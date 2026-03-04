@@ -5,33 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 1 — Infrastructure Foundation
+**Current focus:** Phase 2 — OTel Cardinality Locking (Phase 1 complete)
 
 ## Current Position
 
-Phase: 1 of 8 (Infrastructure Foundation)
-Plan: 4 of 5 in current phase
-Status: In progress
-Last activity: 2026-03-05 — Completed 01-04-PLAN.md (DI extension methods, Program.cs, running Generic Host)
+Phase: 1 of 8 (Infrastructure Foundation) — COMPLETE
+Plan: 5 of 5 in phase 1
+Status: Phase complete
+Last activity: 2026-03-05 — Completed 01-05-PLAN.md (custom IValidateOptions validators, fail-fast verified)
 
-Progress: [█░░░░░░░░░] 10% (4/40 plans across all phases estimated)
+Progress: [█░░░░░░░░░] 12.5% (5/40 plans across all phases estimated)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: ~4 min
-- Total execution time: ~14 min
+- Total execution time: ~20 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-infrastructure-foundation | 4 | ~14 min | ~4 min |
+| 01-infrastructure-foundation | 5 | ~20 min | ~4 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (scaffold), 01-02 (docker configs), 01-03 (telemetry classes), 01-04 (DI wiring)
-- Trend: Fast execution; DI integration plans (~5 min) slightly longer than class-only plans (~3 min)
+- Last 5 plans: 01-01 (scaffold), 01-02 (docker configs), 01-03 (telemetry classes), 01-04 (DI wiring), 01-05 (validators)
+- Trend: Consistent ~4 min execution; validation-only plans (01-05) match class-creation plans
 
 *Updated after each plan completion*
 
@@ -64,6 +64,8 @@ Recent decisions affecting current work:
 - [01-04]: Direct AddOtlpExporter on metrics — no MetricRoleGatedExporter in Phase 1 (no leader election)
 - [01-04]: Microsoft.Extensions.Options.DataAnnotations 9.0.0 required separately — ValidateDataAnnotations() not in base Options package
 - [01-04]: OptionsValidationException catch wraps host.RunAsync(), not builder.Build() — ValidateOnStart fires during RunAsync host startup
+- [01-05]: IValidateOptions custom messages use "Section:Field is required" format for operational clarity — all future validators should follow same pattern
+- [01-05]: SiteOptions validation fires during builder.Build() (DI init for OTel logging processor), not during RunAsync — "Configuration validation failed:" prefix not shown for SiteOptions path; this is pre-existing behavior, not a bug
 
 ### Pending Todos
 
@@ -77,5 +79,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Completed 01-04-PLAN.md — DI extension methods and Program.cs complete, 4 of 5 phase plans done, next is 01-05 (custom validators for ValidateOnStart)
+Stopped at: Completed 01-05-PLAN.md — Phase 1 Infrastructure Foundation fully complete. All 5 plans done. Next: Phase 2 OTel cardinality locking.
 Resume file: None
