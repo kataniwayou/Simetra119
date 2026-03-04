@@ -33,14 +33,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A missing or malformed required config value (e.g., missing `Site:Name`) causes the application to fail-fast at startup with a clear error before accepting any network traffic
   4. Console output can be suppressed by setting `Logging:EnableConsole: false` in appsettings without code changes
   5. Correlation IDs appear on every log line — rotating global ID from CorrelationJob and per-operation AsyncLocal ID visible in the log formatter
-**Plans**: TBD
+**Plans**: 5 plans in 4 waves
 
 Plans:
-- [ ] 01-01: .NET 9 Generic Host scaffold with DI, appsettings, and environment configuration
-- [ ] 01-02: Structured logging — custom console formatter, OTLP log export, enrichment processor
-- [ ] 01-03: OTel SDK registration — MeterProvider, LoggerProvider, OTLP gRPC exporter (all packages at 1.15.0)
-- [ ] 01-04: OTel Collector configuration — prometheusremotewriteexporter pipeline to Prometheus
-- [ ] 01-05: Config validation — ValidateOnStart data annotations and startup fail-fast
+- [ ] 01-01-PLAN.md — Project scaffold: .NET 9 csproj, config options classes, appsettings files (Wave 1)
+- [ ] 01-02-PLAN.md — Docker Compose deploy stack: OTel Collector + Prometheus + Grafana (Wave 1)
+- [ ] 01-03-PLAN.md — Telemetry classes: correlation service, console formatter, enrichment processor (Wave 2)
+- [ ] 01-04-PLAN.md — DI wiring: ServiceCollectionExtensions + Program.cs entry point (Wave 3)
+- [ ] 01-05-PLAN.md — Config validators: SiteOptionsValidator, OtlpOptionsValidator, fail-fast verification (Wave 4)
 
 ### Phase 2: Device Registry and OID Map
 **Goal**: All lookup structures (device registry and OID map) are populated from configuration, O(1) lookups work correctly, cardinality is explicitly counted and bounded before any metric instruments are created, and hot-reload of the OID map functions without restart.
@@ -181,7 +181,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Infrastructure Foundation | 0/5 | Not started | - |
+| 1. Infrastructure Foundation | 0/5 | Planned (3 waves) | - |
 | 2. Device Registry and OID Map | 0/4 | Not started | - |
 | 3. MediatR Pipeline and Instruments | 0/7 | Not started | - |
 | 4. Counter Delta Engine | 0/4 | Not started | - |
