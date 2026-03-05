@@ -212,6 +212,35 @@ public sealed class DeviceChannelManagerTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
+    // 9. WaitForDrainAsync_CompletesAfterCompleteAll
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task WaitForDrainAsync_CompletesAfterCompleteAll()
+    {
+        var manager = CreateManager([MakeDevice("drain-test", "10.0.0.1")], capacity: 10);
+
+        // Write an item
+        var writer = manager.GetWriter("drain-test");
+        writer.TryWrite(MakeEnvelope("drain-test", "1.3.6.1.1"));
+
+        // Start a background consumer to drain the channel
+        var reader = manager.GetReader("drain-test");
+        var consumerTask = Task.Run(async () =>
+        {
+            await foreach (var _ in reader.ReadAllAsync()) { }
+        });
+
+        // Complete all channels (marks writers done)
+        manager.CompleteAll();
+
+        // WaitForDrainAsync should complete once consumer finishes
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await manager.WaitForDrainAsync(cts.Token);
+        await consumerTask;
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
