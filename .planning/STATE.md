@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** All 8 phases complete — v1 milestone done. Ready for audit.
+**Current focus:** Phase 9 added — containerized integration testing. Phases 1-8 complete.
 
 ## Current Position
 
-Phase: 8 of 8 (Graceful Shutdown and Health Probes) — Complete
-Plan: 5 of 5 complete
-Status: All phases done — 137 tests passing (0 failures). Phase 8 added 23 new tests for health checks, liveness vector, job interval registry, graceful shutdown.
-Last activity: 2026-03-05 — Completed quick task 006: Wire CorrelationId propagation into job and trap paths
+Phase: 9 of 9 (Containerized Integration Testing) — In progress
+Plan: 1 of 3 complete
+Status: Phase 9 started — monitoring stack fixed for push-based prometheusremotewrite pipeline.
+Last activity: 2026-03-05 — Completed 09-01: Fix monitoring stack (OTel Collector + Prometheus) for push pipeline
 
-Progress: [████████████████████] 100% (37/37 plans across all phases)
+Progress: [████████████████████░░] 95% (38/40 plans across all phases)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 37
+- Total plans completed: 38
 - Average duration: ~3-5 min
-- Total execution time: ~120 min
+- Total execution time: ~121 min
 
 **By Phase:**
 
@@ -35,10 +35,11 @@ Progress: [████████████████████] 100% (3
 | 06-poll-scheduling | 4 | ~14 min | ~3.5 min |
 | 07-leader-election-and-role-gated-export | 5 | ~15 min | ~3 min |
 | 08-graceful-shutdown-and-health-probes | 5 | ~15 min | ~3 min |
+| 09-containerized-integration-testing | 1/3 | ~1 min | ~1 min |
 
 **Recent Trend:**
-- All 37 plans complete across 8 phases
-- Trend: Consistent ~2-8 min execution
+- 38/40 plans complete across 9 phases
+- Trend: Consistent ~1-8 min execution
 
 *Updated after each plan completion*
 
@@ -169,6 +170,9 @@ Recent decisions affecting current work:
 - [07-05]: MeterProvider-based approach for MetricRoleGatedExporter tests — Metric is a sealed SDK class; constructing it directly is unsupported; real pipeline with ForceFlush() is more realistic
 - [07-05]: CapturingExporter.ExportCallCount == 0 asserts all-gated follower case — inner exporter not called; Success returned without forwarding (not Failure which triggers OTel retry)
 - [07-05]: AlwaysLeaderElection used as K8sLeaseElection stand-in in DI singleton test — tests the registration PATTERN not K8s cluster behavior; avoids requiring live cluster in unit tests
+- [09-01]: Simetra reference project left scrape-based pipeline in K8s manifests (OTel exposes :8889, Prometheus polls) — replaced with prometheusremotewrite push pipeline per decision [01-02]
+- [09-01]: Prometheus global block retained with empty scrape_configs removed — Prometheus requires scrape_interval/evaluation_interval even in remote_write-only mode
+- [09-01]: OTel Collector prom-exporter port 8889 removed from Deployment and Service — no active listener in push model, port was dead after prometheusremotewrite switch
 
 ### Pending Todos
 
@@ -185,6 +189,10 @@ None yet.
 | 005 | Verify health check endpoints (startup, readiness, liveness probes) | 2026-03-05 | — (verification only) | [005-verify-health-check-endpoints](./quick/005-verify-health-check-endpoints/) |
 | 006 | Wire CorrelationId propagation into job and trap paths | 2026-03-05 | 0b48083 | [006-wire-correlationid-propagation](./quick/006-wire-correlationid-propagation/) |
 
+### Roadmap Evolution
+
+- Phase 9 added: Containerized integration testing with K8s — Docker Desktop observability stack, remove simulators/Simetra pods from namespace simetra
+
 ### Blockers/Concerns
 
 - [Phase 7] MetricRoleGatedExporter reflection ParentProvider propagation confirmed working in OTel 1.15.0. ParentProvider breakage detection test added in 07-05: any future OTel SDK upgrade that removes/renames the property will surface immediately in CI.
@@ -192,5 +200,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Phase 8 complete (5/5 plans done). All 8 phases complete. v1 milestone ready for audit.
+Stopped at: Phase 9 plan 1 complete — monitoring stack fixed for push-based prometheusremotewrite pipeline.
 Resume file: None
