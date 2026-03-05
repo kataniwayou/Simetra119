@@ -99,6 +99,7 @@ public sealed class MetricPollJobTests : IDisposable
             tracker     ?? new DeviceUnreachabilityTracker(),
             sender      ?? new CapturingSender(),
             snmpClient  ?? new StubSnmpClient(),
+            new LivenessVectorService(),
             _metrics,
             NullLogger<MetricPollJob>.Instance);
     }

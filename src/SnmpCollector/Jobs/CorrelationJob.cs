@@ -14,13 +14,16 @@ namespace SnmpCollector.Jobs;
 public sealed class CorrelationJob : IJob
 {
     private readonly ICorrelationService _correlation;
+    private readonly ILivenessVectorService _liveness;
     private readonly ILogger<CorrelationJob> _logger;
 
     public CorrelationJob(
         ICorrelationService correlation,
+        ILivenessVectorService liveness,
         ILogger<CorrelationJob> logger)
     {
         _correlation = correlation;
+        _liveness = liveness;
         _logger = logger;
     }
 
@@ -42,6 +45,11 @@ public sealed class CorrelationJob : IJob
         {
             _logger.LogError(ex,
                 "Correlation job {JobKey} failed", jobKey);
+        }
+        finally
+        {
+            // HLTH-05: Stamp liveness vector on completion (always, even on failure)
+            _liveness.Stamp(jobKey);
         }
 
         return Task.CompletedTask;

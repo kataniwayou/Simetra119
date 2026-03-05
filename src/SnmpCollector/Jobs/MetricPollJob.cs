@@ -27,6 +27,7 @@ public sealed class MetricPollJob : IJob
     private readonly IDeviceUnreachabilityTracker _unreachabilityTracker;
     private readonly ISender _sender;
     private readonly ISnmpClient _snmpClient;
+    private readonly ILivenessVectorService _liveness;
     private readonly PipelineMetricService _pipelineMetrics;
     private readonly ILogger<MetricPollJob> _logger;
 
@@ -35,6 +36,7 @@ public sealed class MetricPollJob : IJob
         IDeviceUnreachabilityTracker unreachabilityTracker,
         ISender sender,
         ISnmpClient snmpClient,
+        ILivenessVectorService liveness,
         PipelineMetricService pipelineMetrics,
         ILogger<MetricPollJob> logger)
     {
@@ -42,6 +44,7 @@ public sealed class MetricPollJob : IJob
         _unreachabilityTracker = unreachabilityTracker;
         _sender = sender;
         _snmpClient = snmpClient;
+        _liveness = liveness;
         _pipelineMetrics = pipelineMetrics;
         _logger = logger;
     }
@@ -126,6 +129,8 @@ public sealed class MetricPollJob : IJob
         {
             // SC#4: always increment after every completed poll attempt, success or failure.
             _pipelineMetrics.IncrementPollExecuted();
+            // HLTH-05: Stamp liveness vector on completion (always, even on failure)
+            _liveness.Stamp(jobKey);
         }
     }
 
