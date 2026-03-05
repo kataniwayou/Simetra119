@@ -270,30 +270,51 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers <see cref="ICorrelationService"/> as a singleton, the Quartz.NET in-memory
-    /// scheduler, and <see cref="CorrelationJob"/> with a simple interval trigger.
+    /// Registers <see cref="ICorrelationService"/> and <see cref="IDeviceUnreachabilityTracker"/>
+    /// as singletons, the Quartz.NET in-memory scheduler with auto-scaled thread pool,
+    /// <see cref="CorrelationJob"/> with a simple interval trigger, and one
+    /// <see cref="MetricPollJob"/> per device/poll-group pair with correct JobDataMap.
     /// <para>
     /// ICorrelationService is registered BEFORE AddQuartz so that the DI container
     /// can resolve it when Quartz instantiates CorrelationJob.
     /// </para>
     /// <para>
-    /// Phase 1 only: no heartbeat job (Phase 8), no state/metric poll jobs (Phase 6).
+    /// Thread pool: maxConcurrency = 1 (CorrelationJob) + sum of poll groups across all devices.
+    /// Ensures every job gets a thread immediately without waiting for pool expansion.
     /// </para>
     /// </summary>
     public static IServiceCollection AddSnmpScheduling(
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // Phase 6: Per-device consecutive failure tracking for unreachability detection.
+        services.AddSingleton<IDeviceUnreachabilityTracker, DeviceUnreachabilityTracker>();
+
         // Register ICorrelationService BEFORE AddQuartz -- CorrelationJob depends on it.
         services.AddSingleton<ICorrelationService, RotatingCorrelationService>();
 
-        // Bind options for trigger interval
+        // Bind options for trigger intervals.
         var correlationOptions = new CorrelationJobOptions();
         configuration.GetSection(CorrelationJobOptions.SectionName).Bind(correlationOptions);
+
+        // Phase 6: Bind DevicesOptions to calculate thread pool size and register poll jobs.
+        // CRITICAL: bind directly into .Devices (not the wrapper) -- matches AddSnmpConfiguration pattern.
+        // DI container is NOT built yet; IOptions<DevicesOptions> is not available here.
+        var devicesOptions = new DevicesOptions();
+        configuration.GetSection(DevicesOptions.SectionName).Bind(devicesOptions.Devices);
+
+        // Thread pool: 1 for CorrelationJob + one thread per poll group across all devices.
+        var jobCount = 1; // CorrelationJob
+        foreach (var device in devicesOptions.Devices)
+            jobCount += device.MetricPolls.Count;
 
         services.AddQuartz(q =>
         {
             q.UseInMemoryStore();
+
+            // Auto-scaled thread pool: one thread per registered job (1:1 from Simetra reference).
+            // Replaces Quartz default of 10. Prevents any job from waiting for a free thread.
+            q.UseDefaultThreadPool(maxConcurrency: jobCount);
 
             // Correlation job: rotates the global correlation ID on a fixed interval.
             // Misfire handling: NextWithRemainingCount -- skip stale fires, wait for next.
@@ -307,12 +328,41 @@ public static class ServiceCollectionExtensions
                     .WithIntervalInSeconds(correlationOptions.IntervalSeconds)
                     .RepeatForever()
                     .WithMisfireHandlingInstructionNextWithRemainingCount()));
+
+            // Phase 6: MetricPollJob per device per poll group.
+            // for loops (not foreach) to avoid lambda variable capture bug (Pitfall 8).
+            for (var di = 0; di < devicesOptions.Devices.Count; di++)
+            {
+                var device = devicesOptions.Devices[di];
+                for (var pi = 0; pi < device.MetricPolls.Count; pi++)
+                {
+                    var poll = device.MetricPolls[pi];
+                    var jobKey = new JobKey($"metric-poll-{device.Name}-{pi}");
+                    q.AddJob<MetricPollJob>(j => j
+                        .WithIdentity(jobKey)
+                        .UsingJobData("deviceName", device.Name)
+                        .UsingJobData("pollIndex", pi)
+                        .UsingJobData("intervalSeconds", poll.IntervalSeconds));
+
+                    q.AddTrigger(t => t
+                        .ForJob(jobKey)
+                        .WithIdentity($"metric-poll-{device.Name}-{pi}-trigger")
+                        .StartNow()
+                        .WithSimpleSchedule(s => s
+                            .WithIntervalInSeconds(poll.IntervalSeconds)
+                            .RepeatForever()
+                            .WithMisfireHandlingInstructionNextWithRemainingCount()));
+                }
+            }
         });
 
         services.AddQuartzHostedService(options =>
         {
             options.WaitForJobsToComplete = true;
         });
+
+        // Phase 6: Log job registration summary at startup (poll job count, device count, thread pool size).
+        services.AddHostedService<PollSchedulerStartupService>();
 
         return services;
     }
