@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 6 in progress — Poll Scheduling. Plans 01-02 complete. Plan 03 next (Quartz scheduler registration).
+**Current focus:** Phase 6 in progress — Poll Scheduling. Plans 01-03 complete. Plan 04 next.
 
 ## Current Position
 
 Phase: 6 of 8 (Poll Scheduling) — In progress
-Plan: 2 of ~4 complete
-Status: Phase 6 plans 01-02 complete. MetricPollJob created with SNMP GET, ISender.Send dispatch, 80% timeout, unreachability tracking. 86 tests passing.
-Last activity: 2026-03-05 — Completed 06-02-PLAN.md (MetricPollJob)
+Plan: 3 of ~4 complete
+Status: Phase 6 plans 01-03 complete. Quartz wired: IDeviceUnreachabilityTracker singleton, thread pool auto-scaled, MetricPollJob per device/poll-group, PollSchedulerStartupService startup log. 86 tests passing.
+Last activity: 2026-03-05 — Completed 06-03-PLAN.md (Quartz MetricPollJob registration)
 
-Progress: [████████████░░░░░░░░] 68% (25/40 plans across all phases estimated)
+Progress: [█████████████░░░░░░░] 70% (26/40 plans across all phases estimated)
 
 ## Performance Metrics
 
@@ -32,7 +32,7 @@ Progress: [████████████░░░░░░░░] 68% (25
 | 03-mediatr-pipeline-and-instruments | 6 (complete) | ~24 min | ~4 min |
 | 04-counter-delta-engine | 4 (complete) | ~5 min | ~1.3 min |
 | 05-trap-ingestion | 4 (complete) | ~31 min | ~7.75 min |
-| 06-poll-scheduling | 2 complete | ~5 min | ~2.5 min |
+| 06-poll-scheduling | 3 complete | ~7 min | ~2.3 min |
 
 **Recent Trend:**
 - Last 24 plans: 01-01 through 06-01
@@ -139,6 +139,10 @@ Recent decisions affecting current work:
 - [06-02]: sysUpTime varbind own SnmpOidReceived carries SysUpTimeCentiseconds=null — extracted in same iteration but local is null at dispatch time; subsequent OIDs carry the extracted value
 - [06-02]: noSuchObject/noSuchInstance/EndOfMibView logged at Debug (not Warning) — expected for devices not exposing all OIDs; Warning would cause noise
 - [06-02]: Bare OperationCanceledException re-thrown (host shutdown) — Quartz needs to see cancellation for graceful shutdown; swallowing it makes job report success on shutdown
+- [06-03]: Thread pool maxConcurrency = 1 (CorrelationJob) + sum(device.MetricPolls.Count) — 1:1 thread-per-job, no starvation possible
+- [06-03]: DevicesOptions bound eagerly (pre-DI) to devicesOptions.Devices — DI container not yet built when AddQuartz lambda runs; same pattern as AddSnmpConfiguration
+- [06-03]: for loops (not foreach) inside AddQuartz lambdas — prevents C# lambda closure capture bug on loop variables
+- [06-03]: PollSchedulerStartupService committed with ServiceCollectionExtensions in one commit — build requires both files simultaneously
 
 ### Pending Todos
 
@@ -151,5 +155,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Completed 06-02-PLAN.md — MetricPollJob with SNMP GET, ISender.Send dispatch, 80% timeout CTS, unreachability tracking
+Stopped at: Completed 06-03-PLAN.md — Quartz MetricPollJob registration with thread pool sizing and PollSchedulerStartupService startup log
 Resume file: None
