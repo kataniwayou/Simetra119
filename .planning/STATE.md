@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 5 in progress — Trap Ingestion. Plans 05-01, 05-02, and 05-03 complete.
+**Current focus:** Phase 5 complete — Trap Ingestion. All 4 plans done. Ready for Phase 6 (Polling).
 
 ## Current Position
 
-Phase: 5 of 8 (Trap Ingestion) — In progress
-Plan: 3 of 4 complete (05-01, 05-02, 05-03 done)
-Status: 05-02 and 05-03 complete (wave 2 parallel). 64 tests passing. SnmpTrapListenerService and ChannelConsumerService ready.
-Last activity: 2026-03-05 — Completed 05-02-PLAN.md and 05-03-PLAN.md
+Phase: 5 of 8 (Trap Ingestion) — Phase complete
+Plan: 4 of 4 complete (05-01, 05-02, 05-03, 05-04 done)
+Status: All Phase 5 plans complete. 86 tests passing (22 new in 05-04). DI wired, trap pipeline fully tested.
+Last activity: 2026-03-05 — Completed 05-04-PLAN.md (DI wiring + unit tests)
 
-Progress: [██████░░░░] 52% (21/40 plans across all phases estimated)
+Progress: [███████░░░] 55% (22/40 plans across all phases estimated)
 
 ## Performance Metrics
 
@@ -31,7 +31,7 @@ Progress: [██████░░░░] 52% (21/40 plans across all phases es
 | 02-device-registry-and-oid-map | 4 | ~14 min | ~3.5 min |
 | 03-mediatr-pipeline-and-instruments | 6 (complete) | ~24 min | ~4 min |
 | 04-counter-delta-engine | 4 (complete) | ~5 min | ~1.3 min |
-| 05-trap-ingestion | 1 complete (of 4) | ~2 min | ~2 min |
+| 05-trap-ingestion | 4 (complete) | ~31 min | ~7.75 min |
 
 **Recent Trend:**
 - Last 14 plans: 01-01 through 01-05 (foundation), 02-01 through 02-04, 03-01 through 03-06, 04-01 through 04-04
@@ -125,6 +125,10 @@ Recent decisions affecting current work:
 - [05-03]: IncrementTrapReceived called BEFORE ISender.Send — counts varbinds entering pipeline, not handler success
 - [05-03]: OperationCanceledException break ordered before general Exception catch — avoids treating cancellation as a warning during normal host shutdown
 - [05-03]: DeviceName from VarbindEnvelope.DeviceName (pre-resolved at listener time) — no double device registry lookup in consumer
+- [05-04]: ProcessDatagram changed private -> internal with InternalsVisibleTo — testable without exposing to production callers
+- [05-04]: [Collection(NonParallelCollection.Name)] with DisableParallelization=true for MeterListener-using test classes — MeterListener is a global .NET runtime listener; parallel tests with same meter name cause cross-contamination of measurement lists
+- [05-04]: CapturingChannelManager uses ChannelWriter subclass (TryWrite captures to list) — gives exact synchronous write capture without buffering or async complexity
+- [05-04]: WaitForAsync polling (10ms intervals, 5s timeout) for BackgroundService consumer tests — more reliable than fixed delays
 
 ### Pending Todos
 
@@ -136,6 +140,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-05T05:14:14Z
-Stopped at: Completed 05-03-PLAN.md (ChannelConsumerService BackgroundService)
+Last session: 2026-03-05T05:31:37Z
+Stopped at: Completed 05-04-PLAN.md (DI wiring + Phase 5 unit tests)
 Resume file: None
