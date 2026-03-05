@@ -70,16 +70,15 @@ Plans:
   3. Publishing a notification that causes any behavior to throw causes `snmp.event.errors` to increment and the next notification processes normally — the pipeline never crashes
   4. All pipeline metrics (`snmp.event.published`, `snmp.event.handled`, `snmp.event.errors`, `snmp.event.rejected`, `snmp.poll.executed`, `snmp.trap.received`) are visible in Prometheus without requiring leader election
   5. Behavior execution order is verifiable: Logging fires first, then Exception, then Validation, then OidResolution, then OtelMetricHandler — confirmable via log output on a test notification
-**Plans**: TBD
+**Plans**: 6 plans in 4 waves
 
 Plans:
-- [ ] 03-01: MediatR v12.5.0 registration and SnmpOidReceived notification model
-- [ ] 03-02: LoggingBehavior and ExceptionBehavior with pipeline metric counters
-- [ ] 03-03: ValidationBehavior (OID format and IP format checks) with rejection counter
-- [ ] 03-04: OidResolutionBehavior wired to Phase 2 OID map
-- [ ] 03-05: MetricFactory instrument cache — snmp_gauge, snmp_counter, snmp_info with label assembly
-- [ ] 03-06: OtelMetricHandler — TypeCode-to-instrument dispatch and snmp.event.handled counter
-- [ ] 03-07: TaskWhenAllPublisher configuration and per-handler error isolation verification
+- [ ] 03-01-PLAN.md — NuGet packages (MediatR 12.5.0, SharpSnmpLib 12.5.7), SnmpOidReceived, SnmpSource, PipelineMetricService (Wave 1)
+- [ ] 03-02-PLAN.md — LoggingBehavior and ExceptionBehavior (Wave 2)
+- [ ] 03-03-PLAN.md — ValidationBehavior and OidResolutionBehavior (Wave 2)
+- [ ] 03-04-PLAN.md — SnmpMetricFactory instrument cache and OtelMetricHandler TypeCode dispatch (Wave 2)
+- [ ] 03-05-PLAN.md — AddSnmpPipeline DI wiring and Program.cs integration (Wave 3)
+- [ ] 03-06-PLAN.md — TDD: Unit tests for all behaviors, handler, and pipeline integration (Wave 4)
 
 ### Phase 4: Counter Delta Engine
 **Goal**: The counter delta engine correctly computes deltas for all counter scenarios — normal increment, Counter32 wrap-around at 2^32, Counter64 wrap-around, device reboot detection via sysUpTime, and first-poll skip — before any counter metrics reach Prometheus.
@@ -183,7 +182,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 |-------|----------------|--------|-----------|
 | 1. Infrastructure Foundation | 5/5 | Complete | 2026-03-05 |
 | 2. Device Registry and OID Map | 4/4 | Complete | 2026-03-05 |
-| 3. MediatR Pipeline and Instruments | 0/7 | Not started | - |
+| 3. MediatR Pipeline and Instruments | 0/6 | Not started | - |
 | 4. Counter Delta Engine | 0/4 | Not started | - |
 | 5. Trap Ingestion | 0/4 | Not started | - |
 | 6. Poll Scheduling | 0/5 | Not started | - |
