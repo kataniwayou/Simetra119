@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 ## Current Position
 
 Phase: 3 of 8 (MediatR Pipeline and Instruments) — In progress
-Plan: 4 of 6 in phase 3
-Status: In progress — 03-04 complete, next: 03-05 (DI registration / wiring)
-Last activity: 2026-03-05 — Completed 03-04-PLAN.md (ISnmpMetricFactory, SnmpMetricFactory with ConcurrentDictionary instrument cache, OtelMetricHandler TypeCode dispatch)
+Plan: 5 of 6 in phase 3
+Status: In progress — 03-05 complete, next: 03-06 (final Phase 3 plan)
+Last activity: 2026-03-05 — Completed 03-05-PLAN.md (AddSnmpPipeline extension method, Program.cs wiring, all Phase 3 services registered in DI)
 
-Progress: [████░░░░░░] 33% (13/40 plans across all phases estimated)
+Progress: [████░░░░░░] 35% (14/40 plans across all phases estimated)
 
 ## Performance Metrics
 
@@ -29,7 +29,7 @@ Progress: [████░░░░░░] 33% (13/40 plans across all phases es
 |-------|-------|-------|----------|
 | 01-infrastructure-foundation | 5 | ~20 min | ~4 min |
 | 02-device-registry-and-oid-map | 4 | ~14 min | ~3.5 min |
-| 03-mediatr-pipeline-and-instruments | 4 (of 6) | ~6 min | ~1.5 min |
+| 03-mediatr-pipeline-and-instruments | 5 (of 6) | ~10 min | ~2 min |
 
 **Recent Trend:**
 - Last 10 plans: 01-01 through 01-05 (foundation), 02-01 through 02-04, 03-01 (pipeline foundation)
@@ -92,6 +92,9 @@ Recent decisions affecting current work:
 - [03-04]: snmp_gauge and snmp_info stored as object in ConcurrentDictionary<string, object> -- Gauge<T> and Counter<T> share no common generic base in .NET OTel
 - [03-04]: Counter32/Counter64 deferred to Phase 4: LogDebug emitted, IncrementHandled NOT called, no metric recorded
 - [03-04]: snmp_info value label truncated at 128 chars (125 + "...") to bound OTel label cardinality
+- [03-05]: AddSnmpPipeline inserted after AddSnmpConfiguration — OidResolutionBehavior/ValidationBehavior depend on IOidMapService/IDeviceRegistry registered by AddSnmpConfiguration
+- [03-05]: TaskWhenAllPublisher set via cfg.NotificationPublisher = new ..., not AddSingleton — MediatR 12.x reads instance from MediatRServiceConfiguration.NotificationPublisher directly
+- [03-05]: 4 AddOpenBehavior calls ordered Logging->Exception->Validation->OidResolution matches PIPE-08: first registered = outermost = runs first
 
 ### Pending Todos
 
@@ -104,6 +107,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-05T01:40:06Z
-Stopped at: Completed 03-04-PLAN.md — ISnmpMetricFactory, SnmpMetricFactory (ConcurrentDictionary cache for snmp_gauge/snmp_info), OtelMetricHandler (TypeCode switch dispatch, Counter32/Counter64 deferred to Phase 4); build zero errors. Next: 03-05 (DI registration/wiring).
+Last session: 2026-03-05T01:44:33Z
+Stopped at: Completed 03-05-PLAN.md — AddSnmpPipeline extension method (MediatR + 4 ordered behaviors + TaskWhenAllPublisher singleton + PipelineMetricService + ISnmpMetricFactory), Program.cs wired; build zero errors. Next: 03-06 (final Phase 3 plan).
 Resume file: None
