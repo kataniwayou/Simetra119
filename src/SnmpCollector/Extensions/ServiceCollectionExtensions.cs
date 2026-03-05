@@ -12,7 +12,9 @@ using OpenTelemetry.Resources;
 using Quartz;
 using SnmpCollector.Configuration;
 using SnmpCollector.Configuration.Validators;
+using SnmpCollector.HealthChecks;
 using SnmpCollector.Jobs;
+using SnmpCollector.Lifecycle;
 using SnmpCollector.Pipeline;
 using SnmpCollector.Pipeline.Behaviors;
 using SnmpCollector.Services;
@@ -28,6 +30,8 @@ namespace SnmpCollector.Extensions;
 /// 2. AddSnmpConfiguration
 /// 3. AddSnmpPipeline     (MediatR + behaviors; depends on Phase 2 registrations)
 /// 4. AddSnmpScheduling
+/// 5. AddSnmpHealthChecks (startup, readiness, liveness probes)
+/// 6. AddSnmpLifecycle    (GracefulShutdownService -- MUST BE LAST, stops FIRST)
 /// </para>
 /// </summary>
 public static class ServiceCollectionExtensions
@@ -251,6 +255,12 @@ public static class ServiceCollectionExtensions
             .Configure<IConfiguration>((opts, config) =>
                 config.GetSection(OidMapOptions.SectionName).Bind(opts.Entries));
 
+        // --- Phase 8: Liveness configuration ---
+        services.AddOptions<LivenessOptions>()
+            .Bind(configuration.GetSection(LivenessOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         // --- Phase 5: Channel configuration ---
         services.AddOptions<ChannelsOptions>()
             .Bind(configuration.GetSection(ChannelsOptions.SectionName))
@@ -320,6 +330,10 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<SnmpTrapListenerService>();
         services.AddHostedService<ChannelConsumerService>();
 
+        // Phase 8: Liveness vector for job completion timestamp tracking.
+        // Singleton stamped by every job's finally block, read by LivenessHealthCheck.
+        services.AddSingleton<ILivenessVectorService, LivenessVectorService>();
+
         return services;
     }
 
@@ -357,6 +371,10 @@ public static class ServiceCollectionExtensions
         var devicesOptions = new DevicesOptions();
         configuration.GetSection(DevicesOptions.SectionName).Bind(devicesOptions.Devices);
 
+        // Phase 8: Job interval registry for liveness staleness threshold calculation.
+        // Populated here during Quartz configuration, then registered as singleton.
+        var intervalRegistry = new JobIntervalRegistry();
+
         // Thread pool: 1 for CorrelationJob + one thread per poll group across all devices.
         var jobCount = 1; // CorrelationJob
         foreach (var device in devicesOptions.Devices)
@@ -383,6 +401,8 @@ public static class ServiceCollectionExtensions
                     .RepeatForever()
                     .WithMisfireHandlingInstructionNextWithRemainingCount()));
 
+            intervalRegistry.Register("correlation", correlationOptions.IntervalSeconds);
+
             // Phase 6: MetricPollJob per device per poll group.
             // for loops (not foreach) to avoid lambda variable capture bug (Pitfall 8).
             for (var di = 0; di < devicesOptions.Devices.Count; di++)
@@ -406,9 +426,13 @@ public static class ServiceCollectionExtensions
                             .WithIntervalInSeconds(poll.IntervalSeconds)
                             .RepeatForever()
                             .WithMisfireHandlingInstructionNextWithRemainingCount()));
+
+                    intervalRegistry.Register($"metric-poll-{device.Name}-{pi}", poll.IntervalSeconds);
                 }
             }
         });
+
+        services.AddSingleton<IJobIntervalRegistry>(intervalRegistry);
 
         services.AddQuartzHostedService(options =>
         {
@@ -417,6 +441,45 @@ public static class ServiceCollectionExtensions
 
         // Phase 6: Log job registration summary at startup (poll job count, device count, thread pool size).
         services.AddHostedService<PollSchedulerStartupService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers health checks for K8s probe endpoints.
+    /// <para>
+    /// Three health checks with distinct tags:
+    /// - startup: OID map loaded and poll definitions registered (HLTH-01)
+    /// - ready: trap listener running and device registry populated (HLTH-02)
+    /// - live: per-job staleness detection via liveness vector (HLTH-03)
+    /// </para>
+    /// </summary>
+    public static IServiceCollection AddSnmpHealthChecks(this IServiceCollection services)
+    {
+        services.AddHealthChecks()
+            .AddCheck<StartupHealthCheck>("startup", tags: new[] { "startup" })
+            .AddCheck<ReadinessHealthCheck>("readiness", tags: new[] { "ready" })
+            .AddCheck<LivenessHealthCheck>("liveness", tags: new[] { "live" });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="GracefulShutdownService"/> and configures <see cref="HostOptions.ShutdownTimeout"/>.
+    /// <para>
+    /// MUST be called LAST in DI registration order (SHUT-01). The .NET Generic Host stops
+    /// <see cref="IHostedService"/> instances in REVERSE registration order, so the
+    /// last-registered service stops first.
+    /// </para>
+    /// </summary>
+    public static IServiceCollection AddSnmpLifecycle(this IServiceCollection services)
+    {
+        // SHUT-08: Total shutdown timeout 30 seconds
+        services.Configure<HostOptions>(opts =>
+            opts.ShutdownTimeout = TimeSpan.FromSeconds(30));
+
+        // SHUT-01: MUST BE LAST -- registered last = stops first
+        services.AddHostedService<GracefulShutdownService>();
 
         return services;
     }
