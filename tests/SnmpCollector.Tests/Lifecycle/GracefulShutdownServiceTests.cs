@@ -1,0 +1,117 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Quartz;
+using Quartz.Impl;
+using SnmpCollector.Lifecycle;
+using SnmpCollector.Pipeline;
+using System.Threading.Channels;
+using Xunit;
+
+namespace SnmpCollector.Tests.Lifecycle;
+
+public sealed class GracefulShutdownServiceTests : IAsyncDisposable
+{
+    private readonly ISchedulerFactory _schedulerFactory;
+    private readonly StubChannelManager _channelManager;
+    private readonly ServiceProvider _serviceProvider;
+    private readonly GracefulShutdownService _service;
+
+    public GracefulShutdownServiceTests()
+    {
+        _schedulerFactory = new StdSchedulerFactory();
+        _channelManager = new StubChannelManager();
+
+        var services = new ServiceCollection();
+        _serviceProvider = services.BuildServiceProvider();
+
+        _service = new GracefulShutdownService(
+            _schedulerFactory,
+            _channelManager,
+            _serviceProvider,
+            NullLogger<GracefulShutdownService>.Instance);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _serviceProvider.Dispose();
+        var scheduler = await _schedulerFactory.GetScheduler();
+        if (scheduler.IsStarted)
+            await scheduler.Shutdown();
+    }
+
+    [Fact]
+    public async Task StartAsync_CompletesImmediately()
+    {
+        await _service.StartAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task StopAsync_CompletesWithinTimeout()
+    {
+        var scheduler = await _schedulerFactory.GetScheduler();
+        await scheduler.Start();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await _service.StopAsync(cts.Token);
+    }
+
+    [Fact]
+    public async Task StopAsync_CallsCompleteAll()
+    {
+        var scheduler = await _schedulerFactory.GetScheduler();
+        await scheduler.Start();
+
+        await _service.StopAsync(CancellationToken.None);
+
+        Assert.True(_channelManager.CompleteAllCalled);
+    }
+
+    [Fact]
+    public async Task StopAsync_CallsWaitForDrainAsync()
+    {
+        var scheduler = await _schedulerFactory.GetScheduler();
+        await scheduler.Start();
+
+        await _service.StopAsync(CancellationToken.None);
+
+        Assert.True(_channelManager.WaitForDrainCalled);
+    }
+
+    [Fact]
+    public async Task StopAsync_PutsSchedulerInStandby()
+    {
+        var scheduler = await _schedulerFactory.GetScheduler();
+        await scheduler.Start();
+
+        await _service.StopAsync(CancellationToken.None);
+
+        Assert.True(scheduler.InStandbyMode);
+    }
+
+    [Fact]
+    public async Task StopAsync_HandlesNoLeaseService()
+    {
+        var scheduler = await _schedulerFactory.GetScheduler();
+        await scheduler.Start();
+
+        await _service.StopAsync(CancellationToken.None);
+    }
+
+    private sealed class StubChannelManager : IDeviceChannelManager
+    {
+        public bool CompleteAllCalled { get; private set; }
+        public bool WaitForDrainCalled { get; private set; }
+
+        public ChannelWriter<VarbindEnvelope> GetWriter(string deviceName)
+            => Channel.CreateUnbounded<VarbindEnvelope>().Writer;
+        public ChannelReader<VarbindEnvelope> GetReader(string deviceName)
+            => Channel.CreateUnbounded<VarbindEnvelope>().Reader;
+        public IReadOnlyCollection<string> DeviceNames => [];
+        public void CompleteAll() => CompleteAllCalled = true;
+        public Task WaitForDrainAsync(CancellationToken cancellationToken)
+        {
+            WaitForDrainCalled = true;
+            return Task.CompletedTask;
+        }
+    }
+}
