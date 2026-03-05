@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 5 complete — Trap Ingestion verified (18/18 must-haves). Ready for Phase 6.
+**Current focus:** Phase 6 in progress — Poll Scheduling. Plan 01 complete (foundation types). Plan 02 next (MetricPollJob).
 
 ## Current Position
 
-Phase: 5 of 8 (Trap Ingestion) — Complete
-Plan: All 4 plans complete
-Status: Phase 5 verified (18/18 must-haves). 86 tests passing. Trap ingestion pipeline fully operational.
-Last activity: 2026-03-05 — Phase 5 verified and completed
+Phase: 6 of 8 (Poll Scheduling) — In progress
+Plan: 1 of ~4 complete
+Status: Phase 6 plan 01 complete. IDeviceUnreachabilityTracker + DeviceUnreachabilityTracker created. PipelineMetricService extended to 11 counters. 86 tests passing.
+Last activity: 2026-03-05 — Completed 06-01-PLAN.md (foundation types for poll scheduling)
 
-Progress: [██████████░░░░░░░░░░] 63% (23/40 plans across all phases estimated)
+Progress: [████████████░░░░░░░░] 66% (24/40 plans across all phases estimated)
 
 ## Performance Metrics
 
@@ -32,9 +32,10 @@ Progress: [██████████░░░░░░░░░░] 63% (23
 | 03-mediatr-pipeline-and-instruments | 6 (complete) | ~24 min | ~4 min |
 | 04-counter-delta-engine | 4 (complete) | ~5 min | ~1.3 min |
 | 05-trap-ingestion | 4 (complete) | ~31 min | ~7.75 min |
+| 06-poll-scheduling | 1 complete | ~2 min | ~2 min |
 
 **Recent Trend:**
-- Last 23 plans: 01-01 through 05-04
+- Last 24 plans: 01-01 through 06-01
 - Trend: Consistent ~2-8 min execution
 
 *Updated after each plan completion*
@@ -129,6 +130,11 @@ Recent decisions affecting current work:
 - [05-04]: [Collection(NonParallelCollection.Name)] with DisableParallelization=true for MeterListener-using test classes — MeterListener is a global .NET runtime listener; parallel tests with same meter name cause cross-contamination of measurement lists
 - [05-04]: CapturingChannelManager uses ChannelWriter subclass (TryWrite captures to list) — gives exact synchronous write capture without buffering or async complexity
 - [05-04]: WaitForAsync polling (10ms intervals, 5s timeout) for BackgroundService consumer tests — more reliable than fixed delays
+- [06-01]: DeviceUnreachabilityTracker threshold hardcoded at 3 (not configurable) per locked CONTEXT.md decision
+- [06-01]: OrdinalIgnoreCase on ConcurrentDictionary<string, DeviceState> — device names are user-configured strings that may vary in case between configuration files and Quartz JobDataMap usage
+- [06-01]: Singleton tracker (not per-job instance field) — Quartz DI creates new job instance per execution; per-job state is lost between runs
+- [06-01]: Inner DeviceState class avoids struct-update atomicity issues in ConcurrentDictionary; volatile int + Interlocked for lock-free counting without locks
+- [06-01]: RecordFailure/RecordSuccess return true ONLY on state transition (not on every call) — MetricPollJob (Plan 02) uses return value to decide whether to fire OTel counter and log transition
 
 ### Pending Todos
 
@@ -141,5 +147,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Phase 5 complete and verified (18/18 must-haves). 86 tests passing. Ready for Phase 6.
+Stopped at: Completed 06-01-PLAN.md — IDeviceUnreachabilityTracker, DeviceUnreachabilityTracker, PipelineMetricService (+2 counters)
 Resume file: None
