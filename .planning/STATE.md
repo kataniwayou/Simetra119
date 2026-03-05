@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 ## Current Position
 
 Phase: 3 of 8 (MediatR Pipeline and Instruments) — In progress
-Plan: 1 of 6 in phase 3
-Status: In progress — 03-01 complete, next: 03-02 (OidResolutionBehavior)
-Last activity: 2026-03-05 — Completed 03-01-PLAN.md (MediatR + SharpSnmpLib NuGet packages; SnmpOidReceived, SnmpSource, PipelineMetricService with 6 pipeline counters)
+Plan: 2 of 6 in phase 3
+Status: In progress — 03-02 complete, next: 03-03 (OidResolutionBehavior)
+Last activity: 2026-03-05 — Completed 03-02-PLAN.md (LoggingBehavior + ExceptionBehavior open-generic pipeline behaviors in Pipeline/Behaviors/)
 
-Progress: [███░░░░░░░] 25% (10/40 plans across all phases estimated)
+Progress: [███░░░░░░░] 27% (11/40 plans across all phases estimated)
 
 ## Performance Metrics
 
@@ -29,7 +29,7 @@ Progress: [███░░░░░░░] 25% (10/40 plans across all phases es
 |-------|-------|-------|----------|
 | 01-infrastructure-foundation | 5 | ~20 min | ~4 min |
 | 02-device-registry-and-oid-map | 4 | ~14 min | ~3.5 min |
-| 03-mediatr-pipeline-and-instruments | 1 (of 6) | ~2 min | ~2 min |
+| 03-mediatr-pipeline-and-instruments | 2 (of 6) | ~3 min | ~1.5 min |
 
 **Recent Trend:**
 - Last 10 plans: 01-01 through 01-05 (foundation), 02-01 through 02-04, 03-01 (pipeline foundation)
@@ -82,6 +82,9 @@ Recent decisions affecting current work:
 - [03-01]: SnmpOidReceived is a sealed class not a record — behaviors enrich properties in-place; AgentIp uses set not init (trap path may update post-construction)
 - [03-01]: System.Diagnostics using required for TagList alongside System.Diagnostics.Metrics — TagList is in System.Diagnostics namespace (DiagnosticSource package, transitive via OTel)
 - [03-01]: PipelineMetricService takes IMeterFactory not Meter directly — follows OTel hosting pattern where factory manages meter lifetime
+- [03-02]: LoggingBehavior pattern-matches notification is SnmpOidReceived before logging — other notification types pass through silently to next()
+- [03-02]: ExceptionBehavior returns default! (not Unit.Value) — TResponse is generic; default! is safe for both Unit and any other TResponse
+- [03-02]: ExceptionBehavior always wraps next() in try/catch regardless of notification type — pipeline guard is universal, not type-gated
 
 ### Pending Todos
 
@@ -94,6 +97,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-05T01:34:15Z
-Stopped at: Completed 03-01-PLAN.md — MediatR 12.5.0 + SharpSnmpLib 12.5.7 added; SnmpOidReceived, SnmpSource, PipelineMetricService (6 counters) created; both projects build zero errors. Next: 03-02 (OidResolutionBehavior).
+Last session: 2026-03-05T01:37:47Z
+Stopped at: Completed 03-02-PLAN.md — LoggingBehavior (Debug OID/IP/Source) and ExceptionBehavior (catch-log-swallow + IncrementErrors) created in Pipeline/Behaviors/; build zero errors. Next: 03-03 (OidResolutionBehavior).
 Resume file: None
