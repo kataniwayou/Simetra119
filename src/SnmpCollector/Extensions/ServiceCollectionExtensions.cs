@@ -202,6 +202,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDeviceRegistry, DeviceRegistry>();
         services.AddSingleton<IOidMapService, OidMapService>();
 
+        // --- Phase 2: Cardinality audit (runs during StartingAsync, before Quartz starts) ---
+        // IHostedLifecycleService.StartingAsync fires before IHostedService.StartAsync,
+        // so the audit completes before the Quartz scheduler begins executing jobs.
+        services.AddHostedService<CardinalityAuditService>();
+
         return services;
     }
 
