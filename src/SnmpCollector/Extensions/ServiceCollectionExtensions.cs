@@ -1,3 +1,5 @@
+using MediatR;
+using MediatR.NotificationPublishers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -12,6 +14,7 @@ using SnmpCollector.Configuration;
 using SnmpCollector.Configuration.Validators;
 using SnmpCollector.Jobs;
 using SnmpCollector.Pipeline;
+using SnmpCollector.Pipeline.Behaviors;
 using SnmpCollector.Telemetry;
 
 namespace SnmpCollector.Extensions;
@@ -20,9 +23,10 @@ namespace SnmpCollector.Extensions;
 /// Extension methods for registering SnmpCollector services with the DI container.
 /// <para>
 /// Registration order in Program.cs:
-/// 1. AddSnmpTelemetry  (registered first = disposed last = ForceFlush on shutdown)
+/// 1. AddSnmpTelemetry    (registered first = disposed last = ForceFlush on shutdown)
 /// 2. AddSnmpConfiguration
-/// 3. AddSnmpScheduling
+/// 3. AddSnmpPipeline     (MediatR + behaviors; depends on Phase 2 registrations)
+/// 4. AddSnmpScheduling
 /// </para>
 /// </summary>
 public static class ServiceCollectionExtensions
@@ -206,6 +210,47 @@ public static class ServiceCollectionExtensions
         // IHostedLifecycleService.StartingAsync fires before IHostedService.StartAsync,
         // so the audit completes before the Quartz scheduler begins executing jobs.
         services.AddHostedService<CardinalityAuditService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the MediatR pipeline for SNMP OID processing.
+    /// <para>
+    /// Behavior registration order (first registered = outermost = runs first):
+    /// 1. <see cref="LoggingBehavior{TRequest,TResponse}"/>     — outermost, logs entry/exit
+    /// 2. <see cref="ExceptionBehavior{TRequest,TResponse}"/>   — catches unhandled exceptions
+    /// 3. <see cref="ValidationBehavior{TRequest,TResponse}"/>  — validates message and device
+    /// 4. <see cref="OidResolutionBehavior{TRequest,TResponse}"/> — innermost, resolves OID to metric name
+    /// </para>
+    /// <para>
+    /// <see cref="TaskWhenAllPublisher"/> is set as a singleton instance on the MediatR config
+    /// (PIPE-09) — notification handlers run concurrently via Task.WhenAll.
+    /// </para>
+    /// </summary>
+    public static IServiceCollection AddSnmpPipeline(
+        this IServiceCollection services)
+    {
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssemblyContaining<SnmpOidReceived>();
+
+            // PIPE-09: singleton instance (not type registration) so the publisher is
+            // shared across all notification dispatches without repeated allocation.
+            cfg.NotificationPublisher = new TaskWhenAllPublisher();
+
+            // Behavior order: first registered = outermost = runs first in pipeline.
+            cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));       // 1st = outermost
+            cfg.AddOpenBehavior(typeof(ExceptionBehavior<,>));     // 2nd
+            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));    // 3rd
+            cfg.AddOpenBehavior(typeof(OidResolutionBehavior<,>)); // 4th = innermost
+        });
+
+        // Pipeline telemetry: metrics for pipeline latency, handled/rejected counts.
+        services.AddSingleton<PipelineMetricService>();
+
+        // SNMP instrument factory: ConcurrentDictionary cache for snmp_gauge and snmp_info instruments.
+        services.AddSingleton<ISnmpMetricFactory, SnmpMetricFactory>();
 
         return services;
     }
