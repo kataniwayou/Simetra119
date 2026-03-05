@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="Lextm.SharpSnmpLib" Version="12.5.7" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
