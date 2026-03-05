@@ -14,7 +14,7 @@ namespace SnmpCollector.Pipeline.Behaviors;
 /// </summary>
 public sealed class ValidationBehavior<TNotification, TResponse>
     : IPipelineBehavior<TNotification, TResponse>
-    where TNotification : INotification
+    where TNotification : notnull
 {
     /// <summary>
     /// Matches valid OID strings: one or more decimal arcs separated by dots, with at least 2 arcs.

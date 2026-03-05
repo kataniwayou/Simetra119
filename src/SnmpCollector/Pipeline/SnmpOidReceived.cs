@@ -5,10 +5,12 @@ using System.Net;
 namespace SnmpCollector.Pipeline;
 
 /// <summary>
-/// MediatR notification published for every SNMP OID value received, whether from polling or a trap.
+/// MediatR request published for every SNMP OID value received, whether from polling or a trap.
+/// Implements IRequest&lt;Unit&gt; (not INotification) so that registered IPipelineBehavior pipeline
+/// behaviors execute in the correct order: Logging → Exception → Validation → OidResolution → handler.
 /// Sealed class (not record) so behaviors can enrich properties in-place as the pipeline progresses.
 /// </summary>
-public sealed class SnmpOidReceived : INotification
+public sealed class SnmpOidReceived : IRequest<Unit>
 {
     /// <summary>Raw OID string from the SNMP PDU (e.g., "1.3.6.1.2.1.1.1.0").</summary>
     public required string Oid { get; init; }

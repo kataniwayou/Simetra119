@@ -6,14 +6,16 @@ using SnmpCollector.Telemetry;
 namespace SnmpCollector.Pipeline.Handlers;
 
 /// <summary>
-/// Terminal MediatR notification handler that dispatches SNMP OID values to the correct
+/// Terminal MediatR request handler that dispatches SNMP OID values to the correct
 /// OpenTelemetry instrument based on the <see cref="SnmpType"/> type code.
 ///
+/// Implements IRequestHandler (not INotificationHandler) so that IPipelineBehavior chain
+/// runs: Logging → Exception → Validation → OidResolution → this handler.
 /// Counter32 and Counter64 are intentionally deferred to Phase 4 (delta engine) and are
 /// logged at Debug level without recording a metric value.
 /// Unrecognized type codes are logged at Warning level and dropped.
 /// </summary>
-public sealed class OtelMetricHandler : INotificationHandler<SnmpOidReceived>
+public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
 {
     private readonly ISnmpMetricFactory _metricFactory;
     private readonly PipelineMetricService _pipelineMetrics;
@@ -29,7 +31,7 @@ public sealed class OtelMetricHandler : INotificationHandler<SnmpOidReceived>
         _logger = logger;
     }
 
-    public Task Handle(SnmpOidReceived notification, CancellationToken cancellationToken)
+    public Task<Unit> Handle(SnmpOidReceived notification, CancellationToken cancellationToken)
     {
         var metricName = notification.MetricName ?? OidMapService.Unknown;
         var agent = notification.DeviceName ?? notification.AgentIp.ToString();
@@ -98,6 +100,6 @@ public sealed class OtelMetricHandler : INotificationHandler<SnmpOidReceived>
                 break;
         }
 
-        return Task.CompletedTask;
+        return Task.FromResult(Unit.Value);
     }
 }

@@ -12,7 +12,7 @@ namespace SnmpCollector.Pipeline.Behaviors;
 /// </summary>
 public sealed class LoggingBehavior<TNotification, TResponse>
     : IPipelineBehavior<TNotification, TResponse>
-    where TNotification : INotification
+    where TNotification : notnull
 {
     private readonly ILogger<LoggingBehavior<TNotification, TResponse>> _logger;
 

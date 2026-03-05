@@ -11,7 +11,7 @@ namespace SnmpCollector.Pipeline.Behaviors;
 /// </summary>
 public sealed class OidResolutionBehavior<TNotification, TResponse>
     : IPipelineBehavior<TNotification, TResponse>
-    where TNotification : INotification
+    where TNotification : notnull
 {
     private readonly IOidMapService _oidMapService;
 

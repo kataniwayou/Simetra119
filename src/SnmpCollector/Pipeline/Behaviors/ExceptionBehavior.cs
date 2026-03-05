@@ -14,7 +14,7 @@ namespace SnmpCollector.Pipeline.Behaviors;
 /// </summary>
 public sealed class ExceptionBehavior<TNotification, TResponse>
     : IPipelineBehavior<TNotification, TResponse>
-    where TNotification : INotification
+    where TNotification : notnull
 {
     private readonly ILogger<ExceptionBehavior<TNotification, TResponse>> _logger;
     private readonly PipelineMetricService _metrics;

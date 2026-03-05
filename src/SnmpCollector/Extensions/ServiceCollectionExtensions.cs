@@ -1,5 +1,4 @@
 using MediatR;
-using MediatR.NotificationPublishers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -217,15 +216,16 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Registers the MediatR pipeline for SNMP OID processing.
     /// <para>
+    /// SnmpOidReceived implements IRequest&lt;Unit&gt; (not INotification) so that the registered
+    /// IPipelineBehavior chain executes on every ISender.Send call. INotification + IPublisher.Publish
+    /// does NOT invoke IPipelineBehavior in MediatR 12.x -- only IRequest&lt;T&gt; + ISender.Send does.
+    /// </para>
+    /// <para>
     /// Behavior registration order (first registered = outermost = runs first):
     /// 1. <see cref="LoggingBehavior{TRequest,TResponse}"/>     — outermost, logs entry/exit
     /// 2. <see cref="ExceptionBehavior{TRequest,TResponse}"/>   — catches unhandled exceptions
     /// 3. <see cref="ValidationBehavior{TRequest,TResponse}"/>  — validates message and device
     /// 4. <see cref="OidResolutionBehavior{TRequest,TResponse}"/> — innermost, resolves OID to metric name
-    /// </para>
-    /// <para>
-    /// <see cref="TaskWhenAllPublisher"/> is set as a singleton instance on the MediatR config
-    /// (PIPE-09) — notification handlers run concurrently via Task.WhenAll.
     /// </para>
     /// </summary>
     public static IServiceCollection AddSnmpPipeline(
@@ -235,11 +235,8 @@ public static class ServiceCollectionExtensions
         {
             cfg.RegisterServicesFromAssemblyContaining<SnmpOidReceived>();
 
-            // PIPE-09: singleton instance (not type registration) so the publisher is
-            // shared across all notification dispatches without repeated allocation.
-            cfg.NotificationPublisher = new TaskWhenAllPublisher();
-
             // Behavior order: first registered = outermost = runs first in pipeline.
+            // Behaviors fire because SnmpOidReceived : IRequest<Unit> dispatched via ISender.Send.
             cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));       // 1st = outermost
             cfg.AddOpenBehavior(typeof(ExceptionBehavior<,>));     // 2nd
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));    // 3rd
