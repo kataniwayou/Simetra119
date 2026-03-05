@@ -107,13 +107,13 @@ Plans:
   2. A trap received with an incorrect community string is dropped and logged at Warning level — no metric is recorded
   3. A burst of traps exceeding the per-device channel capacity causes excess traps to be dropped (DropOldest) and `snmp.trap.received` reflects received-not-dropped — the listener continues processing without blocking
   4. The trap listener never publishes directly to MediatR — all trap varbinds route through per-device BoundedChannel to ChannelConsumerService before MediatR publish (verifiable by code structure and log sequence)
-**Plans**: TBD
+**Plans**: 4 plans in 3 waves
 
 Plans:
-- [ ] 05-01: SharpSnmpLib trap listener BackgroundService bound to UDP 162 with community string auth
-- [ ] 05-02: DeviceChannelManager — per-device BoundedChannel with DropOldest policy
-- [ ] 05-03: ChannelConsumerService — one Task per device, reads envelopes, publishes SnmpOidReceived per varbind
-- [ ] 05-04: Trap storm rate limiting and snmp.trap.received counter integration
+- [ ] 05-01-PLAN.md — Foundation types: ChannelsOptions, VarbindEnvelope, IDeviceChannelManager/DeviceChannelManager, PipelineMetricService trap counters (Wave 1)
+- [ ] 05-02-PLAN.md — SnmpTrapListenerService: UDP receive loop, community auth, channel write (Wave 2)
+- [ ] 05-03-PLAN.md — ChannelConsumerService: per-device ReadAllAsync, ISender.Send dispatch (Wave 2)
+- [ ] 05-04-PLAN.md — DI wiring + TDD: ServiceCollectionExtensions registration, unit tests for all Phase 5 SC (Wave 3)
 
 ### Phase 6: Poll Scheduling
 **Goal**: Quartz executes SNMP GET polls on configured intervals per device, publishes results to MediatR, handles device unreachability gracefully, and the thread pool scales to the total job count without starvation.
@@ -184,7 +184,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Device Registry and OID Map | 4/4 | Complete | 2026-03-05 |
 | 3. MediatR Pipeline and Instruments | 6/6 | Complete | 2026-03-05 |
 | 4. Counter Delta Engine | 4/4 | Complete | 2026-03-05 |
-| 5. Trap Ingestion | 0/4 | Not started | - |
+| 5. Trap Ingestion | 0/4 | Planned | - |
 | 6. Poll Scheduling | 0/5 | Not started | - |
 | 7. Leader Election and Role-Gated Export | 0/5 | Not started | - |
 | 8. Graceful Shutdown and Health Probes | 0/6 | Not started | - |
