@@ -1,15 +1,34 @@
 using System.Net;
 using Lextm.SharpSnmpLib;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
 using SnmpCollector.Pipeline.Behaviors;
+using SnmpCollector.Telemetry;
 using Xunit;
 
 namespace SnmpCollector.Tests.Pipeline.Behaviors;
 
-public sealed class LoggingBehaviorTests
+public sealed class LoggingBehaviorTests : IDisposable
 {
+    private readonly ServiceProvider _sp;
+    private readonly PipelineMetricService _metrics;
+
+    public LoggingBehaviorTests()
+    {
+        var services = new ServiceCollection();
+        services.AddMetrics();
+        services.AddSingleton(Options.Create(new SiteOptions { Name = "test-site" }));
+        services.AddSingleton<PipelineMetricService>();
+        _sp = services.BuildServiceProvider();
+        _metrics = _sp.GetRequiredService<PipelineMetricService>();
+    }
+
+    public void Dispose() => _sp.Dispose();
+
     private static SnmpOidReceived MakeNotification(string oid = "1.3.6.1.2.1.1.1.0") =>
         new()
         {
@@ -21,8 +40,8 @@ public sealed class LoggingBehaviorTests
             DeviceName = "test-device"
         };
 
-    private static LoggingBehavior<SnmpOidReceived, Unit> CreateBehavior() =>
-        new(NullLogger<LoggingBehavior<SnmpOidReceived, Unit>>.Instance);
+    private LoggingBehavior<SnmpOidReceived, Unit> CreateBehavior() =>
+        new(NullLogger<LoggingBehavior<SnmpOidReceived, Unit>>.Instance, _metrics);
 
     [Fact]
     public async Task AlwaysCallsNext()
@@ -58,7 +77,7 @@ public sealed class LoggingBehaviorTests
     {
         // LoggingBehavior uses open generic: must also work for non-SnmpOidReceived types.
         var behavior = new LoggingBehavior<StubNotification, Unit>(
-            NullLogger<LoggingBehavior<StubNotification, Unit>>.Instance);
+            NullLogger<LoggingBehavior<StubNotification, Unit>>.Instance, _metrics);
 
         var nextCalled = false;
 

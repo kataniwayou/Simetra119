@@ -1,0 +1,98 @@
+using System.Diagnostics.Metrics;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using SnmpCollector.Configuration;
+using SnmpCollector.Telemetry;
+using Xunit;
+
+namespace SnmpCollector.Tests.Telemetry;
+
+/// <summary>
+/// Tests the real <see cref="SnmpMetricFactory"/> to verify OTel instrument tags
+/// that are not observable through <see cref="ISnmpMetricFactory"/> (e.g., site_name).
+/// Uses <see cref="MeterListener"/> to capture actual instrument recordings.
+/// </summary>
+public sealed class SnmpMetricFactoryTests : IDisposable
+{
+    private readonly ServiceProvider _sp;
+    private readonly SnmpMetricFactory _factory;
+    private readonly MeterListener _listener;
+    private readonly List<KeyValuePair<string, object?>[]> _recordedTags = new();
+
+    public SnmpMetricFactoryTests()
+    {
+        var services = new ServiceCollection();
+        services.AddMetrics();
+        _sp = services.BuildServiceProvider();
+
+        _factory = new SnmpMetricFactory(
+            _sp.GetRequiredService<IMeterFactory>(),
+            Options.Create(new SiteOptions { Name = "test-site" }));
+
+        _listener = new MeterListener();
+        _listener.InstrumentPublished = (instrument, listener) =>
+        {
+            if (instrument.Meter.Name == TelemetryConstants.MeterName)
+                listener.EnableMeasurementEvents(instrument);
+        };
+        _listener.SetMeasurementEventCallback<double>((instrument, value, tags, _) =>
+        {
+            _recordedTags.Add(tags.ToArray());
+        });
+        _listener.Start();
+    }
+
+    public void Dispose()
+    {
+        _listener.Dispose();
+        _factory.Dispose();
+        _sp.Dispose();
+    }
+
+    [Fact]
+    public void RecordGauge_IncludesAllFiveLabels()
+    {
+        _factory.RecordGauge("hrProcessorLoad", "1.3.6.1.2.1.25.3.3.1.2", "core-router", "poll", 42.0);
+
+        Assert.Single(_recordedTags);
+        var tags = _recordedTags[0].ToDictionary(t => t.Key, t => t.Value);
+
+        Assert.Equal("test-site", tags["site_name"]);
+        Assert.Equal("hrProcessorLoad", tags["metric_name"]);
+        Assert.Equal("1.3.6.1.2.1.25.3.3.1.2", tags["oid"]);
+        Assert.Equal("core-router", tags["agent"]);
+        Assert.Equal("poll", tags["source"]);
+        Assert.Equal(5, tags.Count);
+    }
+
+    [Fact]
+    public void RecordInfo_IncludesAllSixLabels()
+    {
+        _factory.RecordInfo("sysDescr", "1.3.6.1.2.1.1.1.0", "test-device", "trap", "Linux router");
+
+        Assert.Single(_recordedTags);
+        var tags = _recordedTags[0].ToDictionary(t => t.Key, t => t.Value);
+
+        Assert.Equal("test-site", tags["site_name"]);
+        Assert.Equal("sysDescr", tags["metric_name"]);
+        Assert.Equal("1.3.6.1.2.1.1.1.0", tags["oid"]);
+        Assert.Equal("test-device", tags["agent"]);
+        Assert.Equal("trap", tags["source"]);
+        Assert.Equal("Linux router", tags["value"]);
+        Assert.Equal(6, tags.Count);
+    }
+
+    [Fact]
+    public void RecordInfo_TruncatesLongValueAt128Chars()
+    {
+        var longValue = new string('x', 200);
+
+        _factory.RecordInfo("sysDescr", "1.3.6.1.2.1.1.1.0", "test-device", "poll", longValue);
+
+        Assert.Single(_recordedTags);
+        var tags = _recordedTags[0].ToDictionary(t => t.Key, t => t.Value);
+        var valueStr = (string)tags["value"]!;
+        Assert.Equal(128, valueStr.Length);
+        Assert.EndsWith("...", valueStr);
+    }
+}
