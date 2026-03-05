@@ -182,6 +182,7 @@ None yet.
 | 002 | Verify CorrelationId flow (generation, propagation, storage) | 2026-03-05 | — (verification only) | [002-verify-correlationid-flow](./quick/002-verify-correlationid-flow/) |
 | 003 | Verify logging framework (OTel, enrichment, console toggle, log levels) | 2026-03-05 | — (verification only) | [003-verify-logging-framework](./quick/003-verify-logging-framework/) |
 | 004 | Verify liveness vector (entries, timestamps, stamp points, probe usage) | 2026-03-05 | — (verification only) | [004-verify-liveness-vector](./quick/004-verify-liveness-vector/) |
+| 005 | Verify health check endpoints (startup, readiness, liveness probes) | 2026-03-05 | — (verification only) | [005-verify-health-check-endpoints](./quick/005-verify-health-check-endpoints/) |
 
 ### Blockers/Concerns
 
