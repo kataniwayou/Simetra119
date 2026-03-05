@@ -253,6 +253,9 @@ public static class ServiceCollectionExtensions
         // Pipeline telemetry: metrics for pipeline latency, handled/rejected counts.
         services.AddSingleton<PipelineMetricService>();
 
+        // SNMP client: wraps static Messenger.GetAsync for testability.
+        services.AddSingleton<ISnmpClient, SharpSnmpClient>();
+
         // SNMP instrument factory: ConcurrentDictionary cache for snmp_gauge and snmp_info instruments.
         services.AddSingleton<ISnmpMetricFactory, SnmpMetricFactory>();
 

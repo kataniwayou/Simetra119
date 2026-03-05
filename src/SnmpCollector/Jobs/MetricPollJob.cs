@@ -1,5 +1,4 @@
 using Lextm.SharpSnmpLib;
-using Lextm.SharpSnmpLib.Messaging;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Quartz;
@@ -27,6 +26,7 @@ public sealed class MetricPollJob : IJob
     private readonly IDeviceRegistry _deviceRegistry;
     private readonly IDeviceUnreachabilityTracker _unreachabilityTracker;
     private readonly ISender _sender;
+    private readonly ISnmpClient _snmpClient;
     private readonly PipelineMetricService _pipelineMetrics;
     private readonly ILogger<MetricPollJob> _logger;
 
@@ -34,12 +34,14 @@ public sealed class MetricPollJob : IJob
         IDeviceRegistry deviceRegistry,
         IDeviceUnreachabilityTracker unreachabilityTracker,
         ISender sender,
+        ISnmpClient snmpClient,
         PipelineMetricService pipelineMetrics,
         ILogger<MetricPollJob> logger)
     {
         _deviceRegistry = deviceRegistry;
         _unreachabilityTracker = unreachabilityTracker;
         _sender = sender;
+        _snmpClient = snmpClient;
         _pipelineMetrics = pipelineMetrics;
         _logger = logger;
     }
@@ -80,7 +82,7 @@ public sealed class MetricPollJob : IJob
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(intervalSeconds * 0.8));
 
-            var response = await Messenger.GetAsync(
+            var response = await _snmpClient.GetAsync(
                 VersionCode.V2,
                 endpoint,
                 community,
@@ -141,15 +143,6 @@ public sealed class MetricPollJob : IJob
 
         foreach (var variable in response)
         {
-            // Extract sysUpTime before deciding whether to skip or dispatch.
-            // The sysUpTime varbind itself is still dispatched (sysUpTimeCentiseconds = null on its own message).
-            if (variable.Id.ToString() == SysUpTimeOid
-                && variable.Data.TypeCode == SnmpType.TimeTicks)
-            {
-                sysUpTime = ((TimeTicks)variable.Data).ToUInt32();
-                // Fall through — sysUpTime itself is also dispatched as an SnmpOidReceived.
-            }
-
             // Skip error sentinels — device doesn't expose this OID.
             if (variable.Data.TypeCode is SnmpType.NoSuchObject
                                        or SnmpType.NoSuchInstance
@@ -169,12 +162,21 @@ public sealed class MetricPollJob : IJob
                 Value = variable.Data,
                 Source = SnmpSource.Poll,
                 TypeCode = variable.Data.TypeCode,
-                // sysUpTime is null for the sysUpTime varbind itself (extracted above but not yet set
-                // when this is the first iteration). Subsequent OIDs carry the extracted value.
+                // sysUpTime is null for the sysUpTime varbind itself (not yet extracted at dispatch time).
+                // Subsequent OIDs carry the extracted value.
                 SysUpTimeCentiseconds = sysUpTime
             };
 
             await _sender.Send(msg, ct);
+
+            // Extract sysUpTime AFTER dispatching the sysUpTime varbind itself so that
+            // the sysUpTime message carries SysUpTimeCentiseconds = null, while all
+            // subsequent OIDs carry the extracted value.
+            if (variable.Id.ToString() == SysUpTimeOid
+                && variable.Data.TypeCode == SnmpType.TimeTicks)
+            {
+                sysUpTime = ((TimeTicks)variable.Data).ToUInt32();
+            }
         }
     }
 
