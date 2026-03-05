@@ -9,6 +9,7 @@ var builder = Host.CreateApplicationBuilder(args);
 // DI registration order: Telemetry FIRST (registered first = disposed last = ForceFlush on shutdown)
 builder.AddSnmpTelemetry();
 builder.Services.AddSnmpConfiguration(builder.Configuration);
+builder.Services.AddSnmpPipeline();
 builder.Services.AddSnmpScheduling(builder.Configuration);
 
 var host = builder.Build();
