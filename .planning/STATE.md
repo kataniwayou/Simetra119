@@ -99,6 +99,8 @@ Recent decisions affecting current work:
 - [03-06]: TaskWhenAllPublisher removed from AddSnmpPipeline — not applicable to IRequest<Unit> request/response pipeline
 - [03-06]: RequestHandlerDelegate<TResponse> in MediatR 12.5.0 takes CancellationToken parameter — test lambdas must use 'ct =>' not '() =>'
 - [03-06]: Phase 5/6 MUST use ISender.Send(snmpOidReceived) not IPublisher.Publish — IPublisher.Publish bypasses the entire behavior pipeline
+- [03-gap]: LoggingBehavior now takes PipelineMetricService and calls IncrementPublished() for every SnmpOidReceived — closes PMET-01 (snmp.event.published counter)
+- [03-gap]: SnmpMetricFactoryTests uses MeterListener on real SnmpMetricFactory to verify all 5 OTel tags including site_name — closes SC#1 label coverage
 
 ### Pending Todos
 

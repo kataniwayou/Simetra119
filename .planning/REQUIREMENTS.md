@@ -13,7 +13,7 @@
 - [ ] **COLL-04**: Quartz creates a MetricPollJob per device/poll combination
 - [ ] **COLL-05**: Quartz thread pool auto-scales to total job count
 - [ ] **COLL-06**: Poll timeout set to 80% of interval to leave response window
-- [ ] **COLL-07**: Both traps and polls publish the same `SnmpOidReceived` notification to MediatR
+- [x] **COLL-07**: Both traps and polls publish the same `SnmpOidReceived` notification to MediatR
 
 ### OID Map
 
@@ -25,24 +25,24 @@
 
 ### MediatR Pipeline
 
-- [ ] **PIPE-01**: MediatR v12.5.0 (MIT license) for event routing
-- [ ] **PIPE-02**: `SnmpOidReceived` notification carries OID, agent IP, value, source (poll/trap), SNMP TypeCode
-- [ ] **PIPE-03**: `LoggingBehavior` logs every OID received with agent and source
-- [ ] **PIPE-04**: `ExceptionBehavior` catches all failures, never crashes the pipeline
-- [ ] **PIPE-05**: `ValidationBehavior` rejects malformed OID or IP format
-- [ ] **PIPE-06**: `OidResolutionBehavior` resolves metric_name from OID map, sets "Unknown" if not found
-- [ ] **PIPE-07**: `OtelMetricHandler` records to correct instrument based on SNMP TypeCode
-- [ ] **PIPE-08**: Behavior registration order: Logging → Exception → Validation → OidResolution
-- [ ] **PIPE-09**: Configure `TaskWhenAllPublisher` for parallel handler dispatch with per-handler error isolation
+- [x] **PIPE-01**: MediatR v12.5.0 (MIT license) for event routing
+- [x] **PIPE-02**: `SnmpOidReceived` notification carries OID, agent IP, value, source (poll/trap), SNMP TypeCode
+- [x] **PIPE-03**: `LoggingBehavior` logs every OID received with agent and source
+- [x] **PIPE-04**: `ExceptionBehavior` catches all failures, never crashes the pipeline
+- [x] **PIPE-05**: `ValidationBehavior` rejects malformed OID or IP format
+- [x] **PIPE-06**: `OidResolutionBehavior` resolves metric_name from OID map, sets "Unknown" if not found
+- [x] **PIPE-07**: `OtelMetricHandler` records to correct instrument based on SNMP TypeCode
+- [x] **PIPE-08**: Behavior registration order: Logging → Exception → Validation → OidResolution
+- [x] **PIPE-09**: Configure `TaskWhenAllPublisher` for parallel handler dispatch with per-handler error isolation
 
 ### Business Metrics
 
-- [ ] **METR-01**: `snmp_gauge` instrument for Integer32, Gauge32, TimeTicks values
-- [ ] **METR-02**: `snmp_counter` instrument for Counter32, Counter64 values
-- [ ] **METR-03**: `snmp_info` instrument (gauge=1) for OctetString, IpAddress, OID with string in `value` label
-- [ ] **METR-04**: Common labels on all instruments: `site_name`, `metric_name`, `oid`, `agent`, `source`
-- [ ] **METR-05**: `site_name` loaded from appsettings `Site:Name`
-- [ ] **METR-06**: Runtime metric type detection from SNMP TypeCode — no type field in OID map
+- [x] **METR-01**: `snmp_gauge` instrument for Integer32, Gauge32, TimeTicks values
+- [x] **METR-02**: `snmp_counter` instrument for Counter32, Counter64 values
+- [x] **METR-03**: `snmp_info` instrument (gauge=1) for OctetString, IpAddress, OID with string in `value` label
+- [x] **METR-04**: Common labels on all instruments: `site_name`, `metric_name`, `oid`, `agent`, `source`
+- [x] **METR-05**: `site_name` loaded from appsettings `Site:Name`
+- [x] **METR-06**: Runtime metric type detection from SNMP TypeCode — no type field in OID map
 
 ### Counter Delta Engine
 
@@ -55,14 +55,14 @@
 
 ### Pipeline Metrics
 
-- [ ] **PMET-01**: `snmp.event.published` — events published to MediatR
-- [ ] **PMET-02**: `snmp.event.handled` — events successfully handled by OtelMetricHandler
-- [ ] **PMET-03**: `snmp.event.errors` — exceptions caught by ExceptionBehavior
-- [ ] **PMET-04**: `snmp.event.rejected` — events rejected by ValidationBehavior
-- [ ] **PMET-05**: `snmp.poll.executed` — Quartz poll jobs completed
-- [ ] **PMET-06**: `snmp.trap.received` — traps received on UDP 162
-- [ ] **PMET-07**: All pipeline metrics include `site_name` label
-- [ ] **PMET-08**: Pipeline metrics exported by all instances (not leader-gated)
+- [x] **PMET-01**: `snmp.event.published` — events published to MediatR
+- [x] **PMET-02**: `snmp.event.handled` — events successfully handled by OtelMetricHandler
+- [x] **PMET-03**: `snmp.event.errors` — exceptions caught by ExceptionBehavior
+- [x] **PMET-04**: `snmp.event.rejected` — events rejected by ValidationBehavior
+- [x] **PMET-05**: `snmp.poll.executed` — Quartz poll jobs completed
+- [x] **PMET-06**: `snmp.trap.received` — traps received on UDP 162
+- [x] **PMET-07**: All pipeline metrics include `site_name` label
+- [x] **PMET-08**: Pipeline metrics exported by all instances (not leader-gated)
 
 ### Logging & Telemetry
 
@@ -167,41 +167,41 @@
 | COLL-04 | Phase 6 | Pending |
 | COLL-05 | Phase 6 | Pending |
 | COLL-06 | Phase 6 | Pending |
-| COLL-07 | Phase 3 | Pending |
+| COLL-07 | Phase 3 | Complete |
 | MAP-01 | Phase 2 | Complete |
 | MAP-02 | Phase 2 | Complete |
 | MAP-03 | Phase 2 | Complete |
 | MAP-04 | Phase 2 | Complete |
 | MAP-05 | Phase 2 | Complete |
-| PIPE-01 | Phase 3 | Pending |
-| PIPE-02 | Phase 3 | Pending |
-| PIPE-03 | Phase 3 | Pending |
-| PIPE-04 | Phase 3 | Pending |
-| PIPE-05 | Phase 3 | Pending |
-| PIPE-06 | Phase 3 | Pending |
-| PIPE-07 | Phase 3 | Pending |
-| PIPE-08 | Phase 3 | Pending |
-| PIPE-09 | Phase 3 | Pending |
-| METR-01 | Phase 3 | Pending |
-| METR-02 | Phase 3 | Pending |
-| METR-03 | Phase 3 | Pending |
-| METR-04 | Phase 3 | Pending |
-| METR-05 | Phase 3 | Pending |
-| METR-06 | Phase 3 | Pending |
+| PIPE-01 | Phase 3 | Complete |
+| PIPE-02 | Phase 3 | Complete |
+| PIPE-03 | Phase 3 | Complete |
+| PIPE-04 | Phase 3 | Complete |
+| PIPE-05 | Phase 3 | Complete |
+| PIPE-06 | Phase 3 | Complete |
+| PIPE-07 | Phase 3 | Complete |
+| PIPE-08 | Phase 3 | Complete |
+| PIPE-09 | Phase 3 | Complete |
+| METR-01 | Phase 3 | Complete |
+| METR-02 | Phase 3 | Complete |
+| METR-03 | Phase 3 | Complete |
+| METR-04 | Phase 3 | Complete |
+| METR-05 | Phase 3 | Complete |
+| METR-06 | Phase 3 | Complete |
 | DELT-01 | Phase 4 | Pending |
 | DELT-02 | Phase 4 | Pending |
 | DELT-03 | Phase 4 | Pending |
 | DELT-04 | Phase 4 | Pending |
 | DELT-05 | Phase 4 | Pending |
 | DELT-06 | Phase 4 | Pending |
-| PMET-01 | Phase 3 | Pending |
-| PMET-02 | Phase 3 | Pending |
-| PMET-03 | Phase 3 | Pending |
-| PMET-04 | Phase 3 | Pending |
-| PMET-05 | Phase 3 | Pending |
-| PMET-06 | Phase 3 | Pending |
-| PMET-07 | Phase 3 | Pending |
-| PMET-08 | Phase 3 | Pending |
+| PMET-01 | Phase 3 | Complete |
+| PMET-02 | Phase 3 | Complete |
+| PMET-03 | Phase 3 | Complete |
+| PMET-04 | Phase 3 | Complete |
+| PMET-05 | Phase 3 | Complete |
+| PMET-06 | Phase 3 | Complete |
+| PMET-07 | Phase 3 | Complete |
+| PMET-08 | Phase 3 | Complete |
 | LOG-01 | Phase 1 | Complete |
 | LOG-02 | Phase 1 | Complete |
 | LOG-03 | Phase 1 | Complete |

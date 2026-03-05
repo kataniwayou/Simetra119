@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Infrastructure Foundation** - Running host with OTel SDK, structured logging, and push pipeline wired
 - [x] **Phase 2: Device Registry and OID Map** - All lookup structures built, cardinality locked, config validated
-- [ ] **Phase 3: MediatR Pipeline and Instruments** - Full behavior chain and all metric instruments verified in isolation
+- [x] **Phase 3: MediatR Pipeline and Instruments** - Full behavior chain and all metric instruments verified in isolation
 - [ ] **Phase 4: Counter Delta Engine** - Correct delta computation including wrap-around and reboot detection
 - [ ] **Phase 5: Trap Ingestion** - UDP 162 listener receiving traps end-to-end through MediatR
 - [ ] **Phase 6: Poll Scheduling** - Quartz-driven SNMP GET publishing to MediatR with unreachability handling
@@ -73,12 +73,12 @@ Plans:
 **Plans**: 6 plans in 4 waves
 
 Plans:
-- [ ] 03-01-PLAN.md — NuGet packages (MediatR 12.5.0, SharpSnmpLib 12.5.7), SnmpOidReceived, SnmpSource, PipelineMetricService (Wave 1)
-- [ ] 03-02-PLAN.md — LoggingBehavior and ExceptionBehavior (Wave 2)
-- [ ] 03-03-PLAN.md — ValidationBehavior and OidResolutionBehavior (Wave 2)
-- [ ] 03-04-PLAN.md — SnmpMetricFactory instrument cache and OtelMetricHandler TypeCode dispatch (Wave 2)
-- [ ] 03-05-PLAN.md — AddSnmpPipeline DI wiring and Program.cs integration (Wave 3)
-- [ ] 03-06-PLAN.md — TDD: Unit tests for all behaviors, handler, and pipeline integration (Wave 4)
+- [x] 03-01-PLAN.md — NuGet packages (MediatR 12.5.0, SharpSnmpLib 12.5.7), SnmpOidReceived, SnmpSource, PipelineMetricService (Wave 1)
+- [x] 03-02-PLAN.md — LoggingBehavior and ExceptionBehavior (Wave 2)
+- [x] 03-03-PLAN.md — ValidationBehavior and OidResolutionBehavior (Wave 2)
+- [x] 03-04-PLAN.md — SnmpMetricFactory instrument cache and OtelMetricHandler TypeCode dispatch (Wave 2)
+- [x] 03-05-PLAN.md — AddSnmpPipeline DI wiring and Program.cs integration (Wave 3)
+- [x] 03-06-PLAN.md — TDD: Unit tests for all behaviors, handler, and pipeline integration (Wave 4)
 
 ### Phase 4: Counter Delta Engine
 **Goal**: The counter delta engine correctly computes deltas for all counter scenarios — normal increment, Counter32 wrap-around at 2^32, Counter64 wrap-around, device reboot detection via sysUpTime, and first-poll skip — before any counter metrics reach Prometheus.
@@ -182,7 +182,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 |-------|----------------|--------|-----------|
 | 1. Infrastructure Foundation | 5/5 | Complete | 2026-03-05 |
 | 2. Device Registry and OID Map | 4/4 | Complete | 2026-03-05 |
-| 3. MediatR Pipeline and Instruments | 0/6 | Not started | - |
+| 3. MediatR Pipeline and Instruments | 6/6 | Complete | 2026-03-05 |
 | 4. Counter Delta Engine | 0/4 | Not started | - |
 | 5. Trap Ingestion | 0/4 | Not started | - |
 | 6. Poll Scheduling | 0/5 | Not started | - |
