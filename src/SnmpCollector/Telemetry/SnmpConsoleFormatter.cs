@@ -74,7 +74,7 @@ public sealed class SnmpConsoleFormatter : ConsoleFormatter
         var timestamp = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
         var level = GetLevelAbbreviation(logEntry.LogLevel);
         var site = _siteOptions?.Value.Name ?? "unknown";
-        var role = _leaderElection?.CurrentRole ?? _siteOptions?.Value.Role ?? "unknown";
+        var role = _leaderElection?.CurrentRole ?? "unknown";
         var globalId = _correlationService?.CurrentCorrelationId ?? "none";
         var operationId = _correlationService?.OperationCorrelationId;
         var category = logEntry.Category;
