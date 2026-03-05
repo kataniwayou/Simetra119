@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 2 — Device Registry and OID Map (2/4 plans complete)
+**Current focus:** Phase 2 — Device Registry and OID Map (3/4 plans complete)
 
 ## Current Position
 
 Phase: 2 of 8 (Device Registry and OID Map) — In progress
-Plan: 2 of 4 in phase 2
+Plan: 3 of 4 in phase 2
 Status: In progress
-Last activity: 2026-03-05 — Completed 02-02-PLAN.md (DeviceRegistry, OidMapService, DI wiring)
+Last activity: 2026-03-05 — Completed 02-03-PLAN.md (xUnit test project, TestOptionsMonitor, 16 passing unit tests)
 
-Progress: [██░░░░░░░░] 17% (7/40 plans across all phases estimated)
+Progress: [██░░░░░░░░] 20% (8/40 plans across all phases estimated)
 
 ## Performance Metrics
 
@@ -28,11 +28,11 @@ Progress: [██░░░░░░░░] 17% (7/40 plans across all phases est
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-infrastructure-foundation | 5 | ~20 min | ~4 min |
-| 02-device-registry-and-oid-map | 2 | ~10 min | ~5 min |
+| 02-device-registry-and-oid-map | 3 | ~12 min | ~4 min |
 
 **Recent Trend:**
-- Last 7 plans: 01-01 through 01-05 (foundation), 02-01 (options), 02-02 (pipeline services)
-- Trend: Consistent ~4-6 min execution
+- Last 8 plans: 01-01 through 01-05 (foundation), 02-01 (options), 02-02 (pipeline services), 02-03 (unit tests)
+- Trend: Consistent ~2-6 min execution (02-03 was ~2 min -- TDD with pre-existing impl)
 
 *Updated after each plan completion*
 
@@ -75,6 +75,9 @@ Recent decisions affecting current work:
 - [02-02]: OidMapOptions uses Configure<IConfiguration> delegate — GetSection("OidMap").Bind(opts.Entries) maps flat JSON object keys to Dictionary<string,string>
 - [02-02]: AllDevices returns _byIp.Values (not separate ordered list) — adequate for Phase 6 scheduler which needs to enumerate, not order, devices
 - [02-02]: OidMapService diff logging at Information level (not Debug) — config changes are operator-relevant events
+- [02-03]: xunit 2.9.3 (not 3.x) — 2.x stable; v3 changes assertion API unnecessarily
+- [02-03]: dotnet test -c Release required — Debug build hits SnmpCollector.exe file-lock (pre-existing); Release avoids lock
+- [02-03]: Explicit `using Xunit;` required in test files — ImplicitUsings does not include xUnit namespaces
 
 ### Pending Todos
 
@@ -87,6 +90,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-05T00:14:55Z
-Stopped at: Completed 02-02-PLAN.md — DeviceRegistry, OidMapService, and Phase 2 DI wiring complete. Next: 02-03 (if exists) or Phase 3.
+Last session: 2026-03-05T00:20:54Z
+Stopped at: Completed 02-03-PLAN.md — xUnit test project with 16 passing unit tests (OidMapService + DeviceRegistry). Next: 02-04 (if exists) or Phase 3.
 Resume file: None
