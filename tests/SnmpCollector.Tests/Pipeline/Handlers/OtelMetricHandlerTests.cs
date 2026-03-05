@@ -30,8 +30,10 @@ public sealed class OtelMetricHandlerTests : IDisposable
 
         _pipelineMetrics = _sp.GetRequiredService<PipelineMetricService>();
         _testFactory = new TestSnmpMetricFactory();
+        var deltaEngine = new CounterDeltaEngine(_testFactory, NullLogger<CounterDeltaEngine>.Instance);
         _handler = new OtelMetricHandler(
             _testFactory,
+            deltaEngine,
             _pipelineMetrics,
             NullLogger<OtelMetricHandler>.Instance);
     }
@@ -106,25 +108,27 @@ public sealed class OtelMetricHandlerTests : IDisposable
     // --- Counter deferral tests (Phase 4) ---
 
     [Fact]
-    public async Task Counter32_DoesNotRecord()
+    public async Task Counter32_FirstPoll_NoCounterRecorded()
     {
         var notification = MakeNotification(new Counter32(1000), SnmpType.Counter32);
         await _handler.Handle(notification, CancellationToken.None);
 
-        // Counter32 deferred to Phase 4 -- no gauge or info recorded
+        // First poll stores baseline -- no counter delta emitted, no gauge or info recorded
         Assert.Empty(_testFactory.GaugeRecords);
         Assert.Empty(_testFactory.InfoRecords);
+        Assert.Empty(_testFactory.CounterRecords);
     }
 
     [Fact]
-    public async Task Counter64_DoesNotRecord()
+    public async Task Counter64_FirstPoll_NoCounterRecorded()
     {
         var notification = MakeNotification(new Counter64(5000), SnmpType.Counter64);
         await _handler.Handle(notification, CancellationToken.None);
 
-        // Counter64 deferred to Phase 4 -- no gauge or info recorded
+        // First poll stores baseline -- no counter delta emitted, no gauge or info recorded
         Assert.Empty(_testFactory.GaugeRecords);
         Assert.Empty(_testFactory.InfoRecords);
+        Assert.Empty(_testFactory.CounterRecords);
     }
 
     // --- Label correctness tests ---

@@ -247,18 +247,38 @@ public sealed class PipelineIntegrationTests : IDisposable
         Assert.True(firstLoggingIndex >= 0, "LoggingBehavior log message not found");
     }
 
-    // --- Counter deferral ---
+    // --- Counter delta recording ---
 
     [Fact]
-    public async Task SendCounter32_NothingRecorded()
+    public async Task SendCounter32_FirstPoll_NoCounterRecorded()
     {
-        // Counter32 deferred to Phase 4 -- no gauge or info should be recorded
+        // First poll stores baseline -- no counter delta emitted
         var notification = MakePollNotification(new Counter32(1000), SnmpType.Counter32);
 
         await _sender.Send(notification, CancellationToken.None);
 
         Assert.Empty(_testFactory.GaugeRecords);
         Assert.Empty(_testFactory.InfoRecords);
+        Assert.Empty(_testFactory.CounterRecords);
+    }
+
+    [Fact]
+    public async Task SendCounter32_SecondPoll_CounterDeltaRecorded()
+    {
+        var firstPoll = MakePollNotification(new Counter32(1000), SnmpType.Counter32);
+        await _sender.Send(firstPoll, CancellationToken.None);
+        Assert.Empty(_testFactory.CounterRecords);
+
+        var secondPoll = MakePollNotification(new Counter32(1500), SnmpType.Counter32);
+        await _sender.Send(secondPoll, CancellationToken.None);
+
+        Assert.Single(_testFactory.CounterRecords);
+        var record = _testFactory.CounterRecords[0];
+        Assert.Equal(500.0, record.Delta);
+        Assert.Equal("hrProcessorLoad", record.MetricName);
+        Assert.Equal(KnownOid, record.Oid);
+        Assert.Equal(KnownDevice, record.Agent);
+        Assert.Equal("poll", record.Source);
     }
 
     // --- Helper stubs ---
