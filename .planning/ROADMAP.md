@@ -90,13 +90,13 @@ Plans:
   3. A counter value lower than the previous value that coincides with a sysUpTime reset (device reboot detected) causes the current value to be treated as the delta — verifiable with a unit test providing synthetic uptime values
   4. The first poll for a given OID+agent combination after startup produces no `snmp_counter` recording — the baseline is stored but not emitted
   5. The delta cache is keyed by OID+agent combination so that two different agents reporting the same OID maintain independent delta state
-**Plans**: TBD
+**Plans**: 4 plans in 3 waves
 
 Plans:
-- [ ] 04-01: Counter delta cache (ConcurrentDictionary keyed by OID+agent) with first-poll skip logic
-- [ ] 04-02: Delta computation — normal increment, Counter32 wrap at 2^32, Counter64 wrap
-- [ ] 04-03: sysUpTime polling integration and reboot-vs-wrap disambiguation
-- [ ] 04-04: Unit test suite — synthetic counter scenarios covering all edge cases
+- [ ] 04-01-PLAN.md — Interface extensions: SysUpTimeCentiseconds, RecordCounter, TestSnmpMetricFactory update (Wave 1)
+- [ ] 04-02-PLAN.md — CounterDeltaEngine: ICounterDeltaEngine + all 5 delta computation paths (Wave 2)
+- [ ] 04-03-PLAN.md — Handler wiring: OtelMetricHandler integration, DI registration, integration test updates (Wave 3)
+- [ ] 04-04-PLAN.md — TDD: CounterDeltaEngine unit tests covering all 5 SC edge cases (Wave 3)
 
 ### Phase 5: Trap Ingestion
 **Goal**: The application receives SNMPv2c traps on UDP 162 and routes each varbind through the MediatR pipeline to the correct metric instrument — with backpressure under trap storms and community string authentication.
@@ -183,7 +183,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 1. Infrastructure Foundation | 5/5 | Complete | 2026-03-05 |
 | 2. Device Registry and OID Map | 4/4 | Complete | 2026-03-05 |
 | 3. MediatR Pipeline and Instruments | 6/6 | Complete | 2026-03-05 |
-| 4. Counter Delta Engine | 0/4 | Not started | - |
+| 4. Counter Delta Engine | 0/4 | Planned | - |
 | 5. Trap Ingestion | 0/4 | Not started | - |
 | 6. Poll Scheduling | 0/5 | Not started | - |
 | 7. Leader Election and Role-Gated Export | 0/5 | Not started | - |
