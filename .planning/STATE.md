@@ -174,6 +174,12 @@ Recent decisions affecting current work:
 
 None yet.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 001 | Verify SNMPv2c only (SNMPv3 not supported) | 2026-03-05 | — (verification only) | [001-verify-snmpv2c-only](./quick/001-verify-snmpv2c-only/) |
+
 ### Blockers/Concerns
 
 - [Phase 7] MetricRoleGatedExporter reflection ParentProvider propagation confirmed working in OTel 1.15.0. ParentProvider breakage detection test added in 07-05: any future OTel SDK upgrade that removes/renames the property will surface immediately in CI.
