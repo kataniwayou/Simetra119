@@ -29,6 +29,8 @@ public sealed class CorrelationJob : IJob
 
     public Task Execute(IJobExecutionContext context)
     {
+        // Capture the current global correlationId for this job's log context.
+        _correlation.OperationCorrelationId = _correlation.CurrentCorrelationId;
         var jobKey = context.JobDetail.Key.Name;
 
         try
@@ -36,6 +38,9 @@ public sealed class CorrelationJob : IJob
             // SCHED-07: Generate new correlationId
             var newCorrelationId = Guid.NewGuid().ToString("N");
             _correlation.SetCorrelationId(newCorrelationId);
+
+            // Update operation scope to the new ID so the rotation log line carries it.
+            _correlation.OperationCorrelationId = newCorrelationId;
 
             _logger.LogInformation(
                 "Correlation ID rotated to {CorrelationId}",
@@ -50,6 +55,8 @@ public sealed class CorrelationJob : IJob
         {
             // HLTH-05: Stamp liveness vector on completion (always, even on failure)
             _liveness.Stamp(jobKey);
+            // Clear operation-scoped correlationId.
+            _correlation.OperationCorrelationId = null;
         }
 
         return Task.CompletedTask;

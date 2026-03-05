@@ -22,17 +22,20 @@ public sealed class ChannelConsumerService : BackgroundService
 {
     private readonly IDeviceChannelManager _channelManager;
     private readonly ISender _sender;
+    private readonly ICorrelationService _correlation;
     private readonly PipelineMetricService _pipelineMetrics;
     private readonly ILogger<ChannelConsumerService> _logger;
 
     public ChannelConsumerService(
         IDeviceChannelManager channelManager,
         ISender sender,
+        ICorrelationService correlation,
         PipelineMetricService pipelineMetrics,
         ILogger<ChannelConsumerService> logger)
     {
         _channelManager = channelManager;
         _sender = sender;
+        _correlation = correlation;
         _pipelineMetrics = pipelineMetrics;
         _logger = logger;
     }
@@ -68,6 +71,9 @@ public sealed class ChannelConsumerService : BackgroundService
 
         await foreach (var envelope in reader.ReadAllAsync(ct))
         {
+            // Capture the current global correlationId so all logs for this trap varbind
+            // carry a consistent ID even if the global one rotates mid-processing.
+            _correlation.OperationCorrelationId = _correlation.CurrentCorrelationId;
             try
             {
                 var msg = new SnmpOidReceived

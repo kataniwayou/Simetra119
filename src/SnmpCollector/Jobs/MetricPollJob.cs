@@ -27,6 +27,7 @@ public sealed class MetricPollJob : IJob
     private readonly IDeviceUnreachabilityTracker _unreachabilityTracker;
     private readonly ISender _sender;
     private readonly ISnmpClient _snmpClient;
+    private readonly ICorrelationService _correlation;
     private readonly ILivenessVectorService _liveness;
     private readonly PipelineMetricService _pipelineMetrics;
     private readonly ILogger<MetricPollJob> _logger;
@@ -36,6 +37,7 @@ public sealed class MetricPollJob : IJob
         IDeviceUnreachabilityTracker unreachabilityTracker,
         ISender sender,
         ISnmpClient snmpClient,
+        ICorrelationService correlation,
         ILivenessVectorService liveness,
         PipelineMetricService pipelineMetrics,
         ILogger<MetricPollJob> logger)
@@ -44,6 +46,7 @@ public sealed class MetricPollJob : IJob
         _unreachabilityTracker = unreachabilityTracker;
         _sender = sender;
         _snmpClient = snmpClient;
+        _correlation = correlation;
         _liveness = liveness;
         _pipelineMetrics = pipelineMetrics;
         _logger = logger;
@@ -51,6 +54,10 @@ public sealed class MetricPollJob : IJob
 
     public async Task Execute(IJobExecutionContext context)
     {
+        // Capture the current global correlationId at job start so all logs during this
+        // execution carry a consistent ID even if the global one rotates mid-execution.
+        _correlation.OperationCorrelationId = _correlation.CurrentCorrelationId;
+
         var map = context.MergedJobDataMap;
         var deviceName = map.GetString("deviceName")!;
         var pollIndex = map.GetInt("pollIndex");
@@ -131,6 +138,8 @@ public sealed class MetricPollJob : IJob
             _pipelineMetrics.IncrementPollExecuted();
             // HLTH-05: Stamp liveness vector on completion (always, even on failure)
             _liveness.Stamp(jobKey);
+            // Clear operation-scoped correlationId so it doesn't leak to other async contexts.
+            _correlation.OperationCorrelationId = null;
         }
     }
 

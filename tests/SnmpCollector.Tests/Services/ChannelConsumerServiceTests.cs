@@ -79,6 +79,7 @@ public sealed class ChannelConsumerServiceTests : IDisposable
         => new ChannelConsumerService(
             channelManager,
             sender,
+            new RotatingCorrelationService(),
             _metrics,
             NullLogger<ChannelConsumerService>.Instance);
 
