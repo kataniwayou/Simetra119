@@ -43,4 +43,11 @@ public sealed class SnmpOidReceived : IRequest<Unit>
     /// Resolved metric name (e.g., "sysUpTime"). Null until OidResolutionBehavior runs and maps the OID.
     /// </summary>
     public string? MetricName { get; set; }
+
+    /// <summary>
+    /// sysUpTime value (OID 1.3.6.1.2.1.1.3.0) in centiseconds, bundled with the counter poll.
+    /// Null when unavailable (device doesn't expose it, SNMP error, or test without uptime context).
+    /// When null, the delta engine conservatively treats current &lt; previous as reboot.
+    /// </summary>
+    public uint? SysUpTimeCentiseconds { get; set; }
 }

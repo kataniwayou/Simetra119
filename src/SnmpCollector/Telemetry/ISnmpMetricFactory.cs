@@ -17,4 +17,11 @@ public interface ISnmpMetricFactory
     /// Used for OctetString, IPAddress, and ObjectIdentifier OID types.
     /// </summary>
     void RecordInfo(string metricName, string oid, string agent, string source, string value);
+
+    /// <summary>
+    /// Records a computed counter delta on the <c>snmp_counter</c> instrument.
+    /// Used by the counter delta engine after computing the difference from the previous value.
+    /// The delta parameter must be non-negative (counters never decrease in Prometheus).
+    /// </summary>
+    void RecordCounter(string metricName, string oid, string agent, string source, double delta);
 }
