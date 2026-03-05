@@ -46,12 +46,12 @@
 
 ### Counter Delta Engine
 
-- [ ] **DELT-01**: Cache stores last cumulative value per OID+agent combination
-- [ ] **DELT-02**: Delta = current - previous for normal increments
-- [ ] **DELT-03**: Counter reset detection: current < previous → treat current as delta
-- [ ] **DELT-04**: Counter32 wrap-around handling at 2^32 boundary
-- [ ] **DELT-05**: First poll after startup: skip (no previous baseline)
-- [ ] **DELT-06**: Poll sysUpTime to distinguish device reboot from counter wrap
+- [x] **DELT-01**: Cache stores last cumulative value per OID+agent combination
+- [x] **DELT-02**: Delta = current - previous for normal increments
+- [x] **DELT-03**: Counter reset detection: current < previous → treat current as delta
+- [x] **DELT-04**: Counter32 wrap-around handling at 2^32 boundary
+- [x] **DELT-05**: First poll after startup: skip (no previous baseline)
+- [x] **DELT-06**: Poll sysUpTime to distinguish device reboot from counter wrap
 
 ### Pipeline Metrics
 
@@ -188,12 +188,12 @@
 | METR-04 | Phase 3 | Complete |
 | METR-05 | Phase 3 | Complete |
 | METR-06 | Phase 3 | Complete |
-| DELT-01 | Phase 4 | Pending |
-| DELT-02 | Phase 4 | Pending |
-| DELT-03 | Phase 4 | Pending |
-| DELT-04 | Phase 4 | Pending |
-| DELT-05 | Phase 4 | Pending |
-| DELT-06 | Phase 4 | Pending |
+| DELT-01 | Phase 4 | Complete |
+| DELT-02 | Phase 4 | Complete |
+| DELT-03 | Phase 4 | Complete |
+| DELT-04 | Phase 4 | Complete |
+| DELT-05 | Phase 4 | Complete |
+| DELT-06 | Phase 4 | Complete |
 | PMET-01 | Phase 3 | Complete |
 | PMET-02 | Phase 3 | Complete |
 | PMET-03 | Phase 3 | Complete |
@@ -249,4 +249,4 @@
 
 ---
 *Requirements defined: 2026-03-04*
-*Last updated: 2026-03-05 after Phase 2 completion*
+*Last updated: 2026-03-05 after Phase 4 completion*

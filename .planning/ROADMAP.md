@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Infrastructure Foundation** - Running host with OTel SDK, structured logging, and push pipeline wired
 - [x] **Phase 2: Device Registry and OID Map** - All lookup structures built, cardinality locked, config validated
 - [x] **Phase 3: MediatR Pipeline and Instruments** - Full behavior chain and all metric instruments verified in isolation
-- [ ] **Phase 4: Counter Delta Engine** - Correct delta computation including wrap-around and reboot detection
+- [x] **Phase 4: Counter Delta Engine** - Correct delta computation including wrap-around and reboot detection
 - [ ] **Phase 5: Trap Ingestion** - UDP 162 listener receiving traps end-to-end through MediatR
 - [ ] **Phase 6: Poll Scheduling** - Quartz-driven SNMP GET publishing to MediatR with unreachability handling
 - [ ] **Phase 7: Leader Election and Role-Gated Export** - Exactly one pod exports business metrics in multi-instance deployment
@@ -93,10 +93,10 @@ Plans:
 **Plans**: 4 plans in 3 waves
 
 Plans:
-- [ ] 04-01-PLAN.md — Interface extensions: SysUpTimeCentiseconds, RecordCounter, TestSnmpMetricFactory update (Wave 1)
-- [ ] 04-02-PLAN.md — CounterDeltaEngine: ICounterDeltaEngine + all 5 delta computation paths (Wave 2)
-- [ ] 04-03-PLAN.md — Handler wiring: OtelMetricHandler integration, DI registration, integration test updates (Wave 3)
-- [ ] 04-04-PLAN.md — TDD: CounterDeltaEngine unit tests covering all 5 SC edge cases (Wave 3)
+- [x] 04-01-PLAN.md — Interface extensions: SysUpTimeCentiseconds, RecordCounter, TestSnmpMetricFactory update (Wave 1)
+- [x] 04-02-PLAN.md — CounterDeltaEngine: ICounterDeltaEngine + all 5 delta computation paths (Wave 2)
+- [x] 04-03-PLAN.md — Handler wiring: OtelMetricHandler integration, DI registration, integration test updates (Wave 3)
+- [x] 04-04-PLAN.md — TDD: CounterDeltaEngine unit tests covering all 5 SC edge cases (Wave 3)
 
 ### Phase 5: Trap Ingestion
 **Goal**: The application receives SNMPv2c traps on UDP 162 and routes each varbind through the MediatR pipeline to the correct metric instrument — with backpressure under trap storms and community string authentication.
@@ -183,7 +183,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 1. Infrastructure Foundation | 5/5 | Complete | 2026-03-05 |
 | 2. Device Registry and OID Map | 4/4 | Complete | 2026-03-05 |
 | 3. MediatR Pipeline and Instruments | 6/6 | Complete | 2026-03-05 |
-| 4. Counter Delta Engine | 0/4 | Planned | - |
+| 4. Counter Delta Engine | 4/4 | Complete | 2026-03-05 |
 | 5. Trap Ingestion | 0/4 | Not started | - |
 | 6. Poll Scheduling | 0/5 | Not started | - |
 | 7. Leader Election and Role-Gated Export | 0/5 | Not started | - |
