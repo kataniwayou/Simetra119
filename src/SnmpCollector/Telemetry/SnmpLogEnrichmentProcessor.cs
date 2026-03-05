@@ -6,7 +6,7 @@ namespace SnmpCollector.Telemetry;
 
 /// <summary>
 /// OpenTelemetry log processor that enriches every <see cref="LogRecord"/> with
-/// site name, role, and the current correlation ID.
+/// site name, dynamic role (from leader election), and the current correlation ID.
 /// <para>
 /// These attributes appear on all log records regardless of the logger category,
 /// providing consistent structured context for OTLP-exported logs.
@@ -16,28 +16,29 @@ public sealed class SnmpLogEnrichmentProcessor : BaseProcessor<LogRecord>
 {
     private readonly ICorrelationService _correlationService;
     private readonly string _siteName;
-    private readonly string _role;
+    private readonly Func<string> _roleProvider;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SnmpLogEnrichmentProcessor"/> class.
     /// </summary>
     /// <param name="correlationService">Service providing the current correlation ID.</param>
     /// <param name="siteName">Site name resolved from <c>SiteOptions.Name</c>.</param>
-    /// <param name="role">
-    /// Role string (e.g. "standalone", "leader", or "follower").
-    /// Uses a static string in Phase 1 -- Phase 7 will make this dynamic via leader election.
+    /// <param name="roleProvider">
+    /// Delegate returning the current role (e.g. "leader" or "follower").
+    /// Evaluated on every log record to reflect dynamic leadership changes.
+    /// Bound to ILeaderElection.CurrentRole via closure in DI wiring.
     /// </param>
     public SnmpLogEnrichmentProcessor(
         ICorrelationService correlationService,
         string siteName,
-        string role)
+        Func<string> roleProvider)
     {
         _correlationService = correlationService
             ?? throw new ArgumentNullException(nameof(correlationService));
         _siteName = siteName
             ?? throw new ArgumentNullException(nameof(siteName));
-        _role = role
-            ?? throw new ArgumentNullException(nameof(role));
+        _roleProvider = roleProvider
+            ?? throw new ArgumentNullException(nameof(roleProvider));
     }
 
     /// <inheritdoc />
@@ -49,7 +50,7 @@ public sealed class SnmpLogEnrichmentProcessor : BaseProcessor<LogRecord>
             ?? new List<KeyValuePair<string, object?>>(3);
 
         attributes.Add(new KeyValuePair<string, object?>("site_name", _siteName));
-        attributes.Add(new KeyValuePair<string, object?>("role", _role));
+        attributes.Add(new KeyValuePair<string, object?>("role", _roleProvider()));
         attributes.Add(new KeyValuePair<string, object?>("correlationId",
             _correlationService.OperationCorrelationId ?? _correlationService.CurrentCorrelationId));
 

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenTelemetry;
+using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -40,8 +41,9 @@ public static class ServiceCollectionExtensions
     /// ensuring ForceFlush runs during graceful shutdown after all other services stop.
     /// </para>
     /// <para>
-    /// Phase 1: No tracing (LOG-07), no leader election, no role-gated exporters.
-    /// Direct AddOtlpExporter on metrics -- all instances export.
+    /// Phase 7: MetricRoleGatedExporter wraps OtlpMetricExporter to gate business metrics
+    /// (LeaderMeterName) behind ILeaderElection.IsLeader. Pipeline and System.Runtime metrics
+    /// are exported by all instances. No tracing (LOG-07).
     /// </para>
     /// </summary>
     public static IHostApplicationBuilder AddSnmpTelemetry(
@@ -64,7 +66,6 @@ public static class ServiceCollectionExtensions
 
         // --- Metrics ---
         // No WithTracing block (LOG-07: no distributed traces in SnmpCollector).
-        // No MetricRoleGatedExporter -- Phase 1 has no leader election; all instances export directly.
         builder.Services.AddOpenTelemetry()
             .ConfigureResource(resource => resource
                 .AddService(
@@ -73,11 +74,23 @@ public static class ServiceCollectionExtensions
                         ?? Environment.MachineName))
             .WithMetrics(metrics =>
             {
-                metrics.AddMeter(TelemetryConstants.MeterName);
-                metrics.AddRuntimeInstrumentation();
-                metrics.AddOtlpExporter(o =>
+                metrics.AddMeter(TelemetryConstants.MeterName);        // Pipeline metrics (always exported)
+                metrics.AddMeter(TelemetryConstants.LeaderMeterName);  // Business metrics (leader-gated)
+                metrics.AddRuntimeInstrumentation();                   // System.Runtime (always exported)
+
+                // Manual construction required: AddOtlpExporter() creates the exporter internally
+                // and prevents wrapping. MetricRoleGatedExporter wraps OtlpMetricExporter to gate
+                // business metrics (LeaderMeterName) behind ILeaderElection.IsLeader.
+                metrics.AddReader(sp =>
                 {
-                    o.Endpoint = new Uri(endpoint);
+                    var leaderElection = sp.GetRequiredService<ILeaderElection>();
+                    var otlpExporter = new OtlpMetricExporter(new OtlpExporterOptions
+                    {
+                        Endpoint = new Uri(endpoint)
+                    });
+                    var roleGated = new MetricRoleGatedExporter(
+                        otlpExporter, leaderElection, TelemetryConstants.LeaderMeterName);
+                    return new PeriodicExportingMetricReader(roleGated);
                 });
             });
 
@@ -118,10 +131,11 @@ public static class ServiceCollectionExtensions
             {
                 var siteOptions = sp.GetRequiredService<IOptions<SiteOptions>>().Value;
                 var correlationService = sp.GetRequiredService<ICorrelationService>();
+                var leaderElection = sp.GetRequiredService<ILeaderElection>();
                 return new SnmpLogEnrichmentProcessor(
                     correlationService,
                     siteOptions.Name,
-                    siteOptions.Role);
+                    () => leaderElection.CurrentRole);
             });
         });
 
@@ -174,6 +188,43 @@ public static class ServiceCollectionExtensions
         // Custom IValidateOptions for cross-field validation (Phase 1)
         services.AddSingleton<IValidateOptions<SiteOptions>, SiteOptionsValidator>();
         services.AddSingleton<IValidateOptions<OtlpOptions>, OtlpOptionsValidator>();
+
+        // --- Phase 7: Leader election ---
+        // K8s environment detection: IsInCluster() checks KUBERNETES_SERVICE_HOST +
+        // KUBERNETES_SERVICE_PORT env vars AND service account token/cert files.
+        if (k8s.KubernetesClientConfiguration.IsInCluster())
+        {
+            // LeaseOptions: only needed in K8s (not bound for local dev).
+            services.AddOptions<LeaseOptions>()
+                .Bind(configuration.GetSection(LeaseOptions.SectionName))
+                .ValidateDataAnnotations()
+                .ValidateOnStart();
+            services.AddSingleton<IValidateOptions<LeaseOptions>, LeaseOptionsValidator>();
+
+            var kubeConfig = k8s.KubernetesClientConfiguration.InClusterConfig();
+            services.AddSingleton<k8s.IKubernetes>(new k8s.Kubernetes(kubeConfig));
+
+            // CRITICAL: Register concrete type FIRST, then resolve same instance for both interfaces.
+            // If AddSingleton<ILeaderElection, K8sLeaseElection>() and AddHostedService<K8sLeaseElection>()
+            // are used separately, DI creates TWO instances -- the hosted service updates _isLeader on one,
+            // but ILeaderElection consumers read from a different instance that never becomes leader.
+            services.AddSingleton<K8sLeaseElection>();
+            services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<K8sLeaseElection>());
+            services.AddHostedService(sp => sp.GetRequiredService<K8sLeaseElection>());
+        }
+        else
+        {
+            // Local dev: AlwaysLeaderElection (IsLeader=true, no K8s dependency).
+            services.AddSingleton<ILeaderElection, AlwaysLeaderElection>();
+        }
+
+        // Phase 7: SiteOptions.PodIdentity defaults to HOSTNAME env var (K8s pod name),
+        // falling back to machine name for local dev.
+        services.PostConfigure<SiteOptions>(options =>
+        {
+            options.PodIdentity ??= Environment.GetEnvironmentVariable("HOSTNAME")
+                ?? Environment.MachineName;
+        });
 
         // --- Phase 2 options ---
         // DevicesOptions: "Devices" is a JSON array; bind list directly into the Devices property.

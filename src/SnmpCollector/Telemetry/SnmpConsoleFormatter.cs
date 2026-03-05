@@ -15,8 +15,9 @@ namespace SnmpCollector.Telemetry;
 public sealed class SnmpConsoleFormatterOptions : ConsoleFormatterOptions
 {
     /// <summary>
-    /// The service provider used to resolve <see cref="ICorrelationService"/>
-    /// and <see cref="IOptions{SiteOptions}"/> on first write.
+    /// The service provider used to resolve <see cref="ICorrelationService"/>,
+    /// <see cref="IOptions{SiteOptions}"/>, and <see cref="ILeaderElection"/>
+    /// on first write.
     /// Populated by <see cref="PostConfigureSnmpFormatterOptions"/>.
     /// </summary>
     public IServiceProvider? ServiceProvider { get; set; }
@@ -44,6 +45,7 @@ public sealed class SnmpConsoleFormatter : ConsoleFormatter
     // Lazily resolved DI services (resolved on first Write call)
     private ICorrelationService? _correlationService;
     private IOptions<SiteOptions>? _siteOptions;
+    private ILeaderElection? _leaderElection;
     private bool _servicesResolved;
 
     /// <summary>
@@ -72,7 +74,7 @@ public sealed class SnmpConsoleFormatter : ConsoleFormatter
         var timestamp = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
         var level = GetLevelAbbreviation(logEntry.LogLevel);
         var site = _siteOptions?.Value.Name ?? "unknown";
-        var role = _siteOptions?.Value.Role ?? "unknown";
+        var role = _leaderElection?.CurrentRole ?? _siteOptions?.Value.Role ?? "unknown";
         var globalId = _correlationService?.CurrentCorrelationId ?? "none";
         var operationId = _correlationService?.OperationCorrelationId;
         var category = logEntry.Category;
@@ -117,6 +119,7 @@ public sealed class SnmpConsoleFormatter : ConsoleFormatter
 
         _correlationService = sp.GetService<ICorrelationService>();
         _siteOptions = sp.GetService<IOptions<SiteOptions>>();
+        _leaderElection = sp.GetService<ILeaderElection>();  // Phase 7: dynamic role
         _servicesResolved = true;
     }
 
