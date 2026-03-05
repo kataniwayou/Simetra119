@@ -21,4 +21,11 @@ public sealed class SiteOptions
     /// Defaults to "standalone".
     /// </summary>
     public string Role { get; set; } = "standalone";
+
+    /// <summary>
+    /// Pod identity for Kubernetes lease holder identification.
+    /// Defaults to HOSTNAME environment variable (the K8s pod name) via PostConfigure
+    /// when not explicitly set in configuration. Falls back to Environment.MachineName.
+    /// </summary>
+    public string? PodIdentity { get; set; }
 }
