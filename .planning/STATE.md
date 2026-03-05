@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 4 — Counter Delta Engine (Plan 01 complete — interface extensions done)
+**Current focus:** Phase 4 — Counter Delta Engine (Plans 01-02 complete — interface extensions + CounterDeltaEngine done)
 
 ## Current Position
 
 Phase: 4 of 8 (Counter Delta Engine) — In progress
-Plan: 1 of N in phase 4
-Status: 04-01 complete — interface extensions done; ready for 04-02 (CounterDeltaEngine)
-Last activity: 2026-03-05 — Completed 04-01-PLAN.md (52 tests passing; RecordCounter + SysUpTimeCentiseconds added)
+Plan: 2 of N in phase 4
+Status: 04-02 complete — CounterDeltaEngine with all 5 delta paths implemented; ready for 04-03 (DI registration + unit tests)
+Last activity: 2026-03-05 — Completed 04-02-PLAN.md (CounterDeltaEngine: ICounterDeltaEngine interface + singleton service)
 
-Progress: [█████░░░░░] 40% (16/40 plans across all phases estimated)
+Progress: [█████░░░░░] 43% (17/40 plans across all phases estimated)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
+- Total plans completed: 11
 - Average duration: ~3-5 min
-- Total execution time: ~49 min
+- Total execution time: ~50 min
 
 **By Phase:**
 
@@ -30,10 +30,10 @@ Progress: [█████░░░░░] 40% (16/40 plans across all phases es
 | 01-infrastructure-foundation | 5 | ~20 min | ~4 min |
 | 02-device-registry-and-oid-map | 4 | ~14 min | ~3.5 min |
 | 03-mediatr-pipeline-and-instruments | 6 (complete) | ~24 min | ~4 min |
-| 04-counter-delta-engine | 1 so far | ~2 min | ~2 min |
+| 04-counter-delta-engine | 2 so far | ~3 min | ~1.5 min |
 
 **Recent Trend:**
-- Last 11 plans: 01-01 through 01-05 (foundation), 02-01 through 02-04, 03-01 through 03-06, 04-01
+- Last 12 plans: 01-01 through 01-05 (foundation), 02-01 through 02-04, 03-01 through 03-06, 04-01 through 04-02
 - Trend: Consistent ~2-6 min execution
 
 *Updated after each plan completion*
@@ -105,6 +105,10 @@ Recent decisions affecting current work:
 - [04-01]: SysUpTimeCentiseconds is uint? nullable on SnmpOidReceived — null means unavailable; delta engine conservatively treats current < previous as reboot when null
 - [04-01]: RecordCounter last param named delta (not value) — signals it is a computed difference, not a raw SNMP reading
 - [04-01]: snmp_counter instrument name for Counter<double> — follows snmp_gauge/snmp_info naming convention
+- [04-02]: Counter32 wrap casts previousValue to uint before subtraction — avoids 64-bit arithmetic inflating the wrap delta when previous is stored as ulong
+- [04-02]: Counter64 current < previous always treated as reboot — 64-bit rollover in practice takes years at max SNMPv2c rates; conservative reboot treatment is correct
+- [04-02]: sysUpTime keyed by agent (not oid|agent) — device reboot resets all OID counters simultaneously; one uptime per device is the correct granularity
+- [04-02]: AddOrUpdate closure captures previousValue as ulong? — null = add path (first poll); non-null = update path; single atomic ConcurrentDictionary operation
 
 ### Pending Todos
 
@@ -113,10 +117,10 @@ None yet.
 ### Blockers/Concerns
 
 - [Phase 6] MetricRoleGatedExporter uses reflection to set internal ParentProvider on BaseExporter<Metric> — verify against OTel 1.15.0 internals and add breakage-detection test during Phase 7 planning
-- [Phase 4] Counter delta wrap-around and sysUpTime reboot detection require explicit unit test cases before any counter metrics reach Prometheus — design before coding
+- [Phase 4] CounterDeltaEngine unit tests (all 5 paths) still needed before counter metrics reach Prometheus — 04-03 must cover these
 
 ## Session Continuity
 
-Last session: 2026-03-05T03:09:04Z
-Stopped at: Completed 04-01-PLAN.md — 52 tests passing; RecordCounter added to ISnmpMetricFactory + SnmpMetricFactory; SysUpTimeCentiseconds added to SnmpOidReceived; CounterRecords in TestSnmpMetricFactory. Next: 04-02 CounterDeltaEngine.
+Last session: 2026-03-05T03:12:37Z
+Stopped at: Completed 04-02-PLAN.md — ICounterDeltaEngine + CounterDeltaEngine singleton with all 5 delta paths; build passes zero errors. Next: 04-03 DI registration + unit tests for all 5 paths.
 Resume file: None
