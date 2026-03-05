@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 6 in progress — Poll Scheduling. Plan 01 complete (foundation types). Plan 02 next (MetricPollJob).
+**Current focus:** Phase 6 in progress — Poll Scheduling. Plans 01-02 complete. Plan 03 next (Quartz scheduler registration).
 
 ## Current Position
 
 Phase: 6 of 8 (Poll Scheduling) — In progress
-Plan: 1 of ~4 complete
-Status: Phase 6 plan 01 complete. IDeviceUnreachabilityTracker + DeviceUnreachabilityTracker created. PipelineMetricService extended to 11 counters. 86 tests passing.
-Last activity: 2026-03-05 — Completed 06-01-PLAN.md (foundation types for poll scheduling)
+Plan: 2 of ~4 complete
+Status: Phase 6 plans 01-02 complete. MetricPollJob created with SNMP GET, ISender.Send dispatch, 80% timeout, unreachability tracking. 86 tests passing.
+Last activity: 2026-03-05 — Completed 06-02-PLAN.md (MetricPollJob)
 
-Progress: [████████████░░░░░░░░] 66% (24/40 plans across all phases estimated)
+Progress: [████████████░░░░░░░░] 68% (25/40 plans across all phases estimated)
 
 ## Performance Metrics
 
@@ -32,7 +32,7 @@ Progress: [████████████░░░░░░░░] 66% (24
 | 03-mediatr-pipeline-and-instruments | 6 (complete) | ~24 min | ~4 min |
 | 04-counter-delta-engine | 4 (complete) | ~5 min | ~1.3 min |
 | 05-trap-ingestion | 4 (complete) | ~31 min | ~7.75 min |
-| 06-poll-scheduling | 1 complete | ~2 min | ~2 min |
+| 06-poll-scheduling | 2 complete | ~5 min | ~2.5 min |
 
 **Recent Trend:**
 - Last 24 plans: 01-01 through 06-01
@@ -135,6 +135,10 @@ Recent decisions affecting current work:
 - [06-01]: Singleton tracker (not per-job instance field) — Quartz DI creates new job instance per execution; per-job state is lost between runs
 - [06-01]: Inner DeviceState class avoids struct-update atomicity issues in ConcurrentDictionary; volatile int + Interlocked for lock-free counting without locks
 - [06-01]: RecordFailure/RecordSuccess return true ONLY on state transition (not on every call) — MetricPollJob (Plan 02) uses return value to decide whether to fire OTel counter and log transition
+- [06-02]: Device lookup failure returns before try block — config errors must NOT increment snmp.poll.executed; only actual poll attempts count
+- [06-02]: sysUpTime varbind own SnmpOidReceived carries SysUpTimeCentiseconds=null — extracted in same iteration but local is null at dispatch time; subsequent OIDs carry the extracted value
+- [06-02]: noSuchObject/noSuchInstance/EndOfMibView logged at Debug (not Warning) — expected for devices not exposing all OIDs; Warning would cause noise
+- [06-02]: Bare OperationCanceledException re-thrown (host shutdown) — Quartz needs to see cancellation for graceful shutdown; swallowing it makes job report success on shutdown
 
 ### Pending Todos
 
@@ -147,5 +151,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Completed 06-01-PLAN.md — IDeviceUnreachabilityTracker, DeviceUnreachabilityTracker, PipelineMetricService (+2 counters)
+Stopped at: Completed 06-02-PLAN.md — MetricPollJob with SNMP GET, ISender.Send dispatch, 80% timeout CTS, unreachability tracking
 Resume file: None
