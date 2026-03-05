@@ -249,6 +249,9 @@ public static class ServiceCollectionExtensions
         // SNMP instrument factory: ConcurrentDictionary cache for snmp_gauge and snmp_info instruments.
         services.AddSingleton<ISnmpMetricFactory, SnmpMetricFactory>();
 
+        // Counter delta engine: singleton, maintains per-OID+agent state for delta computation.
+        services.AddSingleton<ICounterDeltaEngine, CounterDeltaEngine>();
+
         return services;
     }
 

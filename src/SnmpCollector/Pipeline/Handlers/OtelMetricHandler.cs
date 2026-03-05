@@ -11,22 +11,25 @@ namespace SnmpCollector.Pipeline.Handlers;
 ///
 /// Implements IRequestHandler (not INotificationHandler) so that IPipelineBehavior chain
 /// runs: Logging → Exception → Validation → OidResolution → this handler.
-/// Counter32 and Counter64 are intentionally deferred to Phase 4 (delta engine) and are
-/// logged at Debug level without recording a metric value.
+/// Counter32 and Counter64 are routed through <see cref="ICounterDeltaEngine"/> for
+/// delta computation before recording to the metric factory.
 /// Unrecognized type codes are logged at Warning level and dropped.
 /// </summary>
 public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
 {
     private readonly ISnmpMetricFactory _metricFactory;
+    private readonly ICounterDeltaEngine _deltaEngine;
     private readonly PipelineMetricService _pipelineMetrics;
     private readonly ILogger<OtelMetricHandler> _logger;
 
     public OtelMetricHandler(
         ISnmpMetricFactory metricFactory,
+        ICounterDeltaEngine deltaEngine,
         PipelineMetricService pipelineMetrics,
         ILogger<OtelMetricHandler> logger)
     {
         _metricFactory = metricFactory;
+        _deltaEngine = deltaEngine;
         _pipelineMetrics = pipelineMetrics;
         _logger = logger;
     }
@@ -70,14 +73,34 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                 break;
 
             case SnmpType.Counter32:
-            case SnmpType.Counter64:
-                _logger.LogDebug(
-                    "Counter OID deferred to Phase 4: Oid={Oid} TypeCode={TypeCode} Agent={Agent}",
+            {
+                var currentValue = ((Counter32)notification.Value).ToUInt32();
+                var didEmit = _deltaEngine.RecordDelta(
                     notification.Oid,
-                    notification.TypeCode,
-                    agent);
-                // IncrementHandled intentionally NOT called — counter recording deferred.
+                    agent,
+                    source,
+                    metricName,
+                    SnmpType.Counter32,
+                    currentValue,
+                    notification.SysUpTimeCentiseconds);
+                if (didEmit) _pipelineMetrics.IncrementHandled();
                 break;
+            }
+
+            case SnmpType.Counter64:
+            {
+                var currentValue = ((Counter64)notification.Value).ToUInt64();
+                var didEmit = _deltaEngine.RecordDelta(
+                    notification.Oid,
+                    agent,
+                    source,
+                    metricName,
+                    SnmpType.Counter64,
+                    currentValue,
+                    notification.SysUpTimeCentiseconds);
+                if (didEmit) _pipelineMetrics.IncrementHandled();
+                break;
+            }
 
             case SnmpType.OctetString:
             case SnmpType.IPAddress:
