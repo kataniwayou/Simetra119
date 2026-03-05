@@ -1,0 +1,195 @@
+using Lextm.SharpSnmpLib;
+using Lextm.SharpSnmpLib.Messaging;
+using MediatR;
+using Microsoft.Extensions.Logging;
+using Quartz;
+using SnmpCollector.Pipeline;
+using SnmpCollector.Telemetry;
+using System.Net;
+
+namespace SnmpCollector.Jobs;
+
+/// <summary>
+/// Quartz <see cref="IJob"/> that executes a single SNMP GET poll for one device/poll-group pair.
+/// Prepends sysUpTime to every GET so the counter delta engine has uptime context atomically.
+/// Each returned varbind is dispatched individually via <see cref="ISender.Send"/> into the
+/// MediatR pipeline (Logging → Exception → Validation → OidResolution → OtelMetricHandler).
+/// <para>
+/// <see cref="DisallowConcurrentExecution"/> prevents pile-up on slow devices: if a previous
+/// execution is still running when the trigger fires, Quartz skips the fire.
+/// </para>
+/// </summary>
+[DisallowConcurrentExecution]
+public sealed class MetricPollJob : IJob
+{
+    private const string SysUpTimeOid = "1.3.6.1.2.1.1.3.0";
+
+    private readonly IDeviceRegistry _deviceRegistry;
+    private readonly IDeviceUnreachabilityTracker _unreachabilityTracker;
+    private readonly ISender _sender;
+    private readonly PipelineMetricService _pipelineMetrics;
+    private readonly ILogger<MetricPollJob> _logger;
+
+    public MetricPollJob(
+        IDeviceRegistry deviceRegistry,
+        IDeviceUnreachabilityTracker unreachabilityTracker,
+        ISender sender,
+        PipelineMetricService pipelineMetrics,
+        ILogger<MetricPollJob> logger)
+    {
+        _deviceRegistry = deviceRegistry;
+        _unreachabilityTracker = unreachabilityTracker;
+        _sender = sender;
+        _pipelineMetrics = pipelineMetrics;
+        _logger = logger;
+    }
+
+    public async Task Execute(IJobExecutionContext context)
+    {
+        var map = context.MergedJobDataMap;
+        var deviceName = map.GetString("deviceName")!;
+        var pollIndex = map.GetInt("pollIndex");
+        var intervalSeconds = map.GetInt("intervalSeconds");
+        var jobKey = context.JobDetail.Key.Name;
+
+        // Device lookup must succeed before we enter the try block.
+        // Config errors (device removed after scheduler started) do NOT count as a poll execution.
+        if (!_deviceRegistry.TryGetDeviceByName(deviceName, out var device))
+        {
+            _logger.LogWarning(
+                "Poll job {JobKey}: device '{DeviceName}' not found in registry -- skipping poll",
+                jobKey, deviceName);
+            return;
+        }
+
+        var pollGroup = device.PollGroups[pollIndex];
+
+        // Build variable list: sysUpTime first for atomic uptime snapshot, then poll group OIDs.
+        var variables = new List<Variable>(pollGroup.Oids.Count + 1)
+        {
+            new Variable(new ObjectIdentifier(SysUpTimeOid))
+        };
+        variables.AddRange(pollGroup.Oids.Select(oid => new Variable(new ObjectIdentifier(oid))));
+
+        var endpoint = new IPEndPoint(IPAddress.Parse(device.IpAddress), 161);
+        var community = new OctetString(device.CommunityString);
+
+        try
+        {
+            // 80% of the interval as timeout (SC#2) — leaves response window before next trigger.
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(intervalSeconds * 0.8));
+
+            var response = await Messenger.GetAsync(
+                VersionCode.V2,
+                endpoint,
+                community,
+                variables,
+                timeoutCts.Token);
+
+            await DispatchResponseAsync(response, device, context.CancellationToken);
+
+            // Success: reset failure counter; log + counter only on recovered transition.
+            if (_unreachabilityTracker.RecordSuccess(deviceName))
+            {
+                _logger.LogInformation(
+                    "Device {Name} ({Ip}) recovered after consecutive failures",
+                    device.Name, device.IpAddress);
+                _pipelineMetrics.IncrementPollRecovered();
+            }
+        }
+        catch (OperationCanceledException) when (!context.CancellationToken.IsCancellationRequested)
+        {
+            // Timeout: the linked CTS fired, but host is not shutting down.
+            _logger.LogWarning(
+                "Poll job {JobKey} timed out waiting for SNMP response from {DeviceName} ({Ip})",
+                jobKey, device.Name, device.IpAddress);
+            RecordFailure(deviceName, device);
+        }
+        catch (OperationCanceledException)
+        {
+            // Host shutdown: context.CancellationToken was cancelled.
+            // Re-throw so Quartz handles graceful shutdown correctly.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Network error, SNMP error, or any other unexpected failure.
+            _logger.LogWarning(ex,
+                "Poll job {JobKey} failed for {DeviceName} ({Ip})",
+                jobKey, device.Name, device.IpAddress);
+            RecordFailure(deviceName, device);
+        }
+        finally
+        {
+            // SC#4: always increment after every completed poll attempt, success or failure.
+            _pipelineMetrics.IncrementPollExecuted();
+        }
+    }
+
+    /// <summary>
+    /// Dispatches each varbind from the SNMP GET response individually via ISender.Send.
+    /// Extracts sysUpTime from the first TimeTicks variable for attachment to subsequent OID messages.
+    /// Skips noSuchObject / noSuchInstance / EndOfMibView varbinds with a Debug log.
+    /// </summary>
+    private async Task DispatchResponseAsync(
+        IList<Variable> response,
+        DeviceInfo device,
+        CancellationToken ct)
+    {
+        uint? sysUpTime = null;
+
+        foreach (var variable in response)
+        {
+            // Extract sysUpTime before deciding whether to skip or dispatch.
+            // The sysUpTime varbind itself is still dispatched (sysUpTimeCentiseconds = null on its own message).
+            if (variable.Id.ToString() == SysUpTimeOid
+                && variable.Data.TypeCode == SnmpType.TimeTicks)
+            {
+                sysUpTime = ((TimeTicks)variable.Data).ToUInt32();
+                // Fall through — sysUpTime itself is also dispatched as an SnmpOidReceived.
+            }
+
+            // Skip error sentinels — device doesn't expose this OID.
+            if (variable.Data.TypeCode is SnmpType.NoSuchObject
+                                       or SnmpType.NoSuchInstance
+                                       or SnmpType.EndOfMibView)
+            {
+                _logger.LogDebug(
+                    "OID {Oid} returned {TypeCode} from {DeviceName} -- skipping",
+                    variable.Id, variable.Data.TypeCode, device.Name);
+                continue;
+            }
+
+            var msg = new SnmpOidReceived
+            {
+                Oid = variable.Id.ToString(),
+                AgentIp = IPAddress.Parse(device.IpAddress),
+                DeviceName = device.Name,
+                Value = variable.Data,
+                Source = SnmpSource.Poll,
+                TypeCode = variable.Data.TypeCode,
+                // sysUpTime is null for the sysUpTime varbind itself (extracted above but not yet set
+                // when this is the first iteration). Subsequent OIDs carry the extracted value.
+                SysUpTimeCentiseconds = sysUpTime
+            };
+
+            await _sender.Send(msg, ct);
+        }
+    }
+
+    /// <summary>
+    /// Records a poll failure and fires the unreachability transition counter + log on state change.
+    /// </summary>
+    private void RecordFailure(string deviceName, DeviceInfo device)
+    {
+        if (_unreachabilityTracker.RecordFailure(deviceName))
+        {
+            var failureCount = _unreachabilityTracker.GetFailureCount(deviceName);
+            _logger.LogWarning(
+                "Device {Name} ({Ip}) unreachable after {N} consecutive failures",
+                device.Name, device.IpAddress, failureCount);
+            _pipelineMetrics.IncrementPollUnreachable();
+        }
+    }
+}
