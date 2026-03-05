@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 Phase: 8 of 8 (Graceful Shutdown and Health Probes) — Complete
 Plan: 5 of 5 complete
 Status: All phases done — 137 tests passing (0 failures). Phase 8 added 23 new tests for health checks, liveness vector, job interval registry, graceful shutdown.
-Last activity: 2026-03-05 — Completed Phase 8 (graceful shutdown + health probes). All v1 requirements delivered.
+Last activity: 2026-03-05 — Completed quick task 006: Wire CorrelationId propagation into job and trap paths
 
 Progress: [████████████████████] 100% (37/37 plans across all phases)
 
@@ -183,6 +183,7 @@ None yet.
 | 003 | Verify logging framework (OTel, enrichment, console toggle, log levels) | 2026-03-05 | — (verification only) | [003-verify-logging-framework](./quick/003-verify-logging-framework/) |
 | 004 | Verify liveness vector (entries, timestamps, stamp points, probe usage) | 2026-03-05 | — (verification only) | [004-verify-liveness-vector](./quick/004-verify-liveness-vector/) |
 | 005 | Verify health check endpoints (startup, readiness, liveness probes) | 2026-03-05 | — (verification only) | [005-verify-health-check-endpoints](./quick/005-verify-health-check-endpoints/) |
+| 006 | Wire CorrelationId propagation into job and trap paths | 2026-03-05 | 0b48083 | [006-wire-correlationid-propagation](./quick/006-wire-correlationid-propagation/) |
 
 ### Blockers/Concerns
 
