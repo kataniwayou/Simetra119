@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 4 — Counter Delta Engine (Phase 3 complete — 6/6 plans done)
+**Current focus:** Phase 4 — Counter Delta Engine (Plan 01 complete — interface extensions done)
 
 ## Current Position
 
-Phase: 4 of 8 (Counter Delta Engine) — Not started
-Plan: 0 of N in phase 4
-Status: Phase 3 complete — all 6 plans done; ready for Phase 4
-Last activity: 2026-03-05 — Completed 03-06-PLAN.md (49 tests passing; SnmpOidReceived IRequest<Unit> bug fix; all 5 Phase 3 SC verified)
+Phase: 4 of 8 (Counter Delta Engine) — In progress
+Plan: 1 of N in phase 4
+Status: 04-01 complete — interface extensions done; ready for 04-02 (CounterDeltaEngine)
+Last activity: 2026-03-05 — Completed 04-01-PLAN.md (52 tests passing; RecordCounter + SysUpTimeCentiseconds added)
 
-Progress: [█████░░░░░] 38% (15/40 plans across all phases estimated)
+Progress: [█████░░░░░] 40% (16/40 plans across all phases estimated)
 
 ## Performance Metrics
 
@@ -30,9 +30,10 @@ Progress: [█████░░░░░] 38% (15/40 plans across all phases es
 | 01-infrastructure-foundation | 5 | ~20 min | ~4 min |
 | 02-device-registry-and-oid-map | 4 | ~14 min | ~3.5 min |
 | 03-mediatr-pipeline-and-instruments | 6 (complete) | ~24 min | ~4 min |
+| 04-counter-delta-engine | 1 so far | ~2 min | ~2 min |
 
 **Recent Trend:**
-- Last 10 plans: 01-01 through 01-05 (foundation), 02-01 through 02-04, 03-01 through 03-06
+- Last 11 plans: 01-01 through 01-05 (foundation), 02-01 through 02-04, 03-01 through 03-06, 04-01
 - Trend: Consistent ~2-6 min execution
 
 *Updated after each plan completion*
@@ -101,6 +102,9 @@ Recent decisions affecting current work:
 - [03-06]: Phase 5/6 MUST use ISender.Send(snmpOidReceived) not IPublisher.Publish — IPublisher.Publish bypasses the entire behavior pipeline
 - [03-gap]: LoggingBehavior now takes PipelineMetricService and calls IncrementPublished() for every SnmpOidReceived — closes PMET-01 (snmp.event.published counter)
 - [03-gap]: SnmpMetricFactoryTests uses MeterListener on real SnmpMetricFactory to verify all 5 OTel tags including site_name — closes SC#1 label coverage
+- [04-01]: SysUpTimeCentiseconds is uint? nullable on SnmpOidReceived — null means unavailable; delta engine conservatively treats current < previous as reboot when null
+- [04-01]: RecordCounter last param named delta (not value) — signals it is a computed difference, not a raw SNMP reading
+- [04-01]: snmp_counter instrument name for Counter<double> — follows snmp_gauge/snmp_info naming convention
 
 ### Pending Todos
 
@@ -113,6 +117,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-05T02:05:59Z
-Stopped at: Completed 03-06-PLAN.md — 49 tests all passing; SnmpOidReceived changed to IRequest<Unit> (bug fix: behaviors were dead code with INotification); Phase 3 complete. Next: Phase 4 Counter Delta Engine.
+Last session: 2026-03-05T03:09:04Z
+Stopped at: Completed 04-01-PLAN.md — 52 tests passing; RecordCounter added to ISnmpMetricFactory + SnmpMetricFactory; SysUpTimeCentiseconds added to SnmpOidReceived; CounterRecords in TestSnmpMetricFactory. Next: 04-02 CounterDeltaEngine.
 Resume file: None
