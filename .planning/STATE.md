@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 5 in progress — Trap Ingestion. Plan 05-01 complete.
+**Current focus:** Phase 5 in progress — Trap Ingestion. Plans 05-01 and 05-03 complete.
 
 ## Current Position
 
 Phase: 5 of 8 (Trap Ingestion) — In progress
-Plan: 1 of 4 complete (05-01 done)
-Status: 05-01 complete (2/2 tasks). 64 tests passing. Channel infrastructure and metric counters ready.
-Last activity: 2026-03-05 — Completed 05-01-PLAN.md
+Plan: 3 of 4 complete (05-01, 05-03 done; 05-02 in wave 2 parallel)
+Status: 05-03 complete (1/1 tasks). 64 tests passing. ChannelConsumerService ready.
+Last activity: 2026-03-05 — Completed 05-03-PLAN.md
 
-Progress: [██████░░░░] 50% (20/40 plans across all phases estimated)
+Progress: [██████░░░░] 52% (21/40 plans across all phases estimated)
 
 ## Performance Metrics
 
@@ -116,6 +116,10 @@ Recent decisions affecting current work:
 - [05-01]: DropCounter sealed class with Interlocked.Increment on long field — ConcurrentDictionary<string,long> cannot use Interlocked.Increment(ref dict[key]) in C#; DropCounter wrapper enables lock-free increment
 - [05-01]: Warning logged every 100 drops per device — bounds log volume during trap storms while maintaining visibility
 - [05-01]: device_name tag on snmp.trap.dropped only — auth_failed and unknown_device use site_name only (device not yet known at those rejection points)
+- [05-03]: ISender.Send used (not IPublisher.Publish) in ChannelConsumerService — SnmpOidReceived is IRequest<Unit>; IPublisher.Publish bypasses IPipelineBehavior entirely
+- [05-03]: IncrementTrapReceived called BEFORE ISender.Send — counts varbinds entering pipeline, not handler success
+- [05-03]: OperationCanceledException break ordered before general Exception catch — avoids treating cancellation as a warning during normal host shutdown
+- [05-03]: DeviceName from VarbindEnvelope.DeviceName (pre-resolved at listener time) — no double device registry lookup in consumer
 
 ### Pending Todos
 
@@ -127,6 +131,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-05T05:09:47Z
-Stopped at: Completed 05-01-PLAN.md (channel infrastructure and trap counters)
+Last session: 2026-03-05T05:14:14Z
+Stopped at: Completed 05-03-PLAN.md (ChannelConsumerService BackgroundService)
 Resume file: None
