@@ -70,12 +70,17 @@ public static class ServiceCollectionExtensions
 
         // --- Metrics ---
         // No WithTracing block (LOG-07: no distributed traces in SnmpCollector).
+        var podName = Environment.GetEnvironmentVariable("HOSTNAME") ?? Environment.MachineName;
+
         builder.Services.AddOpenTelemetry()
             .ConfigureResource(resource => resource
                 .AddService(
                     serviceName: otlpOptions.ServiceName ?? "snmp-collector",
                     serviceInstanceId: Environment.GetEnvironmentVariable("PHYSICAL_HOSTNAME")
-                        ?? Environment.MachineName))
+                        ?? Environment.MachineName)
+                .AddAttributes([
+                    new KeyValuePair<string, object>("k8s.pod.name", podName)
+                ]))
             .WithMetrics(metrics =>
             {
                 metrics.AddMeter(TelemetryConstants.MeterName);        // Pipeline metrics (always exported)
@@ -126,7 +131,10 @@ public static class ServiceCollectionExtensions
                     .AddService(
                         serviceName: otlpOptions.ServiceName ?? "snmp-collector",
                         serviceInstanceId: Environment.GetEnvironmentVariable("PHYSICAL_HOSTNAME")
-                            ?? Environment.MachineName));
+                            ?? Environment.MachineName)
+                    .AddAttributes([
+                        new KeyValuePair<string, object>("k8s.pod.name", podName)
+                    ]));
             logging.AddOtlpExporter(o =>
             {
                 o.Endpoint = new Uri(endpoint);

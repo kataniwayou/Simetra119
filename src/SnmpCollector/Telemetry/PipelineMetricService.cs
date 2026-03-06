@@ -12,6 +12,7 @@ public sealed class PipelineMetricService : IDisposable
 {
     private readonly Meter _meter;
     private readonly string _hostName;
+    private readonly string _podName;
 
     // PMET-01: counts every SnmpOidReceived notification published into the MediatR pipeline
     private readonly Counter<long> _published;
@@ -50,6 +51,7 @@ public sealed class PipelineMetricService : IDisposable
     {
         _meter = meterFactory.Create(TelemetryConstants.MeterName);
         _hostName = Environment.GetEnvironmentVariable("PHYSICAL_HOSTNAME") ?? Environment.MachineName;
+        _podName = Environment.GetEnvironmentVariable("HOSTNAME") ?? Environment.MachineName;
 
         _published = _meter.CreateCounter<long>("snmp.event.published");
         _handled = _meter.CreateCounter<long>("snmp.event.handled");
@@ -67,27 +69,27 @@ public sealed class PipelineMetricService : IDisposable
 
     /// <summary>PMET-01: Increment the count of published pipeline notifications by 1.</summary>
     public void IncrementPublished()
-        => _published.Add(1, new TagList { { "host_name", _hostName } });
+        => _published.Add(1, new TagList { { "host_name", _hostName }, { "pod_name", _podName } });
 
     /// <summary>PMET-02: Increment the count of successfully handled notifications by 1.</summary>
     public void IncrementHandled()
-        => _handled.Add(1, new TagList { { "host_name", _hostName } });
+        => _handled.Add(1, new TagList { { "host_name", _hostName }, { "pod_name", _podName } });
 
     /// <summary>PMET-03: Increment the count of pipeline errors by 1.</summary>
     public void IncrementErrors()
-        => _errors.Add(1, new TagList { { "host_name", _hostName } });
+        => _errors.Add(1, new TagList { { "host_name", _hostName }, { "pod_name", _podName } });
 
     /// <summary>PMET-04: Increment the count of rejected (discarded) notifications by 1.</summary>
     public void IncrementRejected()
-        => _rejected.Add(1, new TagList { { "host_name", _hostName } });
+        => _rejected.Add(1, new TagList { { "host_name", _hostName }, { "pod_name", _podName } });
 
     /// <summary>PMET-05: Increment the count of executed poll cycles by 1.</summary>
     public void IncrementPollExecuted()
-        => _pollExecuted.Add(1, new TagList { { "host_name", _hostName } });
+        => _pollExecuted.Add(1, new TagList { { "host_name", _hostName }, { "pod_name", _podName } });
 
     /// <summary>PMET-06: Increment the count of received trap messages by 1.</summary>
     public void IncrementTrapReceived()
-        => _trapReceived.Add(1, new TagList { { "host_name", _hostName } });
+        => _trapReceived.Add(1, new TagList { { "host_name", _hostName }, { "pod_name", _podName } });
 
     /// <summary>
     /// PMET-07: Increment the count of traps rejected due to community string mismatch by 1.
@@ -95,7 +97,7 @@ public sealed class PipelineMetricService : IDisposable
     /// Used for Prometheus alerting on authentication anomalies.
     /// </summary>
     public void IncrementTrapAuthFailed()
-        => _trapAuthFailed.Add(1, new TagList { { "host_name", _hostName } });
+        => _trapAuthFailed.Add(1, new TagList { { "host_name", _hostName }, { "pod_name", _podName } });
 
     /// <summary>
     /// PMET-08: Increment the count of traps from unregistered source IPs by 1.
@@ -103,7 +105,7 @@ public sealed class PipelineMetricService : IDisposable
     /// Indicates rogue or misconfigured devices sending traps to this collector.
     /// </summary>
     public void IncrementTrapUnknownDevice()
-        => _trapUnknownDevice.Add(1, new TagList { { "host_name", _hostName } });
+        => _trapUnknownDevice.Add(1, new TagList { { "host_name", _hostName }, { "pod_name", _podName } });
 
     /// <summary>
     /// PMET-09: Increment the count of dropped varbind envelopes for the given device by 1.
@@ -111,21 +113,21 @@ public sealed class PipelineMetricService : IDisposable
     /// Includes device_name tag to identify which device is generating the trap storm.
     /// </summary>
     public void IncrementTrapDropped(string deviceName)
-        => _trapDropped.Add(1, new TagList { { "host_name", _hostName }, { "device_name", deviceName } });
+        => _trapDropped.Add(1, new TagList { { "host_name", _hostName }, { "pod_name", _podName }, { "device_name", deviceName } });
 
     /// <summary>
     /// Phase 6: Increment the count of devices transitioning to unreachable state by 1.
     /// Fired when a device reaches the consecutive failure threshold (3 failures).
     /// </summary>
     public void IncrementPollUnreachable()
-        => _pollUnreachable.Add(1, new TagList { { "host_name", _hostName } });
+        => _pollUnreachable.Add(1, new TagList { { "host_name", _hostName }, { "pod_name", _podName } });
 
     /// <summary>
     /// Phase 6: Increment the count of devices recovering from unreachable state by 1.
     /// Fired when a previously unreachable device responds successfully.
     /// </summary>
     public void IncrementPollRecovered()
-        => _pollRecovered.Add(1, new TagList { { "host_name", _hostName } });
+        => _pollRecovered.Add(1, new TagList { { "host_name", _hostName }, { "pod_name", _podName } });
 
     public void Dispose() => _meter.Dispose();
 }

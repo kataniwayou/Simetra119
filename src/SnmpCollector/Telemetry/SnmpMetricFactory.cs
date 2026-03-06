@@ -15,6 +15,7 @@ public sealed class SnmpMetricFactory : ISnmpMetricFactory, IDisposable
 {
     private readonly Meter _meter;
     private readonly string _hostName;
+    private readonly string _podName;
 
     /// <summary>
     /// Thread-safe cache mapping instrument name to the instrument instance.
@@ -32,6 +33,7 @@ public sealed class SnmpMetricFactory : ISnmpMetricFactory, IDisposable
     {
         _meter = meterFactory.Create(TelemetryConstants.LeaderMeterName);
         _hostName = Environment.GetEnvironmentVariable("PHYSICAL_HOSTNAME") ?? Environment.MachineName;
+        _podName = Environment.GetEnvironmentVariable("HOSTNAME") ?? Environment.MachineName;
     }
 
     /// <inheritdoc />
@@ -41,6 +43,7 @@ public sealed class SnmpMetricFactory : ISnmpMetricFactory, IDisposable
         gauge.Record(value, new TagList
         {
             { "host_name", _hostName },
+            { "pod_name", _podName },
             { "metric_name", metricName },
             { "oid", oid },
             { "device_name", deviceName },
@@ -61,6 +64,7 @@ public sealed class SnmpMetricFactory : ISnmpMetricFactory, IDisposable
         gauge.Record(1.0, new TagList
         {
             { "host_name", _hostName },
+            { "pod_name", _podName },
             { "metric_name", metricName },
             { "oid", oid },
             { "device_name", deviceName },

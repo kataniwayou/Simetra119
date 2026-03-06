@@ -21,6 +21,7 @@ data:
           - context: datapoint
             statements:
               - set(attributes["host_name"], resource.attributes["service.instance.id"])
+              - set(attributes["pod_name"], resource.attributes["k8s.pod.name"])
 
     exporters:
       prometheusremotewrite:
