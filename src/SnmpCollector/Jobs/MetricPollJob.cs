@@ -10,7 +10,7 @@ namespace SnmpCollector.Jobs;
 
 /// <summary>
 /// Quartz <see cref="IJob"/> that executes a single SNMP GET poll for one device/poll-group pair.
-/// Prepends sysUpTime to every GET so the counter delta engine has uptime context atomically.
+/// Prepends sysUpTime to every GET so it is collected as a gauge metric for uptime monitoring.
 /// Each returned varbind is dispatched individually via <see cref="ISender.Send"/> into the
 /// MediatR pipeline (Logging → Exception → Validation → OidResolution → OtelMetricHandler).
 /// <para>
@@ -76,7 +76,7 @@ public sealed class MetricPollJob : IJob
 
         var pollGroup = device.PollGroups[pollIndex];
 
-        // Build variable list: sysUpTime first for atomic uptime snapshot, then poll group OIDs.
+        // Build variable list: sysUpTime first for uptime monitoring, then poll group OIDs.
         var variables = new List<Variable>(pollGroup.Oids.Count + 1)
         {
             new Variable(new ObjectIdentifier(SysUpTimeOid))
@@ -84,7 +84,7 @@ public sealed class MetricPollJob : IJob
         variables.AddRange(pollGroup.Oids.Select(oid => new Variable(new ObjectIdentifier(oid))));
 
         var endpoint = new IPEndPoint(IPAddress.Parse(device.IpAddress), 161);
-        var community = new OctetString(device.CommunityString);
+        var community = new OctetString(CommunityStringHelper.DeriveFromDeviceName(device.Name));
 
         try
         {
@@ -145,7 +145,6 @@ public sealed class MetricPollJob : IJob
 
     /// <summary>
     /// Dispatches each varbind from the SNMP GET response individually via ISender.Send.
-    /// Extracts sysUpTime from the first TimeTicks variable for attachment to subsequent OID messages.
     /// Skips noSuchObject / noSuchInstance / EndOfMibView varbinds with a Debug log.
     /// </summary>
     private async Task DispatchResponseAsync(
@@ -153,8 +152,6 @@ public sealed class MetricPollJob : IJob
         DeviceInfo device,
         CancellationToken ct)
     {
-        uint? sysUpTime = null;
-
         foreach (var variable in response)
         {
             // Skip error sentinels — device doesn't expose this OID.
@@ -175,22 +172,10 @@ public sealed class MetricPollJob : IJob
                 DeviceName = device.Name,
                 Value = variable.Data,
                 Source = SnmpSource.Poll,
-                TypeCode = variable.Data.TypeCode,
-                // sysUpTime is null for the sysUpTime varbind itself (not yet extracted at dispatch time).
-                // Subsequent OIDs carry the extracted value.
-                SysUpTimeCentiseconds = sysUpTime
+                TypeCode = variable.Data.TypeCode
             };
 
             await _sender.Send(msg, ct);
-
-            // Extract sysUpTime AFTER dispatching the sysUpTime varbind itself so that
-            // the sysUpTime message carries SysUpTimeCentiseconds = null, while all
-            // subsequent OIDs carry the extracted value.
-            if (variable.Id.ToString() == SysUpTimeOid
-                && variable.Data.TypeCode == SnmpType.TimeTicks)
-            {
-                sysUpTime = ((TimeTicks)variable.Data).ToUInt32();
-            }
         }
     }
 

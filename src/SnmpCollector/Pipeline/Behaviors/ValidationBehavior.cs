@@ -24,16 +24,13 @@ public sealed class ValidationBehavior<TNotification, TResponse>
 
     private readonly ILogger<ValidationBehavior<TNotification, TResponse>> _logger;
     private readonly PipelineMetricService _metrics;
-    private readonly IDeviceRegistry _deviceRegistry;
 
     public ValidationBehavior(
         ILogger<ValidationBehavior<TNotification, TResponse>> logger,
-        PipelineMetricService metrics,
-        IDeviceRegistry deviceRegistry)
+        PipelineMetricService metrics)
     {
         _logger = logger;
         _metrics = metrics;
-        _deviceRegistry = deviceRegistry;
     }
 
     public async Task<TResponse> Handle(
@@ -59,23 +56,19 @@ public sealed class ValidationBehavior<TNotification, TResponse>
             return default!;
         }
 
-        // Unknown device check: if DeviceName is not already set, resolve from registry by IP.
+        // DeviceName must always be set: polls set it from JobDataMap, traps extract it
+        // from the Simetra.{DeviceName} community string convention. A null DeviceName
+        // is a programming error, not a normal flow.
         if (msg.DeviceName is null)
         {
-            if (!_deviceRegistry.TryGetDevice(msg.AgentIp, out var device))
-            {
-                _logger.LogWarning(
-                    "SnmpOidReceived rejected: Oid={Oid} AgentIp={AgentIp} Reason={Reason}",
-                    msg.Oid,
-                    msg.AgentIp,
-                    "UnknownDevice");
+            _logger.LogWarning(
+                "SnmpOidReceived rejected: Oid={Oid} AgentIp={AgentIp} Reason={Reason}",
+                msg.Oid,
+                msg.AgentIp,
+                "MissingDeviceName");
 
-                _metrics.IncrementRejected();
-                return default!;
-            }
-
-            // Enrich the notification in-place with the resolved device name.
-            msg.DeviceName = device.Name;
+            _metrics.IncrementRejected();
+            return default!;
         }
 
         return await next();

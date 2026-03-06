@@ -30,18 +30,18 @@ namespace SnmpCollector.Lifecycle;
 public sealed class GracefulShutdownService : IHostedService
 {
     private readonly ISchedulerFactory _schedulerFactory;
-    private readonly IDeviceChannelManager _channelManager;
+    private readonly ITrapChannel _trapChannel;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<GracefulShutdownService> _logger;
 
     public GracefulShutdownService(
         ISchedulerFactory schedulerFactory,
-        IDeviceChannelManager channelManager,
+        ITrapChannel trapChannel,
         IServiceProvider serviceProvider,
         ILogger<GracefulShutdownService> logger)
     {
         _schedulerFactory = schedulerFactory;
-        _channelManager = channelManager;
+        _trapChannel = trapChannel;
         _serviceProvider = serviceProvider;
         _logger = logger;
     }
@@ -95,12 +95,12 @@ public sealed class GracefulShutdownService : IHostedService
             _logger.LogInformation("Scheduler placed in standby");
         }, cancellationToken);
 
-        // Step 4: Drain device channels (8s budget) -- SHUT-05
+        // Step 4: Drain trap channel (8s budget) -- SHUT-05
         await ExecuteWithBudget("DrainChannels", TimeSpan.FromSeconds(8), async () =>
         {
-            _channelManager.CompleteAll();
-            await _channelManager.WaitForDrainAsync(CancellationToken.None);
-            _logger.LogInformation("Device channels drained");
+            _trapChannel.Complete();
+            await _trapChannel.WaitForDrainAsync(CancellationToken.None);
+            _logger.LogInformation("Trap channel drained");
         }, cancellationToken);
 
         // Step 5: Flush telemetry (independent CTS -- ALWAYS runs) -- SHUT-06
