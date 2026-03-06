@@ -133,12 +133,12 @@ public static class ServiceCollectionExtensions
             });
             logging.AddProcessor(sp =>
             {
-                var siteOptions = sp.GetRequiredService<IOptions<SiteOptions>>().Value;
+                var hostName = Environment.GetEnvironmentVariable("HOSTNAME") ?? Environment.MachineName;
                 var correlationService = sp.GetRequiredService<ICorrelationService>();
                 var leaderElection = sp.GetRequiredService<ILeaderElection>();
                 return new SnmpLogEnrichmentProcessor(
                     correlationService,
-                    siteOptions.Name,
+                    hostName,
                     () => leaderElection.CurrentRole);
             });
         });
@@ -268,7 +268,7 @@ public static class ServiceCollectionExtensions
             .ValidateOnStart();
 
         // --- Phase 2 pipeline singletons ---
-        // DeviceRegistry depends on IOptions<DevicesOptions> and IOptions<SnmpListenerOptions>.
+        // DeviceRegistry depends on IOptions<DevicesOptions>.
         // OidMapService depends on IOptionsMonitor<OidMapOptions> for hot-reload on appsettings change.
         services.AddSingleton<IDeviceRegistry, DeviceRegistry>();
         services.AddSingleton<IOidMapService, OidMapService>();
@@ -320,12 +320,9 @@ public static class ServiceCollectionExtensions
         // SNMP instrument factory: ConcurrentDictionary cache for snmp_gauge and snmp_info instruments.
         services.AddSingleton<ISnmpMetricFactory, SnmpMetricFactory>();
 
-        // Counter delta engine: singleton, maintains per-OID+agent state for delta computation.
-        services.AddSingleton<ICounterDeltaEngine, CounterDeltaEngine>();
-
-        // --- Phase 5: Trap ingestion services ---
-        // Registration order: listener before consumer (start order = registration order).
-        services.AddSingleton<IDeviceChannelManager, DeviceChannelManager>();
+        // --- Phase 10: Single shared trap channel (replaces per-device IDeviceChannelManager) ---
+        // Registration order: channel singleton before hosted services.
+        services.AddSingleton<ITrapChannel, TrapChannel>();
 
         services.AddHostedService<SnmpTrapListenerService>();
         services.AddHostedService<ChannelConsumerService>();
