@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 7: Leader Election and Role-Gated Export** - Exactly one pod exports business metrics in multi-instance deployment
 - [x] **Phase 8: Graceful Shutdown and Health Probes** - Clean SIGTERM handling and K8s health probe coverage
 - [x] **Phase 9: Containerized Integration Testing** - K8s integration tests using Docker Desktop stack, observability verification, namespace isolation
-- [x] **Phase 10: Metrics Redesign** - Community string convention, open collector model, consistent label taxonomy
+- [ ] **Phase 10: Metrics Redesign** - Community string convention, open collector model, consistent label taxonomy
 
 ## Phase Details
 
@@ -189,11 +189,12 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Traps from any IP with a valid `Simetra.*` community string are accepted and produce metrics with correct `device_name` label extracted from the community string
   2. Traps with invalid community string (no `Simetra.` prefix) are dropped with Debug-level log
-  3. Polls derive community string as `Simetra.{device.Name}` -- no configured CommunityString field
-  4. All metric labels use `host_name` (from HOSTNAME env var / MachineName) instead of `site_name`, and `device_name` + `ip` instead of `agent`
+  3. Polls use per-device configured CommunityString (validated as Simetra.* at startup) and Port
+  4. All metric labels use `host_name` (from NODE_NAME env var / MachineName) instead of `site_name`, and `device_name` + `ip` instead of `agent`
   5. Empty `Devices[]` config is valid -- pod starts and accepts traps without poll configuration
   6. All tests pass with new label taxonomy, community string convention, and single channel architecture
-**Plans:** 5 plans in 4 waves
+  7. sysUpTime is not automatically prepended to poll requests -- users add it to OID lists if needed
+**Plans:** 7 plans in 5 waves
 
 Plans:
 - [x] 10-01-PLAN.md — Config cleanup: SiteOptions optional, remove CommunityString fields, CommunityStringHelper, DeviceInfo/DeviceRegistry refactor (Wave 1)
@@ -201,11 +202,13 @@ Plans:
 - [x] 10-03-PLAN.md — Trap path rewrite: single shared ITrapChannel, community string convention, no device registry dependency (Wave 2)
 - [x] 10-04-PLAN.md — Poll path alignment, readiness check, ValidationBehavior, DI wiring, build fix (Wave 3)
 - [x] 10-05-PLAN.md — Test updates: all test files updated for new interfaces, labels, and channel architecture (Wave 4)
+- [ ] 10-06-PLAN.md — GAP: Fix host_name to use NODE_NAME env var (K8s Downward API spec.nodeName) for persistent server identity (Wave 5)
+- [ ] 10-07-PLAN.md — GAP: Add per-device Port and CommunityString config, Simetra.* validation, remove sysUpTime prepend (Wave 5)
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -218,4 +221,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 7. Leader Election and Role-Gated Export | 5/5 | Complete | 2026-03-05 |
 | 8. Graceful Shutdown and Health Probes | 5/5 | Complete | 2026-03-05 |
 | 9. Containerized Integration Testing | 3/3 | Complete | 2026-03-05 |
-| 10. Metrics Redesign | 5/5 | Complete | 2026-03-06 |
+| 10. Metrics Redesign | 5/7 | Gap closure | 2026-03-06 |
