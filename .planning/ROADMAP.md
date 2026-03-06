@@ -204,7 +204,7 @@ Plans:
 - [x] 10-05-PLAN.md — Test updates: all test files updated for new interfaces, labels, and channel architecture (Wave 4)
 - [x] 10-06-PLAN.md — GAP: Fix host_name to use NODE_NAME env var (K8s Downward API spec.nodeName) for persistent server identity (Wave 5)
 - [x] 10-07-PLAN.md — GAP: Add per-device Port and CommunityString config, Simetra.* validation, remove sysUpTime prepend (Wave 5)
-- [ ] 10-08-PLAN.md — GAP: Remove redundant CommunityString config, derive from Name via CommunityStringHelper (Wave 6)
+- [x] 10-08-PLAN.md — GAP: Remove redundant CommunityString config, derive from Name via CommunityStringHelper (Wave 6)
 
 ## Progress
 
@@ -222,4 +222,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 7. Leader Election and Role-Gated Export | 5/5 | Complete | 2026-03-05 |
 | 8. Graceful Shutdown and Health Probes | 5/5 | Complete | 2026-03-05 |
 | 9. Containerized Integration Testing | 3/3 | Complete | 2026-03-05 |
-| 10. Metrics Redesign | 7/8 | Gap Closure | 2026-03-06 |
+| 10. Metrics Redesign | 8/8 | Complete | 2026-03-06 |
