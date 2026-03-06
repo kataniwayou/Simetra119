@@ -15,8 +15,7 @@ data:
       },
       "SnmpListener": {
         "BindAddress": "0.0.0.0",
-        "Port": 10162,
-        "CommunityString": "public"
+        "Port": 10162
       },
       "Lease": {
         "Name": "snmp-collector-leader",
@@ -27,20 +26,23 @@ data:
       "CorrelationJob": {
         "IntervalSeconds": 30
       },
+      "HeartbeatJob": {
+        "IntervalSeconds": 15
+      },
       "Liveness": {
         "GraceMultiplier": 2.0
       },
       "Channels": {
         "BoundedCapacity": 100
       },
-      "Devices": [
-        {
-          "Name": "dummy-device-01",
-          "IpAddress": "127.0.0.1",
-          "MetricPolls": []
-        }
-      ],
+      "OidMap": {
+        "1.3.6.1.4.1.9999.1.1.1.0": "simetraHeartbeat"
+      },
+      "Devices": [],
       "Logging": {
+        "LogLevel": {
+          "Default": "Debug"
+        },
         "EnableConsole": true
       }
     }
