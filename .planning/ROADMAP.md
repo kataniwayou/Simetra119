@@ -21,6 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 7: Leader Election and Role-Gated Export** - Exactly one pod exports business metrics in multi-instance deployment
 - [x] **Phase 8: Graceful Shutdown and Health Probes** - Clean SIGTERM handling and K8s health probe coverage
 - [x] **Phase 9: Containerized Integration Testing** - K8s integration tests using Docker Desktop stack, observability verification, namespace isolation
+- [ ] **Phase 10: Metrics Redesign** - Community string convention, open collector model, consistent label taxonomy
 
 ## Phase Details
 
@@ -182,10 +183,29 @@ Plans:
 - [x] 09-02-PLAN.md — Create SnmpCollector K8s manifests: ConfigMap, Deployment (3 replicas), Service (Wave 1)
 - [x] 09-03-PLAN.md — Deployment guide + human verification: build, deploy, validate metrics and leader failover (Wave 2)
 
+### Phase 10: Metrics Redesign
+**Goal:** Redesign the SNMP trap and poll paths to use a `Simetra.{DeviceName}` community string convention for both authentication and device identity, replace `site_name` with `host_name` from the machine hostname, simplify channel architecture from per-device to single shared channel, update readiness checks, and ensure consistent metric labeling across traps and polls.
+**Depends on:** Phase 9
+**Success Criteria** (what must be TRUE):
+  1. Traps from any IP with a valid `Simetra.*` community string are accepted and produce metrics with correct `device_name` label extracted from the community string
+  2. Traps with invalid community string (no `Simetra.` prefix) are dropped with Debug-level log
+  3. Polls derive community string as `Simetra.{device.Name}` -- no configured CommunityString field
+  4. All metric labels use `host_name` (from HOSTNAME env var / MachineName) instead of `site_name`, and `device_name` + `ip` instead of `agent`
+  5. Empty `Devices[]` config is valid -- pod starts and accepts traps without poll configuration
+  6. All tests pass with new label taxonomy, community string convention, and single channel architecture
+**Plans:** 5 plans in 4 waves
+
+Plans:
+- [ ] 10-01-PLAN.md — Config cleanup: SiteOptions optional, remove CommunityString fields, CommunityStringHelper, DeviceInfo/DeviceRegistry refactor (Wave 1)
+- [ ] 10-02-PLAN.md — Metric label taxonomy: site_name -> host_name, agent -> device_name + ip across all instruments and telemetry (Wave 2)
+- [ ] 10-03-PLAN.md — Trap path rewrite: single shared ITrapChannel, community string convention, no device registry dependency (Wave 2)
+- [ ] 10-04-PLAN.md — Poll path alignment, readiness check, ValidationBehavior, DI wiring, build fix (Wave 3)
+- [ ] 10-05-PLAN.md — Test updates: all test files updated for new interfaces, labels, and channel architecture (Wave 4)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -198,3 +218,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 7. Leader Election and Role-Gated Export | 5/5 | Complete | 2026-03-05 |
 | 8. Graceful Shutdown and Health Probes | 5/5 | Complete | 2026-03-05 |
 | 9. Containerized Integration Testing | 3/3 | Complete | 2026-03-05 |
+| 10. Metrics Redesign | 0/5 | Planned | — |
