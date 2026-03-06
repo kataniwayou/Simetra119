@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 7: Leader Election and Role-Gated Export** - Exactly one pod exports business metrics in multi-instance deployment
 - [x] **Phase 8: Graceful Shutdown and Health Probes** - Clean SIGTERM handling and K8s health probe coverage
 - [x] **Phase 9: Containerized Integration Testing** - K8s integration tests using Docker Desktop stack, observability verification, namespace isolation
-- [ ] **Phase 10: Metrics Redesign** - Community string convention, open collector model, consistent label taxonomy
+- [x] **Phase 10: Metrics Redesign** - Community string convention, open collector model, consistent label taxonomy
 
 ## Phase Details
 
@@ -202,8 +202,8 @@ Plans:
 - [x] 10-03-PLAN.md — Trap path rewrite: single shared ITrapChannel, community string convention, no device registry dependency (Wave 2)
 - [x] 10-04-PLAN.md — Poll path alignment, readiness check, ValidationBehavior, DI wiring, build fix (Wave 3)
 - [x] 10-05-PLAN.md — Test updates: all test files updated for new interfaces, labels, and channel architecture (Wave 4)
-- [ ] 10-06-PLAN.md — GAP: Fix host_name to use NODE_NAME env var (K8s Downward API spec.nodeName) for persistent server identity (Wave 5)
-- [ ] 10-07-PLAN.md — GAP: Add per-device Port and CommunityString config, Simetra.* validation, remove sysUpTime prepend (Wave 5)
+- [x] 10-06-PLAN.md — GAP: Fix host_name to use NODE_NAME env var (K8s Downward API spec.nodeName) for persistent server identity (Wave 5)
+- [x] 10-07-PLAN.md — GAP: Add per-device Port and CommunityString config, Simetra.* validation, remove sysUpTime prepend (Wave 5)
 
 ## Progress
 
@@ -221,4 +221,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 7. Leader Election and Role-Gated Export | 5/5 | Complete | 2026-03-05 |
 | 8. Graceful Shutdown and Health Probes | 5/5 | Complete | 2026-03-05 |
 | 9. Containerized Integration Testing | 3/3 | Complete | 2026-03-05 |
-| 10. Metrics Redesign | 5/7 | Gap closure | 2026-03-06 |
+| 10. Metrics Redesign | 7/7 | Complete | 2026-03-06 |
