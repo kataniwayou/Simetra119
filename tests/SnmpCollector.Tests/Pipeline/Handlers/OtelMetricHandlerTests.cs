@@ -30,10 +30,8 @@ public sealed class OtelMetricHandlerTests : IDisposable
 
         _pipelineMetrics = _sp.GetRequiredService<PipelineMetricService>();
         _testFactory = new TestSnmpMetricFactory();
-        var deltaEngine = new CounterDeltaEngine(_testFactory, NullLogger<CounterDeltaEngine>.Instance);
         _handler = new OtelMetricHandler(
             _testFactory,
-            deltaEngine,
             _pipelineMetrics,
             NullLogger<OtelMetricHandler>.Instance);
     }
@@ -105,30 +103,26 @@ public sealed class OtelMetricHandlerTests : IDisposable
         Assert.Empty(_testFactory.GaugeRecords);
     }
 
-    // --- Counter deferral tests (Phase 4) ---
+    // --- Counter raw value tests ---
 
     [Fact]
-    public async Task Counter32_FirstPoll_NoCounterRecorded()
+    public async Task Counter32_RecordsGauge()
     {
         var notification = MakeNotification(new Counter32(1000), SnmpType.Counter32);
         await _handler.Handle(notification, CancellationToken.None);
 
-        // First poll stores baseline -- no counter delta emitted, no gauge or info recorded
-        Assert.Empty(_testFactory.GaugeRecords);
-        Assert.Empty(_testFactory.InfoRecords);
-        Assert.Empty(_testFactory.CounterRecords);
+        Assert.Single(_testFactory.GaugeRecords);
+        Assert.Equal(1000.0, _testFactory.GaugeRecords[0].Value);
     }
 
     [Fact]
-    public async Task Counter64_FirstPoll_NoCounterRecorded()
+    public async Task Counter64_RecordsGauge()
     {
         var notification = MakeNotification(new Counter64(5000), SnmpType.Counter64);
         await _handler.Handle(notification, CancellationToken.None);
 
-        // First poll stores baseline -- no counter delta emitted, no gauge or info recorded
-        Assert.Empty(_testFactory.GaugeRecords);
-        Assert.Empty(_testFactory.InfoRecords);
-        Assert.Empty(_testFactory.CounterRecords);
+        Assert.Single(_testFactory.GaugeRecords);
+        Assert.Equal(5000.0, _testFactory.GaugeRecords[0].Value);
     }
 
     // --- Label correctness tests ---
@@ -151,6 +145,7 @@ public sealed class OtelMetricHandlerTests : IDisposable
         Assert.Equal("1.3.6.1.2.1.25.3.3.1.2", record.Oid);
         Assert.Equal("core-router", record.Agent);
         Assert.Equal("poll", record.Source);
+        Assert.Equal("integer32", record.SnmpType);
         Assert.Equal(99.0, record.Value);
     }
 
@@ -192,7 +187,7 @@ public sealed class OtelMetricHandlerTests : IDisposable
 
         var longValue = new string('x', 200);
 
-        capturingFactory.RecordInfo("sysDescr", "1.3.6.1.2.1.1.1.0", "test-device", "poll", longValue);
+        capturingFactory.RecordInfo("sysDescr", "1.3.6.1.2.1.1.1.0", "test-device", "poll", "octetstring", longValue);
 
         Assert.Single(capturingFactory.CapturedInfoValues);
         var captured = capturingFactory.CapturedInfoValues[0];
@@ -223,26 +218,17 @@ public sealed class OtelMetricHandlerTests : IDisposable
 
         public CapturingSnmpMetricFactory(SnmpMetricFactory inner) => _inner = inner;
 
-        public void RecordGauge(string metricName, string oid, string agent, string source, double value)
-            => _inner.RecordGauge(metricName, oid, agent, source, value);
+        public void RecordGauge(string metricName, string oid, string agent, string source, string snmpType, double value)
+            => _inner.RecordGauge(metricName, oid, agent, source, snmpType, value);
 
-        public void RecordInfo(string metricName, string oid, string agent, string source, string value)
+        public void RecordInfo(string metricName, string oid, string agent, string source, string snmpType, string value)
         {
-            // Call inner first (which truncates), then capture what was passed to the underlying gauge
-            // We capture BEFORE the call and verify the truncation happens inside RecordInfo.
-            // Since SnmpMetricFactory truncates internally, we need to verify by calling it and
-            // observing through a delegate.
-            _inner.RecordInfo(metricName, oid, agent, source, value);
-            // The truncation happens in SnmpMetricFactory -- we verify by checking the value length
-            // that SnmpMetricFactory would produce (125 chars + "...").
+            _inner.RecordInfo(metricName, oid, agent, source, snmpType, value);
             var truncated = value.Length > 128
                 ? string.Concat(value.AsSpan(0, 125), "...")
                 : value;
             CapturedInfoValues.Add(truncated);
         }
-
-        public void RecordCounter(string metricName, string oid, string agent, string source, double delta)
-            => _inner.RecordCounter(metricName, oid, agent, source, delta);
 
         public void Dispose() => _inner.Dispose();
     }

@@ -53,9 +53,9 @@ public sealed class SnmpMetricFactoryTests : IDisposable
     }
 
     [Fact]
-    public void RecordGauge_IncludesAllFiveLabels()
+    public void RecordGauge_IncludesAllSixLabels()
     {
-        _factory.RecordGauge("hrProcessorLoad", "1.3.6.1.2.1.25.3.3.1.2", "core-router", "poll", 42.0);
+        _factory.RecordGauge("hrProcessorLoad", "1.3.6.1.2.1.25.3.3.1.2", "core-router", "poll", "integer32", 42.0);
 
         Assert.Single(_recordedTags);
         var tags = _recordedTags[0].ToDictionary(t => t.Key, t => t.Value);
@@ -65,13 +65,14 @@ public sealed class SnmpMetricFactoryTests : IDisposable
         Assert.Equal("1.3.6.1.2.1.25.3.3.1.2", tags["oid"]);
         Assert.Equal("core-router", tags["agent"]);
         Assert.Equal("poll", tags["source"]);
-        Assert.Equal(5, tags.Count);
+        Assert.Equal("integer32", tags["snmp_type"]);
+        Assert.Equal(6, tags.Count);
     }
 
     [Fact]
-    public void RecordInfo_IncludesAllSixLabels()
+    public void RecordInfo_IncludesAllSevenLabels()
     {
-        _factory.RecordInfo("sysDescr", "1.3.6.1.2.1.1.1.0", "test-device", "trap", "Linux router");
+        _factory.RecordInfo("sysDescr", "1.3.6.1.2.1.1.1.0", "test-device", "trap", "octetstring", "Linux router");
 
         Assert.Single(_recordedTags);
         var tags = _recordedTags[0].ToDictionary(t => t.Key, t => t.Value);
@@ -81,8 +82,9 @@ public sealed class SnmpMetricFactoryTests : IDisposable
         Assert.Equal("1.3.6.1.2.1.1.1.0", tags["oid"]);
         Assert.Equal("test-device", tags["agent"]);
         Assert.Equal("trap", tags["source"]);
+        Assert.Equal("octetstring", tags["snmp_type"]);
         Assert.Equal("Linux router", tags["value"]);
-        Assert.Equal(6, tags.Count);
+        Assert.Equal(7, tags.Count);
     }
 
     [Fact]
@@ -90,7 +92,7 @@ public sealed class SnmpMetricFactoryTests : IDisposable
     {
         var longValue = new string('x', 200);
 
-        _factory.RecordInfo("sysDescr", "1.3.6.1.2.1.1.1.0", "test-device", "poll", longValue);
+        _factory.RecordInfo("sysDescr", "1.3.6.1.2.1.1.1.0", "test-device", "poll", "octetstring", longValue);
 
         Assert.Single(_recordedTags);
         var tags = _recordedTags[0].ToDictionary(t => t.Key, t => t.Value);

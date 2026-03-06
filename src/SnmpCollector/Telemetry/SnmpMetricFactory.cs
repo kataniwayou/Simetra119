@@ -11,7 +11,7 @@ namespace SnmpCollector.Telemetry;
 /// Instruments are created lazily on first use via GetOrAdd, guaranteeing single registration.
 /// Instruments are registered on the leader-gated meter (<see cref="TelemetryConstants.LeaderMeterName"/>)
 /// so that <c>MetricRoleGatedExporter</c> can suppress them on follower instances, ensuring
-/// snmp_gauge, snmp_counter, and snmp_info are exported only by the leader pod.
+/// snmp_gauge and snmp_info are exported only by the leader pod.
 /// </summary>
 public sealed class SnmpMetricFactory : ISnmpMetricFactory, IDisposable
 {
@@ -20,7 +20,7 @@ public sealed class SnmpMetricFactory : ISnmpMetricFactory, IDisposable
 
     /// <summary>
     /// Thread-safe cache mapping instrument name to the instrument instance.
-    /// Values are typed as <c>object</c> because <see cref="Gauge{T}"/> and <see cref="Counter{T}"/> share no common base.
+    /// Values are typed as <c>object</c> because <see cref="Gauge{T}"/> shares no common base with other instrument types.
     /// </summary>
     private readonly ConcurrentDictionary<string, object> _instruments = new();
 
@@ -37,7 +37,7 @@ public sealed class SnmpMetricFactory : ISnmpMetricFactory, IDisposable
     }
 
     /// <inheritdoc />
-    public void RecordGauge(string metricName, string oid, string agent, string source, double value)
+    public void RecordGauge(string metricName, string oid, string agent, string source, string snmpType, double value)
     {
         var gauge = GetOrCreateGauge("snmp_gauge");
         gauge.Record(value, new TagList
@@ -46,12 +46,13 @@ public sealed class SnmpMetricFactory : ISnmpMetricFactory, IDisposable
             { "metric_name", metricName },
             { "oid", oid },
             { "agent", agent },
-            { "source", source }
+            { "source", source },
+            { "snmp_type", snmpType }
         });
     }
 
     /// <inheritdoc />
-    public void RecordInfo(string metricName, string oid, string agent, string source, string value)
+    public void RecordInfo(string metricName, string oid, string agent, string source, string snmpType, string value)
     {
         var truncated = value.Length > MaxInfoValueLength
             ? string.Concat(value.AsSpan(0, 125), "...")
@@ -65,30 +66,13 @@ public sealed class SnmpMetricFactory : ISnmpMetricFactory, IDisposable
             { "oid", oid },
             { "agent", agent },
             { "source", source },
+            { "snmp_type", snmpType },
             { "value", truncated }
-        });
-    }
-
-    /// <inheritdoc />
-    public void RecordCounter(string metricName, string oid, string agent, string source, double delta)
-    {
-        var counter = GetOrCreateCounter("snmp_counter");
-        counter.Add(delta, new TagList
-        {
-            { "site_name", _siteName },
-            { "metric_name", metricName },
-            { "oid", oid },
-            { "agent", agent },
-            { "source", source }
         });
     }
 
     private Gauge<double> GetOrCreateGauge(string name)
         => (Gauge<double>)_instruments.GetOrAdd(name, n => _meter.CreateGauge<double>(n));
-
-    // Used by the Phase 4 counter delta engine.
-    private Counter<double> GetOrCreateCounter(string name)
-        => (Counter<double>)_instruments.GetOrAdd(name, n => _meter.CreateCounter<double>(n));
 
     public void Dispose() => _meter.Dispose();
 }

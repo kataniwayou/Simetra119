@@ -130,6 +130,7 @@ public sealed class PipelineIntegrationTests : IDisposable
         Assert.Equal(KnownOid, record.Oid);
         Assert.Equal(KnownDevice, record.Agent);
         Assert.Equal("poll", record.Source);
+        Assert.Equal("integer32", record.SnmpType);
         Assert.Equal(42.0, record.Value);
     }
 
@@ -247,51 +248,27 @@ public sealed class PipelineIntegrationTests : IDisposable
         Assert.True(firstLoggingIndex >= 0, "LoggingBehavior log message not found");
     }
 
-    // --- Counter delta recording ---
+    // --- Counter raw value recording ---
 
     [Fact]
-    public async Task SendCounter32_FirstPoll_NoCounterRecorded()
+    public async Task SendCounter32_GaugeRecorded()
     {
-        // First poll stores baseline -- no counter delta emitted
         var notification = MakePollNotification(new Counter32(1000), SnmpType.Counter32);
 
         await _sender.Send(notification, CancellationToken.None);
 
-        Assert.Empty(_testFactory.GaugeRecords);
-        Assert.Empty(_testFactory.InfoRecords);
-        Assert.Empty(_testFactory.CounterRecords);
-    }
-
-    [Fact]
-    public async Task SendCounter32_SecondPoll_CounterDeltaRecorded()
-    {
-        var firstPoll = MakePollNotification(new Counter32(1000), SnmpType.Counter32);
-        await _sender.Send(firstPoll, CancellationToken.None);
-        Assert.Empty(_testFactory.CounterRecords);
-
-        var secondPoll = MakePollNotification(new Counter32(1500), SnmpType.Counter32);
-        await _sender.Send(secondPoll, CancellationToken.None);
-
-        Assert.Single(_testFactory.CounterRecords);
-        var record = _testFactory.CounterRecords[0];
-        Assert.Equal(500.0, record.Delta);
-        Assert.Equal("hrProcessorLoad", record.MetricName);
-        Assert.Equal(KnownOid, record.Oid);
-        Assert.Equal(KnownDevice, record.Agent);
-        Assert.Equal("poll", record.Source);
+        Assert.Single(_testFactory.GaugeRecords);
+        Assert.Equal(1000.0, _testFactory.GaugeRecords[0].Value);
     }
 
     // --- Helper stubs ---
 
     private sealed class ThrowingSnmpMetricFactory : ISnmpMetricFactory
     {
-        public void RecordGauge(string metricName, string oid, string agent, string source, double value)
+        public void RecordGauge(string metricName, string oid, string agent, string source, string snmpType, double value)
             => throw new InvalidOperationException("Simulated downstream factory error");
 
-        public void RecordInfo(string metricName, string oid, string agent, string source, string value)
-            => throw new InvalidOperationException("Simulated downstream factory error");
-
-        public void RecordCounter(string metricName, string oid, string agent, string source, double delta)
+        public void RecordInfo(string metricName, string oid, string agent, string source, string snmpType, string value)
             => throw new InvalidOperationException("Simulated downstream factory error");
     }
 

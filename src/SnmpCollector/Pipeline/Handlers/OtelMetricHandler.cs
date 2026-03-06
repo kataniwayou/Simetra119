@@ -11,25 +11,21 @@ namespace SnmpCollector.Pipeline.Handlers;
 ///
 /// Implements IRequestHandler (not INotificationHandler) so that IPipelineBehavior chain
 /// runs: Logging → Exception → Validation → OidResolution → this handler.
-/// Counter32 and Counter64 are routed through <see cref="ICounterDeltaEngine"/> for
-/// delta computation before recording to the metric factory.
+/// Counter32 and Counter64 raw values are recorded as gauges (Prometheus applies rate()/increase()).
 /// Unrecognized type codes are logged at Warning level and dropped.
 /// </summary>
 public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
 {
     private readonly ISnmpMetricFactory _metricFactory;
-    private readonly ICounterDeltaEngine _deltaEngine;
     private readonly PipelineMetricService _pipelineMetrics;
     private readonly ILogger<OtelMetricHandler> _logger;
 
     public OtelMetricHandler(
         ISnmpMetricFactory metricFactory,
-        ICounterDeltaEngine deltaEngine,
         PipelineMetricService pipelineMetrics,
         ILogger<OtelMetricHandler> logger)
     {
         _metricFactory = metricFactory;
-        _deltaEngine = deltaEngine;
         _pipelineMetrics = pipelineMetrics;
         _logger = logger;
     }
@@ -48,6 +44,7 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     notification.Oid,
                     agent,
                     source,
+                    "integer32",
                     ((Integer32)notification.Value).ToInt32());
                 _pipelineMetrics.IncrementHandled();
                 break;
@@ -58,6 +55,7 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     notification.Oid,
                     agent,
                     source,
+                    "gauge32",
                     ((Gauge32)notification.Value).ToUInt32());
                 _pipelineMetrics.IncrementHandled();
                 break;
@@ -68,48 +66,62 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     notification.Oid,
                     agent,
                     source,
+                    "timeticks",
                     ((TimeTicks)notification.Value).ToUInt32());
                 _pipelineMetrics.IncrementHandled();
                 break;
 
             case SnmpType.Counter32:
-            {
-                var currentValue = ((Counter32)notification.Value).ToUInt32();
-                var didEmit = _deltaEngine.RecordDelta(
+                _metricFactory.RecordGauge(
+                    metricName,
                     notification.Oid,
                     agent,
                     source,
-                    metricName,
-                    SnmpType.Counter32,
-                    currentValue,
-                    notification.SysUpTimeCentiseconds);
-                if (didEmit) _pipelineMetrics.IncrementHandled();
+                    "counter32",
+                    ((Counter32)notification.Value).ToUInt32());
+                _pipelineMetrics.IncrementHandled();
                 break;
-            }
 
             case SnmpType.Counter64:
-            {
-                var currentValue = ((Counter64)notification.Value).ToUInt64();
-                var didEmit = _deltaEngine.RecordDelta(
+                _metricFactory.RecordGauge(
+                    metricName,
                     notification.Oid,
                     agent,
                     source,
-                    metricName,
-                    SnmpType.Counter64,
-                    currentValue,
-                    notification.SysUpTimeCentiseconds);
-                if (didEmit) _pipelineMetrics.IncrementHandled();
+                    "counter64",
+                    ((Counter64)notification.Value).ToUInt64());
+                _pipelineMetrics.IncrementHandled();
                 break;
-            }
 
             case SnmpType.OctetString:
+                _metricFactory.RecordInfo(
+                    metricName,
+                    notification.Oid,
+                    agent,
+                    source,
+                    "octetstring",
+                    notification.Value.ToString());
+                _pipelineMetrics.IncrementHandled();
+                break;
+
             case SnmpType.IPAddress:
+                _metricFactory.RecordInfo(
+                    metricName,
+                    notification.Oid,
+                    agent,
+                    source,
+                    "ipaddress",
+                    notification.Value.ToString());
+                _pipelineMetrics.IncrementHandled();
+                break;
+
             case SnmpType.ObjectIdentifier:
                 _metricFactory.RecordInfo(
                     metricName,
                     notification.Oid,
                     agent,
                     source,
+                    "objectidentifier",
                     notification.Value.ToString());
                 _pipelineMetrics.IncrementHandled();
                 break;

@@ -7,7 +7,7 @@ namespace SnmpCollector.Pipeline;
 /// Hosted lifecycle service that runs during <see cref="StartingAsync"/> (before Quartz starts any jobs)
 /// to compute and log the estimated OTel metric series cardinality.
 /// <para>
-/// Cardinality formula: devices x max(OID map entries, unique poll OIDs) x instruments (3) x sources (2).
+/// Cardinality formula: devices x max(OID map entries, unique poll OIDs) x instruments (2) x sources (2).
 /// </para>
 /// <para>
 /// A warning is logged if the estimate exceeds <see cref="WarningThreshold"/> (10,000 series),
@@ -20,6 +20,7 @@ namespace SnmpCollector.Pipeline;
 ///   oid         -- bounded by OID map size
 ///   agent       -- bounded by device count (IDeviceRegistry.AllDevices)
 ///   source      -- 2 values: poll, trap
+///   snmp_type   -- 8 fixed values: integer32, gauge32, timeticks, counter32, counter64, octetstring, ipaddress, objectidentifier
 /// </para>
 /// </summary>
 public sealed class CardinalityAuditService : IHostedLifecycleService
@@ -29,7 +30,7 @@ public sealed class CardinalityAuditService : IHostedLifecycleService
     private readonly ILogger<CardinalityAuditService> _logger;
 
     // Constants for cardinality calculation
-    private const int InstrumentCount = 3;     // snmp_gauge, snmp_counter, snmp_info
+    private const int InstrumentCount = 2;     // snmp_gauge, snmp_info
     private const int SourceCount = 2;         // poll, trap
     private const int WarningThreshold = 10_000;
 
@@ -92,7 +93,8 @@ public sealed class CardinalityAuditService : IHostedLifecycleService
             "metric_name (bounded by OID map: {OidMapSize} entries + Unknown), " +
             "oid (bounded by OID map), " +
             "agent (bounded by device count: {DeviceCount}), " +
-            "source (2: poll/trap)",
+            "source (2: poll/trap), " +
+            "snmp_type (bounded: 8 fixed enum values)",
             oidMapEntries, deviceCount);
 
         if (estimate > WarningThreshold)
