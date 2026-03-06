@@ -22,7 +22,7 @@ public sealed class SnmpLogEnrichmentProcessor : BaseProcessor<LogRecord>
     /// Initializes a new instance of the <see cref="SnmpLogEnrichmentProcessor"/> class.
     /// </summary>
     /// <param name="correlationService">Service providing the current correlation ID.</param>
-    /// <param name="hostName">Host name resolved from <c>HOSTNAME</c> env var or <c>Environment.MachineName</c>.</param>
+    /// <param name="hostName">Host name resolved from <c>NODE_NAME</c> env var or <c>Environment.MachineName</c>.</param>
     /// <param name="roleProvider">
     /// Delegate returning the current role (e.g. "leader" or "follower").
     /// Evaluated on every log record to reflect dynamic leadership changes.

@@ -49,7 +49,7 @@ public sealed class PipelineMetricService : IDisposable
     public PipelineMetricService(IMeterFactory meterFactory)
     {
         _meter = meterFactory.Create(TelemetryConstants.MeterName);
-        _hostName = Environment.GetEnvironmentVariable("HOSTNAME") ?? Environment.MachineName;
+        _hostName = Environment.GetEnvironmentVariable("NODE_NAME") ?? Environment.MachineName;
 
         _published = _meter.CreateCounter<long>("snmp.event.published");
         _handled = _meter.CreateCounter<long>("snmp.event.handled");

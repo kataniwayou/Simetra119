@@ -70,7 +70,7 @@ public sealed class SnmpConsoleFormatter : ConsoleFormatter
 
         var timestamp = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
         var level = GetLevelAbbreviation(logEntry.LogLevel);
-        var hostname = Environment.GetEnvironmentVariable("HOSTNAME") ?? Environment.MachineName;
+        var hostname = Environment.GetEnvironmentVariable("NODE_NAME") ?? Environment.MachineName;
         var role = _leaderElection?.CurrentRole ?? "unknown";
         var globalId = _correlationService?.CurrentCorrelationId ?? "none";
         var operationId = _correlationService?.OperationCorrelationId;
