@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 ## Current Position
 
 Phase: 10 of 10 (Metrics Redesign)
-Plan: 7 of 7 complete
+Plan: 8 of 8 complete
 Status: Phase complete
-Last activity: 2026-03-06 - Completed quick task 012: Test hostname on runtime metrics and logs
+Last activity: 2026-03-06 - Completed 10-08-PLAN.md (remove redundant per-device CommunityString)
 
-Progress: [█████████████████████████] 100% (47/47 plans across all phases)
+Progress: [█████████████████████████] 100% (48/48 plans across all phases)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 47
+- Total plans completed: 48
 - Average duration: ~3-5 min
-- Total execution time: ~153 min
+- Total execution time: ~157 min
 
 **By Phase:**
 
@@ -180,6 +180,7 @@ Recent decisions affecting current work:
 - [09-03]: Dockerfile sed for Devices array removed — base appsettings.json already has empty Devices[]; sed pattern corrupted JSON when array was already empty
 - [09-03]: OTel metric names in Prometheus use dotnet_ prefix (not process_runtime_dotnet_) and snmp_ prefix for pipeline counters — prometheusremotewrite normalizes names
 - [10-02]: host_name resolved from NODE_NAME env var (K8s spec.nodeName) with Environment.MachineName fallback — consistent pattern across SnmpMetricFactory, PipelineMetricService, SnmpConsoleFormatter
+- [10-08]: CommunityString removed from DeviceOptions/DeviceInfo/DeviceRegistry — convention Simetra.{Name} enforced at runtime by CommunityStringHelper.DeriveFromDeviceName; config files no longer store per-device community strings
 - [10-06]: NODE_NAME env var replaces HOSTNAME for host_name label — HOSTNAME is pod name (ephemeral); NODE_NAME is physical K8s node (persistent, unique per server); PodIdentity retains HOSTNAME
 - [10-02]: agent label split into device_name + ip — device_name from community string, ip from sender/target address; two explicit labels replace one ambiguous label
 - [10-02]: SiteOptions dependency removed from SnmpMetricFactory, PipelineMetricService, SnmpConsoleFormatter — host identity is environment-derived, not config-derived
@@ -221,5 +222,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 10-07-PLAN.md (per-device Port and CommunityString -- all plans complete)
+Stopped at: Completed 10-08-PLAN.md (remove redundant per-device CommunityString -- gap closure)
 Resume file: None
