@@ -189,6 +189,11 @@ public static class ServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<HeartbeatJobOptions>()
+            .Bind(configuration.GetSection(HeartbeatJobOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         // Custom IValidateOptions for cross-field validation (Phase 1)
         services.AddSingleton<IValidateOptions<SiteOptions>, SiteOptionsValidator>();
         services.AddSingleton<IValidateOptions<OtlpOptions>, OtlpOptionsValidator>();
@@ -337,8 +342,9 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Registers <see cref="ICorrelationService"/> and <see cref="IDeviceUnreachabilityTracker"/>
     /// as singletons, the Quartz.NET in-memory scheduler with auto-scaled thread pool,
-    /// <see cref="CorrelationJob"/> with a simple interval trigger, and one
-    /// <see cref="MetricPollJob"/> per device/poll-group pair with correct JobDataMap.
+    /// <see cref="CorrelationJob"/> with a simple interval trigger, <see cref="HeartbeatJob"/>
+    /// with a configurable interval, and one <see cref="MetricPollJob"/> per device/poll-group
+    /// pair with correct JobDataMap.
     /// <para>
     /// ICorrelationService is registered BEFORE AddQuartz so that the DI container
     /// can resolve it when Quartz instantiates CorrelationJob.
@@ -362,6 +368,9 @@ public static class ServiceCollectionExtensions
         var correlationOptions = new CorrelationJobOptions();
         configuration.GetSection(CorrelationJobOptions.SectionName).Bind(correlationOptions);
 
+        var heartbeatOptions = new HeartbeatJobOptions();
+        configuration.GetSection(HeartbeatJobOptions.SectionName).Bind(heartbeatOptions);
+
         // Phase 6: Bind DevicesOptions to calculate thread pool size and register poll jobs.
         // CRITICAL: bind directly into .Devices (not the wrapper) -- matches AddSnmpConfiguration pattern.
         // DI container is NOT built yet; IOptions<DevicesOptions> is not available here.
@@ -372,8 +381,8 @@ public static class ServiceCollectionExtensions
         // Populated here during Quartz configuration, then registered as singleton.
         var intervalRegistry = new JobIntervalRegistry();
 
-        // Thread pool: 1 for CorrelationJob + one thread per poll group across all devices.
-        var jobCount = 1; // CorrelationJob
+        // Thread pool: 2 = CorrelationJob + HeartbeatJob, plus one thread per poll group across all devices.
+        var jobCount = 2; // CorrelationJob + HeartbeatJob
         foreach (var device in devicesOptions.Devices)
             jobCount += device.MetricPolls.Count;
 
@@ -399,6 +408,20 @@ public static class ServiceCollectionExtensions
                     .WithMisfireHandlingInstructionNextWithRemainingCount()));
 
             intervalRegistry.Register("correlation", correlationOptions.IntervalSeconds);
+
+            // HeartbeatJob: sends loopback SNMP trap to prove scheduler + pipeline alive.
+            var heartbeatKey = new JobKey("heartbeat");
+            q.AddJob<HeartbeatJob>(j => j.WithIdentity(heartbeatKey));
+            q.AddTrigger(t => t
+                .ForJob(heartbeatKey)
+                .WithIdentity("heartbeat-trigger")
+                .StartNow()
+                .WithSimpleSchedule(s => s
+                    .WithIntervalInSeconds(heartbeatOptions.IntervalSeconds)
+                    .RepeatForever()
+                    .WithMisfireHandlingInstructionNextWithRemainingCount()));
+
+            intervalRegistry.Register("heartbeat", heartbeatOptions.IntervalSeconds);
 
             // Phase 6: MetricPollJob per device per poll group.
             // for loops (not foreach) to avoid lambda variable capture bug (Pitfall 8).
