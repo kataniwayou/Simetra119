@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simetra
+  namespace: simetra
+  labels:
+    app: simetra
+spec:
+  # Increase to 3 if desired; leader election supports multiple replicas
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simetra
+  template:
+    metadata:
+      labels:
+        app: simetra
+    spec:
+      serviceAccountName: simetra-sa
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: simetra
+        image: simetra:local
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8080
+          name: health
+          protocol: TCP
+        - containerPort: 10162
+          name: snmp
+          protocol: UDP
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: Production
+        - name: Site__PodIdentity
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        volumeMounts:
+        - name: config
+          mountPath: /app/appsettings.Production.json
+          subPath: appsettings.k8s.json
+          readOnly: true
+        startupProbe:
+          httpGet:
+            path: /healthz/startup
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 3
+          failureThreshold: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz/ready
+            port: health
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /healthz/live
+            port: health
+          periodSeconds: 15
+          failureThreshold: 3
+          timeoutSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: simetra-config
