@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 Phase: 10 of 10 (Metrics Redesign)
 Plan: 8 of 8 complete
 Status: Phase complete
-Last activity: 2026-03-06 - Completed quick task 015: Add HeartbeatJob (loopback trap, liveness stamp)
+Last activity: 2026-03-06 - Completed quick task 016: E2E deploy and test heartbeat metrics
 
 Progress: [█████████████████████████] 100% (48/48 plans across all phases)
 
@@ -208,6 +208,7 @@ None yet.
 | 013 | Heartbeat loopback flow: configure appsettings with virtual device properties | 2026-03-06 | 7a0a7bd | [013-heartbeat-loopback-flow-appsettings](./quick/013-heartbeat-loopback-flow-appsettings/) |
 | 014 | Fix heartbeat config — remove device entry, keep OidMap only | 2026-03-06 | f7c100d | [014-fix-heartbeat-remove-device-keep-oid](./quick/014-fix-heartbeat-remove-device-keep-oid/) |
 | 015 | Add HeartbeatJob — loopback SNMP trap, liveness stamp, Quartz wiring | 2026-03-06 | 1f5cd42 | [015-add-heartbeat-job](./quick/015-add-heartbeat-job/) |
+| 016 | E2E deploy and test — heartbeat, pipeline, runtime metrics, logs | 2026-03-06 | 4e82181 | [016-e2e-deploy-test-heartbeat-metrics](./quick/016-e2e-deploy-test-heartbeat-metrics/) |
 
 ### Roadmap Evolution
 
