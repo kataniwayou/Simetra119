@@ -19,12 +19,6 @@ public sealed class DeviceOptions
     public string IpAddress { get; set; } = string.Empty;
 
     /// <summary>
-    /// Optional per-device SNMP community string override.
-    /// When null or empty, falls back to SnmpListenerOptions.CommunityString.
-    /// </summary>
-    public string? CommunityString { get; set; }
-
-    /// <summary>
     /// Metric polling configurations for this device.
     /// Each entry is a separate Quartz job: metric-poll-{deviceName}-{pollIndex}.
     /// </summary>

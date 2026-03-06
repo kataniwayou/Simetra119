@@ -22,13 +22,6 @@ public sealed class SnmpListenerOptions
     public int Port { get; set; } = 162;
 
     /// <summary>
-    /// Global default SNMP community string for authentication.
-    /// Used for all devices unless overridden by DeviceOptions.CommunityString.
-    /// </summary>
-    [Required]
-    public required string CommunityString { get; set; }
-
-    /// <summary>
     /// SNMP protocol version. Only "v2c" is supported.
     /// </summary>
     [Required]

@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace SnmpCollector.Configuration;
 
 /// <summary>
@@ -10,10 +8,10 @@ public sealed class SiteOptions
     public const string SectionName = "Site";
 
     /// <summary>
-    /// Unique site name identifier (e.g., "site-nyc-01"). Required.
+    /// Optional site name identifier (e.g., "site-nyc-01").
+    /// Used as the site_name label on OTel metrics when provided.
     /// </summary>
-    [Required]
-    public required string Name { get; set; }
+    public string? Name { get; set; }
 
     /// <summary>
     /// Pod identity for Kubernetes lease holder identification.

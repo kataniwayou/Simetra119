@@ -16,11 +16,6 @@ public sealed class SnmpListenerOptionsValidator : IValidateOptions<SnmpListener
             failures.Add("SnmpListener:BindAddress is required");
         }
 
-        if (string.IsNullOrWhiteSpace(options.CommunityString))
-        {
-            failures.Add("SnmpListener:CommunityString is required");
-        }
-
         if (options.Version != "v2c")
         {
             failures.Add("SnmpListener:Version must be 'v2c'");
