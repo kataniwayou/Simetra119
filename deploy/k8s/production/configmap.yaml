@@ -72,11 +72,13 @@ data:
   #                                 How often each pod emits a heartbeat (seconds).
   #                                 Lower = faster failover detection, more overhead.
   #
-  # Heartbeat Virtual Device      - The "heartbeat" device entry is infrastructure.
-  #                                 DO NOT remove it. It documents the loopback
-  #                                 convention used by the heartbeat self-trap flow.
-  #                                 Community string: "Simetra.heartbeat"
-  #                                 OID: 1.3.6.1.4.1.9999.1.1.1.0 (simetraHeartbeat)
+  # Heartbeat OID Mapping          - The simetraHeartbeat OidMap entry resolves
+  #                                 the internal heartbeat trap OID to a metric name.
+  #                                 DO NOT remove it. The HeartbeatJob sends a
+  #                                 loopback trap with community "Simetra.heartbeat"
+  #                                 and OID 1.3.6.1.4.1.9999.1.1.1.0.
+  #                                 No device entry needed — trap path validates
+  #                                 community string only, not device registry.
   #
   # CorrelationJob.IntervalSeconds - 30
   #                                 How often the leader correlates device liveness
@@ -128,11 +130,6 @@ data:
         "1.3.6.1.4.1.9999.1.1.1.0": "simetraHeartbeat"
       },
       "Devices": [
-        {
-          "Name": "heartbeat",
-          "IpAddress": "127.0.0.1",
-          "MetricPolls": []
-        },
         {
           "Name": "REPLACE_ME_DEVICE_1_NAME",
           "IpAddress": "REPLACE_ME_DEVICE_1_IP",
