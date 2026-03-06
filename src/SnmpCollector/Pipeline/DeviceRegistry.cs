@@ -9,8 +9,8 @@ namespace SnmpCollector.Pipeline;
 /// <summary>
 /// Singleton registry that maps normalized IPv4 addresses and device names to
 /// <see cref="DeviceInfo"/> for O(1) device lookup. Built once at startup from
-/// <see cref="DevicesOptions"/> with community string resolution against the global
-/// <see cref="SnmpListenerOptions.CommunityString"/> default.
+/// <see cref="DevicesOptions"/>. Community strings are derived at usage time via
+/// <see cref="CommunityStringHelper.DeriveFromDeviceName"/>.
 /// </summary>
 public sealed class DeviceRegistry : IDeviceRegistry
 {
@@ -21,17 +21,12 @@ public sealed class DeviceRegistry : IDeviceRegistry
     /// Initializes the registry by building FrozenDictionary lookups from configuration.
     /// For each device:
     /// - IP is normalized to IPv4 via <see cref="IPAddress.MapToIPv4"/>.
-    /// - Community string is resolved: per-device override wins; falls back to global default.
     /// - Poll groups are converted to <see cref="MetricPollInfo"/> with their zero-based index.
     /// </summary>
     /// <param name="devicesOptions">The configured devices to register.</param>
-    /// <param name="listenerOptions">Global SNMP options providing the community string default.</param>
-    public DeviceRegistry(
-        IOptions<DevicesOptions> devicesOptions,
-        IOptions<SnmpListenerOptions> listenerOptions)
+    public DeviceRegistry(IOptions<DevicesOptions> devicesOptions)
     {
         var devices = devicesOptions.Value.Devices;
-        var globalCommunity = listenerOptions.Value.CommunityString;
 
         var byIpBuilder = new Dictionary<IPAddress, DeviceInfo>(devices.Count);
         var byNameBuilder = new Dictionary<string, DeviceInfo>(devices.Count, StringComparer.OrdinalIgnoreCase);
@@ -39,10 +34,6 @@ public sealed class DeviceRegistry : IDeviceRegistry
         foreach (var d in devices)
         {
             var ip = IPAddress.Parse(d.IpAddress).MapToIPv4();
-
-            var community = string.IsNullOrWhiteSpace(d.CommunityString)
-                ? globalCommunity
-                : d.CommunityString;
 
             var pollGroups = d.MetricPolls
                 .Select((poll, index) => new MetricPollInfo(
@@ -52,7 +43,7 @@ public sealed class DeviceRegistry : IDeviceRegistry
                 .ToList()
                 .AsReadOnly();
 
-            var info = new DeviceInfo(d.Name, d.IpAddress, community, pollGroups);
+            var info = new DeviceInfo(d.Name, d.IpAddress, pollGroups);
             byIpBuilder[ip] = info;
             byNameBuilder[info.Name] = info;
         }
