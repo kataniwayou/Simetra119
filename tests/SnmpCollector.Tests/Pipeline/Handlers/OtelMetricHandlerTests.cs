@@ -3,8 +3,6 @@ using System.Net;
 using Lextm.SharpSnmpLib;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
 using SnmpCollector.Pipeline.Handlers;
 using SnmpCollector.Telemetry;
@@ -24,7 +22,6 @@ public sealed class OtelMetricHandlerTests : IDisposable
     {
         var services = new ServiceCollection();
         services.AddMetrics();
-        services.AddSingleton(Options.Create(new SiteOptions { Name = "test-site" }));
         services.AddSingleton<PipelineMetricService>();
         _sp = services.BuildServiceProvider();
 
@@ -134,6 +131,7 @@ public sealed class OtelMetricHandlerTests : IDisposable
             new Integer32(99),
             SnmpType.Integer32,
             oid: "1.3.6.1.2.1.25.3.3.1.2",
+            agentIp: "10.0.0.1",
             deviceName: "core-router",
             metricName: "hrProcessorLoad");
 
@@ -143,16 +141,17 @@ public sealed class OtelMetricHandlerTests : IDisposable
         var record = _testFactory.GaugeRecords[0];
         Assert.Equal("hrProcessorLoad", record.MetricName);
         Assert.Equal("1.3.6.1.2.1.25.3.3.1.2", record.Oid);
-        Assert.Equal("core-router", record.Agent);
+        Assert.Equal("core-router", record.DeviceName);
+        Assert.Equal("10.0.0.1", record.Ip);
         Assert.Equal("poll", record.Source);
         Assert.Equal("integer32", record.SnmpType);
         Assert.Equal(99.0, record.Value);
     }
 
     [Fact]
-    public async Task GaugeRecord_FallsBackToAgentIpWhenDeviceNameNull()
+    public async Task GaugeRecord_FallsBackToUnknownWhenDeviceNameNull()
     {
-        // When DeviceName is null, agent label uses AgentIp.ToString()
+        // When DeviceName is null, device_name label uses "unknown" and ip uses AgentIp.ToString()
         var notification = new SnmpOidReceived
         {
             Oid = "1.3.6.1.2.1.25.3.3.1.2",
@@ -167,7 +166,8 @@ public sealed class OtelMetricHandlerTests : IDisposable
         await _handler.Handle(notification, CancellationToken.None);
 
         Assert.Single(_testFactory.GaugeRecords);
-        Assert.Equal("10.0.0.1", _testFactory.GaugeRecords[0].Agent);
+        Assert.Equal("unknown", _testFactory.GaugeRecords[0].DeviceName);
+        Assert.Equal("10.0.0.1", _testFactory.GaugeRecords[0].Ip);
     }
 
     // --- snmp_info truncation test ---
@@ -179,15 +179,14 @@ public sealed class OtelMetricHandlerTests : IDisposable
         // Verify via a capturing wrapper around SnmpMetricFactory.
         var services = new ServiceCollection();
         services.AddMetrics();
-        services.AddSingleton(Options.Create(new SiteOptions { Name = "test-site" }));
         using var sp = services.BuildServiceProvider();
 
         var capturingFactory = new CapturingSnmpMetricFactory(
-            new SnmpMetricFactory(sp.GetRequiredService<IMeterFactory>(), Options.Create(new SiteOptions { Name = "test-site" })));
+            new SnmpMetricFactory(sp.GetRequiredService<IMeterFactory>()));
 
         var longValue = new string('x', 200);
 
-        capturingFactory.RecordInfo("sysDescr", "1.3.6.1.2.1.1.1.0", "test-device", "poll", "octetstring", longValue);
+        capturingFactory.RecordInfo("sysDescr", "1.3.6.1.2.1.1.1.0", "test-device", "10.0.0.1", "poll", "octetstring", longValue);
 
         Assert.Single(capturingFactory.CapturedInfoValues);
         var captured = capturingFactory.CapturedInfoValues[0];
@@ -218,12 +217,12 @@ public sealed class OtelMetricHandlerTests : IDisposable
 
         public CapturingSnmpMetricFactory(SnmpMetricFactory inner) => _inner = inner;
 
-        public void RecordGauge(string metricName, string oid, string agent, string source, string snmpType, double value)
-            => _inner.RecordGauge(metricName, oid, agent, source, snmpType, value);
+        public void RecordGauge(string metricName, string oid, string deviceName, string ip, string source, string snmpType, double value)
+            => _inner.RecordGauge(metricName, oid, deviceName, ip, source, snmpType, value);
 
-        public void RecordInfo(string metricName, string oid, string agent, string source, string snmpType, string value)
+        public void RecordInfo(string metricName, string oid, string deviceName, string ip, string source, string snmpType, string value)
         {
-            _inner.RecordInfo(metricName, oid, agent, source, snmpType, value);
+            _inner.RecordInfo(metricName, oid, deviceName, ip, source, snmpType, value);
             var truncated = value.Length > 128
                 ? string.Concat(value.AsSpan(0, 125), "...")
                 : value;

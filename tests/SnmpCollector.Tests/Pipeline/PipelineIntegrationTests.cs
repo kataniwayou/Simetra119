@@ -59,16 +59,9 @@ public sealed class PipelineIntegrationTests : IDisposable
                 {
                     Name = KnownDevice,
                     IpAddress = KnownDeviceIp,
-                    CommunityString = null,
                     MetricPolls = []
                 }
             ]
-        }));
-        services.AddSingleton(Options.Create(new SnmpListenerOptions
-        {
-            BindAddress = "0.0.0.0",
-            CommunityString = "public",
-            Version = "v2c"
         }));
         services.AddSingleton<IDeviceRegistry, DeviceRegistry>();
 
@@ -118,7 +111,7 @@ public sealed class PipelineIntegrationTests : IDisposable
     [Fact]
     public async Task SendInteger32_GaugeRecorded_WithCorrectLabels()
     {
-        // SC #1: Synthetic Integer32 SnmpOidReceived -> snmp_gauge recorded with correct 5-label taxonomy
+        // SC #1: Synthetic Integer32 SnmpOidReceived -> snmp_gauge recorded with correct label taxonomy
         // OidResolutionBehavior resolves KnownOid -> "hrProcessorLoad"
         var notification = MakePollNotification(new Integer32(42), SnmpType.Integer32);
 
@@ -128,7 +121,8 @@ public sealed class PipelineIntegrationTests : IDisposable
         var record = _testFactory.GaugeRecords[0];
         Assert.Equal("hrProcessorLoad", record.MetricName);
         Assert.Equal(KnownOid, record.Oid);
-        Assert.Equal(KnownDevice, record.Agent);
+        Assert.Equal(KnownDevice, record.DeviceName);
+        Assert.Equal(KnownDeviceIp, record.Ip);
         Assert.Equal("poll", record.Source);
         Assert.Equal("integer32", record.SnmpType);
         Assert.Equal(42.0, record.Value);
@@ -154,14 +148,14 @@ public sealed class PipelineIntegrationTests : IDisposable
     }
 
     [Fact]
-    public async Task SendUnknownDeviceIp_NoGaugeRecorded_NoException()
+    public async Task SendNullDeviceName_NoGaugeRecorded_NoException()
     {
-        // SC #2: Unknown device IP (DeviceName null = trap path) -> rejected by ValidationBehavior
+        // SC #2: Null DeviceName -> rejected by ValidationBehavior (MissingDeviceName)
         var notification = MakePollNotification(
             new Integer32(42),
             SnmpType.Integer32,
             agentIp: "192.168.99.99",
-            deviceName: null); // trap path: no pre-set device name
+            deviceName: null);
 
         var exception = await Record.ExceptionAsync(() =>
             _sender.Send(notification, CancellationToken.None));
@@ -181,12 +175,6 @@ public sealed class PipelineIntegrationTests : IDisposable
         services.AddLogging(b => b.SetMinimumLevel(LogLevel.Debug));
         services.AddSingleton(Options.Create(new SiteOptions { Name = "test-site" }));
         services.AddSingleton(Options.Create(new DevicesOptions()));
-        services.AddSingleton(Options.Create(new SnmpListenerOptions
-        {
-            BindAddress = "0.0.0.0",
-            CommunityString = "public",
-            Version = "v2c"
-        }));
         services.AddSingleton<IDeviceRegistry, DeviceRegistry>();
         services.AddSingleton<IOptionsMonitor<OidMapOptions>>(
             new TestOptionsMonitor<OidMapOptions>(new OidMapOptions
@@ -265,10 +253,10 @@ public sealed class PipelineIntegrationTests : IDisposable
 
     private sealed class ThrowingSnmpMetricFactory : ISnmpMetricFactory
     {
-        public void RecordGauge(string metricName, string oid, string agent, string source, string snmpType, double value)
+        public void RecordGauge(string metricName, string oid, string deviceName, string ip, string source, string snmpType, double value)
             => throw new InvalidOperationException("Simulated downstream factory error");
 
-        public void RecordInfo(string metricName, string oid, string agent, string source, string snmpType, string value)
+        public void RecordInfo(string metricName, string oid, string deviceName, string ip, string source, string snmpType, string value)
             => throw new InvalidOperationException("Simulated downstream factory error");
     }
 

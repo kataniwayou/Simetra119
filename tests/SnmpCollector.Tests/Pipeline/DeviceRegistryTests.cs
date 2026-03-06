@@ -8,17 +8,10 @@ namespace SnmpCollector.Tests.Pipeline;
 
 public sealed class DeviceRegistryTests
 {
-    private static readonly SnmpListenerOptions DefaultListenerOptions = new()
-    {
-        BindAddress = "0.0.0.0",
-        CommunityString = "public",
-        Version = "v2c"
-    };
-
     /// <summary>
     /// Creates a DevicesOptions with two devices:
-    ///   - npb-core-01 at 10.0.10.1 (no per-device community, inherits global "public")
-    ///   - obp-edge-01 at 10.0.10.2 with per-device community "obp-secret"
+    ///   - npb-core-01 at 10.0.10.1
+    ///   - obp-edge-01 at 10.0.10.2
     /// </summary>
     private static DevicesOptions TwoDeviceOptions() => new()
     {
@@ -28,7 +21,6 @@ public sealed class DeviceRegistryTests
             {
                 Name = "npb-core-01",
                 IpAddress = "10.0.10.1",
-                CommunityString = null,
                 MetricPolls =
                 [
                     new MetricPollOptions
@@ -42,19 +34,15 @@ public sealed class DeviceRegistryTests
             {
                 Name = "obp-edge-01",
                 IpAddress = "10.0.10.2",
-                CommunityString = "obp-secret",
                 MetricPolls = []
             }
         ]
     };
 
-    private static DeviceRegistry CreateRegistry(
-        DevicesOptions? devicesOptions = null,
-        SnmpListenerOptions? listenerOptions = null)
+    private static DeviceRegistry CreateRegistry(DevicesOptions? devicesOptions = null)
     {
         return new DeviceRegistry(
-            Options.Create(devicesOptions ?? TwoDeviceOptions()),
-            Options.Create(listenerOptions ?? DefaultListenerOptions));
+            Options.Create(devicesOptions ?? TwoDeviceOptions()));
     }
 
     [Fact]
@@ -134,32 +122,6 @@ public sealed class DeviceRegistryTests
         var sut = CreateRegistry();
 
         Assert.Equal(2, sut.AllDevices.Count);
-    }
-
-    [Fact]
-    public void CommunityString_FallsBackToGlobal()
-    {
-        var sut = CreateRegistry();
-
-        var found = sut.TryGetDevice(IPAddress.Parse("10.0.10.1"), out var device);
-
-        Assert.True(found);
-        Assert.NotNull(device);
-        // Device has no per-device community string -- should inherit global "public"
-        Assert.Equal("public", device.CommunityString);
-    }
-
-    [Fact]
-    public void CommunityString_UsesOverride()
-    {
-        var sut = CreateRegistry();
-
-        var found = sut.TryGetDevice(IPAddress.Parse("10.0.10.2"), out var device);
-
-        Assert.True(found);
-        Assert.NotNull(device);
-        // Device has per-device community "obp-secret" -- should use it, not the global "public"
-        Assert.Equal("obp-secret", device.CommunityString);
     }
 
     [Fact]

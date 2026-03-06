@@ -1,7 +1,5 @@
 using System.Diagnostics.Metrics;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
-using SnmpCollector.Configuration;
 using SnmpCollector.Telemetry;
 using SnmpCollector.Tests.Helpers;
 using Xunit;
@@ -31,8 +29,7 @@ public sealed class PipelineMetricServiceTests : IDisposable
         _sp = services.BuildServiceProvider();
 
         _service = new PipelineMetricService(
-            _sp.GetRequiredService<IMeterFactory>(),
-            Options.Create(new SiteOptions { Name = "test-site" }));
+            _sp.GetRequiredService<IMeterFactory>());
 
         _listener = new MeterListener();
         _listener.InstrumentPublished = (instrument, listener) =>
@@ -55,11 +52,11 @@ public sealed class PipelineMetricServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
-    // 1. IncrementTrapAuthFailed_RecordsWithSiteNameTag (PMET-07)
+    // 1. IncrementTrapAuthFailed_RecordsWithHostNameTag (PMET-07)
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IncrementTrapAuthFailed_RecordsWithSiteNameTag()
+    public void IncrementTrapAuthFailed_RecordsWithHostNameTag()
     {
         _service.IncrementTrapAuthFailed();
 
@@ -67,16 +64,16 @@ public sealed class PipelineMetricServiceTests : IDisposable
 
         Assert.Equal(1L, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
-        Assert.Equal("test-site", tags["site_name"]);
+        Assert.True(tags.ContainsKey("host_name"));
         Assert.DoesNotContain("device_name", tags.Keys);
     }
 
     // -----------------------------------------------------------------------
-    // 2. IncrementTrapUnknownDevice_RecordsWithSiteNameTag (PMET-08)
+    // 2. IncrementTrapUnknownDevice_RecordsWithHostNameTag (PMET-08)
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IncrementTrapUnknownDevice_RecordsWithSiteNameTag()
+    public void IncrementTrapUnknownDevice_RecordsWithHostNameTag()
     {
         _service.IncrementTrapUnknownDevice();
 
@@ -84,7 +81,7 @@ public sealed class PipelineMetricServiceTests : IDisposable
 
         Assert.Equal(1L, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
-        Assert.Equal("test-site", tags["site_name"]);
+        Assert.True(tags.ContainsKey("host_name"));
         Assert.DoesNotContain("device_name", tags.Keys);
     }
 
@@ -101,16 +98,16 @@ public sealed class PipelineMetricServiceTests : IDisposable
 
         Assert.Equal(1L, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
-        Assert.Equal("test-site", tags["site_name"]);
+        Assert.True(tags.ContainsKey("host_name"));
         Assert.Equal("router-01", tags["device_name"]);
     }
 
     // -----------------------------------------------------------------------
-    // 4. IncrementTrapReceived_RecordsWithSiteNameTag (PMET-06)
+    // 4. IncrementTrapReceived_RecordsWithHostNameTag (PMET-06)
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IncrementTrapReceived_RecordsWithSiteNameTag()
+    public void IncrementTrapReceived_RecordsWithHostNameTag()
     {
         _service.IncrementTrapReceived();
 
@@ -118,6 +115,6 @@ public sealed class PipelineMetricServiceTests : IDisposable
 
         Assert.Equal(1L, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
-        Assert.Equal("test-site", tags["site_name"]);
+        Assert.True(tags.ContainsKey("host_name"));
     }
 }

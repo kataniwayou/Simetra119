@@ -1,11 +1,8 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using Lextm.SharpSnmpLib;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
 using SnmpCollector.Pipeline.Behaviors;
 using SnmpCollector.Telemetry;
@@ -22,7 +19,6 @@ public sealed class ValidationBehaviorTests : IDisposable
     {
         var services = new ServiceCollection();
         services.AddMetrics();
-        services.AddSingleton(Options.Create(new SiteOptions { Name = "test-site" }));
         services.AddSingleton<PipelineMetricService>();
         _sp = services.BuildServiceProvider();
         _metrics = _sp.GetRequiredService<PipelineMetricService>();
@@ -30,11 +26,10 @@ public sealed class ValidationBehaviorTests : IDisposable
 
     public void Dispose() => _sp.Dispose();
 
-    private ValidationBehavior<SnmpOidReceived, Unit> CreateBehavior(IDeviceRegistry? registry = null) =>
+    private ValidationBehavior<SnmpOidReceived, Unit> CreateBehavior() =>
         new(
             NullLogger<ValidationBehavior<SnmpOidReceived, Unit>>.Instance,
-            _metrics,
-            registry ?? new StubDeviceRegistry(knownIp: null));
+            _metrics);
 
     private static SnmpOidReceived MakeNotification(string oid, string agentIp = "10.0.0.1", string? deviceName = null) =>
         new()
@@ -95,9 +90,9 @@ public sealed class ValidationBehaviorTests : IDisposable
     }
 
     [Fact]
-    public async Task AcceptsValidOid()
+    public async Task AcceptsValidOid_WhenDeviceNameSet()
     {
-        // DeviceName already set (poll path) -- registry not consulted
+        // DeviceName already set (poll path) -- passes validation
         var behavior = CreateBehavior();
         var nextCalled = false;
 
@@ -110,17 +105,16 @@ public sealed class ValidationBehaviorTests : IDisposable
         Assert.True(nextCalled);
     }
 
-    // --- Device resolution tests ---
+    // --- DeviceName validation tests ---
 
     [Fact]
-    public async Task RejectsUnknownDevice()
+    public async Task RejectsMissingDeviceName()
     {
-        // DeviceName is null (trap path); IP 10.99.99.99 not in registry
-        var registry = new StubDeviceRegistry(knownIp: "10.0.0.1");
-        var behavior = CreateBehavior(registry);
+        // DeviceName is null -> rejected with MissingDeviceName reason
+        var behavior = CreateBehavior();
         var nextCalled = false;
 
-        await behavior.Handle(MakeNotification("1.3.6.1.2.1.1.1.0", agentIp: "10.99.99.99", deviceName: null), ct =>
+        await behavior.Handle(MakeNotification("1.3.6.1.2.1.1.1.0", deviceName: null), ct =>
         {
             nextCalled = true;
             return Task.FromResult(Unit.Value);
@@ -130,31 +124,10 @@ public sealed class ValidationBehaviorTests : IDisposable
     }
 
     [Fact]
-    public async Task AcceptsKnownDevice_PopulatesDeviceName()
+    public async Task AcceptsPreSetDeviceName()
     {
-        // DeviceName is null (trap path); IP 10.0.0.1 IS in registry -> DeviceName populated
-        var registry = new StubDeviceRegistry(knownIp: "10.0.0.1");
-        var behavior = CreateBehavior(registry);
-        var notification = MakeNotification("1.3.6.1.2.1.1.1.0", agentIp: "10.0.0.1", deviceName: null);
-        var nextCalled = false;
-
-        await behavior.Handle(notification, ct =>
-        {
-            nextCalled = true;
-            return Task.FromResult(Unit.Value);
-        }, CancellationToken.None);
-
-        Assert.True(nextCalled);
-        // DeviceName enriched in-place by ValidationBehavior
-        Assert.Equal("stub-device", notification.DeviceName);
-    }
-
-    [Fact]
-    public async Task SkipsRegistryWhenDeviceNameAlreadySet()
-    {
-        // Poll path: DeviceName is pre-set, registry TryGetDevice should NOT be consulted
-        var registry = new StubDeviceRegistry(knownIp: null); // registry knows no devices
-        var behavior = CreateBehavior(registry);
+        // Poll path: DeviceName is pre-set, passes validation
+        var behavior = CreateBehavior();
         var nextCalled = false;
 
         await behavior.Handle(MakeNotification("1.3.6.1.2.1.1.1.0", deviceName: "pre-set-device"), ct =>
@@ -163,38 +136,6 @@ public sealed class ValidationBehaviorTests : IDisposable
             return Task.FromResult(Unit.Value);
         }, CancellationToken.None);
 
-        // Even though registry has no devices, DeviceName was pre-set so it passes
         Assert.True(nextCalled);
-    }
-
-    // --- Stub IDeviceRegistry ---
-
-    private sealed class StubDeviceRegistry : IDeviceRegistry
-    {
-        private readonly IPAddress? _knownIp;
-
-        public StubDeviceRegistry(string? knownIp)
-        {
-            _knownIp = knownIp is not null ? IPAddress.Parse(knownIp) : null;
-        }
-
-        public bool TryGetDevice(IPAddress senderIp, [NotNullWhen(true)] out DeviceInfo? device)
-        {
-            if (_knownIp is not null && senderIp.MapToIPv4().Equals(_knownIp.MapToIPv4()))
-            {
-                device = new DeviceInfo("stub-device", senderIp.ToString(), "public", []);
-                return true;
-            }
-            device = null;
-            return false;
-        }
-
-        public bool TryGetDeviceByName(string deviceName, [NotNullWhen(true)] out DeviceInfo? device)
-        {
-            device = null;
-            return false;
-        }
-
-        public IReadOnlyList<DeviceInfo> AllDevices => [];
     }
 }
