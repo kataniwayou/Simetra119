@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 10 complete. All phases complete.
+**Current focus:** Phase 10 gap closure in progress (plan 06 of 07 complete).
 
 ## Current Position
 
 Phase: 10 of 10 (Metrics Redesign)
-Plan: 5 of 5 complete
-Status: Phase complete
-Last activity: 2026-03-06 — Completed 10-05-PLAN.md (test suite update for Phase 10)
+Plan: 6 of 7 complete (gap closure plans 06-07; 06 done)
+Status: Gap closure in progress
+Last activity: 2026-03-06 — Completed 10-06-PLAN.md (NODE_NAME host identity fix)
 
-Progress: [█████████████████████████] 100% (45/45 plans across all phases)
+Progress: [█████████████████████████] 100% (46/47 plans across all phases)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 45
+- Total plans completed: 46
 - Average duration: ~3-5 min
-- Total execution time: ~147 min
+- Total execution time: ~150 min
 
 **By Phase:**
 
@@ -179,7 +179,8 @@ Recent decisions affecting current work:
 - [09-03]: SnmpCollector.csproj needs explicit <Content Include="appsettings*.json" CopyToPublishDirectory="PreserveNewest"/> — Microsoft.NET.Sdk (non-Web) does not auto-publish appsettings files
 - [09-03]: Dockerfile sed for Devices array removed — base appsettings.json already has empty Devices[]; sed pattern corrupted JSON when array was already empty
 - [09-03]: OTel metric names in Prometheus use dotnet_ prefix (not process_runtime_dotnet_) and snmp_ prefix for pipeline counters — prometheusremotewrite normalizes names
-- [10-02]: host_name resolved from HOSTNAME env var with Environment.MachineName fallback — consistent pattern across SnmpMetricFactory, PipelineMetricService, SnmpConsoleFormatter
+- [10-02]: host_name resolved from NODE_NAME env var (K8s spec.nodeName) with Environment.MachineName fallback — consistent pattern across SnmpMetricFactory, PipelineMetricService, SnmpConsoleFormatter
+- [10-06]: NODE_NAME env var replaces HOSTNAME for host_name label — HOSTNAME is pod name (ephemeral); NODE_NAME is physical K8s node (persistent, unique per server); PodIdentity retains HOSTNAME
 - [10-02]: agent label split into device_name + ip — device_name from community string, ip from sender/target address; two explicit labels replace one ambiguous label
 - [10-02]: SiteOptions dependency removed from SnmpMetricFactory, PipelineMetricService, SnmpConsoleFormatter — host identity is environment-derived, not config-derived
 
@@ -219,5 +220,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 10-05-PLAN.md (test suite update — all phases complete)
+Stopped at: Completed 10-06-PLAN.md (NODE_NAME host identity fix)
 Resume file: None
