@@ -16,7 +16,22 @@ data:
       "SnmpListener": {
         "Port": 10162
       },
-      "Devices": [],
+      "HeartbeatJob": {
+        "IntervalSeconds": 15
+      },
+      "Liveness": {
+        "GraceMultiplier": 2.0
+      },
+      "Devices": [
+        {
+          "Name": "heartbeat",
+          "IpAddress": "127.0.0.1",
+          "MetricPolls": []
+        }
+      ],
+      "OidMap": {
+        "1.3.6.1.4.1.9999.1.1.1.0": "simetraHeartbeat"
+      },
       "Logging": {
         "LogLevel": {
           "Default": "Debug"
