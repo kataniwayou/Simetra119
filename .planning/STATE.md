@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 Phase: 10 of 10 (Metrics Redesign)
 Plan: 7 of 7 complete
 Status: Phase complete
-Last activity: 2026-03-06 — Completed 10-07-PLAN.md (per-device Port and CommunityString)
+Last activity: 2026-03-06 - Completed quick task 012: Test hostname on runtime metrics and logs
 
 Progress: [█████████████████████████] 100% (47/47 plans across all phases)
 
@@ -203,6 +203,7 @@ None yet.
 | 009 | Remove redundant Role, simplify Site options | 2026-03-05 | 1428f21 | [009-remove-role-simplify-site-options](./quick/009-remove-role-simplify-site-options/) |
 | 010 | Add snmp_type label, verify no dropped traps, verify no counter instrument | 2026-03-06 | 4e7a503 | [010-add-snmp-type-label-remove-counter](./quick/010-add-snmp-type-label-remove-counter/) |
 | 011 | Verify liveness stamps, set Debug log level, deploy to K8s | 2026-03-06 | 1d2d3a5 | [011-verify-liveness-stamps-debug-logs-dep](./quick/011-verify-liveness-stamps-debug-logs-dep/) |
+| 012 | Test hostname on runtime metrics and logs on actual Prometheus and Elastic | 2026-03-06 | c37eae8 | [012-test-hostname-runtime-metrics-logs](./quick/012-test-hostname-runtime-metrics-logs/) |
 
 ### Roadmap Evolution
 
