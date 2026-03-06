@@ -5,10 +5,8 @@ using Lextm.SharpSnmpLib;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Quartz;
 using Quartz.Impl;
-using SnmpCollector.Configuration;
 using SnmpCollector.Jobs;
 using SnmpCollector.Pipeline;
 using SnmpCollector.Telemetry;
@@ -19,7 +17,7 @@ namespace SnmpCollector.Tests.Jobs;
 
 /// <summary>
 /// Unit tests for <see cref="MetricPollJob"/> covering:
-/// device-not-found early return, successful dispatch with sysUpTime propagation,
+/// device-not-found early return, successful dispatch with varbind routing,
 /// noSuchObject skip, timeout failure recording, unreachable transition after 3 failures,
 /// recovery after unreachable, and PollExecuted counter behavior.
 ///
@@ -34,7 +32,6 @@ public sealed class MetricPollJobTests : IDisposable
 {
     private const string DeviceName     = "test-router";
     private const string DeviceIp       = "192.168.1.1";
-    private const string CommunityStr   = "public";
     private const string SysUpTimeOid   = "1.3.6.1.2.1.1.3.0";
     private const string IfInOctetsOid  = "1.3.6.1.2.1.2.2.1.10.1";
     private const string IfOutOctetsOid = "1.3.6.1.2.1.2.2.1.16.1";
@@ -55,8 +52,7 @@ public sealed class MetricPollJobTests : IDisposable
         _sp = services.BuildServiceProvider();
 
         _metrics = new PipelineMetricService(
-            _sp.GetRequiredService<IMeterFactory>(),
-            Options.Create(new SiteOptions { Name = "test-site" }));
+            _sp.GetRequiredService<IMeterFactory>());
 
         _meterListener = new MeterListener();
         _meterListener.InstrumentPublished = (instrument, listener) =>
@@ -85,7 +81,7 @@ public sealed class MetricPollJobTests : IDisposable
     private static DeviceInfo MakeDevice(params string[] pollOids)
     {
         var pollGroup = new MetricPollInfo(0, pollOids.ToList(), 30);
-        return new DeviceInfo(DeviceName, DeviceIp, CommunityStr, [pollGroup]);
+        return new DeviceInfo(DeviceName, DeviceIp, [pollGroup]);
     }
 
     private MetricPollJob CreateJob(
@@ -118,13 +114,13 @@ public sealed class MetricPollJobTests : IDisposable
         => _measurements.Count(m => m.InstrumentName == "snmp.poll.executed");
 
     // -------------------------------------------------------------------------
-    // Test 1: Device not found — logs warning, returns without incrementing counter
+    // Test 1: Device not found -- logs warning, returns without incrementing counter
     // -------------------------------------------------------------------------
 
     [Fact]
     public async Task Execute_DeviceNotFound_DoesNotIncrementPollExecuted()
     {
-        // Arrange — registry with NO devices
+        // Arrange -- registry with NO devices
         var registry = new StubDeviceRegistry([]);
         var sender   = new CapturingSender();
         var job      = CreateJob(registry: registry, sender: sender);
@@ -133,7 +129,7 @@ public sealed class MetricPollJobTests : IDisposable
         // Act
         await job.Execute(context);
 
-        // Assert — no sends, no counter
+        // Assert -- no sends, no counter
         Assert.Empty(sender.Sent);
         Assert.Equal(0, CountPollExecuted());
     }
@@ -145,7 +141,7 @@ public sealed class MetricPollJobTests : IDisposable
     [Fact]
     public async Task Execute_SuccessfulPoll_DispatchesEachVarbindViaSender()
     {
-        // Arrange — sysUpTime + 2 OIDs in response
+        // Arrange -- sysUpTime + 2 OIDs in response
         var response = new List<Variable>
         {
             new Variable(new ObjectIdentifier(SysUpTimeOid),   new TimeTicks(50000)),
@@ -163,7 +159,7 @@ public sealed class MetricPollJobTests : IDisposable
         // Act
         await job.Execute(MakeContext());
 
-        // Assert — all 3 varbinds dispatched
+        // Assert -- all 3 varbinds dispatched
         Assert.Equal(3, sender.Sent.Count);
 
         var oids = sender.Sent.Select(m => m.Oid).ToList();
@@ -181,13 +177,13 @@ public sealed class MetricPollJobTests : IDisposable
     }
 
     // -------------------------------------------------------------------------
-    // Test 3: sysUpTime propagated to subsequent varbinds (null on sysUpTime's own message)
+    // Test 3: sysUpTime dispatched as a normal varbind (no propagation to subsequent OIDs)
     // -------------------------------------------------------------------------
 
     [Fact]
-    public async Task Execute_SuccessfulPoll_SetsSystemUpTimeOnSubsequentVarbinds()
+    public async Task Execute_SuccessfulPoll_DispatchesSysUpTimeAsNormalVarbind()
     {
-        // Arrange — sysUpTime=500, then one Integer32 OID
+        // Arrange -- sysUpTime=500, then one OID
         var response = new List<Variable>
         {
             new Variable(new ObjectIdentifier(SysUpTimeOid),  new TimeTicks(500)),
@@ -204,17 +200,14 @@ public sealed class MetricPollJobTests : IDisposable
         // Act
         await job.Execute(MakeContext());
 
-        // Assert — 2 messages dispatched
+        // Assert -- 2 messages dispatched with correct OIDs
         Assert.Equal(2, sender.Sent.Count);
 
         var sysUpTimeMsg  = sender.Sent.Single(m => m.Oid == SysUpTimeOid);
         var ifInOctetsMsg = sender.Sent.Single(m => m.Oid == IfInOctetsOid);
 
-        // sysUpTime's own message carries null (not yet assigned when that varbind is dispatched)
-        Assert.Null(sysUpTimeMsg.SysUpTimeCentiseconds);
-
-        // Subsequent OID carries the extracted uptime value
-        Assert.Equal(500u, ifInOctetsMsg.SysUpTimeCentiseconds);
+        Assert.Equal(SnmpType.TimeTicks, sysUpTimeMsg.TypeCode);
+        Assert.Equal(SnmpType.Gauge32, ifInOctetsMsg.TypeCode);
     }
 
     // -------------------------------------------------------------------------
@@ -224,7 +217,7 @@ public sealed class MetricPollJobTests : IDisposable
     [Fact]
     public async Task Execute_NoSuchObject_SkipsVarbind()
     {
-        // Arrange — two error-sentinel varbinds, no valid data OIDs
+        // Arrange -- two error-sentinel varbinds, no valid data OIDs
         var response = new List<Variable>
         {
             new Variable(new ObjectIdentifier(IfInOctetsOid),  new NoSuchObject()),
@@ -241,7 +234,7 @@ public sealed class MetricPollJobTests : IDisposable
         // Act
         await job.Execute(MakeContext());
 
-        // Assert — no sends (both skipped); counter still increments (poll did execute)
+        // Assert -- no sends (both skipped); counter still increments (poll did execute)
         Assert.Empty(sender.Sent);
         Assert.Equal(1, CountPollExecuted());
     }
@@ -253,7 +246,7 @@ public sealed class MetricPollJobTests : IDisposable
     [Fact]
     public async Task Execute_Timeout_RecordsFailureAndIncrementsPollExecuted()
     {
-        // Arrange — snmp client throws; context cancellation token is NOT cancelled (not shutdown)
+        // Arrange -- snmp client throws; context cancellation token is NOT cancelled (not shutdown)
         var snmpClient = new StubSnmpClient
         {
             ExceptionToThrow = new OperationCanceledException("timeout")
@@ -295,7 +288,7 @@ public sealed class MetricPollJobTests : IDisposable
     }
 
     // -------------------------------------------------------------------------
-    // Test 7: Recovery after unreachable — tracker transitions back to healthy
+    // Test 7: Recovery after unreachable -- tracker transitions back to healthy
     // -------------------------------------------------------------------------
 
     [Fact]
@@ -316,7 +309,7 @@ public sealed class MetricPollJobTests : IDisposable
         await timeoutJob.Execute(ctx);
         Assert.True(tracker.IsUnreachable(DeviceName));
 
-        // One successful poll — swap to client returning an empty response
+        // One successful poll -- swap to client returning an empty response
         var successClient = new StubSnmpClient { Response = new List<Variable>() };
         var successJob    = CreateJob(snmpClient: successClient, tracker: tracker, sender: noopSender);
         await successJob.Execute(MakeContext());
@@ -346,7 +339,7 @@ public sealed class MetricPollJobTests : IDisposable
         await errorJob.Execute(MakeContext(cancellationToken: CancellationToken.None));
         Assert.Equal(2, CountPollExecuted());
 
-        // --- Device not found — must NOT increment ---
+        // --- Device not found -- must NOT increment ---
         var missingJob = CreateJob(registry: new StubDeviceRegistry([]));
         await missingJob.Execute(MakeContext("nonexistent"));
         Assert.Equal(2, CountPollExecuted()); // still 2

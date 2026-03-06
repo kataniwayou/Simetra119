@@ -5,8 +5,6 @@ using Lextm.SharpSnmpLib;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
 using SnmpCollector.Services;
 using SnmpCollector.Telemetry;
@@ -40,8 +38,7 @@ public sealed class ChannelConsumerServiceTests : IDisposable
         _sp = services.BuildServiceProvider();
 
         _metrics = new PipelineMetricService(
-            _sp.GetRequiredService<IMeterFactory>(),
-            Options.Create(new SiteOptions { Name = "test-site" }));
+            _sp.GetRequiredService<IMeterFactory>());
 
         _meterListener = new MeterListener();
         _meterListener.InstrumentPublished = (instrument, listener) =>
@@ -75,22 +72,22 @@ public sealed class ChannelConsumerServiceTests : IDisposable
             AgentIp: DeviceIp,
             DeviceName: DeviceName);
 
-    private ChannelConsumerService CreateService(ISender sender, IDeviceChannelManager channelManager)
+    private ChannelConsumerService CreateService(ISender sender, ITrapChannel trapChannel)
         => new ChannelConsumerService(
-            channelManager,
+            trapChannel,
             sender,
             new RotatingCorrelationService(),
             _metrics,
             NullLogger<ChannelConsumerService>.Instance);
 
-    /// <summary>Creates a channel pre-loaded with envelopes, then completed so ReadAllAsync finishes.</summary>
-    private static PrimedChannelManager CreateChannelManager(IEnumerable<VarbindEnvelope> envelopes)
+    /// <summary>Creates a trap channel pre-loaded with envelopes, then completed so ReadAllAsync finishes.</summary>
+    private static PrimedTrapChannel CreateTrapChannel(IEnumerable<VarbindEnvelope> envelopes)
     {
-        var manager = new PrimedChannelManager(DeviceName);
+        var channel = new PrimedTrapChannel();
         foreach (var e in envelopes)
-            manager.Write(e);
-        manager.Complete();
-        return manager;
+            channel.Write(e);
+        channel.Complete();
+        return channel;
     }
 
     /// <summary>Wait for a condition to become true with a timeout, polling every 10ms.</summary>
@@ -109,8 +106,8 @@ public sealed class ChannelConsumerServiceTests : IDisposable
     public async Task ConsumesVarbindAndCallsSenderSend()
     {
         var sender = new CapturingSender();
-        var manager = CreateChannelManager([MakeEnvelope()]);
-        var service = CreateService(sender, manager);
+        var trapChannel = CreateTrapChannel([MakeEnvelope()]);
+        var service = CreateService(sender, trapChannel);
 
         await service.StartAsync(CancellationToken.None);
         await WaitForAsync(() => sender.Calls.Count >= 1, TimeSpan.FromSeconds(5));
@@ -127,8 +124,8 @@ public sealed class ChannelConsumerServiceTests : IDisposable
     public async Task SetsSourceToTrap()
     {
         var sender = new CapturingSender();
-        var manager = CreateChannelManager([MakeEnvelope()]);
-        var service = CreateService(sender, manager);
+        var trapChannel = CreateTrapChannel([MakeEnvelope()]);
+        var service = CreateService(sender, trapChannel);
 
         await service.StartAsync(CancellationToken.None);
         await WaitForAsync(() => sender.Calls.Count >= 1, TimeSpan.FromSeconds(5));
@@ -146,8 +143,8 @@ public sealed class ChannelConsumerServiceTests : IDisposable
     public async Task SetsDeviceNameFromEnvelope()
     {
         var sender = new CapturingSender();
-        var manager = CreateChannelManager([MakeEnvelope()]);
-        var service = CreateService(sender, manager);
+        var trapChannel = CreateTrapChannel([MakeEnvelope()]);
+        var service = CreateService(sender, trapChannel);
 
         await service.StartAsync(CancellationToken.None);
         await WaitForAsync(() => sender.Calls.Count >= 1, TimeSpan.FromSeconds(5));
@@ -165,8 +162,8 @@ public sealed class ChannelConsumerServiceTests : IDisposable
     public async Task IncrementsTrapReceived()
     {
         var sender = new CapturingSender();
-        var manager = CreateChannelManager([MakeEnvelope(), MakeEnvelope()]);
-        var service = CreateService(sender, manager);
+        var trapChannel = CreateTrapChannel([MakeEnvelope(), MakeEnvelope()]);
+        var service = CreateService(sender, trapChannel);
 
         await service.StartAsync(CancellationToken.None);
         await WaitForAsync(() => sender.Calls.Count >= 2, TimeSpan.FromSeconds(5));
@@ -186,8 +183,8 @@ public sealed class ChannelConsumerServiceTests : IDisposable
     {
         // Sender throws on first call, succeeds on second
         var sender = new FaultingThenSucceedingSender(throwOnFirstCall: true);
-        var manager = CreateChannelManager([MakeEnvelope("1.3.6.1.1"), MakeEnvelope("1.3.6.1.2")]);
-        var service = CreateService(sender, manager);
+        var trapChannel = CreateTrapChannel([MakeEnvelope("1.3.6.1.1"), MakeEnvelope("1.3.6.1.2")]);
+        var service = CreateService(sender, trapChannel);
 
         await service.StartAsync(CancellationToken.None);
         await WaitForAsync(() => sender.TotalAttempts >= 2, TimeSpan.FromSeconds(5));
@@ -278,25 +275,16 @@ public sealed class ChannelConsumerServiceTests : IDisposable
             => AsyncEnumerable.Empty<object?>();
     }
 
-    /// <summary>Channel manager backed by pre-loaded, pre-completed channels for testing.</summary>
-    private sealed class PrimedChannelManager : IDeviceChannelManager
+    /// <summary>Trap channel backed by pre-loaded, pre-completed channel for testing.</summary>
+    private sealed class PrimedTrapChannel : ITrapChannel
     {
-        private readonly string _deviceName;
-        private readonly Channel<VarbindEnvelope> _channel;
-
-        public PrimedChannelManager(string deviceName)
-        {
-            _deviceName = deviceName;
-            _channel = Channel.CreateUnbounded<VarbindEnvelope>();
-        }
+        private readonly Channel<VarbindEnvelope> _channel = Channel.CreateUnbounded<VarbindEnvelope>();
 
         public void Write(VarbindEnvelope envelope) => _channel.Writer.TryWrite(envelope);
-        public void Complete() => _channel.Writer.Complete();
+        public void Complete() => _channel.Writer.TryComplete();
 
-        public ChannelWriter<VarbindEnvelope> GetWriter(string name) => _channel.Writer;
-        public ChannelReader<VarbindEnvelope> GetReader(string name) => _channel.Reader;
-        public IReadOnlyCollection<string> DeviceNames => [_deviceName];
-        public void CompleteAll() => _channel.Writer.TryComplete();
+        public ChannelWriter<VarbindEnvelope> Writer => _channel.Writer;
+        public ChannelReader<VarbindEnvelope> Reader => _channel.Reader;
 
         public async Task WaitForDrainAsync(CancellationToken cancellationToken)
         {

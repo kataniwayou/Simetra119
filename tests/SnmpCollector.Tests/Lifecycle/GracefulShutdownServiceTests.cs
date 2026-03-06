@@ -12,21 +12,21 @@ namespace SnmpCollector.Tests.Lifecycle;
 public sealed class GracefulShutdownServiceTests : IAsyncDisposable
 {
     private readonly ISchedulerFactory _schedulerFactory;
-    private readonly StubChannelManager _channelManager;
+    private readonly StubTrapChannel _trapChannel;
     private readonly ServiceProvider _serviceProvider;
     private readonly GracefulShutdownService _service;
 
     public GracefulShutdownServiceTests()
     {
         _schedulerFactory = new StdSchedulerFactory();
-        _channelManager = new StubChannelManager();
+        _trapChannel = new StubTrapChannel();
 
         var services = new ServiceCollection();
         _serviceProvider = services.BuildServiceProvider();
 
         _service = new GracefulShutdownService(
             _schedulerFactory,
-            _channelManager,
+            _trapChannel,
             _serviceProvider,
             NullLogger<GracefulShutdownService>.Instance);
     }
@@ -56,14 +56,14 @@ public sealed class GracefulShutdownServiceTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task StopAsync_CallsCompleteAll()
+    public async Task StopAsync_CallsComplete()
     {
         var scheduler = await _schedulerFactory.GetScheduler();
         await scheduler.Start();
 
         await _service.StopAsync(CancellationToken.None);
 
-        Assert.True(_channelManager.CompleteAllCalled);
+        Assert.True(_trapChannel.CompleteCalled);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public sealed class GracefulShutdownServiceTests : IAsyncDisposable
 
         await _service.StopAsync(CancellationToken.None);
 
-        Assert.True(_channelManager.WaitForDrainCalled);
+        Assert.True(_trapChannel.WaitForDrainCalled);
     }
 
     [Fact]
@@ -97,17 +97,22 @@ public sealed class GracefulShutdownServiceTests : IAsyncDisposable
         await _service.StopAsync(CancellationToken.None);
     }
 
-    private sealed class StubChannelManager : IDeviceChannelManager
+    private sealed class StubTrapChannel : ITrapChannel
     {
-        public bool CompleteAllCalled { get; private set; }
+        public bool CompleteCalled { get; private set; }
         public bool WaitForDrainCalled { get; private set; }
 
-        public ChannelWriter<VarbindEnvelope> GetWriter(string deviceName)
-            => Channel.CreateUnbounded<VarbindEnvelope>().Writer;
-        public ChannelReader<VarbindEnvelope> GetReader(string deviceName)
-            => Channel.CreateUnbounded<VarbindEnvelope>().Reader;
-        public IReadOnlyCollection<string> DeviceNames => [];
-        public void CompleteAll() => CompleteAllCalled = true;
+        private readonly Channel<VarbindEnvelope> _channel = Channel.CreateUnbounded<VarbindEnvelope>();
+
+        public ChannelWriter<VarbindEnvelope> Writer => _channel.Writer;
+        public ChannelReader<VarbindEnvelope> Reader => _channel.Reader;
+
+        public void Complete()
+        {
+            CompleteCalled = true;
+            _channel.Writer.TryComplete();
+        }
+
         public Task WaitForDrainAsync(CancellationToken cancellationToken)
         {
             WaitForDrainCalled = true;
