@@ -12,9 +12,9 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 Phase: 15 (K8s ConfigMap Watch and Unified Config)
 Plan: 5 of 5
 Status: In progress
-Last activity: 2026-03-07 — Completed 15-05-PLAN.md (DynamicPollScheduler unit tests)
+Last activity: 2026-03-07 — Completed 15-04-PLAN.md (K8s manifests: unified ConfigMap, RBAC, cleanup)
 
-Progress: [############________] 3/5 Phase 15 plans
+Progress: [################____] 4/5 Phase 15 plans
 
 ## Milestone History
 
@@ -34,7 +34,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 - Community string convention: Simetra.{DeviceName} for both auth and device identity
 - host_name from NODE_NAME env var (K8s spec.nodeName), pod_name from HOSTNAME
 - Heartbeat is internal infrastructure — pipeline metrics prove liveness, no metric export
-- OBP OID maps stored as separate configmap keys (oidmap-obp.json) with "OidMap" section wrapper for config binding
+- Unified simetra-config.json ConfigMap key replaces separate oidmap-obp.json, oidmap-npb.json, devices.json keys
 - OID map naming: obp_{metric}_L{linkNum} for OBP, npb_{metric} / npb_port_{metric}_P{n} for NPB
 - Config auto-scan: CONFIG_DIRECTORY env var with ContentRootPath/config fallback
 - K8s directory mount at /app/config (no subPath) enables ConfigMap hot-reload
@@ -44,7 +44,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 - JobIntervalRegistry.Unregister and LivenessVectorService.Remove for cleanup on config reload
 - SimetraConfigModel POCO unifies OidMap + Devices in single JSON document
 - DeviceOptions.CommunityString optional override; null falls back to Simetra.{Name} convention
-- devices.json auto-loaded from CONFIG_DIRECTORY alongside oidmap-*.json files
+- RBAC Role named simetra-role covers leases + configmaps (renamed from simetra-lease-role)
 - DynamicPollScheduler.ReconcileAsync diffs Quartz metric-poll-* jobs and adds/removes/reschedules
 - ConfigMapWatcherService watches simetra-config ConfigMap via K8s API with auto-reconnect
 - ConfigMap reload serialized via SemaphoreSlim; orchestrates OidMap + DeviceRegistry + PollScheduler
@@ -61,5 +61,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-07
-Stopped at: Completed 15-05-PLAN.md
+Stopped at: Completed 15-04-PLAN.md
 Resume file: None
