@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
@@ -8,6 +9,29 @@ using SnmpCollector.Extensions;
 using SnmpCollector.Pipeline;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Auto-scan config directory for appsettings.k8s.json and oidmap-*.json files.
+// K8s: CONFIG_DIRECTORY=/app/config (directory-mounted ConfigMap, enables hot-reload).
+// Local dev: falls back to {ContentRootPath}/config.
+// Must happen BEFORE builder.Build() -- AddJsonFile modifies ConfigurationBuilder.
+var configDir = Environment.GetEnvironmentVariable("CONFIG_DIRECTORY")
+    ?? Path.Combine(builder.Environment.ContentRootPath, "config");
+
+if (Directory.Exists(configDir))
+{
+    // Load K8s appsettings override if present (replaces old subPath mount)
+    var k8sConfig = Path.Combine(configDir, "appsettings.k8s.json");
+    if (File.Exists(k8sConfig))
+    {
+        builder.Configuration.AddJsonFile(k8sConfig, optional: true, reloadOnChange: true);
+    }
+
+    // Auto-scan OID map files -- alphabetical order for deterministic merge
+    foreach (var file in Directory.GetFiles(configDir, "oidmap-*.json").OrderBy(f => f))
+    {
+        builder.Configuration.AddJsonFile(file, optional: true, reloadOnChange: true);
+    }
+}
 
 // DI registration order:
 // 1. Telemetry    (registered first = disposed last = ForceFlush on shutdown)
