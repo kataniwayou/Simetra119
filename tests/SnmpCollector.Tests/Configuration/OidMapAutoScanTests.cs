@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using SnmpCollector.Configuration;
 using System.Text.RegularExpressions;
@@ -6,25 +7,44 @@ using Xunit;
 namespace SnmpCollector.Tests.Configuration;
 
 /// <summary>
-/// Integration tests verifying OID map auto-scan: JSONC parsing, multi-file merge,
+/// Integration tests verifying OID map configuration: JSONC parsing, multi-file merge,
 /// OBP entry count, naming convention, and OID prefix consistency.
+/// Tests read from the unified simetra-config.json (Phase 15).
 /// </summary>
 public class OidMapAutoScanTests
 {
     /// <summary>
-    /// Locates the real oidmap-obp.json relative to the test assembly output directory.
-    /// Path: {testBin}/../../../../src/SnmpCollector/config/oidmap-obp.json
+    /// Locates the real simetra-config.json relative to the test assembly output directory.
+    /// Path: {testBin}/../../../../src/SnmpCollector/config/simetra-config.json
     /// </summary>
-    private static string GetOidMapPath()
+    private static string GetSimetraConfigPath()
     {
         var testDir = Path.GetDirectoryName(typeof(OidMapAutoScanTests).Assembly.Location)!;
         var repoRoot = Path.GetFullPath(Path.Combine(testDir, "..", "..", "..", "..", ".."));
-        return Path.Combine(repoRoot, "src", "SnmpCollector", "config", "oidmap-obp.json");
+        return Path.Combine(repoRoot, "src", "SnmpCollector", "config", "simetra-config.json");
+    }
+
+    /// <summary>
+    /// Parses the unified simetra-config.json (JSONC) and returns the OidMap dictionary.
+    /// Matches the production parsing pattern in Program.cs.
+    /// </summary>
+    private static Dictionary<string, string> LoadOidMapFromSimetraConfig()
+    {
+        var path = GetSimetraConfigPath();
+        var json = File.ReadAllText(path);
+        var options = new JsonSerializerOptions
+        {
+            ReadCommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+            PropertyNameCaseInsensitive = true
+        };
+        var config = JsonSerializer.Deserialize<SimetraConfigModel>(json, options)!;
+        return config.OidMap;
     }
 
     /// <summary>
     /// Binds the OidMap section from an IConfiguration into OidMapOptions.Entries,
-    /// matching the production binding pattern in ServiceCollectionExtensions.
+    /// matching the legacy binding pattern for IConfiguration-based tests.
     /// </summary>
     private static OidMapOptions BindOidMapOptions(IConfiguration config)
     {
@@ -120,41 +140,39 @@ public class OidMapAutoScanTests
     [Fact]
     public void ObpOidMapHas24Entries()
     {
-        // Arrange: load the real oidmap-obp.json from the source config directory
-        var path = GetOidMapPath();
-        Assert.True(File.Exists(path), $"oidmap-obp.json not found at: {path}");
+        // Arrange: load OBP entries from the unified simetra-config.json
+        var path = GetSimetraConfigPath();
+        Assert.True(File.Exists(path), $"simetra-config.json not found at: {path}");
 
-        var config = new ConfigurationBuilder()
-            .AddJsonFile(path, optional: false, reloadOnChange: false)
-            .Build();
+        var oidMap = LoadOidMapFromSimetraConfig();
 
-        // Act
-        var options = BindOidMapOptions(config);
+        // Filter to OBP entries only (enterprise prefix 1.3.6.1.4.1.47477.10.21)
+        var obpEntries = oidMap
+            .Where(kv => kv.Key.StartsWith("1.3.6.1.4.1.47477.10.21."))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
 
         // Assert: exactly 24 entries (4 links x 6 metrics)
-        Assert.Equal(24, options.Entries.Count);
+        Assert.Equal(24, obpEntries.Count);
 
         // Spot-check specific entries across different links and metric types
-        Assert.Equal("obp_link_state_L1", options.Entries["1.3.6.1.4.1.47477.10.21.1.3.1.0"]);
-        Assert.Equal("obp_r4_power_L4", options.Entries["1.3.6.1.4.1.47477.10.21.4.3.13.0"]);
-        Assert.Equal("obp_channel_L2", options.Entries["1.3.6.1.4.1.47477.10.21.2.3.4.0"]);
+        Assert.Equal("obp_link_state_L1", obpEntries["1.3.6.1.4.1.47477.10.21.1.3.1.0"]);
+        Assert.Equal("obp_r4_power_L4", obpEntries["1.3.6.1.4.1.47477.10.21.4.3.13.0"]);
+        Assert.Equal("obp_channel_L2", obpEntries["1.3.6.1.4.1.47477.10.21.2.3.4.0"]);
     }
 
     [Fact]
     public void ObpOidNamingConventionIsConsistent()
     {
-        // Arrange
-        var path = GetOidMapPath();
-        var config = new ConfigurationBuilder()
-            .AddJsonFile(path, optional: false, reloadOnChange: false)
-            .Build();
+        // Arrange: load OBP entries from unified config
+        var oidMap = LoadOidMapFromSimetraConfig();
+        var obpEntries = oidMap
+            .Where(kv => kv.Key.StartsWith("1.3.6.1.4.1.47477.10.21."))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
 
-        var options = BindOidMapOptions(config);
-
-        // Act & Assert: all metric names match obp_{metric}_L{1-4} pattern
+        // Act & Assert: all OBP metric names match obp_{metric}_L{1-4} pattern
         var pattern = new Regex(@"^obp_(link_state|channel|r[1-4]_power)_L[1-4]$");
 
-        foreach (var (oid, metricName) in options.Entries)
+        foreach (var (oid, metricName) in obpEntries)
         {
             Assert.Matches(pattern, metricName);
         }
@@ -163,18 +181,16 @@ public class OidMapAutoScanTests
     [Fact]
     public void ObpOidStringsFollowEnterprisePrefix()
     {
-        // Arrange
-        var path = GetOidMapPath();
-        var config = new ConfigurationBuilder()
-            .AddJsonFile(path, optional: false, reloadOnChange: false)
-            .Build();
-
-        var options = BindOidMapOptions(config);
+        // Arrange: load OBP entries from unified config
+        var oidMap = LoadOidMapFromSimetraConfig();
+        var obpEntries = oidMap
+            .Where(kv => kv.Key.StartsWith("1.3.6.1.4.1.47477.10.21."))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
 
         // Act & Assert: all OID keys start with enterprise prefix and end with .0
         const string enterprisePrefix = "1.3.6.1.4.1.47477.10.21.";
 
-        foreach (var oid in options.Entries.Keys)
+        foreach (var oid in obpEntries.Keys)
         {
             Assert.StartsWith(enterprisePrefix, oid);
             Assert.EndsWith(".0", oid);

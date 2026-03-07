@@ -65,16 +65,12 @@ public sealed class PipelineIntegrationTests : IDisposable
         }));
         services.AddSingleton<IDeviceRegistry, DeviceRegistry>();
 
-        // OidMapService needs IOptionsMonitor<OidMapOptions>
-        var oidMapMonitor = new TestOptionsMonitor<OidMapOptions>(new OidMapOptions
-        {
-            Entries = new Dictionary<string, string>
-            {
-                [KnownOid] = "hrProcessorLoad"
-            }
-        });
-        services.AddSingleton<IOptionsMonitor<OidMapOptions>>(oidMapMonitor);
-        services.AddSingleton<IOidMapService, OidMapService>();
+        // OidMapService: construct with initial OID map entries directly (Phase 15 refactor)
+        services.AddSingleton<OidMapService>(sp =>
+            new OidMapService(
+                new Dictionary<string, string> { [KnownOid] = "hrProcessorLoad" },
+                sp.GetRequiredService<ILogger<OidMapService>>()));
+        services.AddSingleton<IOidMapService>(sp => sp.GetRequiredService<OidMapService>());
 
         // Phase 3 MediatR pipeline (registers SnmpMetricFactory by default)
         services.AddSnmpPipeline();
@@ -176,12 +172,11 @@ public sealed class PipelineIntegrationTests : IDisposable
         services.AddSingleton(Options.Create(new SiteOptions { Name = "test-site" }));
         services.AddSingleton(Options.Create(new DevicesOptions()));
         services.AddSingleton<IDeviceRegistry, DeviceRegistry>();
-        services.AddSingleton<IOptionsMonitor<OidMapOptions>>(
-            new TestOptionsMonitor<OidMapOptions>(new OidMapOptions
-            {
-                Entries = new Dictionary<string, string> { [KnownOid] = "hrProcessorLoad" }
-            }));
-        services.AddSingleton<IOidMapService, OidMapService>();
+        services.AddSingleton<OidMapService>(sp =>
+            new OidMapService(
+                new Dictionary<string, string> { [KnownOid] = "hrProcessorLoad" },
+                sp.GetRequiredService<ILogger<OidMapService>>()));
+        services.AddSingleton<IOidMapService>(sp => sp.GetRequiredService<OidMapService>());
         services.AddSnmpPipeline();
         // Override with a factory that throws to simulate downstream error
         services.AddSingleton<ISnmpMetricFactory>(new ThrowingSnmpMetricFactory());
