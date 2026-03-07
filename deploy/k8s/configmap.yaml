@@ -22,7 +22,6 @@ data:
       "Liveness": {
         "GraceMultiplier": 2.0
       },
-      "OidMap": {},
       "Logging": {
         "LogLevel": {
           "Default": "Debug"
@@ -30,50 +29,86 @@ data:
         "EnableConsole": true
       }
     }
-  oidmap-obp.json: |
+  simetra-config.json: |
     {
+      // ===========================================================================
+      // Simetra Unified Device Configuration
+      // This file is the single source of truth for OID maps and device definitions.
+      // Changes to this ConfigMap are detected via K8s API watch and applied at runtime
+      // without pod restart.
+      // ===========================================================================
+
       "OidMap": {
+        // ---- OBP (Optical Bypass) OIDs ----
+        // Enterprise OID prefix: 1.3.6.1.4.1.47477.10.21
+        // Structure: ...47477.10.21.{linkNum}.3.{suffix}.0
+        // Naming: obp_{metric}_L{linkNum}
+
+        // ---- Link 1 ----
+        // Link state: INTEGER | 1=active, 2=bypass, 3=fault
         "1.3.6.1.4.1.47477.10.21.1.3.1.0": "obp_link_state_L1",
+        // Channel: INTEGER | DWDM channel number (1-96)
         "1.3.6.1.4.1.47477.10.21.1.3.4.0": "obp_channel_L1",
+        // Optical power: INTEGER | tenths of dBm (divide by 10 for dBm)
         "1.3.6.1.4.1.47477.10.21.1.3.10.0": "obp_r1_power_L1",
         "1.3.6.1.4.1.47477.10.21.1.3.11.0": "obp_r2_power_L1",
         "1.3.6.1.4.1.47477.10.21.1.3.12.0": "obp_r3_power_L1",
         "1.3.6.1.4.1.47477.10.21.1.3.13.0": "obp_r4_power_L1",
+
+        // ---- Link 2 ----
         "1.3.6.1.4.1.47477.10.21.2.3.1.0": "obp_link_state_L2",
         "1.3.6.1.4.1.47477.10.21.2.3.4.0": "obp_channel_L2",
         "1.3.6.1.4.1.47477.10.21.2.3.10.0": "obp_r1_power_L2",
         "1.3.6.1.4.1.47477.10.21.2.3.11.0": "obp_r2_power_L2",
         "1.3.6.1.4.1.47477.10.21.2.3.12.0": "obp_r3_power_L2",
         "1.3.6.1.4.1.47477.10.21.2.3.13.0": "obp_r4_power_L2",
+
+        // ---- Link 3 ----
         "1.3.6.1.4.1.47477.10.21.3.3.1.0": "obp_link_state_L3",
         "1.3.6.1.4.1.47477.10.21.3.3.4.0": "obp_channel_L3",
         "1.3.6.1.4.1.47477.10.21.3.3.10.0": "obp_r1_power_L3",
         "1.3.6.1.4.1.47477.10.21.3.3.11.0": "obp_r2_power_L3",
         "1.3.6.1.4.1.47477.10.21.3.3.12.0": "obp_r3_power_L3",
         "1.3.6.1.4.1.47477.10.21.3.3.13.0": "obp_r4_power_L3",
+
+        // ---- Link 4 ----
         "1.3.6.1.4.1.47477.10.21.4.3.1.0": "obp_link_state_L4",
         "1.3.6.1.4.1.47477.10.21.4.3.4.0": "obp_channel_L4",
         "1.3.6.1.4.1.47477.10.21.4.3.10.0": "obp_r1_power_L4",
         "1.3.6.1.4.1.47477.10.21.4.3.11.0": "obp_r2_power_L4",
         "1.3.6.1.4.1.47477.10.21.4.3.12.0": "obp_r3_power_L4",
-        "1.3.6.1.4.1.47477.10.21.4.3.13.0": "obp_r4_power_L4"
-      }
-    }
-  oidmap-npb.json: |
-    {
-      "OidMap": {
+        "1.3.6.1.4.1.47477.10.21.4.3.13.0": "obp_r4_power_L4",
+
+        // ---- NPB (Network Packet Broker) OIDs ----
+        // Enterprise OID prefix: 1.3.6.1.4.1.47477.100
+        // System metrics: ...47477.100.1.{metricId}.0
+        // Per-port metrics: ...47477.100.2.{portNum}.{metricId}.0
+        // Naming: npb_{metric} for system, npb_port_{metric}_P{portNum} for per-port
+
+        // ---- System Metrics ----
+        // CPU utilization: OctetString | percentage (0-100)
         "1.3.6.1.4.1.47477.100.1.1.0": "npb_cpu_util",
+        // Memory utilization: OctetString | percentage (0-100)
         "1.3.6.1.4.1.47477.100.1.2.0": "npb_mem_util",
+        // System temperature: OctetString | degrees Celsius
         "1.3.6.1.4.1.47477.100.1.3.0": "npb_sys_temp",
+        // Uptime: OctetString | seconds since boot
         "1.3.6.1.4.1.47477.100.1.4.0": "npb_uptime",
+
+        // ---- Port 1 ----
+        // Port status: INTEGER | 1=up, 2=down, 3=testing
         "1.3.6.1.4.1.47477.100.2.1.1.0": "npb_port_status_P1",
+        // Traffic counters: Counter64 | cumulative bytes/packets
         "1.3.6.1.4.1.47477.100.2.1.2.0": "npb_port_rx_octets_P1",
         "1.3.6.1.4.1.47477.100.2.1.3.0": "npb_port_tx_octets_P1",
         "1.3.6.1.4.1.47477.100.2.1.4.0": "npb_port_rx_packets_P1",
         "1.3.6.1.4.1.47477.100.2.1.5.0": "npb_port_tx_packets_P1",
+        // Error/drop counters: Counter64 | cumulative error/drop counts
         "1.3.6.1.4.1.47477.100.2.1.6.0": "npb_port_rx_errors_P1",
         "1.3.6.1.4.1.47477.100.2.1.7.0": "npb_port_tx_errors_P1",
         "1.3.6.1.4.1.47477.100.2.1.8.0": "npb_port_rx_drops_P1",
+
+        // ---- Port 2 ----
         "1.3.6.1.4.1.47477.100.2.2.1.0": "npb_port_status_P2",
         "1.3.6.1.4.1.47477.100.2.2.2.0": "npb_port_rx_octets_P2",
         "1.3.6.1.4.1.47477.100.2.2.3.0": "npb_port_tx_octets_P2",
@@ -82,6 +117,8 @@ data:
         "1.3.6.1.4.1.47477.100.2.2.6.0": "npb_port_rx_errors_P2",
         "1.3.6.1.4.1.47477.100.2.2.7.0": "npb_port_tx_errors_P2",
         "1.3.6.1.4.1.47477.100.2.2.8.0": "npb_port_rx_drops_P2",
+
+        // ---- Port 3 ----
         "1.3.6.1.4.1.47477.100.2.3.1.0": "npb_port_status_P3",
         "1.3.6.1.4.1.47477.100.2.3.2.0": "npb_port_rx_octets_P3",
         "1.3.6.1.4.1.47477.100.2.3.3.0": "npb_port_tx_octets_P3",
@@ -90,6 +127,8 @@ data:
         "1.3.6.1.4.1.47477.100.2.3.6.0": "npb_port_rx_errors_P3",
         "1.3.6.1.4.1.47477.100.2.3.7.0": "npb_port_tx_errors_P3",
         "1.3.6.1.4.1.47477.100.2.3.8.0": "npb_port_rx_drops_P3",
+
+        // ---- Port 4 ----
         "1.3.6.1.4.1.47477.100.2.4.1.0": "npb_port_status_P4",
         "1.3.6.1.4.1.47477.100.2.4.2.0": "npb_port_rx_octets_P4",
         "1.3.6.1.4.1.47477.100.2.4.3.0": "npb_port_tx_octets_P4",
@@ -98,6 +137,8 @@ data:
         "1.3.6.1.4.1.47477.100.2.4.6.0": "npb_port_rx_errors_P4",
         "1.3.6.1.4.1.47477.100.2.4.7.0": "npb_port_tx_errors_P4",
         "1.3.6.1.4.1.47477.100.2.4.8.0": "npb_port_rx_drops_P4",
+
+        // ---- Port 5 ----
         "1.3.6.1.4.1.47477.100.2.5.1.0": "npb_port_status_P5",
         "1.3.6.1.4.1.47477.100.2.5.2.0": "npb_port_rx_octets_P5",
         "1.3.6.1.4.1.47477.100.2.5.3.0": "npb_port_tx_octets_P5",
@@ -106,6 +147,8 @@ data:
         "1.3.6.1.4.1.47477.100.2.5.6.0": "npb_port_rx_errors_P5",
         "1.3.6.1.4.1.47477.100.2.5.7.0": "npb_port_tx_errors_P5",
         "1.3.6.1.4.1.47477.100.2.5.8.0": "npb_port_rx_drops_P5",
+
+        // ---- Port 6 ----
         "1.3.6.1.4.1.47477.100.2.6.1.0": "npb_port_status_P6",
         "1.3.6.1.4.1.47477.100.2.6.2.0": "npb_port_rx_octets_P6",
         "1.3.6.1.4.1.47477.100.2.6.3.0": "npb_port_tx_octets_P6",
@@ -114,6 +157,8 @@ data:
         "1.3.6.1.4.1.47477.100.2.6.6.0": "npb_port_rx_errors_P6",
         "1.3.6.1.4.1.47477.100.2.6.7.0": "npb_port_tx_errors_P6",
         "1.3.6.1.4.1.47477.100.2.6.8.0": "npb_port_rx_drops_P6",
+
+        // ---- Port 7 ----
         "1.3.6.1.4.1.47477.100.2.7.1.0": "npb_port_status_P7",
         "1.3.6.1.4.1.47477.100.2.7.2.0": "npb_port_rx_octets_P7",
         "1.3.6.1.4.1.47477.100.2.7.3.0": "npb_port_tx_octets_P7",
@@ -122,6 +167,8 @@ data:
         "1.3.6.1.4.1.47477.100.2.7.6.0": "npb_port_rx_errors_P7",
         "1.3.6.1.4.1.47477.100.2.7.7.0": "npb_port_tx_errors_P7",
         "1.3.6.1.4.1.47477.100.2.7.8.0": "npb_port_rx_drops_P7",
+
+        // ---- Port 8 ----
         "1.3.6.1.4.1.47477.100.2.8.1.0": "npb_port_status_P8",
         "1.3.6.1.4.1.47477.100.2.8.2.0": "npb_port_rx_octets_P8",
         "1.3.6.1.4.1.47477.100.2.8.3.0": "npb_port_tx_octets_P8",
@@ -130,10 +177,8 @@ data:
         "1.3.6.1.4.1.47477.100.2.8.6.0": "npb_port_rx_errors_P8",
         "1.3.6.1.4.1.47477.100.2.8.7.0": "npb_port_tx_errors_P8",
         "1.3.6.1.4.1.47477.100.2.8.8.0": "npb_port_rx_drops_P8"
-      }
-    }
-  devices.json: |
-    {
+      },
+
       "Devices": [
         {
           "Name": "OBP-01",
