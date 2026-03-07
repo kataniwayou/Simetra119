@@ -74,5 +74,11 @@ spec:
           timeoutSeconds: 5
       volumes:
       - name: config
-        configMap:
-          name: simetra-config
+        projected:
+          sources:
+          - configMap:
+              name: simetra-config
+          - configMap:
+              name: simetra-oidmaps
+          - configMap:
+              name: simetra-devices

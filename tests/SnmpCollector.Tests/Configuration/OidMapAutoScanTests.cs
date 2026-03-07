@@ -9,28 +9,28 @@ namespace SnmpCollector.Tests.Configuration;
 /// <summary>
 /// Integration tests verifying OID map configuration: JSONC parsing, multi-file merge,
 /// OBP entry count, naming convention, and OID prefix consistency.
-/// Tests read from the unified simetra-config.json (Phase 15).
+/// Tests read from the standalone oidmaps.json file.
 /// </summary>
 public class OidMapAutoScanTests
 {
     /// <summary>
-    /// Locates the real simetra-config.json relative to the test assembly output directory.
-    /// Path: {testBin}/../../../../src/SnmpCollector/config/simetra-config.json
+    /// Locates the real oidmaps.json relative to the test assembly output directory.
+    /// Path: {testBin}/../../../../src/SnmpCollector/config/oidmaps.json
     /// </summary>
-    private static string GetSimetraConfigPath()
+    private static string GetOidMapsPath()
     {
         var testDir = Path.GetDirectoryName(typeof(OidMapAutoScanTests).Assembly.Location)!;
         var repoRoot = Path.GetFullPath(Path.Combine(testDir, "..", "..", "..", "..", ".."));
-        return Path.Combine(repoRoot, "src", "SnmpCollector", "config", "simetra-config.json");
+        return Path.Combine(repoRoot, "src", "SnmpCollector", "config", "oidmaps.json");
     }
 
     /// <summary>
-    /// Parses the unified simetra-config.json (JSONC) and returns the OidMap dictionary.
-    /// Matches the production parsing pattern in Program.cs.
+    /// Parses oidmaps.json (JSONC) and returns the OID map dictionary.
+    /// Matches the production parsing pattern in Program.cs and OidMapWatcherService.
     /// </summary>
-    private static Dictionary<string, string> LoadOidMapFromSimetraConfig()
+    private static Dictionary<string, string> LoadOidMap()
     {
-        var path = GetSimetraConfigPath();
+        var path = GetOidMapsPath();
         var json = File.ReadAllText(path);
         var options = new JsonSerializerOptions
         {
@@ -38,8 +38,7 @@ public class OidMapAutoScanTests
             AllowTrailingCommas = true,
             PropertyNameCaseInsensitive = true
         };
-        var config = JsonSerializer.Deserialize<SimetraConfigModel>(json, options)!;
-        return config.OidMap;
+        return JsonSerializer.Deserialize<Dictionary<string, string>>(json, options)!;
     }
 
     /// <summary>
@@ -140,11 +139,11 @@ public class OidMapAutoScanTests
     [Fact]
     public void ObpOidMapHas24Entries()
     {
-        // Arrange: load OBP entries from the unified simetra-config.json
-        var path = GetSimetraConfigPath();
-        Assert.True(File.Exists(path), $"simetra-config.json not found at: {path}");
+        // Arrange: load OBP entries from oidmaps.json
+        var path = GetOidMapsPath();
+        Assert.True(File.Exists(path), $"oidmaps.json not found at: {path}");
 
-        var oidMap = LoadOidMapFromSimetraConfig();
+        var oidMap = LoadOidMap();
 
         // Filter to OBP entries only (enterprise prefix 1.3.6.1.4.1.47477.10.21)
         var obpEntries = oidMap
@@ -163,8 +162,8 @@ public class OidMapAutoScanTests
     [Fact]
     public void ObpOidNamingConventionIsConsistent()
     {
-        // Arrange: load OBP entries from unified config
-        var oidMap = LoadOidMapFromSimetraConfig();
+        // Arrange: load OBP entries from oidmaps.json
+        var oidMap = LoadOidMap();
         var obpEntries = oidMap
             .Where(kv => kv.Key.StartsWith("1.3.6.1.4.1.47477.10.21."))
             .ToDictionary(kv => kv.Key, kv => kv.Value);
@@ -181,8 +180,8 @@ public class OidMapAutoScanTests
     [Fact]
     public void ObpOidStringsFollowEnterprisePrefix()
     {
-        // Arrange: load OBP entries from unified config
-        var oidMap = LoadOidMapFromSimetraConfig();
+        // Arrange: load OBP entries from oidmaps.json
+        var oidMap = LoadOidMap();
         var obpEntries = oidMap
             .Where(kv => kv.Key.StartsWith("1.3.6.1.4.1.47477.10.21."))
             .ToDictionary(kv => kv.Key, kv => kv.Value);
