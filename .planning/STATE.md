@@ -51,5 +51,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-07
-Stopped at: Completed 13-03-PLAN.md (K8s Deployment YAML Alignment — Phase 13 complete)
+Stopped at: Completed 13-02-PLAN.md (NPB Simulator Rewrite)
 Resume file: None
