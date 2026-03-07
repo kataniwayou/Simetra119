@@ -28,6 +28,10 @@ Requirements for v1.1 Device Simulation milestone. Each maps to roadmap phases.
 - [ ] **DOC-01**: OBP OID documentation — each polled OID with value meaning, units, expected ranges
 - [ ] **DOC-02**: NPB OID documentation — each polled OID with value meaning, units, expected ranges
 
+### Hot Reload
+
+- [ ] **RELOAD-01**: OID map hot-reload also triggers poll configuration reload (device OID list changes take effect without restart)
+
 ### MetricPoll Configuration
 
 - [ ] **POLL-01**: snmp-collector ConfigMap updated with OBP MetricPoll groups matching OID map
@@ -52,7 +56,7 @@ Requirements for v1.1 Device Simulation milestone. Each maps to roadmap phases.
 |---------|--------|
 | Exhaustive MIB simulation | Realistic subset sufficient for proof of concept |
 | Device management / SNMP SET | Monitor only |
-| SNMPv3 auth | Target devices use v2c |
+| SNMPv3 auth / USM security | Target devices use v2c |
 | Full 8-link OBP simulation | 4 links sufficient for v1.1 proof of concept |
 | Grafana dashboards | Deferred to v2 |
 
@@ -60,25 +64,26 @@ Requirements for v1.1 Device Simulation milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OIDM-01 | TBD | Pending |
-| OIDM-02 | TBD | Pending |
-| OIDM-03 | TBD | Pending |
-| OIDM-04 | TBD | Pending |
-| SIM-01 | TBD | Pending |
-| SIM-02 | TBD | Pending |
-| SIM-03 | TBD | Pending |
-| SIM-04 | TBD | Pending |
-| SIM-05 | TBD | Pending |
-| SIM-06 | TBD | Pending |
-| DOC-01 | TBD | Pending |
-| DOC-02 | TBD | Pending |
-| POLL-01 | TBD | Pending |
-| POLL-02 | TBD | Pending |
+| OIDM-01 | Phase 11 | Pending |
+| OIDM-02 | Phase 11 | Pending |
+| OIDM-03 | Phase 11 | Pending |
+| OIDM-04 | Phase 12 | Pending |
+| SIM-01 | Phase 13 | Pending |
+| SIM-02 | Phase 13 | Pending |
+| SIM-03 | Phase 13 | Pending |
+| SIM-04 | Phase 13 | Pending |
+| SIM-05 | Phase 13 | Pending |
+| SIM-06 | Phase 14 | Pending |
+| DOC-01 | Phase 11 | Pending |
+| DOC-02 | Phase 12 | Pending |
+| RELOAD-01 | Phase 11 | Pending |
+| POLL-01 | Phase 14 | Pending |
+| POLL-02 | Phase 14 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 14 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 14
+- v1.1 requirements: 15 total
+- Mapped to phases: 15
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-07*
