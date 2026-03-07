@@ -10,8 +10,8 @@ using SnmpCollector.Pipeline;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Auto-scan config directory for appsettings.k8s.json and oidmap-*.json files.
-// K8s: CONFIG_DIRECTORY=/app/config (directory-mounted ConfigMap, enables hot-reload).
+// Config directory for appsettings.k8s.json overlay.
+// K8s: CONFIG_DIRECTORY=/app/config (directory-mounted ConfigMap).
 // Local dev: falls back to {ContentRootPath}/config.
 // Must happen BEFORE builder.Build() -- AddJsonFile modifies ConfigurationBuilder.
 var configDir = Environment.GetEnvironmentVariable("CONFIG_DIRECTORY")
@@ -19,24 +19,12 @@ var configDir = Environment.GetEnvironmentVariable("CONFIG_DIRECTORY")
 
 if (Directory.Exists(configDir))
 {
-    // Load K8s appsettings override if present (replaces old subPath mount)
+    // Load K8s appsettings override if present (replaces old subPath mount).
+    // reloadOnChange: false -- Phase 15 ConfigMapWatcherService handles live reload via K8s API.
     var k8sConfig = Path.Combine(configDir, "appsettings.k8s.json");
     if (File.Exists(k8sConfig))
     {
-        builder.Configuration.AddJsonFile(k8sConfig, optional: true, reloadOnChange: true);
-    }
-
-    // Auto-scan OID map files -- alphabetical order for deterministic merge
-    foreach (var file in Directory.GetFiles(configDir, "oidmap-*.json").OrderBy(f => f))
-    {
-        builder.Configuration.AddJsonFile(file, optional: true, reloadOnChange: true);
-    }
-
-    // Load device definitions if present (separate from OID maps for clarity)
-    var devicesConfig = Path.Combine(configDir, "devices.json");
-    if (File.Exists(devicesConfig))
-    {
-        builder.Configuration.AddJsonFile(devicesConfig, optional: true, reloadOnChange: true);
+        builder.Configuration.AddJsonFile(k8sConfig, optional: true, reloadOnChange: false);
     }
 }
 
@@ -59,6 +47,40 @@ var app = builder.Build();
 // Seed first correlation ID before any Quartz job fires (before Run starts hosted services)
 var correlationService = app.Services.GetRequiredService<ICorrelationService>();
 correlationService.SetCorrelationId(Guid.NewGuid().ToString("N"));
+
+// Phase 15: Local dev -- load unified config from file when not in K8s.
+// In K8s mode, ConfigMapWatcherService handles config loading via API watch.
+// ReconcileAsync is called here for consistency with K8s mode, where
+// ConfigMapWatcherService calls it after ReloadAsync. PollSchedulerStartupService
+// also schedules initial jobs, but ReconcileAsync is idempotent -- it will detect
+// that the desired jobs already exist and make no changes.
+if (!k8s.KubernetesClientConfiguration.IsInCluster())
+{
+    var simetraConfigPath = Path.Combine(configDir, "simetra-config.json");
+    if (File.Exists(simetraConfigPath))
+    {
+        var json = File.ReadAllText(simetraConfigPath);
+        var jsonOptions = new System.Text.Json.JsonSerializerOptions
+        {
+            ReadCommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+            PropertyNameCaseInsensitive = true
+        };
+        var config = System.Text.Json.JsonSerializer.Deserialize<SnmpCollector.Configuration.SimetraConfigModel>(json, jsonOptions);
+        if (config != null)
+        {
+            var oidMapService = app.Services.GetRequiredService<SnmpCollector.Pipeline.OidMapService>();
+            oidMapService.UpdateMap(config.OidMap);
+
+            var deviceRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.IDeviceRegistry>();
+            await deviceRegistry.ReloadAsync(config.Devices);
+
+            // Reconcile poll jobs to match the loaded device config
+            var pollScheduler = app.Services.GetRequiredService<SnmpCollector.Services.DynamicPollScheduler>();
+            await pollScheduler.ReconcileAsync(config.Devices, CancellationToken.None);
+        }
+    }
+}
 
 // Phase 8: Health probe endpoints with tag-filtered checks and explicit status codes.
 // Each endpoint runs only the health check(s) matching its tag.
@@ -94,7 +116,7 @@ app.MapHealthChecks("/healthz/live", new HealthCheckOptions
 
 try
 {
-    app.Run();
+    await app.RunAsync();
 }
 catch (OptionsValidationException ex)
 {
