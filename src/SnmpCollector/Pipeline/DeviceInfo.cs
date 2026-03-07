@@ -9,8 +9,10 @@ namespace SnmpCollector.Pipeline;
 /// <param name="IpAddress">IPv4 address string of the device.</param>
 /// <param name="Port">SNMP port for this device (default 161).</param>
 /// <param name="PollGroups">Metric poll groups for this device, each with its own OID list and interval.</param>
+/// <param name="CommunityString">Optional explicit SNMP community string override. Null falls back to convention.</param>
 public sealed record DeviceInfo(
     string Name,
     string IpAddress,
     int Port,
-    IReadOnlyList<MetricPollInfo> PollGroups);
+    IReadOnlyList<MetricPollInfo> PollGroups,
+    string? CommunityString = null);

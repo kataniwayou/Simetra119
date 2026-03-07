@@ -25,6 +25,12 @@ public sealed class DeviceOptions
     public int Port { get; set; } = 161;
 
     /// <summary>
+    /// Optional explicit SNMP community string. If null or empty, falls back to
+    /// the Simetra.{Name} convention via CommunityStringHelper.
+    /// </summary>
+    public string? CommunityString { get; set; }
+
+    /// <summary>
     /// Metric polling configurations for this device.
     /// Each entry is a separate Quartz job: metric-poll-{deviceName}-{pollIndex}.
     /// </summary>

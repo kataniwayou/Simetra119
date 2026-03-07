@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Net.Sockets;
 using Microsoft.Extensions.Options;
 using SnmpCollector.Configuration;
 
@@ -32,7 +33,17 @@ public sealed class DeviceRegistry : IDeviceRegistry
 
         foreach (var d in devices)
         {
-            var ip = IPAddress.Parse(d.IpAddress).MapToIPv4();
+            IPAddress ip;
+            if (IPAddress.TryParse(d.IpAddress, out var parsed))
+            {
+                ip = parsed.MapToIPv4();
+            }
+            else
+            {
+                // Resolve K8s Service DNS name to IP at startup
+                var addresses = Dns.GetHostAddresses(d.IpAddress);
+                ip = addresses.First(a => a.AddressFamily == AddressFamily.InterNetwork);
+            }
 
             var pollGroups = d.MetricPolls
                 .Select((poll, index) => new MetricPollInfo(
@@ -42,7 +53,7 @@ public sealed class DeviceRegistry : IDeviceRegistry
                 .ToList()
                 .AsReadOnly();
 
-            var info = new DeviceInfo(d.Name, d.IpAddress, d.Port, pollGroups);
+            var info = new DeviceInfo(d.Name, ip.ToString(), d.Port, pollGroups, d.CommunityString);
             byIpBuilder[ip] = info;
             byNameBuilder[info.Name] = info;
         }
