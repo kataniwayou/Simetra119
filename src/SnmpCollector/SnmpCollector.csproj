@@ -28,4 +28,10 @@
     <PackageReference Include="Quartz.Extensions.Hosting" Version="3.15.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="config\**\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
