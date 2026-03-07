@@ -35,7 +35,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 - Community string convention: Simetra.{DeviceName} for both auth and device identity
 - host_name from NODE_NAME env var (K8s spec.nodeName), pod_name from HOSTNAME
 - Heartbeat is internal infrastructure — pipeline metrics prove liveness, no metric export
-- Unified simetra-config.json ConfigMap key replaces separate oidmap-obp.json, oidmap-npb.json, devices.json keys
+- Split config: simetra-oidmaps ConfigMap (oidmaps.json bare dict) + simetra-devices ConfigMap (devices.json bare array) + simetra-config (appsettings only)
 - OID map naming: obp_{metric}_L{linkNum} for OBP, npb_{metric} / npb_port_{metric}_P{n} for NPB
 - Config auto-scan: CONFIG_DIRECTORY env var with ContentRootPath/config fallback
 - K8s directory mount at /app/config (no subPath) enables ConfigMap hot-reload
@@ -43,15 +43,16 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 - OidMapService decoupled from IOptionsMonitor; accepts Dictionary + supports UpdateMap atomic swap
 - DeviceRegistry supports ReloadAsync with async DNS and volatile FrozenDictionary swap
 - JobIntervalRegistry.Unregister and LivenessVectorService.Remove for cleanup on config reload
-- SimetraConfigModel POCO unifies OidMap + Devices in single JSON document
+- OidMapWatcherService watches simetra-oidmaps ConfigMap, calls UpdateMap only (no device/scheduler deps)
+- DeviceWatcherService watches simetra-devices ConfigMap, calls ReloadAsync + ReconcileAsync only (no OID map dep)
 - DeviceOptions.CommunityString optional override; null falls back to Simetra.{Name} convention
 - DynamicPollScheduler registered in both K8s and local dev modes for symmetric ReconcileAsync
 - Thread pool ceiling of 50 (generous headroom for dynamic device additions at runtime)
-- Program.cs no longer auto-scans oidmap-*.json or loads devices.json; local dev uses simetra-config.json
+- Program.cs local dev loads oidmaps.json (bare dict) and devices.json (bare array) independently
 - RBAC Role named simetra-role covers leases + configmaps (renamed from simetra-lease-role)
 - DynamicPollScheduler.ReconcileAsync diffs Quartz metric-poll-* jobs and adds/removes/reschedules
-- ConfigMapWatcherService watches simetra-config ConfigMap via K8s API with auto-reconnect
-- ConfigMap reload serialized via SemaphoreSlim; orchestrates OidMap + DeviceRegistry + PollScheduler
+- K8s deployments use projected volume combining simetra-config, simetra-oidmaps, simetra-devices into /app/config
+- Each watcher has independent SemaphoreSlim reload lock (no cascading reloads)
 
 ### Known Tech Debt
 
@@ -64,6 +65,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-07
-Stopped at: Phase 15 complete
+Last session: 2026-03-08
+Stopped at: Quick task 017 complete
 Resume file: None
