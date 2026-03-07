@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 ## Current Position
 
 Phase: 11 of 14 (OID Map Design and OBP Population)
-Plan: 01 of 03 complete
+Plan: 02 of 03 complete
 Status: In progress
-Last activity: 2026-03-07 — Completed 11-01-PLAN.md (OBP OID map creation)
+Last activity: 2026-03-07 — Completed 11-02-PLAN.md (config auto-scan and K8s directory mount)
 
-Progress: [##########..........] 48/48 v1.0 complete, 1/9 v1.1 plans
+Progress: [##########..........] 48/48 v1.0 complete, 2/9 v1.1 plans
 
 ## Milestone History
 
@@ -36,6 +36,8 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 - Heartbeat is internal infrastructure — pipeline metrics prove liveness, no metric export
 - OBP OID maps stored as separate configmap keys (oidmap-obp.json), not merged into appsettings OidMap
 - OID map naming: obp_{metric}_L{linkNum} for OBP device type
+- Config auto-scan: CONFIG_DIRECTORY env var with ContentRootPath/config fallback
+- K8s directory mount at /app/config (no subPath) enables ConfigMap hot-reload
 
 ### Known Tech Debt
 
@@ -49,5 +51,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-07
-Stopped at: Completed 11-01-PLAN.md (OBP OID map creation)
+Stopped at: Completed 11-02-PLAN.md (config auto-scan and K8s directory mount)
 Resume file: None
