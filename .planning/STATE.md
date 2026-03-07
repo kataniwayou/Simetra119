@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.1 Device Simulation — Phase 13 (next)
+**Current focus:** v1.1 Device Simulation — Phase 13 (Simulator Refinement)
 
 ## Current Position
 
 Phase: 13 of 14 (Simulator Refinement)
-Plan: 0 of TBD
-Status: Not started
-Last activity: 2026-03-07 — Completed Phase 12 (NPB OID Population)
+Plan: 1 of 3
+Status: In progress
+Last activity: 2026-03-07 — Completed 13-01-PLAN.md (OBP Simulator Rewrite)
 
-Progress: [###########.........] 48/48 v1.0 complete, 4/9 v1.1 plans
+Progress: [###########.........] 48/48 v1.0 complete, 5/9 v1.1 plans
 
 ## Milestone History
 
@@ -51,5 +51,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-07
-Stopped at: Completed 12-01-PLAN.md (Phase 12 complete)
+Stopped at: Completed 13-01-PLAN.md (OBP Simulator Rewrite)
 Resume file: None
