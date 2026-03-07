@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 
 ## Current Position
 
-Phase: 11 of 14 (OID Map Design and OBP Population)
-Plan: 03 of 03 complete
-Status: Phase complete
-Last activity: 2026-03-07 — Completed 11-03-PLAN.md (OID map auto-scan tests and config cleanup)
+Phase: 12 of 14 (NPB OID Population)
+Plan: 0 of TBD
+Status: Not started
+Last activity: 2026-03-07 — Completed Phase 11 (OID Map Design and OBP Population)
 
 Progress: [##########..........] 48/48 v1.0 complete, 3/9 v1.1 plans
 

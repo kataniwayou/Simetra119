@@ -9,9 +9,9 @@ Requirements for v1.1 Device Simulation milestone. Each maps to roadmap phases.
 
 ### OID Map Structure
 
-- [ ] **OIDM-01**: OID map naming convention uses device-type prefix + metric + index suffix (e.g., `obp_link_state_L1`, `npb_port_rx_octets_P1`)
-- [ ] **OIDM-02**: OID map structure decision — single shared list vs per-device-type separation (to be decided during phase discussion)
-- [ ] **OIDM-03**: OID map populated for OBP device — 4 links with realistic OID coverage (state, channel, optical power R1-R4)
+- [x] **OIDM-01**: OID map naming convention uses device-type prefix + metric + index suffix (e.g., `obp_link_state_L1`, `npb_port_rx_octets_P1`)
+- [x] **OIDM-02**: OID map structure decision — single shared list vs per-device-type separation (to be decided during phase discussion)
+- [x] **OIDM-03**: OID map populated for OBP device — 4 links with realistic OID coverage (state, channel, optical power R1-R4)
 - [ ] **OIDM-04**: OID map populated for NPB device — 8 ports with realistic OID coverage (system health, per-port traffic, port status)
 
 ### Simulator
@@ -25,7 +25,7 @@ Requirements for v1.1 Device Simulation milestone. Each maps to roadmap phases.
 
 ### Device Documentation
 
-- [ ] **DOC-01**: OBP OID documentation — each polled OID with value meaning, units, expected ranges
+- [x] **DOC-01**: OBP OID documentation — each polled OID with value meaning, units, expected ranges
 - [ ] **DOC-02**: NPB OID documentation — each polled OID with value meaning, units, expected ranges
 
 ### MetricPoll Configuration
@@ -60,9 +60,9 @@ Requirements for v1.1 Device Simulation milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OIDM-01 | Phase 11 | Pending |
-| OIDM-02 | Phase 11 | Pending |
-| OIDM-03 | Phase 11 | Pending |
+| OIDM-01 | Phase 11 | Complete |
+| OIDM-02 | Phase 11 | Complete |
+| OIDM-03 | Phase 11 | Complete |
 | OIDM-04 | Phase 12 | Pending |
 | SIM-01 | Phase 13 | Pending |
 | SIM-02 | Phase 13 | Pending |
@@ -70,7 +70,7 @@ Requirements for v1.1 Device Simulation milestone. Each maps to roadmap phases.
 | SIM-04 | Phase 13 | Pending |
 | SIM-05 | Phase 13 | Pending |
 | SIM-06 | Phase 14 | Pending |
-| DOC-01 | Phase 11 | Pending |
+| DOC-01 | Phase 11 | Complete |
 | DOC-02 | Phase 12 | Pending |
 | POLL-01 | Phase 14 | Pending |
 | POLL-02 | Phase 14 | Pending |

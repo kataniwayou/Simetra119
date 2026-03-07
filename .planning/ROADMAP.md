@@ -18,7 +18,7 @@
 
 **Milestone Goal:** Populate OID maps for OBP and NPB devices with documentation, refine simulators to match realistic device profiles, and deploy integrated K8s simulation environment for end-to-end verification.
 
-- [ ] **Phase 11: OID Map Design and OBP Population** - Establish naming convention, decide map structure, populate OBP OIDs with docs
+- [x] **Phase 11: OID Map Design and OBP Population** - Establish naming convention, decide map structure, populate OBP OIDs with docs
 - [ ] **Phase 12: NPB OID Population** - Populate NPB OIDs with documentation using established conventions
 - [ ] **Phase 13: Simulator Refinement** - Update both simulators for realistic OID subsets and trap behavior
 - [ ] **Phase 14: K8s Integration and E2E** - Deploy simulator pods, update ConfigMap, verify end-to-end pipeline
@@ -35,7 +35,7 @@
   3. K8s deployment uses directory mount (no subPath) for OID map hot-reload via ConfigMap updates
   4. OBP OID map contains entries for 4 links covering state, channel, and optical power (R1-R4) with realistic OID strings
   5. Each OBP OID has documentation specifying value meaning, units, and expected ranges
-**Plans**: TBD
+**Plans**: 3 plans (complete)
 
 ### Phase 12: NPB OID Population
 **Goal**: NPB device OIDs are populated with full documentation, following the naming convention and structure established in Phase 11
@@ -78,7 +78,7 @@
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1-10 | v1.0 | 48/48 | Complete | 2026-03-07 |
-| 11. OID Map Design and OBP Population | v1.1 | 0/TBD | Not started | - |
+| 11. OID Map Design and OBP Population | v1.1 | 3/3 | Complete | 2026-03-07 |
 | 12. NPB OID Population | v1.1 | 0/TBD | Not started | - |
 | 13. Simulator Refinement | v1.1 | 0/TBD | Not started | - |
 | 14. K8s Integration and E2E | v1.1 | 0/TBD | Not started | - |
