@@ -37,6 +37,9 @@ ENV SnmpListener__Port=10162
 # Enable console logging for container log capture
 ENV Logging__EnableConsole=true
 
+# Config directory for OID map files (K8s mounts ConfigMap here)
+ENV CONFIG_DIRECTORY=/app/config
+
 # Copy published application from build stage
 COPY --from=build /app/publish .
 

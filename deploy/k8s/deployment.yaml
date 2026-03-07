@@ -39,6 +39,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: CONFIG_DIRECTORY
+          value: /app/config
         resources:
           requests:
             cpu: 100m
@@ -48,8 +50,7 @@ spec:
             memory: 256Mi
         volumeMounts:
         - name: config
-          mountPath: /app/appsettings.Production.json
-          subPath: appsettings.k8s.json
+          mountPath: /app/config
           readOnly: true
         startupProbe:
           httpGet:
