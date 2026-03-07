@@ -91,21 +91,22 @@ Plans:
 ## Phase Details (v1.2)
 
 ### Phase 15: K8s ConfigMap Watch and Unified Config
-**Goal**: All device configuration (OID maps, devices, poll schedules) lives in a single documented ConfigMap key, loaded via K8s API watch with full live reload — no pod restart needed for any config change
+**Goal**: All device configuration (devices, poll schedules) lives in a single documented ConfigMap key, loaded via K8s API watch with full live reload -- no pod restart needed for any config change
 **Depends on**: Phase 14 (v1.1 complete)
 **Requirements**: OPS-01, CFG-01, CFG-02, CFG-03
 **Success Criteria** (what must be TRUE):
-  1. Single ConfigMap key contains all OID maps (92 OIDs) and device entries with JSONC documentation comments
-  2. Separate oidmap-*.json and devices.json files are removed — single source of truth
-  3. K8s API watch detects ConfigMap changes and reloads OID map + device config at runtime
-  4. Adding/removing devices or changing poll OIDs/intervals takes effect without pod restart (Quartz jobs re-registered)
+  1. Single ConfigMap key contains all device entries with JSONC documentation comments
+  2. Separate oidmap-*.json and devices.json files are removed -- single source of truth
+  3. K8s API watch detects ConfigMap changes and reloads device config + poll definitions at runtime
+  4. Adding/removing devices or changing poll OIDs/intervals takes effect without pod restart (Quartz jobs re-registered, PollDefinitionRegistry reloaded)
   5. RBAC updated with configmaps read/watch permission
   6. Local development fallback works without K8s (file-based loading when not in cluster)
-**Plans**: 3 plans
+**Plans**: 4 plans
 Plans:
-- [ ] 15-01-PLAN.md -- Unified config model (SimetraConfigModel, JsoncParser), mutable DeviceRegistry, registry cleanup methods, local dev JSONC file
-- [ ] 15-02-PLAN.md -- ConfigMapWatcherService (K8s API watch with reconnect) and DynamicPollScheduler (Quartz job reconciliation)
-- [ ] 15-03-PLAN.md -- DI wiring, startup integration, K8s RBAC and ConfigMap manifest updates, cleanup of legacy config loading
+- [ ] 15-01-PLAN.md -- Unified config model (SimetraConfigModel, JsoncParser), mutable DeviceRegistry + PollDefinitionRegistry, registry cleanup methods, local dev JSONC file
+- [ ] 15-02-PLAN.md -- ConfigMapWatcherService (K8s API watch with reconnect, reloads DeviceRegistry + PollDefinitionRegistry + DynamicPollScheduler) and DynamicPollScheduler (Quartz job reconciliation)
+- [ ] 15-03-PLAN.md -- DI wiring (ServiceCollectionExtensions + Program.cs), local dev config loading
+- [ ] 15-04-PLAN.md -- K8s RBAC and ConfigMap manifest updates, cleanup of legacy oidmap/devices keys
 
 ## Progress
 
@@ -118,4 +119,4 @@ Plans:
 | 12. NPB OID Population | v1.1 | 1/1 | Complete | 2026-03-07 |
 | 13. Simulator Refinement | v1.1 | 3/3 | Complete | 2026-03-07 |
 | 14. K8s Integration and E2E | v1.1 | 3/3 | Complete | 2026-03-07 |
-| 15. K8s ConfigMap Watch and Unified Config | v1.2 | 0/3 | Not started | - |
+| 15. K8s ConfigMap Watch and Unified Config | v1.2 | 0/4 | Not started | - |
