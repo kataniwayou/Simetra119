@@ -75,7 +75,11 @@ Plans:
   3. snmp-collector ConfigMap contains MetricPoll groups for NPB that match the NPB OID map entries
   4. Polled OBP and NPB metrics appear in Prometheus with correct metric names and labels
   5. Traps from both simulators flow through the pipeline and produce metrics in Prometheus
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 14-01-PLAN.md -- DNS resolution + CommunityString + devices.json loading in C# code
+- [ ] 14-02-PLAN.md -- ConfigMap devices.json with all 92 OIDs for OBP-01 and NPB-01
+- [ ] 14-03-PLAN.md -- E2E verification script querying Prometheus for poll and trap metrics
 
 ## Progress
 
@@ -87,4 +91,4 @@ Plans:
 | 11. OID Map Design and OBP Population | v1.1 | 3/3 | Complete | 2026-03-07 |
 | 12. NPB OID Population | v1.1 | 1/1 | Complete | 2026-03-07 |
 | 13. Simulator Refinement | v1.1 | 3/3 | Complete | 2026-03-07 |
-| 14. K8s Integration and E2E | v1.1 | 0/TBD | Not started | - |
+| 14. K8s Integration and E2E | v1.1 | 0/3 | Not started | - |
