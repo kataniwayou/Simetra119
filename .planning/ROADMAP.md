@@ -101,7 +101,11 @@ Plans:
   4. Adding/removing devices or changing poll OIDs/intervals takes effect without pod restart (Quartz jobs re-registered)
   5. RBAC updated with configmaps read/watch permission
   6. Local development fallback works without K8s (file-based loading when not in cluster)
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 15-01-PLAN.md -- Unified config model (SimetraConfigModel, JsoncParser), mutable DeviceRegistry, registry cleanup methods, local dev JSONC file
+- [ ] 15-02-PLAN.md -- ConfigMapWatcherService (K8s API watch with reconnect) and DynamicPollScheduler (Quartz job reconciliation)
+- [ ] 15-03-PLAN.md -- DI wiring, startup integration, K8s RBAC and ConfigMap manifest updates, cleanup of legacy config loading
 
 ## Progress
 
@@ -114,4 +118,4 @@ Plans:
 | 12. NPB OID Population | v1.1 | 1/1 | Complete | 2026-03-07 |
 | 13. Simulator Refinement | v1.1 | 3/3 | Complete | 2026-03-07 |
 | 14. K8s Integration and E2E | v1.1 | 3/3 | Complete | 2026-03-07 |
-| 15. K8s ConfigMap Watch and Unified Config | v1.2 | 0/0 | Not started | - |
+| 15. K8s ConfigMap Watch and Unified Config | v1.2 | 0/3 | Not started | - |
