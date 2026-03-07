@@ -19,4 +19,12 @@ public interface IOidMapService
     /// Number of OID entries currently in the map.
     /// </summary>
     int EntryCount { get; }
+
+    /// <summary>
+    /// Atomically replaces the OID map with the provided entries.
+    /// Computes and logs the diff (added, removed, changed) for observability.
+    /// Called by the ConfigMap watcher when configuration changes are detected.
+    /// </summary>
+    /// <param name="entries">The new OID-to-metric-name mapping to swap in.</param>
+    void UpdateMap(Dictionary<string, string> entries);
 }

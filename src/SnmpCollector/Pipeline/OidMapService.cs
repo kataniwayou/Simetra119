@@ -1,16 +1,14 @@
 using System.Collections.Frozen;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using SnmpCollector.Configuration;
 
 namespace SnmpCollector.Pipeline;
 
 /// <summary>
 /// Singleton service that resolves OID strings to metric names using a volatile
-/// <see cref="FrozenDictionary{TKey,TValue}"/> that is atomically swapped on appsettings change.
-/// Hot-reload via <see cref="IOptionsMonitor{TOptions}.OnChange"/> -- no restart required.
+/// <see cref="FrozenDictionary{TKey,TValue}"/> that is atomically swapped on reload.
+/// Callers invoke <see cref="UpdateMap"/> to supply a new map (e.g., from ConfigMap watcher).
 /// </summary>
-public sealed class OidMapService : IOidMapService, IDisposable
+public sealed class OidMapService : IOidMapService
 {
     /// <summary>
     /// Metric name returned when an OID is not present in the map.
@@ -19,21 +17,19 @@ public sealed class OidMapService : IOidMapService, IDisposable
     public const string Unknown = "Unknown";
 
     private readonly ILogger<OidMapService> _logger;
-    private readonly IDisposable? _changeToken;
     private volatile FrozenDictionary<string, string> _map;
 
     /// <summary>
-    /// Initializes the service and subscribes to appsettings change notifications.
+    /// Initializes the service with the provided initial OID map entries.
     /// </summary>
-    /// <param name="monitor">Options monitor providing initial map and change callbacks.</param>
+    /// <param name="initialEntries">Initial OID-to-metric-name mapping.</param>
     /// <param name="logger">Logger for structured hot-reload diff output.</param>
     public OidMapService(
-        IOptionsMonitor<OidMapOptions> monitor,
+        Dictionary<string, string> initialEntries,
         ILogger<OidMapService> logger)
     {
         _logger = logger;
-        _map = BuildFrozenMap(monitor.CurrentValue.Entries);
-        _changeToken = monitor.OnChange(OnOidMapChanged);
+        _map = BuildFrozenMap(initialEntries);
 
         _logger.LogInformation(
             "OidMapService initialized with {EntryCount} entries",
@@ -50,15 +46,10 @@ public sealed class OidMapService : IOidMapService, IDisposable
     public int EntryCount => _map.Count;
 
     /// <inheritdoc />
-    public void Dispose()
-    {
-        _changeToken?.Dispose();
-    }
-
-    private void OnOidMapChanged(OidMapOptions newOptions, string? _)
+    public void UpdateMap(Dictionary<string, string> entries)
     {
         var oldMap = _map;
-        var newMap = BuildFrozenMap(newOptions.Entries);
+        var newMap = BuildFrozenMap(entries);
 
         // Compute diff for structured logging
         var added = newMap.Keys.Except(oldMap.Keys).ToList();

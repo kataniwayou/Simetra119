@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using SnmpCollector.Configuration;
 
 namespace SnmpCollector.Pipeline;
 
@@ -34,4 +35,14 @@ public interface IDeviceRegistry
     /// Used by the Quartz scheduler to register poll jobs at startup.
     /// </summary>
     IReadOnlyList<DeviceInfo> AllDevices { get; }
+
+    /// <summary>
+    /// Atomically replaces the device registry with a new set of devices.
+    /// Performs async DNS resolution for non-IP hostnames and builds new
+    /// FrozenDictionary lookups. Returns the sets of added and removed device names
+    /// so callers can update dependent registries (e.g., Quartz jobs, liveness stamps).
+    /// </summary>
+    /// <param name="devices">The new device list to load.</param>
+    /// <returns>Tuple of added and removed device name sets.</returns>
+    Task<(IReadOnlySet<string> Added, IReadOnlySet<string> Removed)> ReloadAsync(List<DeviceOptions> devices);
 }
