@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 Phase: 15 (K8s ConfigMap Watch and Unified Config)
 Plan: 5 of 5
 Status: Complete
-Last activity: 2026-03-07 — Phase 15 complete (all 5 plans executed, verified)
+Last activity: 2026-03-07 — Completed quick task 017: Split ConfigMap into OidMap + Devices watchers
 
 Progress: [####################] 48/48 v1.0 complete, 9/9 v1.1 plans, 5/5 v1.2 plans
 
@@ -58,6 +58,12 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 
 - IDeviceRegistry.TryGetDevice(IPAddress) orphaned — community string replaced IP lookup
 - PollSchedulerStartupService thread pool log off-by-one (HeartbeatJob not counted)
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 017 | Split unified ConfigMap into separate OID map and devices watchers | 2026-03-07 | 2377154 | [017-split-configmap-oidmap-devices](./quick/017-split-configmap-oidmap-devices/) |
 
 ### Blockers/Concerns
 
