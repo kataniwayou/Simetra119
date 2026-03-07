@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 ## Current Position
 
 Phase: 11 of 14 (OID Map Design and OBP Population)
-Plan: Not started — phase needs planning
-Status: Ready to plan
-Last activity: 2026-03-07 — Roadmap created for v1.1 milestone
+Plan: 01 of 03 complete
+Status: In progress
+Last activity: 2026-03-07 — Completed 11-01-PLAN.md (OBP OID map creation)
 
-Progress: [##########..........] 48/48 v1.0 complete, 0/4 v1.1 phases
+Progress: [##########..........] 48/48 v1.0 complete, 1/9 v1.1 plans
 
 ## Milestone History
 
@@ -34,6 +34,8 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 - Community string convention: Simetra.{DeviceName} for both auth and device identity
 - host_name from NODE_NAME env var (K8s spec.nodeName), pod_name from HOSTNAME
 - Heartbeat is internal infrastructure — pipeline metrics prove liveness, no metric export
+- OBP OID maps stored as separate configmap keys (oidmap-obp.json), not merged into appsettings OidMap
+- OID map naming: obp_{metric}_L{linkNum} for OBP device type
 
 ### Known Tech Debt
 
@@ -47,5 +49,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-07
-Stopped at: v1.1 roadmap created, ready to plan Phase 11
+Stopped at: Completed 11-01-PLAN.md (OBP OID map creation)
 Resume file: None
