@@ -21,7 +21,7 @@ Requirements for v1.1 Device Simulation milestone. Each maps to roadmap phases.
 - [x] **SIM-03**: NPB simulator updated to realistic OID subset across 8 ports (core health + per-port traffic)
 - [x] **SIM-04**: NPB simulator sends realistic trap types (link up/down)
 - [x] **SIM-05**: Both simulators use `Simetra.{DeviceName}` community string convention
-- [ ] **SIM-06**: Simulator K8s deployments updated with snmp-collector integration
+- [x] **SIM-06**: Simulator K8s deployments updated with snmp-collector integration
 
 ### Device Documentation
 
@@ -30,8 +30,8 @@ Requirements for v1.1 Device Simulation milestone. Each maps to roadmap phases.
 
 ### MetricPoll Configuration
 
-- [ ] **POLL-01**: snmp-collector ConfigMap updated with OBP MetricPoll groups matching OID map
-- [ ] **POLL-02**: snmp-collector ConfigMap updated with NPB MetricPoll groups matching OID map
+- [x] **POLL-01**: snmp-collector ConfigMap updated with OBP MetricPoll groups matching OID map
+- [x] **POLL-02**: snmp-collector ConfigMap updated with NPB MetricPoll groups matching OID map
 
 ## v2 Requirements
 
@@ -69,11 +69,11 @@ Requirements for v1.1 Device Simulation milestone. Each maps to roadmap phases.
 | SIM-03 | Phase 13 | Complete |
 | SIM-04 | Phase 13 | Complete |
 | SIM-05 | Phase 13 | Complete |
-| SIM-06 | Phase 14 | Pending |
+| SIM-06 | Phase 14 | Complete |
 | DOC-01 | Phase 11 | Complete |
 | DOC-02 | Phase 12 | Complete |
-| POLL-01 | Phase 14 | Pending |
-| POLL-02 | Phase 14 | Pending |
+| POLL-01 | Phase 14 | Complete |
+| POLL-02 | Phase 14 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 14 total

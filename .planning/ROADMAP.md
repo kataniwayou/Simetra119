@@ -3,7 +3,7 @@
 ## Milestones
 
 - v1.0 Foundation - Phases 1-10 (shipped 2026-03-07)
-- v1.1 Device Simulation - Phases 11-14 (in progress)
+- v1.1 Device Simulation - Phases 11-14 (shipped 2026-03-07)
 
 ## Phases
 
@@ -14,14 +14,14 @@
 
 </details>
 
-### v1.1 Device Simulation (In Progress)
+### v1.1 Device Simulation (Complete)
 
 **Milestone Goal:** Populate OID maps for OBP and NPB devices with documentation, refine simulators to match realistic device profiles, and deploy integrated K8s simulation environment for end-to-end verification.
 
 - [x] **Phase 11: OID Map Design and OBP Population** - Establish naming convention, decide map structure, populate OBP OIDs with docs
 - [x] **Phase 12: NPB OID Population** - Populate NPB OIDs with documentation using established conventions
 - [x] **Phase 13: Simulator Refinement** - Update both simulators for realistic OID subsets and trap behavior
-- [ ] **Phase 14: K8s Integration and E2E** - Deploy simulator pods, update ConfigMap, verify end-to-end pipeline
+- [x] **Phase 14: K8s Integration and E2E** - Deploy simulator pods, update ConfigMap, verify end-to-end pipeline
 
 ## Phase Details
 
@@ -77,9 +77,9 @@ Plans:
   5. Traps from both simulators flow through the pipeline and produce metrics in Prometheus
 **Plans**: 3 plans
 Plans:
-- [ ] 14-01-PLAN.md -- DNS resolution + CommunityString + devices.json loading in C# code
-- [ ] 14-02-PLAN.md -- ConfigMap devices.json with all 92 OIDs for OBP-01 and NPB-01
-- [ ] 14-03-PLAN.md -- E2E verification script querying Prometheus for poll and trap metrics
+- [x] 14-01-PLAN.md -- DNS resolution + CommunityString + devices.json loading in C# code
+- [x] 14-02-PLAN.md -- ConfigMap devices.json with all 92 OIDs for OBP-01 and NPB-01
+- [x] 14-03-PLAN.md -- E2E verification script querying Prometheus for poll and trap metrics
 
 ## Progress
 
@@ -91,4 +91,4 @@ Plans:
 | 11. OID Map Design and OBP Population | v1.1 | 3/3 | Complete | 2026-03-07 |
 | 12. NPB OID Population | v1.1 | 1/1 | Complete | 2026-03-07 |
 | 13. Simulator Refinement | v1.1 | 3/3 | Complete | 2026-03-07 |
-| 14. K8s Integration and E2E | v1.1 | 0/3 | Not started | - |
+| 14. K8s Integration and E2E | v1.1 | 3/3 | Complete | 2026-03-07 |
