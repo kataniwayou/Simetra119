@@ -18,7 +18,7 @@
 
 **Milestone Goal:** Populate OID maps for OBP and NPB devices with documentation, refine simulators to match realistic device profiles, and deploy integrated K8s simulation environment for end-to-end verification.
 
-- [ ] **Phase 11: OID Map Design and OBP Population** - Establish naming convention, decide map structure, populate OBP OIDs with docs, fix hot-reload for poll config
+- [ ] **Phase 11: OID Map Design and OBP Population** - Establish naming convention, decide map structure, populate OBP OIDs with docs
 - [ ] **Phase 12: NPB OID Population** - Populate NPB OIDs with documentation using established conventions
 - [ ] **Phase 13: Simulator Refinement** - Update both simulators for realistic OID subsets and trap behavior
 - [ ] **Phase 14: K8s Integration and E2E** - Deploy simulator pods, update ConfigMap, verify end-to-end pipeline
@@ -26,15 +26,15 @@
 ## Phase Details
 
 ### Phase 11: OID Map Design and OBP Population
-**Goal**: OID map structure is decided, naming convention is established, OBP device OIDs are populated with full documentation, and OID map changes propagate to poll configuration without restart
+**Goal**: OID map structure is decided, naming convention is established, OBP device OIDs are populated with full documentation
 **Depends on**: Phase 10 (v1.0 complete)
-**Requirements**: OIDM-01, OIDM-02, OIDM-03, DOC-01, RELOAD-01
+**Requirements**: OIDM-01, OIDM-02, OIDM-03, DOC-01
 **Success Criteria** (what must be TRUE):
   1. OID map entries follow device-type prefix + metric + index suffix naming (e.g., `obp_link_state_L1`, `obp_r1_power_L3`) and this convention is documented
-  2. OID map structure decision (single shared list vs per-device-type files) is made and implemented
-  3. OBP OID map contains entries for 4 links covering state, channel, and optical power (R1-R4) with realistic OID strings
-  4. Each OBP OID has documentation specifying value meaning, units, and expected ranges
-  5. When OID map file changes are detected at runtime, poll configuration reloads automatically — new OIDs appear in the next poll cycle without pod restart
+  2. Separate `oidmap-*.json` files per device type, auto-scanned at startup, merged into single runtime dictionary
+  3. K8s deployment uses directory mount (no subPath) for OID map hot-reload via ConfigMap updates
+  4. OBP OID map contains entries for 4 links covering state, channel, and optical power (R1-R4) with realistic OID strings
+  5. Each OBP OID has documentation specifying value meaning, units, and expected ranges
 **Plans**: TBD
 
 ### Phase 12: NPB OID Population

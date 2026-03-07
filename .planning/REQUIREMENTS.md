@@ -28,10 +28,6 @@ Requirements for v1.1 Device Simulation milestone. Each maps to roadmap phases.
 - [ ] **DOC-01**: OBP OID documentation — each polled OID with value meaning, units, expected ranges
 - [ ] **DOC-02**: NPB OID documentation — each polled OID with value meaning, units, expected ranges
 
-### Hot Reload
-
-- [ ] **RELOAD-01**: OID map hot-reload also triggers poll configuration reload (device OID list changes take effect without restart)
-
 ### MetricPoll Configuration
 
 - [ ] **POLL-01**: snmp-collector ConfigMap updated with OBP MetricPoll groups matching OID map
@@ -46,7 +42,7 @@ Requirements for v1.1 Device Simulation milestone. Each maps to roadmap phases.
 
 ### Operational Enhancements
 
-- **OPS-01**: Hot-reloadable device configuration (add/remove devices without restart)
+- **OPS-01**: Hot-reloadable device configuration (add/remove devices, change OIDs/intervals without restart)
 - **OPS-02**: Grafana dashboard templates for NPB and OBP devices
 - **OPS-03**: Prometheus alerting rules for common failure conditions
 
@@ -76,13 +72,12 @@ Requirements for v1.1 Device Simulation milestone. Each maps to roadmap phases.
 | SIM-06 | Phase 14 | Pending |
 | DOC-01 | Phase 11 | Pending |
 | DOC-02 | Phase 12 | Pending |
-| RELOAD-01 | Phase 11 | Pending |
 | POLL-01 | Phase 14 | Pending |
 | POLL-02 | Phase 14 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 15 total
-- Mapped to phases: 15
+- v1.1 requirements: 14 total
+- Mapped to phases: 14
 - Unmapped: 0
 
 ---
