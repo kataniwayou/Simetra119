@@ -27,6 +27,7 @@
 **Milestone Goal:** Consolidate configuration into a single documented ConfigMap, replace file-based hot-reload with K8s API watch, and enable dynamic device/poll schedule reloading without pod restart.
 
 - [x] **Phase 15: K8s ConfigMap Watch and Unified Config** - Single ConfigMap with documented JSONC, K8s API watch for live reload of OID maps and device/poll config
+- [ ] **Phase 16: Test K8s ConfigMap Watchers** - Integration tests for OidMapWatcherService and DeviceWatcherService covering live reload, error handling, and reconnection
 
 ## Phase Details (v1.2)
 
@@ -49,6 +50,15 @@ Plans:
 - [x] 15-04-PLAN.md -- K8s RBAC and ConfigMap manifest updates, unified simetra-config.json key, delete legacy oidmap files
 - [x] 15-05-PLAN.md -- Unit tests for DynamicPollScheduler reconciliation (add/remove/reschedule scenarios)
 
+### Phase 16: Test K8s ConfigMap Watchers
+**Goal**: Live K8s verification of OidMapWatcherService and DeviceWatcherService covering reload, error handling, and watch reconnection
+**Depends on**: Phase 15
+**Plans**: 3 plans
+Plans:
+- [ ] 16-01-PLAN.md -- OID map watcher scenarios: baseline, add OID, rename, remove, malformed JSON, restore
+- [ ] 16-02-PLAN.md -- Device watcher scenarios: add device, change interval, remove, OID changes, malformed JSON, delete ConfigMap, restore
+- [ ] 16-03-PLAN.md -- Watch reconnection verification (existing log evidence or extended observation)
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -56,3 +66,4 @@ Plans:
 | 1-10 | v1.0 | 48/48 | Complete | 2026-03-07 |
 | 11-14 | v1.1 | 10/10 | Complete | 2026-03-08 |
 | 15. K8s ConfigMap Watch and Unified Config | v1.2 | 5/5 | Complete | 2026-03-07 |
+| 16. Test K8s ConfigMap Watchers | v1.2 | 0/3 | Planned | - |
