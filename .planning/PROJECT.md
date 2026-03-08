@@ -51,6 +51,15 @@ See `.planning/milestones/v1.1-REQUIREMENTS.md` for full requirement details.
 
 See `.planning/milestones/v1.2-REQUIREMENTS.md` for full requirement details.
 
+### Active
+
+**v1.3 Grafana Dashboards**
+
+- [ ] Grafana dashboard provisioning via JSON ConfigMaps with automatic loading
+- [ ] Prometheus datasource provisioned automatically
+- [ ] Operations dashboard: pod identity/role table, pipeline counter time series, .NET runtime time series, per-pod breakdown, auto-refresh
+- [ ] Business dashboard: gauge metrics table and info metrics table with label columns (service_instance_id, device_name, metric_name, oid, snmp_type, value), device-agnostic, auto-refresh
+
 ### Out of Scope
 
 - Device management / configuration writes — monitor only, no SNMP SET
@@ -64,7 +73,7 @@ See `.planning/milestones/v1.2-REQUIREMENTS.md` for full requirement details.
 
 ## Context
 
-**Current state:** v1.2 shipped. 4,937 LOC source + 4,318 LOC tests across 76 C# files + 783 LOC Python simulators. 138 tests passing. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. K8s API watch for live ConfigMap reload verified.
+**Current state:** v1.2 shipped, v1.3 in progress. 4,937 LOC source + 4,318 LOC tests across 76 C# files + 783 LOC Python simulators. 138 tests passing. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. K8s API watch for live ConfigMap reload verified. Single Prometheus instance serves multiple sites via service_instance_id label.
 
 **Reference project:** `src/Simetra/` is an existing SNMP monitoring system used as architectural reference. Key patterns adopted: structured logging, OTel setup, console formatter, correlation IDs, leader election, role-gated export. Key patterns replaced: custom middleware -> MediatR, device modules -> flat OID map, channels -> single shared trap channel.
 
@@ -110,4 +119,4 @@ See `.planning/milestones/v1.2-REQUIREMENTS.md` for full requirement details.
 | PodIdentityOptions rename | Clearer than SiteOptions; section name "PodIdentity" matches single property | Good |
 
 ---
-*Last updated: 2026-03-08 after v1.2 milestone completion*
+*Last updated: 2026-03-08 after v1.3 milestone start*
