@@ -68,6 +68,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 | 018 | Add IsHeartbeat flag to pipeline (replace string comparisons) | 2026-03-08 | 5d0f980 | [018-add-isheartbeat-flag-to-pipeline](./quick/018-add-isheartbeat-flag-to-pipeline/) |
 | 019 | Reorganize Simetra files and cleanup K8s manifests | 2026-03-08 | f3844f6 | [019-reorganize-simetra-files-cleanup-k8s](./quick/019-reorganize-simetra-files-cleanup-k8s/) |
 | 020 | Remove redundant host_name/pod_name metric tags | 2026-03-08 | 976b36e | [020-remove-redundant-host-pod-tags](./quick/020-remove-redundant-host-pod-tags/) |
+| 021 | Remove Site, fix deploy YAML issues | 2026-03-08 | 2e880d9 | [021-remove-site-fix-deploy-yaml-issues](./quick/021-remove-site-fix-deploy-yaml-issues/) |
 
 ### Blockers/Concerns
 
@@ -76,5 +77,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-08
-Stopped at: Quick task 020 complete
+Stopped at: Quick task 021 complete
 Resume file: None
