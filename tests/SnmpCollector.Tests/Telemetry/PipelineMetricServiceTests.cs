@@ -7,7 +7,7 @@ using Xunit;
 namespace SnmpCollector.Tests.Telemetry;
 
 /// <summary>
-/// Unit tests for the Phase 5 trap counter methods on <see cref="PipelineMetricService"/>.
+/// Unit tests for the pipeline counter methods on <see cref="PipelineMetricService"/>.
 /// Uses <see cref="MeterListener"/> to observe actual OTel counter increments and tag values.
 /// Placed in NonParallelMeterTests collection to prevent cross-test meter contamination
 /// (MeterListener is a global listener; parallel tests with the same meter name interfere).
@@ -52,41 +52,43 @@ public sealed class PipelineMetricServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
-    // 1. IncrementTrapAuthFailed_RecordsWithHostNameTag (PMET-07)
+    // 1. IncrementTrapAuthFailed records with device_name tag (PMET-07)
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IncrementTrapAuthFailed_RecordsWithHostNameTag()
+    public void IncrementTrapAuthFailed_RecordsWithDeviceNameTag()
     {
-        _service.IncrementTrapAuthFailed();
+        _service.IncrementTrapAuthFailed("test-device");
 
         var match = _measurements.Single(m => m.InstrumentName == "snmp.trap.auth_failed");
 
         Assert.Equal(1L, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
-        Assert.True(tags.ContainsKey("host_name"));
-        Assert.DoesNotContain("device_name", tags.Keys);
+        Assert.Equal("test-device", tags["device_name"]);
+        Assert.DoesNotContain("host_name", tags.Keys);
+        Assert.DoesNotContain("pod_name", tags.Keys);
     }
 
     // -----------------------------------------------------------------------
-    // 2. IncrementTrapUnknownDevice_RecordsWithHostNameTag (PMET-08)
+    // 2. IncrementTrapUnknownDevice records with device_name tag (PMET-08)
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IncrementTrapUnknownDevice_RecordsWithHostNameTag()
+    public void IncrementTrapUnknownDevice_RecordsWithDeviceNameTag()
     {
-        _service.IncrementTrapUnknownDevice();
+        _service.IncrementTrapUnknownDevice("test-device");
 
         var match = _measurements.Single(m => m.InstrumentName == "snmp.trap.unknown_device");
 
         Assert.Equal(1L, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
-        Assert.True(tags.ContainsKey("host_name"));
-        Assert.DoesNotContain("device_name", tags.Keys);
+        Assert.Equal("test-device", tags["device_name"]);
+        Assert.DoesNotContain("host_name", tags.Keys);
+        Assert.DoesNotContain("pod_name", tags.Keys);
     }
 
     // -----------------------------------------------------------------------
-    // 3. IncrementTrapDropped_RecordsWithDeviceNameTag (PMET-09)
+    // 3. IncrementTrapDropped records with device_name tag (PMET-09)
     // -----------------------------------------------------------------------
 
     [Fact]
@@ -98,23 +100,26 @@ public sealed class PipelineMetricServiceTests : IDisposable
 
         Assert.Equal(1L, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
-        Assert.True(tags.ContainsKey("host_name"));
         Assert.Equal("router-01", tags["device_name"]);
+        Assert.DoesNotContain("host_name", tags.Keys);
+        Assert.DoesNotContain("pod_name", tags.Keys);
     }
 
     // -----------------------------------------------------------------------
-    // 4. IncrementTrapReceived_RecordsWithHostNameTag (PMET-06)
+    // 4. IncrementTrapReceived records with device_name tag (PMET-06)
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IncrementTrapReceived_RecordsWithHostNameTag()
+    public void IncrementTrapReceived_RecordsWithDeviceNameTag()
     {
-        _service.IncrementTrapReceived();
+        _service.IncrementTrapReceived("test-device");
 
         var match = _measurements.Single(m => m.InstrumentName == "snmp.trap.received");
 
         Assert.Equal(1L, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
-        Assert.True(tags.ContainsKey("host_name"));
+        Assert.Equal("test-device", tags["device_name"]);
+        Assert.DoesNotContain("host_name", tags.Keys);
+        Assert.DoesNotContain("pod_name", tags.Keys);
     }
 }
