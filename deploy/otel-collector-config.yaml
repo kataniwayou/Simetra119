@@ -4,13 +4,6 @@ receivers:
       grpc:
         endpoint: 0.0.0.0:4317
 
-processors:
-  transform:
-    metric_statements:
-      - context: datapoint
-        statements:
-          - set(attributes["host_name"], resource.attributes["service.instance.id"])
-
 exporters:
   prometheusremotewrite:
     endpoint: http://prometheus:9090/api/v1/write
@@ -24,7 +17,7 @@ service:
   pipelines:
     metrics:
       receivers: [otlp]
-      processors: [transform]
+      processors: []
       exporters: [prometheusremotewrite]
     logs:
       receivers: [otlp]
