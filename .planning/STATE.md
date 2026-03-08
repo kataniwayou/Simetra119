@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.3 Grafana Dashboards
+**Current focus:** v1.3 Grafana Dashboards — Phase 17 Dashboard Provisioning
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-08 — Milestone v1.3 started
+Phase: 17 of 19 (Dashboard Provisioning)
+Plan: 0 of 1 in current phase
+Status: Ready to plan
+Last activity: 2026-03-08 — Roadmap created for v1.3
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2 | [░░░░░░░░░░] 0/3 v1.3
 
 ## Milestone History
 
@@ -38,18 +38,10 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 - Heartbeat is internal infrastructure — pipeline metrics prove liveness, no metric export
 - IsHeartbeat bool flag set at ingestion boundary (ChannelConsumerService); behaviors/handlers use flag, not string comparison
 - Split config: simetra-oidmaps ConfigMap (oidmaps.json bare dict) + simetra-devices ConfigMap (devices.json bare array) + simetra-config (appsettings only)
-- OID map naming: obp_{metric}_L{linkNum} for OBP, npb_{metric} / npb_port_{metric}_P{n} for NPB
 - K8s directory mount at /app/config (no subPath) enables ConfigMap hot-reload
-- DeviceRegistry resolves K8s Service DNS names at startup via Dns.GetHostAddresses fallback
-- OidMapService decoupled from IOptionsMonitor; accepts Dictionary + supports UpdateMap atomic swap
-- DeviceRegistry supports ReloadAsync with async DNS and volatile FrozenDictionary swap
-- OidMapWatcherService watches simetra-oidmaps ConfigMap, calls UpdateMap only (no device/scheduler deps)
-- DeviceWatcherService watches simetra-devices ConfigMap, calls ReloadAsync + ReconcileAsync only (no OID map dep)
-- DynamicPollScheduler.ReconcileAsync diffs Quartz metric-poll-* jobs and adds/removes/reschedules
-- K8s deployments use projected volume combining simetra-config, simetra-oidmaps, simetra-devices into /app/config
-- Each watcher has independent SemaphoreSlim reload lock (no cascading reloads)
-- RBAC Role named simetra-role covers leases + configmaps
-- PodIdentityOptions (renamed from SiteOptions) with PodIdentity property for K8sLeaseElection
+- Existing Grafana datasource provisioning at deploy/grafana/provisioning/datasources/simetra-prometheus.yaml
+- Existing dashboard JSONs at deploy/grafana/dashboards/ (reference project files, to be replaced)
+- Grafana deployment has no volume mounts for provisioning yet (manual UI setup documented)
 
 ### Known Tech Debt
 
@@ -73,5 +65,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-08
-Stopped at: v1.2 milestone complete
+Stopped at: v1.3 roadmap created, ready to plan Phase 17
 Resume file: None

@@ -39,22 +39,22 @@ Requirements for Grafana Dashboards milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DASH-01 | TBD | Pending |
-| DASH-02 | TBD | Pending |
-| OPS-01 | TBD | Pending |
-| OPS-02 | TBD | Pending |
-| OPS-03 | TBD | Pending |
-| OPS-04 | TBD | Pending |
-| BIZ-01 | TBD | Pending |
-| BIZ-02 | TBD | Pending |
-| BIZ-03 | TBD | Pending |
-| BIZ-04 | TBD | Pending |
+| DASH-01 | Phase 17 | Pending |
+| DASH-02 | Phase 17 | Pending |
+| OPS-01 | Phase 18 | Pending |
+| OPS-02 | Phase 18 | Pending |
+| OPS-03 | Phase 18 | Pending |
+| OPS-04 | Phase 18 | Pending |
+| BIZ-01 | Phase 19 | Pending |
+| BIZ-02 | Phase 19 | Pending |
+| BIZ-03 | Phase 19 | Pending |
+| BIZ-04 | Phase 19 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 10 total
-- Mapped to phases: 0
-- Unmapped: 10 ⚠️
+- Mapped to phases: 10
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-03-08 after initial definition*
+*Last updated: 2026-03-08 after roadmap creation*
