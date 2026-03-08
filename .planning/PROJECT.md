@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A K8s-native SNMP monitoring agent that receives traps and polls devices, resolves OIDs to human-readable metric names via a flat OID map, and pushes metrics through OpenTelemetry to Prometheus/Grafana. Built on C# .NET 9 with MediatR for event routing and Quartz for poll scheduling. Runs as a 3-replica Kubernetes deployment with leader-gated metric export and near-instant failover.
+A K8s-native SNMP monitoring agent that receives traps and polls devices, resolves OIDs to human-readable metric names via a flat OID map, and pushes metrics through OpenTelemetry to Prometheus/Grafana. Built on C# .NET 9 with MediatR for event routing and Quartz for poll scheduling. Runs as a 3-replica Kubernetes deployment with leader-gated metric export and near-instant failover. Includes OBP and NPB device simulators for development and testing.
 
 ## Core Value
 
@@ -19,23 +19,36 @@ Every SNMP OID — from a trap or a poll — gets resolved, typed correctly (gau
 - Quartz-based SNMP GET polling with per-device configuration and unreachability tracking
 - Two metric instruments: snmp_gauge (Integer32, Gauge32, TimeTicks, Counter32, Counter64) and snmp_info (OctetString, IpAddress, OID)
 - Flat OID map with hot-reload, "Unknown" fallback for unmapped OIDs
-- Pipeline metrics (6 counters) exported by all instances
+- Pipeline metrics (11 counters) exported by all instances with device_name label
 - K8s Lease API leader election with MetricRoleGatedExporter
 - Graceful 5-step shutdown (30s budget) with lease release
 - Startup/readiness/liveness health probes with per-job staleness detection
-- HeartbeatJob loopback proving pipeline liveness (suppressed from metric export)
-- Label taxonomy: host_name, pod_name, metric_name, oid, device_name, ip, source, snmp_type
+- HeartbeatJob loopback proving pipeline liveness (IsHeartbeat flag, suppressed from metric export)
+- Label taxonomy: device_name, metric_name, oid, ip, source, snmp_type (host/pod identity via OTel resource attributes)
 
 See `.planning/milestones/v1.0-REQUIREMENTS.md` for full requirement details.
 
+**v1.1 Device Simulation (shipped 2026-03-08)**
+
+- OID map naming convention: `obp_{metric}_L{n}` for OBP, `npb_{metric}` / `npb_port_{metric}_P{n}` for NPB
+- OBP OID map: 24 entries (4 links x 6 metrics) with JSONC documentation
+- NPB OID map: 68 entries (4 system + 8 ports x 8 metrics) with JSONC documentation
+- OBP simulator: 24 OIDs, power random walk, StateChange traps, Simetra.OBP-01 community
+- NPB simulator: 68 OIDs, Counter64 traffic profiles, portLinkChange traps, Simetra.NPB-01 community
+- K8s simulator deployments with pysnmp health probes and DEVICE_NAME env vars
+- devices.json with 92 poll OIDs across OBP-01 and NPB-01 (10s interval, K8s DNS addresses)
+- DNS resolution in DeviceRegistry for K8s Service names + optional CommunityString override
+
+See `.planning/milestones/v1.1-REQUIREMENTS.md` for full requirement details.
+
 ### Active
 
-**v1.1 Device Simulation (in progress)**
+**v1.2 Operational Enhancements (shipped 2026-03-07)**
 
-- OID map structure and naming conventions for NPB + OBP device families
-- Poll OID documentation (values, ranges, units, expected behavior)
-- Simulator refinement — selective trap/poll behavior matching real device profiles
-- K8s simulator pod deployment integrated with snmp-collector
+- K8s API watch for ConfigMap changes with runtime reload (replaces file-based hot-reload)
+- Split ConfigMap architecture: simetra-oidmaps + simetra-devices + snmp-collector-config
+- Dynamic device/poll schedule reloading without pod restart (Quartz jobs re-registered)
+- Local development fallback with file-based loading
 
 ### Out of Scope
 
@@ -50,17 +63,17 @@ See `.planning/milestones/v1.0-REQUIREMENTS.md` for full requirement details.
 
 ## Context
 
-**Current state:** v1.0 shipped. 4,077 LOC source + 3,742 LOC tests across 94 C# files. 121 tests passing. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana.
+**Current state:** v1.1 shipped. 4,937 LOC source + 4,318 LOC tests across 108 C# files + 783 LOC Python simulators. 138 tests passing. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. v1.2 also shipped (Phase 15: K8s ConfigMap watch).
 
 **Reference project:** `src/Simetra/` is an existing SNMP monitoring system used as architectural reference. Key patterns adopted: structured logging, OTel setup, console formatter, correlation IDs, leader election, role-gated export. Key patterns replaced: custom middleware -> MediatR, device modules -> flat OID map, channels -> single shared trap channel.
 
-**Target devices:** NPB (Network Packet Broker, CGS enterprise 47477.100) and OBP (Optical Bypass, CGS enterprise 47477.10.21). Both share the same OID map.
-
-**OID map sizing:** ~500+ entries covering both device families. Per-port/per-link OIDs expanded with index baked into metric name (e.g., `obp_r1_power_l3`).
+**Target devices:** NPB (Network Packet Broker, CGS enterprise 47477.100) and OBP (Optical Bypass, CGS enterprise 47477.10.21). Both share a single oidmaps.json (92 entries).
 
 **Known tech debt:**
 - `IDeviceRegistry.TryGetDevice(IPAddress)` orphaned (community string replaced IP lookup)
 - `PollSchedulerStartupService` thread pool log off-by-one (HeartbeatJob not counted)
+- verify-e2e.sh check 4 queries wrong instrument (snmp_gauge vs snmp_info for OctetString)
+- Production simetra-devices template has wrong MetricPolls schema
 
 ## Constraints
 
@@ -86,9 +99,13 @@ See `.planning/milestones/v1.0-REQUIREMENTS.md` for full requirement details.
 | All instances poll and receive | No warm-up delay on failover, leader only controls metric export | Good |
 | No traces | Metrics and logs sufficient for SNMP monitoring, reduces complexity | Good |
 | Community string convention | Simetra.{DeviceName} replaces IP-based device lookup; works for any IP | Good |
-| host_name from NODE_NAME | Physical K8s node identity (persistent), pod_name from HOSTNAME (ephemeral) | Good |
+| host_name/pod_name removed from TagLists | Redundant with OTel resource attributes service_instance_id and k8s_pod_name | Good |
 | Heartbeat as internal infra | Pipeline metrics prove liveness; no snmp_gauge pollution for heartbeat | Good |
 | IRequest<Unit> over INotification | MediatR behaviors only fire for IRequest; INotification bypasses pipeline entirely | Good |
+| IsHeartbeat flag at ingestion boundary | Single point of truth in ChannelConsumerService; avoids string comparison in handlers | Good |
+| Single shared oidmaps.json | Both device types in one file; simpler K8s ConfigMap management | Good |
+| DNS resolution in DeviceRegistry | K8s Service DNS names resolved at startup; MetricPollJob uses pre-resolved IPs | Good |
+| Split ConfigMap watchers | OidMapWatcherService and DeviceWatcherService independent; no cascading reloads | Good |
 
 ---
-*Last updated: 2026-03-07 after v1.1 milestone start*
+*Last updated: 2026-03-08 after v1.1 milestone completion*

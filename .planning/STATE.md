@@ -2,26 +2,26 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-07)
+See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.2 Operational Enhancements — Complete
+**Current focus:** v1.2 Operational Enhancements — pending formal completion
 
 ## Current Position
 
 Phase: 15 (K8s ConfigMap Watch and Unified Config)
 Plan: 5 of 5
 Status: Complete
-Last activity: 2026-03-08 — Completed quick task 020: Remove redundant host_name/pod_name metric tags
+Last activity: 2026-03-08 — v1.1 milestone completed and archived
 
-Progress: [####################] 48/48 v1.0 complete, 9/9 v1.1 plans, 5/5 v1.2 plans
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 5/5 v1.2
 
 ## Milestone History
 
 | Milestone | Phases | Plans | Shipped |
 |-----------|--------|-------|---------|
 | v1.0 Foundation | 1-10 | 48 | 2026-03-07 |
-| v1.1 Device Simulation | 11-14 | 10 | 2026-03-07 |
+| v1.1 Device Simulation | 11-14 | 10 | 2026-03-08 |
 
 See `.planning/MILESTONES.md` for details.
 See `.planning/milestones/` for archived roadmaps and requirements.
