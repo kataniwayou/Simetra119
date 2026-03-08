@@ -3,7 +3,6 @@
     "Name": "OBP-01",
     "IpAddress": "127.0.0.1",
     "Port": 10161,
-    "CommunityString": "Simetra.OBP-01",
     "MetricPolls": [
       {
         "IntervalSeconds": 10,
@@ -40,7 +39,6 @@
     "Name": "NPB-01",
     "IpAddress": "127.0.0.1",
     "Port": 10162,
-    "CommunityString": "Simetra.NPB-01",
     "MetricPolls": [
       {
         "IntervalSeconds": 10,
