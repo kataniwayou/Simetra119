@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 Phase: 19 of 19 (Business Dashboard)
 Plan: 1 of 1 in current phase
 Status: Phase 19 complete, v1.3 milestone complete
-Last activity: 2026-03-08 — Completed quick task 026: Business dashboard table and filter fix
+Last activity: 2026-03-09 — Completed quick task 027: Fix simulator info/gauge + add static OIDs
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2 | [##########] 2/2 v1.3
 
@@ -63,6 +63,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 | 024 | Add panel descriptions to operations dashboard | 2026-03-08 | cd5ac81 | [024-add-panel-descriptions-operations-dashb](./quick/024-add-panel-descriptions-operations-dashb/) |
 | 025 | Cleanup dead metrics, dashboard, and code | 2026-03-08 | 3f34fad | [025-cleanup-dead-metrics-dashboard-and-code](./quick/025-cleanup-dead-metrics-dashboard-and-code/) |
 | 026 | Business dashboard table and filter fix | 2026-03-08 | 7f9f8b4 | [026-business-dashboard-table-and-filter-fix](./quick/026-business-dashboard-table-and-filter-fix/) |
+| 027 | Fix simulator info/gauge + add static OIDs | 2026-03-09 | 3939ba9 | [027-fix-simulator-info-gauge-add-static-oid](./quick/027-fix-simulator-info-gauge-add-static-oid/) |
 
 ### Blockers/Concerns
 
@@ -70,6 +71,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-08
-Stopped at: Completed quick-026 (Business dashboard table and filter fix)
+Last session: 2026-03-09
+Stopped at: Completed quick-027 (Fix simulator info/gauge + add static OIDs)
 Resume file: None
