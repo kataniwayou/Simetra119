@@ -33,7 +33,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 - MediatR 12.5.0 (MIT) — do NOT upgrade to v13+ (RPL-1.5 license)
 - Two-meter architecture: MeterName for all instances, LeaderMeterName for leader only
 - Community string convention: Simetra.{DeviceName} for both auth and device identity
-- host_name from NODE_NAME env var (K8s spec.nodeName), pod_name from HOSTNAME
+- host_name/pod_name removed from metric TagLists (redundant with OTel resource attrs service_instance_id + k8s_pod_name); logs still carry host_name
 - Heartbeat is internal infrastructure — pipeline metrics prove liveness, no metric export
 - IsHeartbeat bool flag set at ingestion boundary (ChannelConsumerService); behaviors/handlers use flag, not string comparison
 - Split config: simetra-oidmaps ConfigMap (oidmaps.json bare dict) + simetra-devices ConfigMap (devices.json bare array) + simetra-config (appsettings only)
