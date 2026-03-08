@@ -15,6 +15,12 @@ public sealed class HeartbeatJobOptions
     public const string HeartbeatOid = "1.3.6.1.4.1.9999.1.1.1.0";
 
     /// <summary>
+    /// Device name used by HeartbeatJob's loopback trap. Single source of truth for the
+    /// "heartbeat" string — all comparisons reference this const.
+    /// </summary>
+    public const string HeartbeatDeviceName = "heartbeat";
+
+    /// <summary>
     /// Interval between heartbeat trap sends, in seconds.
     /// </summary>
     [Range(1, int.MaxValue)]

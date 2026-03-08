@@ -40,14 +40,15 @@ public sealed class SnmpOidReceived : IRequest<Unit>
     public required SnmpType TypeCode { get; init; }
 
     /// <summary>
+    /// True when this message originated from the internal HeartbeatJob loopback trap.
+    /// Set at the ingestion boundary (ChannelConsumerService) based on DeviceName matching
+    /// <see cref="Configuration.HeartbeatJobOptions.HeartbeatDeviceName"/>.
+    /// Behaviors and handlers check this flag instead of comparing DeviceName strings.
+    /// </summary>
+    public bool IsHeartbeat { get; init; }
+
+    /// <summary>
     /// Resolved metric name (e.g., "sysUpTime"). Null until OidResolutionBehavior runs and maps the OID.
     /// </summary>
     public string? MetricName { get; set; }
-
-    /// <summary>
-    /// sysUpTime value (OID 1.3.6.1.2.1.1.3.0) in centiseconds, bundled with the counter poll.
-    /// Null when unavailable (device doesn't expose it, SNMP error, or test without uptime context).
-    /// When null, the delta engine conservatively treats current &lt; previous as reboot.
-    /// </summary>
-    public uint? SysUpTimeCentiseconds { get; set; }
 }

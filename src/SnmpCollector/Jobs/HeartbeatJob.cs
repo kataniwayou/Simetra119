@@ -33,7 +33,7 @@ public sealed class HeartbeatJob : IJob
         _correlation = correlation;
         _liveness = liveness;
         _listenerPort = listenerOptions.Value.Port;
-        _communityString = CommunityStringHelper.DeriveFromDeviceName("heartbeat");
+        _communityString = CommunityStringHelper.DeriveFromDeviceName(HeartbeatJobOptions.HeartbeatDeviceName);
         _logger = logger;
     }
 
