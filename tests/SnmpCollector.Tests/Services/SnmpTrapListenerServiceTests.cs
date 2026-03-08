@@ -218,7 +218,7 @@ public sealed class SnmpTrapListenerServiceTests : IDisposable
 
         // No trap counter measurements should be recorded
         Assert.DoesNotContain(_measurements, m =>
-            m.InstrumentName is "snmp.trap.auth_failed" or "snmp.trap.unknown_device");
+            m.InstrumentName is "snmp.trap.auth_failed");
     }
 
     // -----------------------------------------------------------------------

@@ -70,25 +70,7 @@ public sealed class PipelineMetricServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
-    // 2. IncrementTrapUnknownDevice records with device_name tag (PMET-08)
-    // -----------------------------------------------------------------------
-
-    [Fact]
-    public void IncrementTrapUnknownDevice_RecordsWithDeviceNameTag()
-    {
-        _service.IncrementTrapUnknownDevice("test-device");
-
-        var match = _measurements.Single(m => m.InstrumentName == "snmp.trap.unknown_device");
-
-        Assert.Equal(1L, match.Value);
-        var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
-        Assert.Equal("test-device", tags["device_name"]);
-        Assert.DoesNotContain("host_name", tags.Keys);
-        Assert.DoesNotContain("pod_name", tags.Keys);
-    }
-
-    // -----------------------------------------------------------------------
-    // 3. IncrementTrapDropped records with device_name tag (PMET-09)
+    // 2. IncrementTrapDropped records with device_name tag (PMET-09)
     // -----------------------------------------------------------------------
 
     [Fact]

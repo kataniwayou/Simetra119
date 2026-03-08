@@ -4,7 +4,7 @@ using System.Diagnostics.Metrics;
 namespace SnmpCollector.Telemetry;
 
 /// <summary>
-/// Singleton service that owns all 11 pipeline counter instruments on the SnmpCollector meter.
+/// Singleton service that owns all 10 pipeline counter instruments on the SnmpCollector meter.
 /// Creating counters here (once) avoids duplicate instrument registration and provides a single
 /// injection point for all pipeline behaviors and handlers that need to record metrics.
 /// </summary>
@@ -33,9 +33,6 @@ public sealed class PipelineMetricService : IDisposable
     // PMET-07: counts traps dropped due to community string authentication failure
     private readonly Counter<long> _trapAuthFailed;
 
-    // PMET-08: counts traps received from IPs not in the device registry
-    private readonly Counter<long> _trapUnknownDevice;
-
     // PMET-09: counts varbind envelopes dropped from per-device BoundedChannel (backpressure)
     private readonly Counter<long> _trapDropped;
 
@@ -56,7 +53,6 @@ public sealed class PipelineMetricService : IDisposable
         _pollExecuted = _meter.CreateCounter<long>("snmp.poll.executed");
         _trapReceived = _meter.CreateCounter<long>("snmp.trap.received");
         _trapAuthFailed    = _meter.CreateCounter<long>("snmp.trap.auth_failed");
-        _trapUnknownDevice = _meter.CreateCounter<long>("snmp.trap.unknown_device");
         _trapDropped       = _meter.CreateCounter<long>("snmp.trap.dropped");
 
         _pollUnreachable = _meter.CreateCounter<long>("snmp.poll.unreachable");
@@ -94,14 +90,6 @@ public sealed class PipelineMetricService : IDisposable
     /// </summary>
     public void IncrementTrapAuthFailed(string deviceName)
         => _trapAuthFailed.Add(1, new TagList { { "device_name", deviceName } });
-
-    /// <summary>
-    /// PMET-08: Increment the count of traps from unregistered source IPs by 1.
-    /// Fired when the sender IP does not resolve to any device in the device registry.
-    /// Indicates rogue or misconfigured devices sending traps to this collector.
-    /// </summary>
-    public void IncrementTrapUnknownDevice(string deviceName)
-        => _trapUnknownDevice.Add(1, new TagList { { "device_name", deviceName } });
 
     /// <summary>
     /// PMET-09: Increment the count of dropped varbind envelopes for the given device by 1.
