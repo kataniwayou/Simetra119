@@ -91,8 +91,11 @@ public sealed class OidMapWatcherService : BackgroundService
                     watch: true,
                     cancellationToken: stoppingToken);
 
+                // CS0618: WatchAsync overload is marked obsolete but no IAsyncEnumerable replacement exists in KubernetesClient 18.x
+#pragma warning disable CS0618
                 await foreach (var (eventType, configMap) in response.WatchAsync<V1ConfigMap, V1ConfigMapList>(
                     cancellationToken: stoppingToken).ConfigureAwait(false))
+#pragma warning restore CS0618
                 {
                     if (eventType is WatchEventType.Added or WatchEventType.Modified)
                     {

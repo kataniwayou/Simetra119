@@ -31,7 +31,7 @@ spec:
         env:
         - name: ASPNETCORE_ENVIRONMENT
           value: Production
-        - name: Site__PodIdentity
+        - name: PodIdentity__PodIdentity
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
@@ -39,6 +39,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: CONFIG_DIRECTORY
+          value: /app/config
         resources:
           requests:
             cpu: 100m
@@ -47,9 +49,8 @@ spec:
             cpu: 500m
             memory: 256Mi
         volumeMounts:
-        - name: snmp-collector-config
-          mountPath: /app/appsettings.Production.json
-          subPath: appsettings.k8s.json
+        - name: config
+          mountPath: /app/config
           readOnly: true
         startupProbe:
           httpGet:
@@ -72,6 +73,12 @@ spec:
           failureThreshold: 3
           timeoutSeconds: 5
       volumes:
-      - name: snmp-collector-config
-        configMap:
-          name: snmp-collector-config
+      - name: config
+        projected:
+          sources:
+          - configMap:
+              name: snmp-collector-config
+          - configMap:
+              name: simetra-oidmaps
+          - configMap:
+              name: simetra-devices

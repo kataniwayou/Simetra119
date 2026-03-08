@@ -32,7 +32,7 @@ spec:
         env:
         - name: ASPNETCORE_ENVIRONMENT
           value: Production
-        - name: Site__PodIdentity
+        - name: PodIdentity__PodIdentity
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
@@ -78,7 +78,7 @@ spec:
         projected:
           sources:
           - configMap:
-              name: simetra-config
+              name: snmp-collector-config
           - configMap:
               name: simetra-oidmaps
           - configMap:
