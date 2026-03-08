@@ -292,6 +292,101 @@
                 "value": "Value"
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #B"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Trend"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "basic",
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "dark-red",
+                      "value": -1000000000
+                    },
+                    {
+                      "color": "text",
+                      "value": 0
+                    },
+                    {
+                      "color": "dark-green",
+                      "value": 0.0001
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "color": "text",
+                        "text": "-"
+                      }
+                    },
+                    "type": "special"
+                  },
+                  {
+                    "options": {
+                      "from": -1000000000,
+                      "to": -0.0001,
+                      "result": {
+                        "color": "dark-red",
+                        "text": "\u25bc"
+                      }
+                    },
+                    "type": "range"
+                  },
+                  {
+                    "options": {
+                      "from": -0.0001,
+                      "to": 0.0001,
+                      "result": {
+                        "color": "text",
+                        "text": "\u2014"
+                      }
+                    },
+                    "type": "range"
+                  },
+                  {
+                    "options": {
+                      "from": 0.0001,
+                      "to": 1000000000,
+                      "result": {
+                        "color": "dark-green",
+                        "text": "\u25b2"
+                      }
+                    },
+                    "type": "range"
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -325,10 +420,24 @@
           "format": "table",
           "instant": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "delta(snmp_gauge{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\", device_name=~\"$device\"}[30s])",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
         }
       ],
       "title": "Gauge Metrics",
       "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
         {
           "id": "organize",
           "options": {
@@ -338,7 +447,8 @@
               "metric_name": 2,
               "oid": 3,
               "snmp_type": 4,
-              "Value #A": 5
+              "Value #A": 5,
+              "Value #B": 6
             }
           }
         }
@@ -635,6 +745,21 @@
       ],
       "title": "Info Metrics",
       "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "k8s_pod_name",
+                "device_name",
+                "metric_name",
+                "oid",
+                "snmp_type",
+                "value"
+              ]
+            }
+          }
+        },
         {
           "id": "organize",
           "options": {
