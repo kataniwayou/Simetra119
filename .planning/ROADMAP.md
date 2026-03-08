@@ -28,10 +28,10 @@ This milestone delivers automated Grafana dashboard provisioning and two purpose
   2. Dashboard JSON files placed in the provisioned directory appear in Grafana automatically
   3. Grafana deployment YAML includes volume mounts for provisioning ConfigMaps
   4. Dashboard provisioning config tells Grafana where to find JSON files and disables UI editing
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 17-01: Provisioning infrastructure (dashboard provider YAML, ConfigMap volume mounts, Grafana deployment update)
+- [ ] 17-01-PLAN.md — Provisioning infrastructure (delete stale files, create ConfigMaps, update Grafana deployment with volume mounts)
 
 ### Phase 18: Operations Dashboard
 **Goal**: Operators can monitor pipeline health, pod roles, and .NET runtime metrics across all replicas from a single Grafana dashboard
