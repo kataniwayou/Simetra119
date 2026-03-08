@@ -58,6 +58,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 | 019 | Reorganize Simetra files and cleanup K8s manifests | 2026-03-08 | f3844f6 | [019-reorganize-simetra-files-cleanup-k8s](./quick/019-reorganize-simetra-files-cleanup-k8s/) |
 | 020 | Remove redundant host_name/pod_name metric tags | 2026-03-08 | 976b36e | [020-remove-redundant-host-pod-tags](./quick/020-remove-redundant-host-pod-tags/) |
 | 021 | Remove Site, fix deploy YAML issues | 2026-03-08 | 2e880d9 | [021-remove-site-fix-deploy-yaml-issues](./quick/021-remove-site-fix-deploy-yaml-issues/) |
+| 022 | Fix operations dashboard missing metrics + Prometheus remote write | 2026-03-08 | 48647cd | [022-fix-operations-dashboard-missing-metrics](./quick/022-fix-operations-dashboard-missing-metrics/) |
 
 ### Blockers/Concerns
 
@@ -66,5 +67,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-08
-Stopped at: Completed 19-01-PLAN.md (Business Dashboard) — v1.3 milestone complete
+Stopped at: Completed quick-022 (Fix operations dashboard missing metrics)
 Resume file: None
