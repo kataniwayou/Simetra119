@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 Phase: 15 (K8s ConfigMap Watch and Unified Config)
 Plan: 5 of 5
 Status: Complete
-Last activity: 2026-03-08 — v1.1 milestone completed and archived
+Last activity: 2026-03-08 — Quick task 021: remove Site, fix deploy YAML issues
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 5/5 v1.2
 
