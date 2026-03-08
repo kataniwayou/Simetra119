@@ -99,7 +99,13 @@ public static class ServiceCollectionExtensions
                     });
                     var roleGated = new MetricRoleGatedExporter(
                         otlpExporter, leaderElection, TelemetryConstants.LeaderMeterName);
-                    return new PeriodicExportingMetricReader(roleGated);
+                    // Cumulative temporality required: Prometheus rate() needs monotonically
+                    // increasing counter values. Delta temporality sends per-interval deltas
+                    // which rate() cannot compute over.
+                    return new PeriodicExportingMetricReader(roleGated)
+                    {
+                        TemporalityPreference = MetricReaderTemporalityPreference.Cumulative
+                    };
                 });
             });
 
