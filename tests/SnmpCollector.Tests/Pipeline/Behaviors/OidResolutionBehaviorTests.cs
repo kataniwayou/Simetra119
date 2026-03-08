@@ -2,6 +2,7 @@ using System.Net;
 using Lextm.SharpSnmpLib;
 using MediatR;
 using Microsoft.Extensions.Logging.Abstractions;
+using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
 using SnmpCollector.Pipeline.Behaviors;
 using Xunit;
@@ -80,6 +81,35 @@ public sealed class OidResolutionBehaviorTests
         }, CancellationToken.None);
 
         Assert.True(nextCalled);
+    }
+
+    [Fact]
+    public async Task SkipsResolution_WhenIsHeartbeat()
+    {
+        // Heartbeat messages should NOT call Resolve() — MetricName stays null
+        var oidMapService = new StubOidMapService(knownOid: null, metricName: null);
+        var behavior = new OidResolutionBehavior<SnmpOidReceived, Unit>(
+            oidMapService, NullLogger<OidResolutionBehavior<SnmpOidReceived, Unit>>.Instance);
+        var notification = new SnmpOidReceived
+        {
+            Oid = HeartbeatJobOptions.HeartbeatOid,
+            AgentIp = IPAddress.Parse("127.0.0.1"),
+            Value = new Integer32(1),
+            Source = SnmpSource.Trap,
+            TypeCode = SnmpType.Integer32,
+            DeviceName = HeartbeatJobOptions.HeartbeatDeviceName,
+            IsHeartbeat = true
+        };
+        var nextCalled = false;
+
+        await behavior.Handle(notification, ct =>
+        {
+            nextCalled = true;
+            return Task.FromResult(Unit.Value);
+        }, CancellationToken.None);
+
+        Assert.Null(notification.MetricName);   // Resolve was never called
+        Assert.True(nextCalled);                 // Pipeline still continues
     }
 
     // --- Stub IOidMapService ---

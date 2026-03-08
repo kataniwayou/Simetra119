@@ -3,6 +3,7 @@ using System.Net;
 using Lextm.SharpSnmpLib;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
 using SnmpCollector.Pipeline.Handlers;
 using SnmpCollector.Telemetry;
@@ -199,16 +200,36 @@ public sealed class OtelMetricHandlerTests : IDisposable
     [Fact]
     public async Task Heartbeat_SkipsMetricRecording_ButIncrementsHandled()
     {
-        var notification = MakeNotification(
-            new Integer32(1),
-            SnmpType.Integer32,
-            deviceName: OtelMetricHandler.HeartbeatDeviceName);
+        var notification = new SnmpOidReceived
+        {
+            Oid = "1.3.6.1.2.1.25.3.3.1.2",
+            AgentIp = IPAddress.Parse("10.0.0.1"),
+            Value = new Integer32(1),
+            Source = SnmpSource.Trap,
+            TypeCode = SnmpType.Integer32,
+            DeviceName = HeartbeatJobOptions.HeartbeatDeviceName,
+            IsHeartbeat = true
+        };
 
         var exception = await Record.ExceptionAsync(() => _handler.Handle(notification, CancellationToken.None));
 
         Assert.Null(exception);
         Assert.Empty(_testFactory.GaugeRecords);
         Assert.Empty(_testFactory.InfoRecords);
+    }
+
+    [Fact]
+    public async Task HeartbeatDeviceName_WithoutFlag_StillRecordsMetric()
+    {
+        var notification = MakeNotification(
+            new Integer32(1),
+            SnmpType.Integer32,
+            deviceName: "heartbeat");
+        // IsHeartbeat defaults to false — should record normally
+
+        await _handler.Handle(notification, CancellationToken.None);
+
+        Assert.Single(_testFactory.GaugeRecords);
     }
 
     // --- Pipeline metric counter test ---
