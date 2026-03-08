@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 Phase: 19 of 19 (Business Dashboard)
 Plan: 1 of 1 in current phase
 Status: Phase 19 complete, v1.3 milestone complete
-Last activity: 2026-03-08 — Completed quick task 024: Add panel descriptions to operations dashboard
+Last activity: 2026-03-08 — Completed quick task 025: Cleanup dead metrics, dashboard, and code
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2 | [##########] 2/2 v1.3
 
@@ -41,7 +41,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 - K8s directory mount at /app/config (no subPath) enables ConfigMap hot-reload
 - Dashboard approach: Claude creates JSON files, user imports manually via Grafana UI (no K8s provisioning)
 - Phase 17 removed — stale file cleanup merged into Phase 18
-- Operations dashboard at deploy/grafana/dashboards/simetra-operations.json (21 panels: pod identity table, 11 pipeline counters, 6 runtime, 3 row headers; all non-row panels have tooltip descriptions; Host Name dropdown filters by service_instance_id)
+- Operations dashboard at deploy/grafana/dashboards/simetra-operations.json (20 panels: pod identity table, 10 pipeline counters, 6 runtime, 3 row headers; all non-row panels have tooltip descriptions; Host Name dropdown filters by service_instance_id)
 - Business dashboard at deploy/grafana/dashboards/simetra-business.json (4 panels: 2 row headers, gauge table, info table with device filter)
 
 ### Known Tech Debt
@@ -61,6 +61,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 | 022 | Fix operations dashboard missing metrics + Prometheus remote write | 2026-03-08 | 48647cd | [022-fix-operations-dashboard-missing-metrics](./quick/022-fix-operations-dashboard-missing-metrics/) |
 | 023 | Fix OTel cumulative temporality for Prometheus rate() | 2026-03-08 | 3391e97 | [023-fix-otel-cumulative-temporality-for-rate](./quick/023-fix-otel-cumulative-temporality-for-rate/) |
 | 024 | Add panel descriptions to operations dashboard | 2026-03-08 | cd5ac81 | [024-add-panel-descriptions-operations-dashb](./quick/024-add-panel-descriptions-operations-dashb/) |
+| 025 | Cleanup dead metrics, dashboard, and code | 2026-03-08 | 3f34fad | [025-cleanup-dead-metrics-dashboard-and-code](./quick/025-cleanup-dead-metrics-dashboard-and-code/) |
 
 ### Blockers/Concerns
 
@@ -69,5 +70,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-08
-Stopped at: Completed quick-024 (Add panel descriptions to operations dashboard)
+Stopped at: Completed quick-025 (Cleanup dead metrics, dashboard, and code)
 Resume file: None
