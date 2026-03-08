@@ -14,3 +14,7 @@ spec:
     port: 8080
     protocol: TCP
     targetPort: health
+  - name: snmp-trap
+    port: 10162
+    protocol: UDP
+    targetPort: 10162

@@ -6,9 +6,7 @@ metadata:
 data:
   appsettings.k8s.json: |
     {
-      "Site": {
-        "Name": "site-lab-k8s"
-      },
+      "PodIdentity": {},
       "Otlp": {
         "Endpoint": "http://otel-collector:4317",
         "ServiceName": "snmp-collector"
@@ -35,8 +33,6 @@ data:
       "Channels": {
         "BoundedCapacity": 100
       },
-      "OidMap": {},
-      "Devices": [],
       "Logging": {
         "LogLevel": {
           "Default": "Debug"
