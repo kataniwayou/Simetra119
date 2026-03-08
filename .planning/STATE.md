@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 Phase: 15 (K8s ConfigMap Watch and Unified Config)
 Plan: 5 of 5
 Status: Complete
-Last activity: 2026-03-08 — Completed quick task 019: Reorganize Simetra files and cleanup K8s
+Last activity: 2026-03-08 — Completed quick task 020: Remove redundant host_name/pod_name metric tags
 
 Progress: [####################] 48/48 v1.0 complete, 9/9 v1.1 plans, 5/5 v1.2 plans
 
@@ -67,6 +67,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 | 017 | Split unified ConfigMap into separate OID map and devices watchers | 2026-03-07 | 2377154 | [017-split-configmap-oidmap-devices](./quick/017-split-configmap-oidmap-devices/) |
 | 018 | Add IsHeartbeat flag to pipeline (replace string comparisons) | 2026-03-08 | 5d0f980 | [018-add-isheartbeat-flag-to-pipeline](./quick/018-add-isheartbeat-flag-to-pipeline/) |
 | 019 | Reorganize Simetra files and cleanup K8s manifests | 2026-03-08 | f3844f6 | [019-reorganize-simetra-files-cleanup-k8s](./quick/019-reorganize-simetra-files-cleanup-k8s/) |
+| 020 | Remove redundant host_name/pod_name metric tags | 2026-03-08 | 976b36e | [020-remove-redundant-host-pod-tags](./quick/020-remove-redundant-host-pod-tags/) |
 
 ### Blockers/Concerns
 
@@ -75,5 +76,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-08
-Stopped at: Quick task 019 complete
+Stopped at: Quick task 020 complete
 Resume file: None
