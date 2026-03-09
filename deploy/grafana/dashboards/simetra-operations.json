@@ -122,12 +122,24 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "service_instance_id"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Host"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "k8s_pod_name"
             },
             "properties": [
               {
                 "id": "displayName",
-                "value": "Pod Name"
+                "value": "Pod"
               }
             ]
           },
@@ -204,7 +216,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "count by (k8s_pod_name) (snmp_event_published_total{k8s_pod_name=~\"$pod\"})",
+          "expr": "count by (service_instance_id, k8s_pod_name) (snmp_event_published_total{k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -214,7 +226,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "clamp_max(count by (k8s_pod_name) (snmp_gauge{k8s_pod_name=~\"$pod\"}), 1)",
+          "expr": "clamp_max(count by (service_instance_id, k8s_pod_name) (snmp_gauge{k8s_pod_name=~\"$pod\"}), 1)",
           "format": "table",
           "instant": true,
           "refId": "B"
@@ -225,6 +237,16 @@
         {
           "id": "merge",
           "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "service_instance_id": 0,
+              "k8s_pod_name": 1,
+              "Value #B": 2
+            }
+          }
         }
       ],
       "type": "table",
