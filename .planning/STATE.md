@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 Phase: 19 of 19 (Business Dashboard)
 Plan: 1 of 1 in current phase
 Status: Phase 19 complete, v1.3 milestone complete
-Last activity: 2026-03-09 — Completed quick task 030: Rollback to trend column approach
+Last activity: 2026-03-09 — Completed quick task 031: Add PromQL column to gauge table
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2 | [##########] 2/2 v1.3
 
@@ -67,6 +67,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 | 028 | Gauge trend colored value cell (delta arrows) | 2026-03-09 | cf65781 | [028-gauge-trend-colored-value-cell](./quick/028-gauge-trend-colored-value-cell/) |
 | 029 | Remove trend column from gauge table | 2026-03-09 | 060f407 | [029-remove-trend-column](./quick/029-remove-trend-column/) |
 | 030 | Rollback to trend column approach | 2026-03-09 | 6c4b49c | [030-value-cell-delta-coloring](./quick/030-value-cell-delta-coloring/) |
+| 031 | Add PromQL column to gauge table | 2026-03-09 | 212e2cd | [031-add-promql-column-to-gauge-table](./quick/031-add-promql-column-to-gauge-table/) |
 
 ### Blockers/Concerns
 
