@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 Phase: 19 of 19 (Business Dashboard)
 Plan: 1 of 1 in current phase
 Status: Phase 19 complete, v1.3 milestone complete
-Last activity: 2026-03-09 — Completed quick task 028: Gauge trend colored value cell
+Last activity: 2026-03-09 — Completed quick task 029: Remove trend column from gauge table
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2 | [##########] 2/2 v1.3
 
@@ -65,6 +65,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 | 026 | Business dashboard table and filter fix | 2026-03-08 | 7f9f8b4 | [026-business-dashboard-table-and-filter-fix](./quick/026-business-dashboard-table-and-filter-fix/) |
 | 027 | Fix simulator info/gauge + add static OIDs | 2026-03-09 | 3939ba9 | [027-fix-simulator-info-gauge-add-static-oid](./quick/027-fix-simulator-info-gauge-add-static-oid/) |
 | 028 | Gauge trend colored value cell (delta arrows) | 2026-03-09 | cf65781 | [028-gauge-trend-colored-value-cell](./quick/028-gauge-trend-colored-value-cell/) |
+| 029 | Remove trend column from gauge table | 2026-03-09 | 060f407 | [029-remove-trend-column](./quick/029-remove-trend-column/) |
 
 ### Blockers/Concerns
 
