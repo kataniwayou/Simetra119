@@ -230,10 +230,6 @@
               {
                 "id": "displayName",
                 "value": "Pod Name"
-              },
-              {
-                "id": "custom.width",
-                "value": 150
               }
             ]
           },
@@ -246,10 +242,6 @@
               {
                 "id": "displayName",
                 "value": "Device"
-              },
-              {
-                "id": "custom.width",
-                "value": 80
               }
             ]
           },
@@ -262,10 +254,6 @@
               {
                 "id": "displayName",
                 "value": "Metric"
-              },
-              {
-                "id": "custom.width",
-                "value": 160
               }
             ]
           },
@@ -278,10 +266,6 @@
               {
                 "id": "displayName",
                 "value": "OID"
-              },
-              {
-                "id": "custom.width",
-                "value": 200
               }
             ]
           },
@@ -294,10 +278,6 @@
               {
                 "id": "displayName",
                 "value": "SNMP Type"
-              },
-              {
-                "id": "custom.width",
-                "value": 90
               }
             ]
           },
@@ -310,10 +290,6 @@
               {
                 "id": "displayName",
                 "value": "Value"
-              },
-              {
-                "id": "custom.width",
-                "value": 70
               }
             ]
           },
@@ -639,10 +615,6 @@
               {
                 "id": "custom.hidden",
                 "value": true
-              },
-              {
-                "id": "custom.width",
-                "value": 70
               }
             ]
           },
@@ -703,10 +675,6 @@
               {
                 "id": "displayName",
                 "value": "SNMP Type"
-              },
-              {
-                "id": "custom.width",
-                "value": 90
               }
             ]
           },
@@ -719,10 +687,6 @@
               {
                 "id": "displayName",
                 "value": "Pod Name"
-              },
-              {
-                "id": "custom.width",
-                "value": 150
               }
             ]
           },
@@ -735,10 +699,6 @@
               {
                 "id": "displayName",
                 "value": "Device"
-              },
-              {
-                "id": "custom.width",
-                "value": 80
               }
             ]
           },
@@ -751,10 +711,6 @@
               {
                 "id": "displayName",
                 "value": "Metric"
-              },
-              {
-                "id": "custom.width",
-                "value": 160
               }
             ]
           },
@@ -767,10 +723,6 @@
               {
                 "id": "displayName",
                 "value": "OID"
-              },
-              {
-                "id": "custom.width",
-                "value": 200
               }
             ]
           },
@@ -783,10 +735,6 @@
               {
                 "id": "displayName",
                 "value": "Value"
-              },
-              {
-                "id": "custom.width",
-                "value": 120
               }
             ]
           },
