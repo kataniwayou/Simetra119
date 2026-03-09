@@ -1388,7 +1388,7 @@
               }
             ]
           },
-          "unit": "s"
+          "unit": "percentunit"
         },
         "overrides": []
       },
@@ -1417,16 +1417,16 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (k8s_pod_name) (rate(dotnet_gc_pause_time_seconds_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(dotnet_process_cpu_time_seconds_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "legendFormat": "{{k8s_pod_name}}",
           "refId": "A",
           "range": true,
           "instant": false
         }
       ],
-      "title": "GC Pause Time Rate",
+      "title": "CPU Time",
       "type": "timeseries",
-      "description": "Rate of time the application is paused for garbage collection. Sustained high values impact throughput. Source: dotnet_gc_pause_time_seconds_total."
+      "description": "Rate of CPU time consumed per pod. Sustained spikes indicate runaway loops, stuck polls, or GC thrashing."
     },
     {
       "datasource": {
@@ -1576,7 +1576,7 @@
               }
             ]
           },
-          "unit": "bytes"
+          "unit": "ops"
         },
         "overrides": []
       },
@@ -1605,16 +1605,16 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "dotnet_gc_last_collection_heap_size_bytes{k8s_pod_name=~\"$pod\"}",
+          "expr": "sum by (k8s_pod_name) (rate(dotnet_exceptions_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "legendFormat": "{{k8s_pod_name}}",
           "refId": "A",
           "range": true,
           "instant": false
         }
       ],
-      "title": "GC Heap Size",
+      "title": "Exceptions",
       "type": "timeseries",
-      "description": "Managed heap size after last GC, broken down by generation. Source: dotnet_gc_last_collection_heap_size_bytes."
+      "description": "Rate of exceptions thrown per pod. Spikes indicate something broke - fastest anomaly detection signal."
     },
     {
       "datasource": {
