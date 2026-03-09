@@ -41,7 +41,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 - Split config: simetra-oidmaps ConfigMap (oidmaps.json bare dict) + simetra-devices ConfigMap (devices.json bare array) + simetra-config (appsettings only)
 - K8s directory mount at /app/config (no subPath) enables ConfigMap hot-reload
 - Dashboard approach: Claude creates JSON files, user imports manually via Grafana UI (no K8s provisioning)
-- Operations dashboard at deploy/grafana/dashboards/simetra-operations.json (20 panels: pod identity table, 10 pipeline counters, 6 runtime, 3 row headers; all non-row panels have tooltip descriptions; Host Name dropdown filters by service_instance_id)
+- Operations dashboard at deploy/grafana/dashboards/simetra-operations.json (20 panels: pod identity table, 10 pipeline counters, 6 runtime, 3 row headers; all non-row panels have tooltip descriptions; Host Name dropdown filters by service_instance_id; runtime row: GC Collections Rate, CPU Time, Process Working Set, Exceptions, Thread Pool Threads, Thread Pool Queue Length)
 - Business dashboard at deploy/grafana/dashboards/simetra-business.json (4 panels: 2 row headers, gauge table, info table; 3 cascading filters: Host->Pod->Device; telemetry SDK columns hidden; gauge table has Trend column with delta-driven colored arrows)
 
 ### Known Tech Debt
@@ -72,6 +72,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 | 032 | Add PromQL column to info table | 2026-03-09 | 65e01b7 | [032-add-promql-column-to-info-table](./quick/032-add-promql-column-to-info-table/) |
 | 033 | Include host/pod labels in PromQL column | 2026-03-09 | 2f74fd6 | [033-promql-include-host-pod-labels](./quick/033-promql-include-host-pod-labels/) |
 | 034 | Add Host column and rename Pod in ops dashboard | 2026-03-09 | acb8e71 | [034-ops-dashboard-host-column-pod-rename](./quick/034-ops-dashboard-host-column-pod-rename/) |
+| 035 | Replace GC panels with CPU Time and Exceptions | 2026-03-09 | 31a9921 | [035-refactor-runtime-panels-for-anomaly-det](./quick/035-refactor-runtime-panels-for-anomaly-det/) |
 
 ### Blockers/Concerns
 
@@ -80,5 +81,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Completed quick-034
+Stopped at: Completed quick-035
 Resume file: None
