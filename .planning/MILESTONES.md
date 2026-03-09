@@ -1,5 +1,32 @@
 # Project Milestones: SNMP Monitoring System
 
+## v1.4 E2E System Verification (Shipped: 2026-03-09)
+
+**Delivered:** Full E2E test harness proving the SNMP-to-Prometheus pipeline works correctly under normal operation, configuration mutations, watcher resilience, and edge cases -- 27 scenarios producing 33 test results with a categorized Markdown report.
+
+**Phases completed:** 20-24 (11 plans total)
+
+**Key accomplishments:**
+- Dedicated pysnmp E2E test simulator with 9 OIDs (7 mapped, 2 unmapped) and dual trap loops
+- Bash test runner with poll-until-satisfied, delta assertions, and ConfigMap snapshot/restore
+- All 10 pipeline counters verified via Prometheus delta queries
+- Business metrics, unknown OID classification, and trap-originated metrics verified
+- OID rename/remove/add and device add/remove/modify mutations verified at runtime
+- ConfigMap watcher resilience: invalid JSON handling, log verification, reconnection observation
+
+**Stats:**
+- 52 files created/modified (~3,255 insertions)
+- ~1,848 LOC bash + python E2E test infrastructure
+- 5 phases, 11 plans
+- 1 day (2026-03-09)
+- 24/24 requirements satisfied, 8/8 integration checks, 2/2 E2E flows
+
+**Git range:** `v1.3` → `v1.4`
+
+**What's next:** TBD — next milestone planning
+
+---
+
 ## v1.3 Grafana Dashboards (Shipped: 2026-03-09)
 
 **Delivered:** Two purpose-built Grafana dashboard JSON files — an operations dashboard for pipeline health and pod observability, and a business dashboard with device-agnostic gauge and info metric tables with cascading filters, trend arrows, and copyable PromQL columns.

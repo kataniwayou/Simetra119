@@ -57,18 +57,22 @@ See `.planning/milestones/v1.2-REQUIREMENTS.md` for full requirement details.
 - Business dashboard JSON: gauge and info metric tables with cascading Host/Pod/Device filters, Trend column with delta arrows, PromQL column with copyable queries
 - Dashboard JSON files created by Claude, imported manually by user via Grafana UI
 
+**v1.4 E2E System Verification (shipped 2026-03-09)**
+
+- Dedicated E2E test simulator (pysnmp) with 9 OIDs (7 mapped, 2 unmapped) and dual trap loops
+- Bash E2E test runner with poll-until-satisfied, delta-based counter assertions, ConfigMap snapshot/restore
+- 27 scenario scripts producing 33 test results across 5 categories (pipeline counters, business metrics, OID mutations, device lifecycle, watcher resilience)
+- All 10 pipeline counters verified via Prometheus delta queries
+- snmp_gauge/snmp_info label correctness, unknown OID classification, trap-originated metrics verified
+- OID rename/remove/add and device add/remove/modify ConfigMap mutations verified at runtime
+- ConfigMap watcher resilience: invalid JSON handling, log verification, reconnection observation
+- 5-category categorized Markdown report with pass/fail evidence
+
+See `.planning/milestones/v1.4-REQUIREMENTS.md` for full requirement details.
+
 ### Active
 
-**v1.4 E2E System Verification**
-
-- [ ] E2E verification of all 10 pipeline counter metrics via existing simulators and Prometheus queries
-- [ ] E2E verification of business metric mutations (OID map rename, removal → "unknown", type changes)
-- [ ] E2E verification of device lifecycle (add/remove/modify device → Prometheus reflects changes)
-- [ ] E2E verification of unknown OID handling (unmapped trap/poll OIDs classified as "unknown")
-- [ ] E2E verification of ConfigMap watchers (OID map hot-reload, device config hot-reload, invalid JSON, watcher reconnection)
-- [ ] Dedicated test simulator for edge cases that existing OBP/NPB simulators cannot cover
-- [ ] Single comprehensive report with pass/fail evidence from logs and Prometheus HTTP API
-- [ ] No SnmpCollector code modifications — findings documented only
+(No active requirements — planning next milestone)
 
 ### Out of Scope
 
@@ -83,7 +87,7 @@ See `.planning/milestones/v1.2-REQUIREMENTS.md` for full requirement details.
 
 ## Context
 
-**Current state:** v1.3 shipped. 4,937 LOC source + 4,318 LOC tests across 76 C# files + 783 LOC Python simulators. 138 tests passing. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. K8s API watch for live ConfigMap reload verified. Two Grafana dashboards shipped: operations (pipeline health) and business (SNMP metric tables). Single Prometheus instance serves multiple sites via service_instance_id label.
+**Current state:** v1.4 shipped. 4,937 LOC source + 4,318 LOC tests across 76 C# files + 783 LOC Python simulators + ~1,848 LOC bash/python E2E test infrastructure. 138 unit tests passing. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. Full E2E test harness with 27 scenarios covering pipeline counters, business metrics, OID mutations, device lifecycle, and watcher resilience. Two Grafana dashboards shipped. Single Prometheus instance serves multiple sites via service_instance_id label.
 
 **Reference project:** `src/Simetra/` is an existing SNMP monitoring system used as architectural reference. Key patterns adopted: structured logging, OTel setup, console formatter, correlation IDs, leader election, role-gated export. Key patterns replaced: custom middleware -> MediatR, device modules -> flat OID map, channels -> single shared trap channel.
 
@@ -130,6 +134,12 @@ See `.planning/milestones/v1.2-REQUIREMENTS.md` for full requirement details.
 | Trend column over per-row coloring | Grafana configFromData is field-level not per-row; delta arrows are the viable approach | Good |
 | PromQL column with label_replace | Copyable query strings per row via label_join+label_replace with backtick raw strings | Good |
 | Cascading Host/Pod/Device filters | Three-level filter for multi-pod multi-device environments | Good |
+| Bash E2E runner over pytest | Sufficient for sequential SNMP scenarios, no extra dependencies | Good |
+| Poll-until-satisfied over fixed sleeps | Handles OTel 15s export interval variability; 30s timeout, 3s interval | Good |
+| Delta-based counter assertions | Correct for cumulative temporality OTel metrics; before/after snapshots | Good |
+| ConfigMap snapshot/restore isolation | Safe mutation testing without manual cleanup; per-scenario isolation | Good |
+| Sourced-script pattern for scenarios | No shebang in scenarios; inherit lib functions from run-all.sh | Good |
+| Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-09 after v1.4 milestone start*
+*Last updated: 2026-03-09 after v1.4 milestone completion*

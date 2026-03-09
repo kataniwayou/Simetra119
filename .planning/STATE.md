@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-09)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.4 E2E System Verification -- Complete
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 24 of 24 (Watcher Resilience and Comprehensive Report)
-Plan: 03 of 3 (complete, gap closure)
-Status: Phase complete -- v1.4 milestone complete (gap closure done)
-Last activity: 2026-03-09 -- Completed 24-03-PLAN.md (report index and scenario 12 bug fixes)
+Phase: Not started (defining next milestone)
+Plan: —
+Status: v1.4 complete, ready for next milestone
+Last activity: 2026-03-09 -- v1.4 E2E System Verification milestone completed and archived
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3 | v1.4: [##########] 5/5 phases
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4
 
 ## Milestone History
 
@@ -24,6 +24,7 @@ Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3 | v1
 | v1.1 Device Simulation | 11-14 | 10 | 2026-03-08 |
 | v1.2 Operational Enhancements | 15-16 | 8 | 2026-03-08 |
 | v1.3 Grafana Dashboards | 18-19 | 2 | 2026-03-09 |
+| v1.4 E2E System Verification | 20-24 | 11 | 2026-03-09 |
 
 See `.planning/MILESTONES.md` for details.
 See `.planning/milestones/` for archived roadmaps and requirements.
@@ -38,15 +39,6 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 - Split config: simetra-oidmaps ConfigMap + simetra-devices ConfigMap + simetra-config
 - K8s directory mount at /app/config (no subPath) enables ConfigMap hot-reload
 
-### E2E Test Context (v1.4)
-
-- OTel 15s export interval: poll-until-satisfied with 30s timeout, 3s interval (never fixed sleeps)
-- Prometheus 5-min staleness: verify removal via label change or counter stagnation, never absence
-- Counter assertions: cumulative temporality, use deltas filtered by device_name
-- Leader election: business metrics (snmp_gauge/snmp_info) export from leader only; pipeline counters from all
-- Test simulator uses enterprise OID subtree 47477.999, community Simetra.E2E-SIM
-- Sequential test execution required (shared Prometheus state)
-
 ### Known Tech Debt
 
 None.
@@ -58,5 +50,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Completed 24-03-PLAN.md (report index and scenario 12 bug fixes) -- v1.4 gap closure complete
+Stopped at: v1.4 milestone completed and archived
 Resume file: None
