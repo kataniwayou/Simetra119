@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simetra-devices
+  namespace: simetra
+data:
+  devices.json: |
+    { this is not valid JSON at all!!!

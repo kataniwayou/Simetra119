@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simetra-oidmaps
+  namespace: simetra
+data:
+  oidmaps.json: |
+    { this is not valid JSON at all!!!
