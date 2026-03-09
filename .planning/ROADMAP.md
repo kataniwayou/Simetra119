@@ -92,10 +92,11 @@ Plans:
   3. Invalid JSON in a ConfigMap does not crash any pod (all pods remain Running, error logged)
   4. Watcher reconnection after disruption is verified via log observation
   5. Final report shows pass/fail status for every test scenario with Prometheus query results and log excerpts as evidence
-**Plans:** 2 plans
+**Plans:** 3 plans
 Plans:
 - [x] 24-01-PLAN.md — Watcher resilience fixtures and scenarios (24-27)
 - [x] 24-02-PLAN.md — Comprehensive report generation
+- [x] 24-03-PLAN.md — Gap closure: report index alignment and scenario 12 metric name fix
 
 ## Progress
 
@@ -107,7 +108,7 @@ Plans:
 | 21. Test Harness + Pipeline Counters | 2/2 | Complete | 2026-03-09 |
 | 22. Business Metrics + Unknown OIDs | 2/2 | Complete | 2026-03-09 |
 | 23. OID Mutations + Device Lifecycle | 2/2 | Complete | 2026-03-09 |
-| 24. Watcher Resilience + Report | 2/2 | Complete | 2026-03-09 |
+| 24. Watcher Resilience + Report | 3/3 | Complete | 2026-03-09 |
 
 ---
 
