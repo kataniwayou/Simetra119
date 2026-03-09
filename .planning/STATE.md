@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 Phase: 19 of 19 (Business Dashboard)
 Plan: 1 of 1 in current phase
 Status: Phase 19 complete, v1.3 milestone complete
-Last activity: 2026-03-09 — Completed quick task 032: Add PromQL column to info table
+Last activity: 2026-03-09 — Completed quick task 033: Include host/pod labels in PromQL column
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2 | [##########] 2/2 v1.3
 
@@ -69,6 +69,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 | 030 | Rollback to trend column approach | 2026-03-09 | 6c4b49c | [030-value-cell-delta-coloring](./quick/030-value-cell-delta-coloring/) |
 | 031 | Add PromQL column to gauge table | 2026-03-09 | 212e2cd | [031-add-promql-column-to-gauge-table](./quick/031-add-promql-column-to-gauge-table/) |
 | 032 | Add PromQL column to info table | 2026-03-09 | 65e01b7 | [032-add-promql-column-to-info-table](./quick/032-add-promql-column-to-info-table/) |
+| 033 | Include host/pod labels in PromQL column | 2026-03-09 | 2f74fd6 | [033-promql-include-host-pod-labels](./quick/033-promql-include-host-pod-labels/) |
 
 ### Blockers/Concerns
 
