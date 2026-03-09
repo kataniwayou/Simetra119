@@ -60,7 +60,10 @@ Plans:
   3. Unmapped OIDs from test simulator appear in Prometheus with metric_name="Unknown"
   4. Trap-originated metrics from test simulator appear with correct device_name derived from community string
   5. ConfigMap snapshot/restore utility safely backs up and restores oidmaps and devices ConfigMaps before/after mutation tests
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 22-01-PLAN.md — ConfigMap snapshot/restore infrastructure + gauge/info label verification scenarios
+- [ ] 22-02-PLAN.md — Unknown OID mutation test + trap-originated metric verification
 
 ### Phase 23: OID Map Mutation and Device Lifecycle Verification
 
