@@ -13,7 +13,7 @@ This milestone builds an E2E test harness that proves the full SNMP-to-Prometheu
 - [x] **Phase 20: Test Simulator** - Dedicated pysnmp simulator for E2E edge cases with mapped + unmapped OIDs and configurable traps
 - [x] **Phase 21: Test Harness and Pipeline Counter Verification** - Bash test runner with polling utilities and delta assertions, proving all 10 pipeline counters
 - [x] **Phase 22: Business Metric and Unknown OID Verification** - Verify snmp_gauge/snmp_info correctness and unknown OID classification with ConfigMap snapshot/restore
-- [ ] **Phase 23: OID Map Mutation and Device Lifecycle Verification** - Verify runtime configuration changes propagate correctly to Prometheus
+- [x] **Phase 23: OID Map Mutation and Device Lifecycle Verification** - Verify runtime configuration changes propagate correctly to Prometheus
 - [ ] **Phase 24: Watcher Resilience and Comprehensive Report** - Verify ConfigMap watcher error handling and generate final pass/fail report
 
 ## Phase Details
@@ -76,7 +76,10 @@ Plans:
   3. Adding an OID to oidmaps ConfigMap causes a previously unknown OID to get the correct metric_name
   4. Adding a new device to devices ConfigMap results in new poll metrics appearing in Prometheus within 30s
   5. Removing a device from devices ConfigMap stops new poll metrics (verified via counter delta stagnation, not metric absence)
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [x] 23-01-PLAN.md — OID mutation fixtures and scenarios (18-20)
+- [x] 23-02-PLAN.md — Device lifecycle fixtures and scenarios (21-23)
 
 ### Phase 24: Watcher Resilience and Comprehensive Report
 
@@ -99,7 +102,7 @@ Plans:
 | 20. Test Simulator | 2/2 | Complete | 2026-03-09 |
 | 21. Test Harness + Pipeline Counters | 2/2 | Complete | 2026-03-09 |
 | 22. Business Metrics + Unknown OIDs | 2/2 | Complete | 2026-03-09 |
-| 23. OID Mutations + Device Lifecycle | 0/TBD | Not started | - |
+| 23. OID Mutations + Device Lifecycle | 2/2 | Complete | 2026-03-09 |
 | 24. Watcher Resilience + Report | 0/TBD | Not started | - |
 
 ---

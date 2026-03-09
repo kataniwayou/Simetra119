@@ -28,15 +28,15 @@ Requirements for E2E System Verification milestone. Each maps to roadmap phases.
 
 ### OID Map Mutation Verification
 
-- [ ] **MUT-01**: OID map metric rename reflected in Prometheus (new metric_name appears, old persists until stale)
-- [ ] **MUT-02**: OID removal causes metric to be classified as "Unknown"
-- [ ] **MUT-03**: OID addition causes previously unknown OID to get correct metric_name
+- [x] **MUT-01**: OID map metric rename reflected in Prometheus (new metric_name appears, old persists until stale)
+- [x] **MUT-02**: OID removal causes metric to be classified as "Unknown"
+- [x] **MUT-03**: OID addition causes previously unknown OID to get correct metric_name
 
 ### Device Lifecycle Verification
 
-- [ ] **DEV-01**: Adding a new device to devices ConfigMap results in new poll metrics appearing in Prometheus
-- [ ] **DEV-02**: Removing a device stops new poll metrics (verified via counter delta = 0)
-- [ ] **DEV-03**: Modifying device poll interval changes metric collection frequency
+- [x] **DEV-01**: Adding a new device to devices ConfigMap results in new poll metrics appearing in Prometheus
+- [x] **DEV-02**: Removing a device stops new poll metrics (verified via counter delta = 0)
+- [x] **DEV-03**: Modifying device poll interval changes metric collection frequency
 
 ### ConfigMap Watcher Verification
 
@@ -81,12 +81,12 @@ Requirements for E2E System Verification milestone. Each maps to roadmap phases.
 | BIZ-02 | Phase 22 | Complete |
 | BIZ-03 | Phase 22 | Complete |
 | BIZ-04 | Phase 22 | Complete |
-| MUT-01 | Phase 23 | Pending |
-| MUT-02 | Phase 23 | Pending |
-| MUT-03 | Phase 23 | Pending |
-| DEV-01 | Phase 23 | Pending |
-| DEV-02 | Phase 23 | Pending |
-| DEV-03 | Phase 23 | Pending |
+| MUT-01 | Phase 23 | Complete |
+| MUT-02 | Phase 23 | Complete |
+| MUT-03 | Phase 23 | Complete |
+| DEV-01 | Phase 23 | Complete |
+| DEV-02 | Phase 23 | Complete |
+| DEV-03 | Phase 23 | Complete |
 | WATCH-01 | Phase 24 | Pending |
 | WATCH-02 | Phase 24 | Pending |
 | WATCH-03 | Phase 24 | Pending |
