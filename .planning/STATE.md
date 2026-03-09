@@ -71,6 +71,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 | 031 | Add PromQL column to gauge table | 2026-03-09 | 212e2cd | [031-add-promql-column-to-gauge-table](./quick/031-add-promql-column-to-gauge-table/) |
 | 032 | Add PromQL column to info table | 2026-03-09 | 65e01b7 | [032-add-promql-column-to-info-table](./quick/032-add-promql-column-to-info-table/) |
 | 033 | Include host/pod labels in PromQL column | 2026-03-09 | 2f74fd6 | [033-promql-include-host-pod-labels](./quick/033-promql-include-host-pod-labels/) |
+| 034 | Add Host column and rename Pod in ops dashboard | 2026-03-09 | acb8e71 | [034-ops-dashboard-host-column-pod-rename](./quick/034-ops-dashboard-host-column-pod-rename/) |
 
 ### Blockers/Concerns
 
@@ -79,5 +80,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: v1.3 milestone complete
+Stopped at: Completed quick-034
 Resume file: None
