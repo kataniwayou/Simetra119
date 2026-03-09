@@ -1,0 +1,3 @@
+# Temporary ConfigMap backups from E2E test runs
+.original-devices-configmap.yaml
+reports/
