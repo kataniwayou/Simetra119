@@ -28,7 +28,10 @@ This milestone builds an E2E test harness that proves the full SNMP-to-Prometheu
   2. Test simulator exposes unmapped OIDs (outside oidmaps.json) that the collector will classify as "Unknown"
   3. Test simulator sends SNMP traps with community string Simetra.E2E-SIM at configurable intervals
   4. OID map fixture entries and device config for E2E-SIM exist as ConfigMap merge fixtures
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 20-01-PLAN.md — Create E2E simulator Python application (e2e_simulator.py, Dockerfile)
+- [ ] 20-02-PLAN.md — Deploy to K8s and configure collector ConfigMaps
 
 ### Phase 21: Test Harness and Pipeline Counter Verification
 
@@ -87,7 +90,7 @@ This milestone builds an E2E test harness that proves the full SNMP-to-Prometheu
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 20. Test Simulator | 0/TBD | Not started | - |
+| 20. Test Simulator | 0/2 | Planned | - |
 | 21. Test Harness + Pipeline Counters | 0/TBD | Not started | - |
 | 22. Business Metrics + Unknown OIDs | 0/TBD | Not started | - |
 | 23. OID Mutations + Device Lifecycle | 0/TBD | Not started | - |
