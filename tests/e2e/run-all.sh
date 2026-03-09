@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ============================================================================
-# run-all.sh -- E2E Pipeline Counter Verification Test Runner
+# run-all.sh -- E2E System Verification Test Runner
 #
 # Single entry point: sources lib/ modules, runs pre-flight checks, manages
 # port-forwards, executes scenario scripts sequentially, generates report.
@@ -43,7 +43,7 @@ trap cleanup EXIT
 
 echo ""
 echo "============================================="
-echo "  E2E Pipeline Counter Verification"
+echo "  E2E System Verification"
 echo "  $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 echo "============================================="
 echo ""
@@ -94,7 +94,7 @@ done
 # Report generation
 # ---------------------------------------------------------------------------
 
-REPORT_FILE="$REPORT_DIR/pipeline-counters-$(date '+%Y%m%d-%H%M%S').md"
+REPORT_FILE="$REPORT_DIR/e2e-report-$(date '+%Y%m%d-%H%M%S').md"
 generate_report "$REPORT_FILE"
 log_info "Report saved to: $REPORT_FILE"
 
