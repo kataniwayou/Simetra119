@@ -302,6 +302,10 @@
               {
                 "id": "displayName",
                 "value": "PromQL"
+              },
+              {
+                "id": "custom.inspect",
+                "value": true
               }
             ]
           },
@@ -755,6 +759,10 @@
               {
                 "id": "displayName",
                 "value": "PromQL"
+              },
+              {
+                "id": "custom.inspect",
+                "value": true
               }
             ]
           }
