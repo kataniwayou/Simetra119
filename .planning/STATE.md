@@ -46,9 +46,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 
 ### Known Tech Debt
 
-- IDeviceRegistry.TryGetDevice(IPAddress) orphaned — community string replaced IP lookup
-- PollSchedulerStartupService thread pool log off-by-one (HeartbeatJob not counted)
-- Stale comments in deploy/k8s/production/grafana.yaml referencing deleted dashboard files
+None.
 
 ### Quick Tasks Completed
 
@@ -73,6 +71,7 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 | 033 | Include host/pod labels in PromQL column | 2026-03-09 | 2f74fd6 | [033-promql-include-host-pod-labels](./quick/033-promql-include-host-pod-labels/) |
 | 034 | Add Host column and rename Pod in ops dashboard | 2026-03-09 | acb8e71 | [034-ops-dashboard-host-column-pod-rename](./quick/034-ops-dashboard-host-column-pod-rename/) |
 | 035 | Replace GC panels with CPU Time and Exceptions | 2026-03-09 | 31a9921 | [035-refactor-runtime-panels-for-anomaly-det](./quick/035-refactor-runtime-panels-for-anomaly-det/) |
+| 036 | Cleanup tech debt: orphan, off-by-one, comment | 2026-03-09 | c3c7ff5 | [036-cleanup-tech-debt-orphan-offbyone-comment](./quick/036-cleanup-tech-debt-orphan-offbyone-comment/) |
 
 ### Blockers/Concerns
 
@@ -81,5 +80,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Completed quick-035
+Stopped at: Completed quick-036
 Resume file: None
