@@ -9,9 +9,9 @@ Requirements for E2E System Verification milestone. Each maps to roadmap phases.
 
 ### Test Simulator
 
-- [ ] **SIM-01**: Dedicated E2E test simulator built with pysnmp, deployed in K8s namespace simetra
-- [ ] **SIM-02**: Test simulator exposes mapped OIDs (gauge, info types) and deliberately unmapped OIDs for "Unknown" testing
-- [ ] **SIM-03**: Test simulator sends SNMP traps on configurable intervals with known community string
+- [x] **SIM-01**: Dedicated E2E test simulator built with pysnmp, deployed in K8s namespace simetra
+- [x] **SIM-02**: Test simulator exposes mapped OIDs (gauge, info types) and deliberately unmapped OIDs for "Unknown" testing
+- [x] **SIM-03**: Test simulator sends SNMP traps on configurable intervals with known community string
 
 ### Pipeline Counter Verification
 
@@ -71,9 +71,9 @@ Requirements for E2E System Verification milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIM-01 | Phase 20 | Pending |
-| SIM-02 | Phase 20 | Pending |
-| SIM-03 | Phase 20 | Pending |
+| SIM-01 | Phase 20 | Complete |
+| SIM-02 | Phase 20 | Complete |
+| SIM-03 | Phase 20 | Complete |
 | PIPE-01 | Phase 21 | Pending |
 | PIPE-02 | Phase 21 | Pending |
 | PIPE-03 | Phase 21 | Pending |

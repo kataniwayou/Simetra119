@@ -10,7 +10,7 @@ This milestone builds an E2E test harness that proves the full SNMP-to-Prometheu
 
 ## Phases
 
-- [ ] **Phase 20: Test Simulator** - Dedicated pysnmp simulator for E2E edge cases with mapped + unmapped OIDs and configurable traps
+- [x] **Phase 20: Test Simulator** - Dedicated pysnmp simulator for E2E edge cases with mapped + unmapped OIDs and configurable traps
 - [ ] **Phase 21: Test Harness and Pipeline Counter Verification** - Bash test runner with polling utilities and delta assertions, proving all 10 pipeline counters
 - [ ] **Phase 22: Business Metric and Unknown OID Verification** - Verify snmp_gauge/snmp_info correctness and unknown OID classification with ConfigMap snapshot/restore
 - [ ] **Phase 23: OID Map Mutation and Device Lifecycle Verification** - Verify runtime configuration changes propagate correctly to Prometheus
@@ -30,8 +30,8 @@ This milestone builds an E2E test harness that proves the full SNMP-to-Prometheu
   4. OID map fixture entries and device config for E2E-SIM exist as ConfigMap merge fixtures
 **Plans:** 2 plans
 Plans:
-- [ ] 20-01-PLAN.md — Create E2E simulator Python application (e2e_simulator.py, Dockerfile)
-- [ ] 20-02-PLAN.md — Deploy to K8s and configure collector ConfigMaps
+- [x] 20-01-PLAN.md — Create E2E simulator Python application (e2e_simulator.py, Dockerfile)
+- [x] 20-02-PLAN.md — Deploy to K8s and configure collector ConfigMaps
 
 ### Phase 21: Test Harness and Pipeline Counter Verification
 
@@ -90,7 +90,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 20. Test Simulator | 0/2 | Planned | - |
+| 20. Test Simulator | 2/2 | Complete | 2026-03-09 |
 | 21. Test Harness + Pipeline Counters | 0/TBD | Not started | - |
 | 22. Business Metrics + Unknown OIDs | 0/TBD | Not started | - |
 | 23. OID Mutations + Device Lifecycle | 0/TBD | Not started | - |
