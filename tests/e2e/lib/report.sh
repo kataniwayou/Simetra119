@@ -2,19 +2,29 @@
 set -euo pipefail
 
 # ============================================================================
-# report.sh -- Markdown report generation for E2E tests
+# report.sh -- Categorized Markdown report generation for E2E tests
 # ============================================================================
+
+# Category definitions: name, start_index (0-based), end_index (inclusive)
+_REPORT_CATEGORIES=(
+    "Pipeline Counters|0|9"
+    "Business Metrics|10|16"
+    "OID Mutations|17|19"
+    "Device Lifecycle|20|22"
+    "Watcher Resilience|23|26"
+)
 
 generate_report() {
     local output_file="$1"
+    local total=${#SCENARIO_RESULTS[@]:-0}
 
     {
-        echo "# E2E Pipeline Counter Verification Report"
+        echo "# E2E System Verification Report"
         echo ""
         echo "Generated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
         echo ""
 
-        # Summary
+        # Summary table
         echo "## Summary"
         echo ""
         echo "| Metric | Count |"
@@ -24,24 +34,43 @@ generate_report() {
         echo "| Fail   | ${FAIL_COUNT} |"
         echo ""
 
-        # Results table
-        echo "## Results"
-        echo ""
-        echo "| # | Scenario | Result |"
-        echo "|---|----------|--------|"
-        local idx=1
-        for result in "${SCENARIO_RESULTS[@]:-}"; do
-            if [ -z "$result" ]; then
+        # Categorized results
+        for category in "${_REPORT_CATEGORIES[@]}"; do
+            local cat_name="${category%%|*}"
+            local rest="${category#*|}"
+            local start_idx="${rest%%|*}"
+            local end_idx="${rest#*|}"
+
+            # Skip category if no scenarios ran in this range
+            if [ "$start_idx" -ge "$total" ]; then
                 continue
             fi
-            local status="${result%%|*}"
-            local name="${result#*|}"
-            echo "| ${idx} | ${name} | ${status} |"
-            idx=$((idx + 1))
-        done
-        echo ""
 
-        # Evidence
+            # Clamp end index to actual results
+            local effective_end="$end_idx"
+            if [ "$effective_end" -ge "$total" ]; then
+                effective_end=$((total - 1))
+            fi
+
+            echo "## ${cat_name} (Scenarios $(printf '%02d' $((start_idx + 1)))-$(printf '%02d' $((effective_end + 1))))"
+            echo ""
+            echo "| # | Scenario | Result |"
+            echo "|---|----------|--------|"
+
+            for idx in $(seq "$start_idx" "$effective_end"); do
+                local result="${SCENARIO_RESULTS[$idx]:-}"
+                if [ -z "$result" ]; then
+                    continue
+                fi
+                local status="${result%%|*}"
+                local name="${result#*|}"
+                local num=$((idx + 1))
+                echo "| ${num} | ${name} | ${status} |"
+            done
+            echo ""
+        done
+
+        # Evidence section (flat)
         echo "## Evidence"
         echo ""
         for entry in "${SCENARIO_EVIDENCE[@]:-}"; do
