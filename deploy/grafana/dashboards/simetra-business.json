@@ -217,7 +217,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Pod Name"
+                "value": "Pod"
               }
             ]
           },
@@ -695,7 +695,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Pod Name"
+                "value": "Pod"
               }
             ]
           },
