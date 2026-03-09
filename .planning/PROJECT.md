@@ -59,7 +59,16 @@ See `.planning/milestones/v1.2-REQUIREMENTS.md` for full requirement details.
 
 ### Active
 
-(None — next milestone not yet planned)
+**v1.4 E2E System Verification**
+
+- [ ] E2E verification of all 10 pipeline counter metrics via existing simulators and Prometheus queries
+- [ ] E2E verification of business metric mutations (OID map rename, removal → "unknown", type changes)
+- [ ] E2E verification of device lifecycle (add/remove/modify device → Prometheus reflects changes)
+- [ ] E2E verification of unknown OID handling (unmapped trap/poll OIDs classified as "unknown")
+- [ ] E2E verification of ConfigMap watchers (OID map hot-reload, device config hot-reload, invalid JSON, watcher reconnection)
+- [ ] Dedicated test simulator for edge cases that existing OBP/NPB simulators cannot cover
+- [ ] Single comprehensive report with pass/fail evidence from logs and Prometheus HTTP API
+- [ ] No SnmpCollector code modifications — findings documented only
 
 ### Out of Scope
 
@@ -123,4 +132,4 @@ See `.planning/milestones/v1.2-REQUIREMENTS.md` for full requirement details.
 | Cascading Host/Pod/Device filters | Three-level filter for multi-pod multi-device environments | Good |
 
 ---
-*Last updated: 2026-03-09 after v1.3 milestone complete*
+*Last updated: 2026-03-09 after v1.4 milestone start*
