@@ -85,15 +85,16 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
 
             foreach (var metric in tenantOpts.Metrics)
             {
+                var resolvedIp = ResolveIp(metric.Ip);
                 var derivedInterval = DeriveIntervalSeconds(metric.Ip, metric.Port, metric.MetricName);
                 var newHolder = new MetricSlotHolder(
-                    metric.Ip,
+                    resolvedIp,
                     metric.Port,
                     metric.MetricName,
                     derivedInterval);
 
                 // Carry over existing slot value when the same (ip, port, metricName) exists.
-                var lookupKey = new RoutingKey(metric.Ip, metric.Port, metric.MetricName);
+                var lookupKey = new RoutingKey(resolvedIp, metric.Port, metric.MetricName);
                 if (oldSlotLookup.TryGetValue(lookupKey, out var oldHolder))
                 {
                     var existingSlot = oldHolder.ReadSlot();
@@ -164,6 +165,19 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
             TenantCount,
             SlotCount,
             carriedOver);
+    }
+
+    private string ResolveIp(string configIp)
+    {
+        foreach (var device in _deviceRegistry.AllDevices)
+        {
+            if (string.Equals(device.ConfigAddress, configIp, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogDebug("Resolved tenant metric IP {ConfigIp} -> {ResolvedIp}", configIp, device.ResolvedIp);
+                return device.ResolvedIp;
+            }
+        }
+        return configIp;
     }
 
     private int DeriveIntervalSeconds(string ip, int port, string metricName)

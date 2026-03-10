@@ -341,7 +341,45 @@ public sealed class TenantVectorRegistryTests
     }
 
     // ──────────────────────────────────────────────────────
-    // 7. Diff logging (1 test)
+    // 7. DNS resolution (1 test)
+    // ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Reload_DnsName_ResolvedViaDeviceRegistry()
+    {
+        var deviceRegistry = Substitute.For<IDeviceRegistry>();
+        var device = new DeviceInfo(
+            Name: "test-device",
+            ConfigAddress: "dns.test.local",
+            ResolvedIp: "10.0.0.99",
+            Port: 161,
+            PollGroups: Array.Empty<MetricPollInfo>());
+
+        deviceRegistry.AllDevices.Returns(new[] { device });
+        deviceRegistry.TryGetByIpPort("dns.test.local", 161, out Arg.Any<DeviceInfo?>())
+            .Returns(x => { x[2] = device; return true; });
+
+        var registry = new TenantVectorRegistry(
+            deviceRegistry,
+            Substitute.For<IOidMapService>(),
+            NullLogger<TenantVectorRegistry>.Instance);
+
+        var options = CreateOptions(
+            (0, 1, "dns.test.local", 161, "test_metric"));
+
+        registry.Reload(options);
+
+        // Resolved IP used for routing.
+        Assert.True(registry.TryRoute("10.0.0.99", 161, "test_metric", out var holders));
+        Assert.NotNull(holders);
+        Assert.Single(holders);
+
+        // Raw DNS name NOT in routing index.
+        Assert.False(registry.TryRoute("dns.test.local", 161, "test_metric", out _));
+    }
+
+    // ──────────────────────────────────────────────────────
+    // 8. Diff logging (1 test)
     // ──────────────────────────────────────────────────────
 
     [Fact]
