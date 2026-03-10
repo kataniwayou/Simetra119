@@ -55,7 +55,7 @@ public sealed class DeviceRegistry : IDeviceRegistry
                     PollIndex: index,
                     Oids: poll.Oids.AsReadOnly(),
                     IntervalSeconds: poll.IntervalSeconds,
-                    TimeoutPercent: poll.TimeoutPercent))
+                    TimeoutMultiplier: poll.TimeoutMultiplier))
                 .ToList()
                 .AsReadOnly();
 
@@ -118,7 +118,7 @@ public sealed class DeviceRegistry : IDeviceRegistry
                     PollIndex: index,
                     Oids: poll.Oids.AsReadOnly(),
                     IntervalSeconds: poll.IntervalSeconds,
-                    TimeoutPercent: poll.TimeoutPercent))
+                    TimeoutMultiplier: poll.TimeoutMultiplier))
                 .ToList()
                 .AsReadOnly();
 
