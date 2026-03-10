@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 ## Current Position
 
 Phase: 27 — third of 5 in v1.5 (Pipeline Integration)
-Plan: 01 of 5 complete in phase 27
+Plan: 02 of 5 complete in phase 27
 Status: In progress
-Last activity: 2026-03-10 — Completed 27-01-PLAN.md (heartbeat normalization, ValueExtractionBehavior, OtelMetricHandler refactor)
+Last activity: 2026-03-10 — Completed 27-02-PLAN.md (TenantVectorFanOutBehavior, TypeCode on MetricSlot, snmp.tenantvector.routed counter)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [####_____] 4/9 v1.5
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [#####____] 5/9 v1.5
 
 ## Milestone History
 
@@ -48,6 +48,10 @@ See `.planning/MILESTONES.md` for details.
 - ValueExtractionBehavior is 5th in pipeline chain; sets ExtractedValue + ExtractedStringValue once — consumers read pre-extracted (D27-01)
 - OidMapService.MergeWithHeartbeatSeed called in both constructor and UpdateMap — heartbeat seed survives every ConfigMap reload (D27-01)
 - OtelMetricHandler reads ExtractedValue/ExtractedStringValue; uses TypeCode.ToString().ToLowerInvariant() for snmpType label (D27-01)
+- TenantVectorFanOutBehavior is 6th in pipeline chain; next() is outside try/catch — fan-out exceptions never kill OTel export (D27-02)
+- MetricSlot.TypeCode (SnmpType) preserved through WriteValue and Reload carry-over; consumers use TypeCode to distinguish Value vs StringValue (D27-02)
+- snmp.tenantvector.routed counter increments once per slot write with device_name tag (D27-02)
+- PipelineIntegrationTests must register ITenantVectorRegistry when using AddSnmpPipeline() (D27-02)
 
 ### Known Tech Debt
 
@@ -59,6 +63,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10T19:30:21Z
-Stopped at: Completed 27-01-PLAN.md, ready for 27-02
+Last session: 2026-03-10T19:53:00Z
+Stopped at: Completed 27-02-PLAN.md, ready for 27-03
 Resume file: None
