@@ -257,3 +257,36 @@ data:
         ]
       }
     ]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simetra-tenantvector
+  namespace: simetra
+data:
+  # ============================================================================
+  # TENANT VECTOR DEFINITIONS
+  # ============================================================================
+  #
+  # Bare JSON object matching TenantVectorOptions shape.
+  # TenantVectorWatcherService watches this ConfigMap for live reload.
+  #
+  # Each tenant entry requires:
+  #   Id             - Unique tenant identifier (e.g., "fiber-monitor")
+  #   Priority       - Integer priority (1 = highest, higher = lower priority)
+  #   Metrics        - Array of metric slot definitions for this tenant
+  #
+  # Each Metric entry:
+  #   Ip             - Device IP address (must match a device in simetra-devices)
+  #   Port           - SNMP port (must match device port)
+  #   MetricName     - Prometheus metric name (must exist in simetra-oidmaps)
+  #   IntervalSeconds - Expected update interval for staleness detection
+  #
+  # IMPORTANT: JSON uses bare TenantVectorOptions format { "Tenants": [...] },
+  # NOT the IConfiguration section wrapper { "TenantVector": { ... } }.
+  #
+  # ============================================================================
+  tenantvector.json: |
+    {
+      "Tenants": []
+    }
