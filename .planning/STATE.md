@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 ## Current Position
 
 Phase: 29 — fifth of 5 in v1.5 (K8s Deployment and E2E Validation)
-Plan: 01 of N complete
+Plan: 02 of N complete
 Status: In progress
-Last activity: 2026-03-10 — Completed 29-01-PLAN.md (K8s manifest updates: tenantvector projected source + device/tenant data)
+Last activity: 2026-03-10 — Completed 29-02-PLAN.md (E2E scenario 28 tenantvector routing + report/kubectl updates)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [########_] 8/9 v1.5
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [#########] 9/9 v1.5 (phase 29 plans 1-2 complete)
 
 ## Milestone History
 
@@ -57,6 +57,8 @@ See `.planning/MILESTONES.md` for details.
 - Concrete-first validator DI: AddSingleton<TenantVectorOptionsValidator>() + AddSingleton<IValidateOptions<T>>(sp => sp.GetRequiredService<TenantVectorOptionsValidator>()) ensures single instance (D28-01)
 - Local dev tenantvector.json uses IConfiguration section wrapper; JsonDocument.Parse + TryGetProperty("TenantVector") extracts inner object before deserialization (D28-01)
 - simetra-tenantvector ConfigMap committed with PLACEHOLDER_NPB_IP / PLACEHOLDER_OBP_IP — e2e script substitutes real ClusterIPs at deploy-time via kubectl get svc (D29-01)
+- E2E scenario 28 derives ClusterIPs via kubectl get svc, applies tenantvector before testing, hot-reload uses obp_r3_power_L1/obp_r4_power_L1 (valid oidmap metrics) for 4th tenant obp-poll-2 (D29-02)
+- kubectl.sh snapshot/restore_configmaps now includes simetra-tenantvector; report.sh Tenant Vector category covers indices 33-36 (D29-02)
 
 ### Known Tech Debt
 
@@ -69,5 +71,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-10
-Stopped at: Completed 29-01-PLAN.md
+Stopped at: Completed 29-02-PLAN.md
 Resume file: None
