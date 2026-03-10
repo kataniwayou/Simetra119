@@ -102,6 +102,31 @@ if (!k8s.KubernetesClientConfiguration.IsInCluster())
             await pollScheduler.ReconcileAsync(deviceRegistry.AllDevices, CancellationToken.None);
         }
     }
+
+    // Load tenant vector from tenantvector.json (section-wrapped format)
+    var tenantVectorPath = Path.Combine(configDir, "tenantvector.json");
+    if (File.Exists(tenantVectorPath))
+    {
+        var tvJson = File.ReadAllText(tenantVectorPath);
+        // tenantvector.json uses IConfiguration section wrapper { "TenantVector": { "Tenants": [...] } }.
+        // Extract the inner TenantVector object for direct deserialization as TenantVectorOptions.
+        using var tvDoc = System.Text.Json.JsonDocument.Parse(tvJson);
+        if (tvDoc.RootElement.TryGetProperty("TenantVector", out var tvElement))
+        {
+            var tvOptions = System.Text.Json.JsonSerializer.Deserialize<SnmpCollector.Configuration.TenantVectorOptions>(
+                    tvElement.GetRawText(), jsonOptions);
+            if (tvOptions != null)
+            {
+                var tvValidator = app.Services.GetRequiredService<SnmpCollector.Configuration.Validators.TenantVectorOptionsValidator>();
+                var tvValidation = tvValidator.Validate(null, tvOptions);
+                if (!tvValidation.Failed)
+                {
+                    var tvRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.TenantVectorRegistry>();
+                    tvRegistry.Reload(tvOptions);
+                }
+            }
+        }
+    }
 }
 
 // Phase 8: Health probe endpoints with tag-filtered checks and explicit status codes.

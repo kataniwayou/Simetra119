@@ -241,6 +241,10 @@ public static class ServiceCollectionExtensions
 
             services.AddSingleton<DeviceWatcherService>();
             services.AddHostedService(sp => sp.GetRequiredService<DeviceWatcherService>());
+
+            // Phase 28: Tenant vector ConfigMap watcher
+            services.AddSingleton<TenantVectorWatcherService>();
+            services.AddHostedService(sp => sp.GetRequiredService<TenantVectorWatcherService>());
         }
         else
         {
@@ -292,7 +296,9 @@ public static class ServiceCollectionExtensions
             .Bind(configuration.GetSection(TenantVectorOptions.SectionName))
             .ValidateOnStart();
 
-        services.AddSingleton<IValidateOptions<TenantVectorOptions>, TenantVectorOptionsValidator>();
+        services.AddSingleton<TenantVectorOptionsValidator>();
+        services.AddSingleton<IValidateOptions<TenantVectorOptions>>(
+            sp => sp.GetRequiredService<TenantVectorOptionsValidator>());
 
         // --- Phase 26: Tenant vector registry ---
         services.AddSingleton<TenantVectorRegistry>(sp =>
