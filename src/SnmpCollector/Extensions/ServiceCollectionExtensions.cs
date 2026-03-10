@@ -294,6 +294,11 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IValidateOptions<TenantVectorOptions>, TenantVectorOptionsValidator>();
 
+        // --- Phase 26: Tenant vector registry ---
+        services.AddSingleton<TenantVectorRegistry>(sp =>
+            new TenantVectorRegistry(sp.GetRequiredService<ILogger<TenantVectorRegistry>>()));
+        services.AddSingleton<ITenantVectorRegistry>(sp => sp.GetRequiredService<TenantVectorRegistry>());
+
         // --- Phase 2 pipeline singletons ---
         // DeviceRegistry depends on IOptions<DevicesOptions> for initial startup construction.
         // In K8s mode, DeviceWatcherService calls ReloadAsync to overwrite with ConfigMap data.
