@@ -60,6 +60,7 @@ See `.planning/MILESTONES.md` for details.
 - simetra-tenantvector ConfigMap committed with PLACEHOLDER_NPB_IP / PLACEHOLDER_OBP_IP — e2e script substitutes real ClusterIPs at deploy-time via kubectl get svc (D29-01)
 - E2E scenario 28 derives ClusterIPs via kubectl get svc, applies tenantvector before testing, hot-reload uses obp_r3_power_L1/obp_r4_power_L1 (valid oidmap metrics) for 4th tenant obp-poll-2 (D29-02)
 - kubectl.sh snapshot/restore_configmaps now includes simetra-tenantvector; report.sh Tenant Vector category covers indices 33-36 (D29-02)
+- IntervalSeconds removed from tenant vector ConfigMap; TenantVectorRegistry.DeriveIntervalSeconds() resolves via IDeviceRegistry.TryGetByIpPort + IOidMapService.Resolve at Reload() time (Q042)
 
 ### Known Tech Debt
 
