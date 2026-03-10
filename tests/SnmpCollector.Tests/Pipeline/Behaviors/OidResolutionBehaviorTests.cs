@@ -86,19 +86,19 @@ public sealed class OidResolutionBehaviorTests
     [Fact]
     public async Task ResolvesHeartbeatOid_ViaOidMapService()
     {
-        // Heartbeat OID now resolves to "heartbeat" via OidMapService — no special-case bypassing
+        // Heartbeat OID resolves to "Heartbeat" via OidMapService — no special-case bypassing
         var oidMapService = new StubOidMapService(
             knownOid: HeartbeatJobOptions.HeartbeatOid,
-            metricName: "heartbeat");
+            metricName: "Heartbeat");
         var behavior = new OidResolutionBehavior<SnmpOidReceived, Unit>(
             oidMapService, NullLogger<OidResolutionBehavior<SnmpOidReceived, Unit>>.Instance);
         var notification = new SnmpOidReceived
         {
             Oid = HeartbeatJobOptions.HeartbeatOid,
             AgentIp = IPAddress.Parse("127.0.0.1"),
-            Value = new Integer32(1),
+            Value = new Counter32(1),
             Source = SnmpSource.Trap,
-            TypeCode = SnmpType.Integer32,
+            TypeCode = SnmpType.Counter32,
             DeviceName = HeartbeatJobOptions.HeartbeatDeviceName,
         };
         var nextCalled = false;
@@ -109,7 +109,7 @@ public sealed class OidResolutionBehaviorTests
             return Task.FromResult(Unit.Value);
         }, CancellationToken.None);
 
-        Assert.Equal("heartbeat", notification.MetricName);  // OidMapService resolved it
+        Assert.Equal("Heartbeat", notification.MetricName);  // OidMapService resolved it
         Assert.True(nextCalled);                              // Pipeline still continues
     }
 

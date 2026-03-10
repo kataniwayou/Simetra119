@@ -201,22 +201,21 @@ public sealed class OtelMetricHandlerTests : IDisposable
         Assert.True(captured.EndsWith("..."), $"Expected value to end with '...', got: '{captured}'");
     }
 
-    // --- Heartbeat normalization test ---
+    // --- Heartbeat export tests ---
 
     [Fact]
-    public async Task Heartbeat_RecordsGaugeNormally_WithHeartbeatMetricName()
+    public async Task Heartbeat_ExportedAsGauge_WithSimetraDevice()
     {
-        // After normalization, heartbeat flows through pipeline like any other metric.
-        // MetricName = "heartbeat" is set by OidMapService (seeded at construction).
+        // Heartbeat flows through the pipeline and exports as snmp_gauge with device_name=Simetra.
         var notification = new SnmpOidReceived
         {
             Oid = HeartbeatJobOptions.HeartbeatOid,
             AgentIp = IPAddress.Parse("127.0.0.1"),
-            Value = new Integer32(1),
+            Value = new Counter32(1),
             Source = SnmpSource.Trap,
-            TypeCode = SnmpType.Integer32,
+            TypeCode = SnmpType.Counter32,
             DeviceName = HeartbeatJobOptions.HeartbeatDeviceName,
-            MetricName = "heartbeat",
+            MetricName = "Heartbeat",
             ExtractedValue = 1.0
         };
 
@@ -224,18 +223,20 @@ public sealed class OtelMetricHandlerTests : IDisposable
 
         Assert.Null(exception);
         Assert.Single(_testFactory.GaugeRecords);
-        Assert.Equal("heartbeat", _testFactory.GaugeRecords[0].MetricName);
-        Assert.Equal(1.0, _testFactory.GaugeRecords[0].Value);
+        Assert.Equal("Heartbeat", _testFactory.GaugeRecords[0].MetricName);
+        Assert.Equal("Simetra", _testFactory.GaugeRecords[0].DeviceName);
+        Assert.Empty(_testFactory.InfoRecords);
     }
 
     [Fact]
-    public async Task HeartbeatDeviceName_RecordsMetricNormally()
+    public async Task HeartbeatDeviceName_ExportedAsGauge()
     {
-        // Heartbeat device name records like any other metric — no special-casing
+        // A message with DeviceName=HeartbeatDeviceName and Counter32 exports as snmp_gauge
         var notification = MakeNotification(
-            new Integer32(1),
-            SnmpType.Integer32,
-            deviceName: "heartbeat");
+            new Counter32(1),
+            SnmpType.Counter32,
+            deviceName: HeartbeatJobOptions.HeartbeatDeviceName,
+            extractedValue: 1.0);
 
         await _handler.Handle(notification, CancellationToken.None);
 

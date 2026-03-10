@@ -108,12 +108,12 @@ public sealed class HeartbeatJobTests
     public void Constructor_DerivesCommunityString()
     {
         // The HeartbeatJob constructor derives the community string via
-        // CommunityStringHelper.DeriveFromDeviceName("heartbeat") -> "Simetra.heartbeat".
+        // CommunityStringHelper.DeriveFromDeviceName("Simetra") -> "Simetra.Simetra".
         // If this fails, the constructor would throw. The fact that _job was created
         // successfully in the test constructor proves derivation works.
         // We verify by checking CommunityStringHelper directly.
-        var derived = CommunityStringHelper.DeriveFromDeviceName("heartbeat");
-        Assert.Equal("Simetra.heartbeat", derived);
+        var derived = CommunityStringHelper.DeriveFromDeviceName(HeartbeatJobOptions.HeartbeatDeviceName);
+        Assert.Equal("Simetra.Simetra", derived);
     }
 
     [Fact]
