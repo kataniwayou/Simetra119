@@ -39,7 +39,7 @@ spec:
         - name: PHYSICAL_HOSTNAME
           valueFrom:
             fieldRef:
-              fieldPath: spec.nodeName
+              fieldPath: metadata.name
         - name: CONFIG_DIRECTORY
           value: /app/config
         resources:
@@ -83,3 +83,5 @@ spec:
               name: simetra-oidmaps
           - configMap:
               name: simetra-devices
+          - configMap:
+              name: simetra-tenantvector
