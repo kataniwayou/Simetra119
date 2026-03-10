@@ -11,7 +11,7 @@ Requirements for the stateful data layer that organizes SNMP metrics into priori
 
 - [ ] **CFG-01**: tenantvector.json config model with tenants (id, priority, metrics[]) where each metric has ip, port, metric_name, source, intervalSeconds
 - [ ] **CFG-02**: IValidateOptions validator — unique tenant IDs, valid IP/port ranges, metric_name exists in OID map, no duplicate (ip, port, metric_name) within a tenant
-- [ ] **CFG-03**: simetra-tenantvector ConfigMap with TenantVectorWatcherService (K8s API watch, hot-reload, local dev file fallback)
+- [x] **CFG-03**: simetra-tenantvector ConfigMap with TenantVectorWatcherService (K8s API watch, hot-reload, local dev file fallback)
 
 ### Data Layer
 
@@ -29,7 +29,7 @@ Requirements for the stateful data layer that organizes SNMP metrics into priori
 
 ### Observability
 
-- [ ] **OBS-01**: Structured diff logging on reload — tenants added/removed/changed
+- [x] **OBS-01**: Structured diff logging on reload — tenants added/removed/changed
 - [ ] **OBS-02**: Pipeline counter snmp_tenantvector_routed_total — increments on successful fan-out
 
 ### Deployment
@@ -56,7 +56,7 @@ Requirements for the stateful data layer that organizes SNMP metrics into priori
 |-------------|-------|--------|
 | CFG-01 | Phase 25 | Complete |
 | CFG-02 | Phase 25 | Complete |
-| CFG-03 | Phase 28 | Pending |
+| CFG-03 | Phase 28 | Complete |
 | DAT-01 | Phase 26 | Complete |
 | DAT-02 | Phase 26 | Complete |
 | DAT-03 | Phase 26 | Complete |
@@ -65,7 +65,7 @@ Requirements for the stateful data layer that organizes SNMP metrics into priori
 | PIP-02 | Phase 27 | Complete |
 | PIP-03 | Phase 27 | Complete |
 | PIP-04 | Phase 27 | Complete |
-| OBS-01 | Phase 28 | Pending |
+| OBS-01 | Phase 28 | Complete |
 | OBS-02 | Phase 27 | Complete |
 | DEP-01 | Phase 29 | Pending |
 | DEP-02 | Phase 29 | Pending |
@@ -77,4 +77,4 @@ Requirements for the stateful data layer that organizes SNMP metrics into priori
 
 ---
 *Requirements defined: 2026-03-10*
-*Last updated: 2026-03-10 after Phase 27 completion*
+*Last updated: 2026-03-10 after Phase 28 completion*

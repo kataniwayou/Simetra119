@@ -81,11 +81,11 @@ Plans:
   2. In local-dev mode (no K8s), the service loads tenantvector.json from the file system
   3. On reload, structured diff logging reports tenants added, removed, and changed (metric count delta)
   4. OID map changes trigger a routing index rebuild so metric_name renames do not cause silent routing misses
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 28-01: TenantVectorWatcherService (K8s watch + local dev fallback)
-- [ ] 28-02: Diff logging and OID map change subscription
+- [x] 28-01: TenantVectorWatcherService (K8s watch + local dev fallback)
+- [x] 28-02: simetra-tenantvector ConfigMap manifest
 
 #### Phase 29: K8s Deployment and E2E Validation
 
@@ -112,9 +112,9 @@ Plans:
 | 25. Config Models | v1.5 | 1/1 | Complete | 2026-03-10 |
 | 26. Core Data Types | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 27. Pipeline Integration | v1.5 | 2/2 | Complete | 2026-03-10 |
-| 28. ConfigMap Watcher | v1.5 | 0/2 | Not started | - |
+| 28. ConfigMap Watcher | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 29. K8s Deployment | v1.5 | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-10 after Phase 27 completion*
+*Last updated: 2026-03-10 after Phase 28 completion*
