@@ -59,21 +59,19 @@ public sealed class DevicesOptionsValidator : IValidateOptions<DevicesOptions>
 
     private static void ValidateNoDuplicates(List<DeviceOptions> devices, List<string> failures)
     {
-        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var seenIps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenIpPorts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         for (var i = 0; i < devices.Count; i++)
         {
             var device = devices[i];
 
-            if (!string.IsNullOrWhiteSpace(device.Name) && !seenNames.Add(device.Name))
+            if (!string.IsNullOrWhiteSpace(device.IpAddress))
             {
-                failures.Add($"Devices[{i}].Name '{device.Name}' is a duplicate — device names must be unique");
-            }
-
-            if (!string.IsNullOrWhiteSpace(device.IpAddress) && !seenIps.Add(device.IpAddress))
-            {
-                failures.Add($"Devices[{i}].IpAddress '{device.IpAddress}' is a duplicate — device IPs must be unique");
+                var ipPort = $"{device.IpAddress}:{device.Port}";
+                if (!seenIpPorts.Add(ipPort))
+                {
+                    failures.Add($"Devices[{i}] IP+Port '{ipPort}' is a duplicate -- each device must have a unique IP+Port combination");
+                }
             }
         }
     }

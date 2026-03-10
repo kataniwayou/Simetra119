@@ -11,8 +11,8 @@ public sealed class DeviceRegistryTests
 {
     /// <summary>
     /// Creates a DevicesOptions with two devices:
-    ///   - npb-core-01 at 10.0.10.1
-    ///   - obp-edge-01 at 10.0.10.2
+    ///   - npb-core-01 at 10.0.10.1:161
+    ///   - obp-edge-01 at 10.0.10.2:161
     /// </summary>
     private static DevicesOptions TwoDeviceOptions() => new()
     {
@@ -46,6 +46,10 @@ public sealed class DeviceRegistryTests
             Options.Create(devicesOptions ?? TwoDeviceOptions()),
             NullLogger<DeviceRegistry>.Instance);
     }
+
+    // -------------------------------------------------------------------------
+    // TryGetDeviceByName (secondary lookup, preserved for trap listener)
+    // -------------------------------------------------------------------------
 
     [Fact]
     public void TryGetDeviceByName_ExactMatch_ReturnsDevice()
@@ -82,6 +86,102 @@ public sealed class DeviceRegistryTests
         Assert.Null(device);
     }
 
+    // -------------------------------------------------------------------------
+    // TryGetByIpPort (primary lookup)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void TryGetByIpPort_ExactMatch_ReturnsDevice()
+    {
+        var sut = CreateRegistry();
+
+        var found = sut.TryGetByIpPort("10.0.10.1", 161, out var device);
+
+        Assert.True(found);
+        Assert.NotNull(device);
+        Assert.Equal("npb-core-01", device.Name);
+        Assert.Equal("10.0.10.1", device.IpAddress);
+        Assert.Equal(161, device.Port);
+    }
+
+    [Fact]
+    public void TryGetByIpPort_Unknown_ReturnsFalse()
+    {
+        var sut = CreateRegistry();
+
+        var found = sut.TryGetByIpPort("99.99.99.99", 9999, out var device);
+
+        Assert.False(found);
+        Assert.Null(device);
+    }
+
+    // -------------------------------------------------------------------------
+    // Duplicate IP+Port detection
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void Constructor_DuplicateIpPort_ThrowsInvalidOperationException()
+    {
+        var opts = new DevicesOptions
+        {
+            Devices =
+            [
+                new DeviceOptions
+                {
+                    Name = "device-a",
+                    IpAddress = "10.0.10.1",
+                    Port = 161,
+                    MetricPolls = []
+                },
+                new DeviceOptions
+                {
+                    Name = "device-b",
+                    IpAddress = "10.0.10.1",
+                    Port = 161,
+                    MetricPolls = []
+                }
+            ]
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => CreateRegistry(opts));
+        Assert.Contains("Duplicate IP+Port 10.0.10.1:161", ex.Message);
+        Assert.Contains("device-a", ex.Message);
+        Assert.Contains("device-b", ex.Message);
+    }
+
+    [Fact]
+    public void Constructor_DuplicateName_DifferentIpPort_Accepted()
+    {
+        var opts = new DevicesOptions
+        {
+            Devices =
+            [
+                new DeviceOptions
+                {
+                    Name = "same-name",
+                    IpAddress = "10.0.10.1",
+                    Port = 161,
+                    MetricPolls = []
+                },
+                new DeviceOptions
+                {
+                    Name = "same-name",
+                    IpAddress = "10.0.10.2",
+                    Port = 161,
+                    MetricPolls = []
+                }
+            ]
+        };
+
+        // Should not throw -- same name but different IP+Port is allowed
+        var sut = CreateRegistry(opts);
+        Assert.Equal(2, sut.AllDevices.Count);
+    }
+
+    // -------------------------------------------------------------------------
+    // AllDevices
+    // -------------------------------------------------------------------------
+
     [Fact]
     public void AllDevices_ReturnsAllRegistered()
     {
@@ -89,6 +189,10 @@ public sealed class DeviceRegistryTests
 
         Assert.Equal(2, sut.AllDevices.Count);
     }
+
+    // -------------------------------------------------------------------------
+    // DNS resolution and CommunityString passthrough
+    // -------------------------------------------------------------------------
 
     [Fact]
     public void Constructor_DnsHostname_ResolvesToIpAddress()
@@ -151,6 +255,10 @@ public sealed class DeviceRegistryTests
         Assert.Null(device!.CommunityString);
     }
 
+    // -------------------------------------------------------------------------
+    // JobKey format
+    // -------------------------------------------------------------------------
+
     [Fact]
     public void JobKey_ProducesCorrectIdentity()
     {
@@ -159,10 +267,14 @@ public sealed class DeviceRegistryTests
             Oids: new List<string> { "1.3.6.1.2.1.25.3.3.1.2" }.AsReadOnly(),
             IntervalSeconds: 30);
 
-        var key = pollInfo.JobKey("npb-core-01");
+        var key = pollInfo.JobKey("10.0.10.1", 161);
 
-        Assert.Equal("metric-poll-npb-core-01-0", key);
+        Assert.Equal("metric-poll-10.0.10.1_161-0", key);
     }
+
+    // -------------------------------------------------------------------------
+    // ReloadAsync (added/removed sets now use IP:Port keys)
+    // -------------------------------------------------------------------------
 
     [Fact]
     public async Task ReloadAsync_AddsNewDevice_FoundByName()
@@ -179,13 +291,18 @@ public sealed class DeviceRegistryTests
 
         var (added, removed) = await sut.ReloadAsync(newDevices);
 
-        Assert.Contains("new-device", added);
+        Assert.Contains("10.0.10.3:161", added);
         Assert.Empty(removed);
         Assert.Equal(3, sut.AllDevices.Count);
 
         var found = sut.TryGetDeviceByName("new-device", out var device);
         Assert.True(found);
         Assert.Equal("new-device", device!.Name);
+
+        // Also verify primary lookup works
+        var foundByIp = sut.TryGetByIpPort("10.0.10.3", 161, out var deviceByIp);
+        Assert.True(foundByIp);
+        Assert.Equal("new-device", deviceByIp!.Name);
     }
 
     [Fact]
@@ -202,10 +319,13 @@ public sealed class DeviceRegistryTests
         var (added, removed) = await sut.ReloadAsync(newDevices);
 
         Assert.Empty(added);
-        Assert.Contains("obp-edge-01", removed);
+        Assert.Contains("10.0.10.2:161", removed);
         Assert.Equal(1, sut.AllDevices.Count);
 
         var found = sut.TryGetDeviceByName("obp-edge-01", out _);
         Assert.False(found);
+
+        var foundByIp = sut.TryGetByIpPort("10.0.10.2", 161, out _);
+        Assert.False(foundByIp);
     }
 }

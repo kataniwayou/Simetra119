@@ -375,6 +375,14 @@ public sealed class MetricPollJobTests : IDisposable
 
         public IReadOnlyList<DeviceInfo> AllDevices => _devices;
 
+        public bool TryGetByIpPort(string ipAddress, int port, [NotNullWhen(true)] out DeviceInfo? device)
+        {
+            device = _devices.FirstOrDefault(d =>
+                string.Equals(d.IpAddress, ipAddress, StringComparison.OrdinalIgnoreCase)
+                && d.Port == port);
+            return device is not null;
+        }
+
         public bool TryGetDeviceByName(string deviceName, [NotNullWhen(true)] out DeviceInfo? device)
         {
             device = _devices.FirstOrDefault(d =>

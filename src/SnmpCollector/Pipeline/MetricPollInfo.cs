@@ -14,8 +14,10 @@ public sealed record MetricPollInfo(
 {
     /// <summary>
     /// Returns the Quartz job key for this poll group.
-    /// Pattern: "metric-poll-{deviceName}-{pollIndex}"
+    /// Pattern: "metric-poll-{ipAddress}_{port}-{pollIndex}"
+    /// Uses underscore between IP and port (colons are problematic in Quartz job key names).
     /// </summary>
-    /// <param name="deviceName">The device name this poll group belongs to.</param>
-    public string JobKey(string deviceName) => $"metric-poll-{deviceName}-{PollIndex}";
+    /// <param name="ipAddress">The device IP address this poll group belongs to.</param>
+    /// <param name="port">The device SNMP port this poll group belongs to.</param>
+    public string JobKey(string ipAddress, int port) => $"metric-poll-{ipAddress}_{port}-{PollIndex}";
 }

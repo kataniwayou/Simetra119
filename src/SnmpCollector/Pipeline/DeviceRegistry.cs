@@ -9,13 +9,14 @@ using SnmpCollector.Configuration;
 namespace SnmpCollector.Pipeline;
 
 /// <summary>
-/// Singleton registry that maps device names to <see cref="DeviceInfo"/> for O(1)
-/// device lookup. Supports runtime reload via <see cref="ReloadAsync"/> with atomic
-/// <see cref="FrozenDictionary{TKey,TValue}"/> swap.
+/// Singleton registry that maps devices by (IP, Port) as primary key and by Name as
+/// secondary key for O(1) device lookup. Supports runtime reload via <see cref="ReloadAsync"/>
+/// with atomic <see cref="FrozenDictionary{TKey,TValue}"/> swap.
 /// </summary>
 public sealed class DeviceRegistry : IDeviceRegistry
 {
     private readonly ILogger<DeviceRegistry> _logger;
+    private volatile FrozenDictionary<string, DeviceInfo> _byIpPort;
     private volatile FrozenDictionary<string, DeviceInfo> _byName;
 
     /// <summary>
@@ -23,6 +24,7 @@ public sealed class DeviceRegistry : IDeviceRegistry
     /// For each device:
     /// - IP is normalized to IPv4 via <see cref="IPAddress.MapToIPv4"/>.
     /// - Poll groups are converted to <see cref="MetricPollInfo"/> with their zero-based index.
+    /// Throws <see cref="InvalidOperationException"/> if duplicate IP+Port is detected.
     /// </summary>
     /// <param name="devicesOptions">The configured devices to register.</param>
     /// <param name="logger">Logger for structured reload output.</param>
@@ -31,6 +33,7 @@ public sealed class DeviceRegistry : IDeviceRegistry
         _logger = logger;
         var devices = devicesOptions.Value.Devices;
 
+        var byIpPortBuilder = new Dictionary<string, DeviceInfo>(devices.Count, StringComparer.OrdinalIgnoreCase);
         var byNameBuilder = new Dictionary<string, DeviceInfo>(devices.Count, StringComparer.OrdinalIgnoreCase);
 
         foreach (var d in devices)
@@ -56,10 +59,26 @@ public sealed class DeviceRegistry : IDeviceRegistry
                 .AsReadOnly();
 
             var info = new DeviceInfo(d.Name, ip.ToString(), d.Port, pollGroups, d.CommunityString);
+
+            var ipPortKey = IpPortKey(info.IpAddress, info.Port);
+            if (byIpPortBuilder.TryGetValue(ipPortKey, out var existing))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate IP+Port {ipPortKey} in device configuration (devices: '{existing.Name}', '{info.Name}')");
+            }
+
+            byIpPortBuilder[ipPortKey] = info;
             byNameBuilder[info.Name] = info;
         }
 
+        _byIpPort = byIpPortBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         _byName = byNameBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <inheritdoc />
+    public bool TryGetByIpPort(string ipAddress, int port, [NotNullWhen(true)] out DeviceInfo? device)
+    {
+        return _byIpPort.TryGetValue(IpPortKey(ipAddress, port), out device);
     }
 
     /// <inheritdoc />
@@ -69,13 +88,14 @@ public sealed class DeviceRegistry : IDeviceRegistry
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<DeviceInfo> AllDevices => _byName.Values.ToList().AsReadOnly();
+    public IReadOnlyList<DeviceInfo> AllDevices => _byIpPort.Values.ToList().AsReadOnly();
 
     /// <inheritdoc />
     public async Task<(IReadOnlySet<string> Added, IReadOnlySet<string> Removed)> ReloadAsync(List<DeviceOptions> devices)
     {
-        var oldNames = new HashSet<string>(_byName.Keys, StringComparer.OrdinalIgnoreCase);
+        var oldKeys = new HashSet<string>(_byIpPort.Keys, StringComparer.OrdinalIgnoreCase);
 
+        var byIpPortBuilder = new Dictionary<string, DeviceInfo>(devices.Count, StringComparer.OrdinalIgnoreCase);
         var byNameBuilder = new Dictionary<string, DeviceInfo>(devices.Count, StringComparer.OrdinalIgnoreCase);
 
         foreach (var d in devices)
@@ -101,24 +121,37 @@ public sealed class DeviceRegistry : IDeviceRegistry
                 .AsReadOnly();
 
             var info = new DeviceInfo(d.Name, ip.ToString(), d.Port, pollGroups, d.CommunityString);
+
+            var ipPortKey = IpPortKey(info.IpAddress, info.Port);
+            if (byIpPortBuilder.TryGetValue(ipPortKey, out var existing))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate IP+Port {ipPortKey} in device configuration (devices: '{existing.Name}', '{info.Name}')");
+            }
+
+            byIpPortBuilder[ipPortKey] = info;
             byNameBuilder[info.Name] = info;
         }
 
+        var newByIpPort = byIpPortBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         var newByName = byNameBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-        // Atomic swap -- volatile write ensures all readers see the new dictionary
+        // Atomic swap -- volatile write ensures all readers see the new dictionaries
+        _byIpPort = newByIpPort;
         _byName = newByName;
 
-        var newNames = new HashSet<string>(newByName.Keys, StringComparer.OrdinalIgnoreCase);
-        var added = new HashSet<string>(newNames.Except(oldNames), StringComparer.OrdinalIgnoreCase);
-        var removed = new HashSet<string>(oldNames.Except(newNames), StringComparer.OrdinalIgnoreCase);
+        var newKeys = new HashSet<string>(newByIpPort.Keys, StringComparer.OrdinalIgnoreCase);
+        var added = new HashSet<string>(newKeys.Except(oldKeys), StringComparer.OrdinalIgnoreCase);
+        var removed = new HashSet<string>(oldKeys.Except(newKeys), StringComparer.OrdinalIgnoreCase);
 
         _logger.LogInformation(
             "DeviceRegistry reloaded: {DeviceCount} devices, +{Added} added, -{Removed} removed",
-            newByName.Count,
+            newByIpPort.Count,
             added.Count,
             removed.Count);
 
         return (added, removed);
     }
+
+    private static string IpPortKey(string ip, int port) => $"{ip}:{port}";
 }
