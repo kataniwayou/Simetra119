@@ -16,4 +16,10 @@ public sealed class MetricPollOptions
     /// Polling interval in seconds. Must be greater than zero.
     /// </summary>
     public int IntervalSeconds { get; set; }
+
+    /// <summary>
+    /// SNMP GET response timeout as a percentage of IntervalSeconds (1-99).
+    /// Defaults to 80 (80% of interval). Leaves headroom before next trigger fires.
+    /// </summary>
+    public int TimeoutPercent { get; set; } = 80;
 }

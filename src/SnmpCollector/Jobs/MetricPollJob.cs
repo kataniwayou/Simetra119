@@ -89,9 +89,9 @@ public sealed class MetricPollJob : IJob
 
         try
         {
-            // 80% of the interval as timeout (SC#2) — leaves response window before next trigger.
+            // Timeout as configured percentage of interval — leaves headroom before next trigger.
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(intervalSeconds * 0.8));
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(intervalSeconds * pollGroup.TimeoutPercent / 100.0));
 
             var response = await _snmpClient.GetAsync(
                 VersionCode.V2,

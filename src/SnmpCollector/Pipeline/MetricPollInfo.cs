@@ -7,10 +7,12 @@ namespace SnmpCollector.Pipeline;
 /// <param name="PollIndex">Zero-based index of this poll group within the device's MetricPolls list.</param>
 /// <param name="Oids">OID strings to fetch together in a single SNMP GET request.</param>
 /// <param name="IntervalSeconds">Polling interval in seconds for this group.</param>
+/// <param name="TimeoutPercent">SNMP GET response timeout as percentage of interval (1-99, default 80).</param>
 public sealed record MetricPollInfo(
     int PollIndex,
     IReadOnlyList<string> Oids,
-    int IntervalSeconds)
+    int IntervalSeconds,
+    int TimeoutPercent = 80)
 {
     /// <summary>
     /// Returns the Quartz job key for this poll group.

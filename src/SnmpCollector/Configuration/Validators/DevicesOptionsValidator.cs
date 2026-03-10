@@ -89,5 +89,10 @@ public sealed class DevicesOptionsValidator : IValidateOptions<DevicesOptions>
         {
             failures.Add($"{prefix}.Oids must contain at least one entry");
         }
+
+        if (poll.TimeoutPercent < 1 || poll.TimeoutPercent > 99)
+        {
+            failures.Add($"{prefix}.TimeoutPercent must be between 1 and 99 (got {poll.TimeoutPercent})");
+        }
     }
 }

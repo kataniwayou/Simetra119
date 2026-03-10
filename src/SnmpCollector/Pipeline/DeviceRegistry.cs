@@ -54,7 +54,8 @@ public sealed class DeviceRegistry : IDeviceRegistry
                 .Select((poll, index) => new MetricPollInfo(
                     PollIndex: index,
                     Oids: poll.Oids.AsReadOnly(),
-                    IntervalSeconds: poll.IntervalSeconds))
+                    IntervalSeconds: poll.IntervalSeconds,
+                    TimeoutPercent: poll.TimeoutPercent))
                 .ToList()
                 .AsReadOnly();
 
@@ -116,7 +117,8 @@ public sealed class DeviceRegistry : IDeviceRegistry
                 .Select((poll, index) => new MetricPollInfo(
                     PollIndex: index,
                     Oids: poll.Oids.AsReadOnly(),
-                    IntervalSeconds: poll.IntervalSeconds))
+                    IntervalSeconds: poll.IntervalSeconds,
+                    TimeoutPercent: poll.TimeoutPercent))
                 .ToList()
                 .AsReadOnly();
 
