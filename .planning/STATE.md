@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 ## Current Position
 
 Phase: 26 — second of 5 in v1.5 (Core Data Types and Registry)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-03-10 — Phase 25 complete (Config Models and Validation)
+Plan: 1 of 2 complete
+Status: In progress
+Last activity: 2026-03-10 — Completed 26-01-PLAN.md (Core Data Types)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [#________] 1/9 v1.5
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##_______] 2/9 v1.5
 
 ## Milestone History
 
@@ -37,9 +37,11 @@ See `.planning/MILESTONES.md` for details.
 - Port resolved via DeviceRegistry.TryGetDeviceByName — no changes to SnmpOidReceived
 - Fan-out catches own exceptions, always calls next() — never kills OTel export
 - FrozenDictionary atomic swap for registry + routing index
-- Immutable MetricSlot record with Volatile.Write for thread safety
+- MetricSlotHolder uses Volatile.Read/Write (NOT volatile keyword — CS0420 conflict); plain field is correct
 - Zero new NuGet packages needed
 - FrozenSet<string> for O(1) metric name containment in OidMapService (D25-01)
+- RoutingKeyComparer.Instance singleton — pass explicitly to FrozenDictionary constructor
+- PriorityGroup is not sealed (C# records cannot be declared sealed)
 
 ### Known Tech Debt
 
@@ -51,6 +53,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10
-Stopped at: Phase 25 complete, ready for Phase 26
+Last session: 2026-03-10T17:23:00Z
+Stopped at: Completed 26-01-PLAN.md (Core Data Types and Registry)
 Resume file: None
