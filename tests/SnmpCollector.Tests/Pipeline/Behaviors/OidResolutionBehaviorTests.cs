@@ -84,10 +84,12 @@ public sealed class OidResolutionBehaviorTests
     }
 
     [Fact]
-    public async Task SkipsResolution_WhenIsHeartbeat()
+    public async Task ResolvesHeartbeatOid_ViaOidMapService()
     {
-        // Heartbeat messages should NOT call Resolve() — MetricName stays null
-        var oidMapService = new StubOidMapService(knownOid: null, metricName: null);
+        // Heartbeat OID now resolves to "heartbeat" via OidMapService — no special-case bypassing
+        var oidMapService = new StubOidMapService(
+            knownOid: HeartbeatJobOptions.HeartbeatOid,
+            metricName: "heartbeat");
         var behavior = new OidResolutionBehavior<SnmpOidReceived, Unit>(
             oidMapService, NullLogger<OidResolutionBehavior<SnmpOidReceived, Unit>>.Instance);
         var notification = new SnmpOidReceived
@@ -98,7 +100,6 @@ public sealed class OidResolutionBehaviorTests
             Source = SnmpSource.Trap,
             TypeCode = SnmpType.Integer32,
             DeviceName = HeartbeatJobOptions.HeartbeatDeviceName,
-            IsHeartbeat = true
         };
         var nextCalled = false;
 
@@ -108,8 +109,8 @@ public sealed class OidResolutionBehaviorTests
             return Task.FromResult(Unit.Value);
         }, CancellationToken.None);
 
-        Assert.Null(notification.MetricName);   // Resolve was never called
-        Assert.True(nextCalled);                 // Pipeline still continues
+        Assert.Equal("heartbeat", notification.MetricName);  // OidMapService resolved it
+        Assert.True(nextCalled);                              // Pipeline still continues
     }
 
     // --- Stub IOidMapService ---

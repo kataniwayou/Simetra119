@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using Microsoft.Extensions.Logging;
+using SnmpCollector.Configuration;
 
 namespace SnmpCollector.Pipeline;
 
@@ -30,7 +31,8 @@ public sealed class OidMapService : IOidMapService
         ILogger<OidMapService> logger)
     {
         _logger = logger;
-        _map = BuildFrozenMap(initialEntries);
+        var seeded = MergeWithHeartbeatSeed(initialEntries);
+        _map = BuildFrozenMap(seeded);
         _metricNames = _map.Values.ToFrozenSet();
 
         _logger.LogInformation(
@@ -54,7 +56,8 @@ public sealed class OidMapService : IOidMapService
     public void UpdateMap(Dictionary<string, string> entries)
     {
         var oldMap = _map;
-        var newMap = BuildFrozenMap(entries);
+        var seeded = MergeWithHeartbeatSeed(entries);
+        var newMap = BuildFrozenMap(seeded);
 
         // Compute diff for structured logging
         var added = newMap.Keys.Except(oldMap.Keys).ToList();
@@ -83,6 +86,13 @@ public sealed class OidMapService : IOidMapService
 
         foreach (var oid in changed)
             _logger.LogInformation("OidMap changed: {Oid} {OldName} -> {NewName}", oid, oldMap[oid], newMap[oid]);
+    }
+
+    private static Dictionary<string, string> MergeWithHeartbeatSeed(Dictionary<string, string> entries)
+    {
+        var merged = new Dictionary<string, string>(entries, StringComparer.OrdinalIgnoreCase);
+        merged[HeartbeatJobOptions.HeartbeatOid] = "heartbeat";
+        return merged;
     }
 
     private static FrozenDictionary<string, string> BuildFrozenMap(Dictionary<string, string> entries)

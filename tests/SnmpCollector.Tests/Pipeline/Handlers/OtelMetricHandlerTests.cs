@@ -195,37 +195,41 @@ public sealed class OtelMetricHandlerTests : IDisposable
         Assert.True(captured.EndsWith("..."), $"Expected value to end with '...', got: '{captured}'");
     }
 
-    // --- Heartbeat suppression test ---
+    // --- Heartbeat normalization test ---
 
     [Fact]
-    public async Task Heartbeat_SkipsMetricRecording_ButIncrementsHandled()
+    public async Task Heartbeat_RecordsGaugeNormally_WithHeartbeatMetricName()
     {
+        // After normalization, heartbeat flows through pipeline like any other metric.
+        // MetricName = "heartbeat" is set by OidMapService (seeded at construction).
         var notification = new SnmpOidReceived
         {
-            Oid = "1.3.6.1.2.1.25.3.3.1.2",
-            AgentIp = IPAddress.Parse("10.0.0.1"),
+            Oid = HeartbeatJobOptions.HeartbeatOid,
+            AgentIp = IPAddress.Parse("127.0.0.1"),
             Value = new Integer32(1),
             Source = SnmpSource.Trap,
             TypeCode = SnmpType.Integer32,
             DeviceName = HeartbeatJobOptions.HeartbeatDeviceName,
-            IsHeartbeat = true
+            MetricName = "heartbeat",
+            ExtractedValue = 1.0
         };
 
         var exception = await Record.ExceptionAsync(() => _handler.Handle(notification, CancellationToken.None));
 
         Assert.Null(exception);
-        Assert.Empty(_testFactory.GaugeRecords);
-        Assert.Empty(_testFactory.InfoRecords);
+        Assert.Single(_testFactory.GaugeRecords);
+        Assert.Equal("heartbeat", _testFactory.GaugeRecords[0].MetricName);
+        Assert.Equal(1.0, _testFactory.GaugeRecords[0].Value);
     }
 
     [Fact]
-    public async Task HeartbeatDeviceName_WithoutFlag_StillRecordsMetric()
+    public async Task HeartbeatDeviceName_RecordsMetricNormally()
     {
+        // Heartbeat device name records like any other metric — no special-casing
         var notification = MakeNotification(
             new Integer32(1),
             SnmpType.Integer32,
             deviceName: "heartbeat");
-        // IsHeartbeat defaults to false — should record normally
 
         await _handler.Handle(notification, CancellationToken.None);
 

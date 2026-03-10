@@ -1,7 +1,6 @@
 using MediatR;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
 using SnmpCollector.Telemetry;
 
@@ -64,10 +63,9 @@ public sealed class ChannelConsumerService : BackgroundService
                     Value      = envelope.Value,
                     Source     = SnmpSource.Trap,
                     TypeCode   = envelope.TypeCode,
-                    IsHeartbeat = string.Equals(envelope.DeviceName, HeartbeatJobOptions.HeartbeatDeviceName, StringComparison.OrdinalIgnoreCase),
                 };
 
-                _pipelineMetrics.IncrementTrapReceived();
+                _pipelineMetrics.IncrementTrapReceived(envelope.DeviceName);
                 await _sender.Send(msg, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

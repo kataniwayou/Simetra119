@@ -40,15 +40,20 @@ public sealed class SnmpOidReceived : IRequest<Unit>
     public required SnmpType TypeCode { get; init; }
 
     /// <summary>
-    /// True when this message originated from the internal HeartbeatJob loopback trap.
-    /// Set at the ingestion boundary (ChannelConsumerService) based on DeviceName matching
-    /// <see cref="Configuration.HeartbeatJobOptions.HeartbeatDeviceName"/>.
-    /// Behaviors and handlers check this flag instead of comparing DeviceName strings.
-    /// </summary>
-    public bool IsHeartbeat { get; init; }
-
-    /// <summary>
     /// Resolved metric name (e.g., "sysUpTime"). Null until OidResolutionBehavior runs and maps the OID.
     /// </summary>
     public string? MetricName { get; set; }
+
+    /// <summary>
+    /// Pre-extracted numeric value. Set by ValueExtractionBehavior for numeric TypeCodes
+    /// (Integer32, Gauge32, TimeTicks, Counter32, Counter64). Zero for string types.
+    /// </summary>
+    public double ExtractedValue { get; set; }
+
+    /// <summary>
+    /// Pre-extracted string value. Set by ValueExtractionBehavior for string TypeCodes
+    /// (OctetString, IPAddress, ObjectIdentifier). Null for numeric types.
+    /// Consumers apply their own truncation as needed.
+    /// </summary>
+    public string? ExtractedStringValue { get; set; }
 }

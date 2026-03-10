@@ -33,14 +33,6 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
     public Task<Unit> Handle(SnmpOidReceived notification, CancellationToken cancellationToken)
     {
         var deviceName = notification.DeviceName ?? "unknown";
-
-        // Internal heartbeat: count as handled for pipeline liveness evidence, skip metric export.
-        if (notification.IsHeartbeat)
-        {
-            _pipelineMetrics.IncrementHandled();
-            return Task.FromResult(Unit.Value);
-        }
-
         var metricName = notification.MetricName ?? OidMapService.Unknown;
         var ip = notification.AgentIp.ToString();
         var source = notification.Source.ToString().ToLowerInvariant();
@@ -56,7 +48,7 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     source,
                     "integer32",
                     ((Integer32)notification.Value).ToInt32());
-                _pipelineMetrics.IncrementHandled();
+                _pipelineMetrics.IncrementHandled(deviceName);
                 break;
 
             case SnmpType.Gauge32:
@@ -68,7 +60,7 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     source,
                     "gauge32",
                     ((Gauge32)notification.Value).ToUInt32());
-                _pipelineMetrics.IncrementHandled();
+                _pipelineMetrics.IncrementHandled(deviceName);
                 break;
 
             case SnmpType.TimeTicks:
@@ -80,7 +72,7 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     source,
                     "timeticks",
                     ((TimeTicks)notification.Value).ToUInt32());
-                _pipelineMetrics.IncrementHandled();
+                _pipelineMetrics.IncrementHandled(deviceName);
                 break;
 
             case SnmpType.Counter32:
@@ -92,7 +84,7 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     source,
                     "counter32",
                     ((Counter32)notification.Value).ToUInt32());
-                _pipelineMetrics.IncrementHandled();
+                _pipelineMetrics.IncrementHandled(deviceName);
                 break;
 
             case SnmpType.Counter64:
@@ -104,7 +96,7 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     source,
                     "counter64",
                     ((Counter64)notification.Value).ToUInt64());
-                _pipelineMetrics.IncrementHandled();
+                _pipelineMetrics.IncrementHandled(deviceName);
                 break;
 
             case SnmpType.OctetString:
@@ -116,7 +108,7 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     source,
                     "octetstring",
                     notification.Value.ToString());
-                _pipelineMetrics.IncrementHandled();
+                _pipelineMetrics.IncrementHandled(deviceName);
                 break;
 
             case SnmpType.IPAddress:
@@ -128,7 +120,7 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     source,
                     "ipaddress",
                     notification.Value.ToString());
-                _pipelineMetrics.IncrementHandled();
+                _pipelineMetrics.IncrementHandled(deviceName);
                 break;
 
             case SnmpType.ObjectIdentifier:
@@ -140,7 +132,7 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     source,
                     "objectidentifier",
                     notification.Value.ToString());
-                _pipelineMetrics.IncrementHandled();
+                _pipelineMetrics.IncrementHandled(deviceName);
                 break;
 
             default:
