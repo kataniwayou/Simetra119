@@ -33,7 +33,6 @@ public class TenantVectorOptionsValidatorTests
         [
             new TenantOptions
             {
-                Id = "test-tenant",
                 Priority = 1,
                 Metrics =
                 [
@@ -63,7 +62,6 @@ public class TenantVectorOptionsValidatorTests
         var options = ValidOptions();
         options.Tenants.Add(new TenantOptions
         {
-            Id = "second-tenant",
             Priority = 2,
             Metrics =
             [
@@ -90,7 +88,6 @@ public class TenantVectorOptionsValidatorTests
             [
                 new TenantOptions
                 {
-                    Id = "empty-metrics",
                     Priority = 1,
                     Metrics = []
                 }
@@ -118,13 +115,11 @@ public class TenantVectorOptionsValidatorTests
             [
                 new TenantOptions
                 {
-                    Id = "tenant-a",
                     Priority = 1,
                     Metrics = [sharedMetric]
                 },
                 new TenantOptions
                 {
-                    Id = "tenant-b",
                     Priority = 2,
                     Metrics =
                     [
@@ -163,61 +158,6 @@ public class TenantVectorOptionsValidatorTests
     }
 
     // ========== Negative cases ==========
-
-    [Fact]
-    public void Validate_EmptyTenantId_Fails()
-    {
-        var options = ValidOptions();
-        options.Tenants[0].Id = "";
-
-        var result = _validator.Validate(null, options);
-        Assert.True(result.Failed);
-        Assert.Contains(result.Failures, f => f.Contains("Tenants[0].Id is required"));
-    }
-
-    [Fact]
-    public void Validate_WhitespaceTenantId_Fails()
-    {
-        var options = ValidOptions();
-        options.Tenants[0].Id = "  ";
-
-        var result = _validator.Validate(null, options);
-        Assert.True(result.Failed);
-        Assert.Contains(result.Failures, f => f.Contains("Tenants[0].Id is required"));
-    }
-
-    [Fact]
-    public void Validate_DuplicateTenantIds_Fails()
-    {
-        var options = ValidOptions();
-        options.Tenants.Add(new TenantOptions
-        {
-            Id = "test-tenant",
-            Priority = 2,
-            Metrics = []
-        });
-
-        var result = _validator.Validate(null, options);
-        Assert.True(result.Failed);
-        Assert.Contains(result.Failures, f => f.Contains("duplicate"));
-    }
-
-    [Fact]
-    public void Validate_DuplicateTenantIdsCaseInsensitive_Fails()
-    {
-        var options = new TenantVectorOptions
-        {
-            Tenants =
-            [
-                new TenantOptions { Id = "Fiber", Priority = 1, Metrics = [] },
-                new TenantOptions { Id = "fiber", Priority = 2, Metrics = [] }
-            ]
-        };
-
-        var result = _validator.Validate(null, options);
-        Assert.True(result.Failed);
-        Assert.Contains(result.Failures, f => f.Contains("duplicate"));
-    }
 
     [Fact]
     public void Validate_InvalidIpAddress_Fails()
@@ -312,13 +252,12 @@ public class TenantVectorOptionsValidatorTests
             [
                 new TenantOptions
                 {
-                    Id = "",           // Error 1: empty ID
                     Priority = 1,
                     Metrics =
                     [
                         new MetricSlotOptions
                         {
-                            Ip = "",           // Error 1b: empty IP
+                            Ip = "",           // Error 1: empty IP
                             Port = 0,          // Error 2: invalid port
                             MetricName = ""    // Error 3: empty metric name
                         }

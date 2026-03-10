@@ -22,20 +22,20 @@ public sealed class TenantVectorRegistryTests
 
     /// <summary>
     /// Build a TenantVectorOptions from a flat tuple list.
-    /// Each tuple: (tenantId, priority, ip, port, metricName)
+    /// Each tuple: (tenantIndex, priority, ip, port, metricName)
+    /// Metrics are grouped by tenantIndex; tenants are ordered by index ascending.
     /// </summary>
     private static TenantVectorOptions CreateOptions(
-        params (string tenantId, int priority, string ip, int port, string metricName)[] metrics)
+        params (int tenantIndex, int priority, string ip, int port, string metricName)[] metrics)
     {
-        var tenantMap = new Dictionary<string, (int priority, List<MetricSlotOptions> slots)>(
-            StringComparer.OrdinalIgnoreCase);
+        var tenantMap = new Dictionary<int, (int priority, List<MetricSlotOptions> slots)>();
 
-        foreach (var (tenantId, priority, ip, port, metricName) in metrics)
+        foreach (var (tenantIndex, priority, ip, port, metricName) in metrics)
         {
-            if (!tenantMap.TryGetValue(tenantId, out var entry))
+            if (!tenantMap.TryGetValue(tenantIndex, out var entry))
             {
                 entry = (priority, new List<MetricSlotOptions>());
-                tenantMap[tenantId] = entry;
+                tenantMap[tenantIndex] = entry;
             }
             entry.slots.Add(new MetricSlotOptions
             {
@@ -47,9 +47,8 @@ public sealed class TenantVectorRegistryTests
 
         return new TenantVectorOptions
         {
-            Tenants = tenantMap.Select(kvp => new TenantOptions
+            Tenants = tenantMap.OrderBy(kvp => kvp.Key).Select(kvp => new TenantOptions
             {
-                Id = kvp.Key,
                 Priority = kvp.Value.priority,
                 Metrics = kvp.Value.slots
             }).ToList()
@@ -94,8 +93,8 @@ public sealed class TenantVectorRegistryTests
     {
         var registry = CreateRegistry();
         var options = CreateOptions(
-            ("tenant-a", 1, "10.0.0.1", 161, "hrProcessorLoad"),
-            ("tenant-a", 1, "10.0.0.1", 161, "ifInOctets"));
+            (0, 1, "10.0.0.1", 161, "hrProcessorLoad"),
+            (0, 1, "10.0.0.1", 161, "ifInOctets"));
 
         registry.Reload(options);
 
@@ -105,7 +104,7 @@ public sealed class TenantVectorRegistryTests
         Assert.Single(group.Tenants);
 
         var tenant = group.Tenants[0];
-        Assert.Equal("tenant-a", tenant.Id);
+        Assert.Equal("tenant-0", tenant.Id);
         Assert.Equal(2, tenant.Holders.Count);
 
         var holder0 = tenant.Holders[0];
@@ -122,8 +121,8 @@ public sealed class TenantVectorRegistryTests
     {
         var registry = CreateRegistry();
         var options = CreateOptions(
-            ("tenant-a", 1, "10.0.0.1", 161, "hrProcessorLoad"),
-            ("tenant-a", 1, "10.0.0.1", 161, "ifInOctets"));
+            (0, 1, "10.0.0.1", 161, "hrProcessorLoad"),
+            (0, 1, "10.0.0.1", 161, "ifInOctets"));
 
         registry.Reload(options);
 
@@ -141,8 +140,8 @@ public sealed class TenantVectorRegistryTests
     {
         var registry = CreateRegistry();
         var options = CreateOptions(
-            ("tenant-a", 1, "10.0.0.1", 161, "hrProcessorLoad"),
-            ("tenant-a", 1, "10.0.0.1", 161, "ifInOctets"));
+            (0, 1, "10.0.0.1", 161, "hrProcessorLoad"),
+            (0, 1, "10.0.0.1", 161, "ifInOctets"));
 
         registry.Reload(options);
 
@@ -155,7 +154,7 @@ public sealed class TenantVectorRegistryTests
     {
         var registry = CreateRegistry();
         var options = CreateOptions(
-            ("tenant-a", 1, "10.0.0.1", 161, "hrProcessorLoad"));
+            (0, 1, "10.0.0.1", 161, "hrProcessorLoad"));
 
         registry.Reload(options);
 
@@ -173,9 +172,9 @@ public sealed class TenantVectorRegistryTests
     {
         var registry = CreateRegistry();
         var options = CreateOptions(
-            ("tenant-high", 10, "10.0.0.1", 161, "hrProcessorLoad"),
-            ("tenant-low",   1, "10.0.0.2", 161, "hrProcessorLoad"),
-            ("tenant-mid",   5, "10.0.0.3", 161, "hrProcessorLoad"));
+            (0, 10, "10.0.0.1", 161, "hrProcessorLoad"),
+            (1,  1, "10.0.0.2", 161, "hrProcessorLoad"),
+            (2,  5, "10.0.0.3", 161, "hrProcessorLoad"));
 
         registry.Reload(options);
 
@@ -190,8 +189,8 @@ public sealed class TenantVectorRegistryTests
     {
         var registry = CreateRegistry();
         var options = CreateOptions(
-            ("tenant-a", 5, "10.0.0.1", 161, "hrProcessorLoad"),
-            ("tenant-b", 5, "10.0.0.2", 161, "hrProcessorLoad"));
+            (0, 5, "10.0.0.1", 161, "hrProcessorLoad"),
+            (1, 5, "10.0.0.2", 161, "hrProcessorLoad"));
 
         registry.Reload(options);
 
@@ -209,8 +208,8 @@ public sealed class TenantVectorRegistryTests
     {
         var registry = CreateRegistry();
         var options = CreateOptions(
-            ("tenant-a", 1, "10.0.0.1", 161, "hrProcessorLoad"),
-            ("tenant-b", 2, "10.0.0.1", 161, "hrProcessorLoad"));
+            (0, 1, "10.0.0.1", 161, "hrProcessorLoad"),
+            (1, 2, "10.0.0.1", 161, "hrProcessorLoad"));
 
         registry.Reload(options);
 
@@ -228,7 +227,7 @@ public sealed class TenantVectorRegistryTests
     {
         var registry = CreateRegistry();
         var options = CreateOptions(
-            ("tenant-a", 1, "10.0.0.1", 161, "hrProcessorLoad"));
+            (0, 1, "10.0.0.1", 161, "hrProcessorLoad"));
 
         registry.Reload(options);
 
@@ -252,7 +251,7 @@ public sealed class TenantVectorRegistryTests
     {
         var registry = CreateRegistry();
         var options = CreateOptions(
-            ("tenant-a", 1, "10.0.0.1", 161, "hrProcessorLoad"));
+            (0, 1, "10.0.0.1", 161, "hrProcessorLoad"));
 
         registry.Reload(options);
 
@@ -277,13 +276,13 @@ public sealed class TenantVectorRegistryTests
 
         // Initial config: one metric.
         var options1 = CreateOptions(
-            ("tenant-a", 1, "10.0.0.1", 161, "hrProcessorLoad"));
+            (0, 1, "10.0.0.1", 161, "hrProcessorLoad"));
         registry.Reload(options1);
 
         // Second reload adds a new metric.
         var options2 = CreateOptions(
-            ("tenant-a", 1, "10.0.0.1", 161, "hrProcessorLoad"),
-            ("tenant-a", 1, "10.0.0.1", 161, "ifInOctets"));
+            (0, 1, "10.0.0.1", 161, "hrProcessorLoad"),
+            (0, 1, "10.0.0.1", 161, "ifInOctets"));
         registry.Reload(options2);
 
         registry.TryRoute("10.0.0.1", 161, "ifInOctets", out var holders);
@@ -298,8 +297,8 @@ public sealed class TenantVectorRegistryTests
 
         // Initial config with two metrics.
         var options1 = CreateOptions(
-            ("tenant-a", 1, "10.0.0.1", 161, "hrProcessorLoad"),
-            ("tenant-a", 1, "10.0.0.1", 161, "ifInOctets"));
+            (0, 1, "10.0.0.1", 161, "hrProcessorLoad"),
+            (0, 1, "10.0.0.1", 161, "ifInOctets"));
         registry.Reload(options1);
 
         // Write a value to ifInOctets.
@@ -308,7 +307,7 @@ public sealed class TenantVectorRegistryTests
 
         // Reload without ifInOctets — it should be gone.
         var options2 = CreateOptions(
-            ("tenant-a", 1, "10.0.0.1", 161, "hrProcessorLoad"));
+            (0, 1, "10.0.0.1", 161, "hrProcessorLoad"));
         registry.Reload(options2);
 
         var found = registry.TryRoute("10.0.0.1", 161, "ifInOctets", out _);
@@ -326,14 +325,14 @@ public sealed class TenantVectorRegistryTests
 
         // First config: tenant-a with metric-A.
         var options1 = CreateOptions(
-            ("tenant-a", 1, "10.0.0.1", 161, "metricA"));
+            (0, 1, "10.0.0.1", 161, "metricA"));
         registry.Reload(options1);
 
         Assert.True(registry.TryRoute("10.0.0.1", 161, "metricA", out _));
 
         // Second config: tenant-b with metric-B (completely different).
         var options2 = CreateOptions(
-            ("tenant-b", 2, "192.168.1.1", 161, "metricB"));
+            (0, 2, "192.168.1.1", 161, "metricB"));
         registry.Reload(options2);
 
         // Old key gone, new key present.
@@ -355,12 +354,12 @@ public sealed class TenantVectorRegistryTests
             logger);
 
         var options1 = CreateOptions(
-            ("tenant-a", 1, "10.0.0.1", 161, "hrProcessorLoad"));
+            (0, 1, "10.0.0.1", 161, "hrProcessorLoad"));
         registry.Reload(options1);
 
         var options2 = CreateOptions(
-            ("tenant-a", 1, "10.0.0.1", 161, "hrProcessorLoad"),
-            ("tenant-b", 2, "10.0.0.2", 161, "ifInOctets"));
+            (0, 1, "10.0.0.1", 161, "hrProcessorLoad"),
+            (1, 2, "10.0.0.2", 161, "ifInOctets"));
         registry.Reload(options2);
 
         Assert.True(logger.LogMessages.Count >= 2, "Expected at least 2 log messages from two reloads");
@@ -368,6 +367,7 @@ public sealed class TenantVectorRegistryTests
         Assert.All(logger.LogMessages, msg => Assert.Contains("reloaded", msg, StringComparison.OrdinalIgnoreCase));
         Assert.All(logger.LogMessages, msg => Assert.Contains("tenants=", msg, StringComparison.OrdinalIgnoreCase));
         Assert.All(logger.LogMessages, msg => Assert.Contains("slots=", msg, StringComparison.OrdinalIgnoreCase));
+        Assert.All(logger.LogMessages, msg => Assert.Contains("carried_over=", msg, StringComparison.OrdinalIgnoreCase));
     }
 
     // ──────────────────────────────────────────────────────

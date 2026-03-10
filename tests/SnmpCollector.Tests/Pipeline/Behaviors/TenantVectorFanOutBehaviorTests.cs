@@ -314,7 +314,6 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
             {
                 new()
                 {
-                    Id = "tenant-a",
                     Priority = 1,
                     Metrics = new List<MetricSlotOptions>
                     {
@@ -338,7 +337,6 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
             {
                 new()
                 {
-                    Id = "tenant-a",
                     Priority = 1,
                     Metrics = new List<MetricSlotOptions>
                     {
@@ -347,7 +345,6 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
                 },
                 new()
                 {
-                    Id = "tenant-b",
                     Priority = 2,
                     Metrics = new List<MetricSlotOptions>
                     {
@@ -371,7 +368,6 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
             {
                 new()
                 {
-                    Id = "tenant-a",
                     Priority = 1,
                     Metrics = new List<MetricSlotOptions>
                     {
@@ -380,7 +376,6 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
                 },
                 new()
                 {
-                    Id = "tenant-b",
                     Priority = 2,
                     Metrics = new List<MetricSlotOptions>
                     {
@@ -389,7 +384,6 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
                 },
                 new()
                 {
-                    Id = "tenant-c",
                     Priority = 3,
                     Metrics = new List<MetricSlotOptions>
                     {

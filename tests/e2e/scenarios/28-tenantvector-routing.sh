@@ -128,7 +128,6 @@ data:
     {
       "Tenants": [
         {
-          "Id": "npb-trap",
           "Priority": 1,
           "Metrics": [
             { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_status_P1" },
@@ -138,7 +137,6 @@ data:
           ]
         },
         {
-          "Id": "npb-poll",
           "Priority": 2,
           "Metrics": [
             { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_mem_util" },
@@ -148,7 +146,6 @@ data:
           ]
         },
         {
-          "Id": "obp-poll",
           "Priority": 3,
           "Metrics": [
             { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_channel_L1" },
@@ -158,7 +155,6 @@ data:
           ]
         },
         {
-          "Id": "obp-poll-2",
           "Priority": 4,
           "Metrics": [
             { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_r3_power_L1" },
@@ -178,10 +174,9 @@ RELOAD_EVIDENCE=""
 
 for POD in $PODS; do
     POD_LOGS=$(kubectl logs "$POD" -n simetra --since=30s 2>/dev/null) || true
-    # Check for registry diff log containing both "added" and "obp-poll-2"
-    if echo "$POD_LOGS" | grep "added" > /dev/null 2>&1 && echo "$POD_LOGS" | grep "obp-poll-2" > /dev/null 2>&1; then
+    if echo "$POD_LOGS" | grep "reloaded" > /dev/null 2>&1 && echo "$POD_LOGS" | grep "tenants=4" > /dev/null 2>&1; then
         FOUND_RELOAD=1
-        RELOAD_EVIDENCE="pod=${POD} logged diff with added=[obp-poll-2]"
+        RELOAD_EVIDENCE="pod=${POD} logged reload with tenants=4"
         break
     fi
 done
@@ -189,7 +184,7 @@ done
 if [ "$FOUND_RELOAD" -eq 1 ]; then
     record_pass "$SCENARIO_NAME" "$RELOAD_EVIDENCE"
 else
-    record_fail "$SCENARIO_NAME" "No pod logged diff containing 'added' and 'obp-poll-2' within 30s window"
+    record_fail "$SCENARIO_NAME" "No pod logged 'reloaded' with 'tenants=4' within 30s window"
 fi
 
 # ---------------------------------------------------------------------------

@@ -417,7 +417,6 @@ data:
   # TenantVectorWatcherService watches this ConfigMap for live reload.
   #
   # Each tenant entry requires:
-  #   Id             - Unique tenant identifier (e.g., "fiber-monitor")
   #   Priority       - Integer priority (1 = highest, higher = lower priority)
   #   Metrics        - Array of metric slot definitions for this tenant
   #
@@ -434,7 +433,6 @@ data:
     {
       "Tenants": [
         {
-          "Id": "npb-trap",
           "Priority": 1,
           "Metrics": [
             { "Ip": "PLACEHOLDER_NPB_IP", "Port": 161, "MetricName": "npb_port_status_P1" },
@@ -444,7 +442,6 @@ data:
           ]
         },
         {
-          "Id": "npb-poll",
           "Priority": 2,
           "Metrics": [
             { "Ip": "PLACEHOLDER_NPB_IP", "Port": 161, "MetricName": "npb_mem_util" },
@@ -454,7 +451,6 @@ data:
           ]
         },
         {
-          "Id": "obp-poll",
           "Priority": 3,
           "Metrics": [
             { "Ip": "PLACEHOLDER_OBP_IP", "Port": 161, "MetricName": "obp_channel_L1" },

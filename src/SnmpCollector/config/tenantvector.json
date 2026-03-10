@@ -2,7 +2,6 @@
   "TenantVector": {
     "Tenants": [
       {
-        "Id": "fiber-monitor",
         "Priority": 1,
         "Metrics": [
           {
@@ -13,7 +12,6 @@
         ]
       },
       {
-        "Id": "traffic-baseline",
         "Priority": 2,
         "Metrics": [
           {
