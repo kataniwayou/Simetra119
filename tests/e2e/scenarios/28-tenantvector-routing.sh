@@ -131,38 +131,38 @@ data:
           "Id": "npb-trap",
           "Priority": 1,
           "Metrics": [
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_status_P1", "IntervalSeconds": 10 },
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_rx_octets_P1", "IntervalSeconds": 10 },
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_tx_octets_P1", "IntervalSeconds": 10 },
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_cpu_util", "IntervalSeconds": 10 }
+            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_status_P1" },
+            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_rx_octets_P1" },
+            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_tx_octets_P1" },
+            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_cpu_util" }
           ]
         },
         {
           "Id": "npb-poll",
           "Priority": 2,
           "Metrics": [
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_mem_util", "IntervalSeconds": 10 },
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_sys_temp", "IntervalSeconds": 10 },
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_rx_packets_P1", "IntervalSeconds": 10 },
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_tx_packets_P1", "IntervalSeconds": 10 }
+            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_mem_util" },
+            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_sys_temp" },
+            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_rx_packets_P1" },
+            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_tx_packets_P1" }
           ]
         },
         {
           "Id": "obp-poll",
           "Priority": 3,
           "Metrics": [
-            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_channel_L1", "IntervalSeconds": 10 },
-            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_r1_power_L1", "IntervalSeconds": 10 },
-            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_r2_power_L1", "IntervalSeconds": 10 },
-            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_channel_L2", "IntervalSeconds": 10 }
+            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_channel_L1" },
+            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_r1_power_L1" },
+            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_r2_power_L1" },
+            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_channel_L2" }
           ]
         },
         {
           "Id": "obp-poll-2",
           "Priority": 4,
           "Metrics": [
-            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_r3_power_L1", "IntervalSeconds": 10 },
-            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_r4_power_L1", "IntervalSeconds": 10 }
+            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_r3_power_L1" },
+            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_r4_power_L1" }
           ]
         }
       ]

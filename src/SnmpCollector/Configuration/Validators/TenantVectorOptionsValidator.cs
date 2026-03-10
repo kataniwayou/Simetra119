@@ -100,13 +100,7 @@ public sealed class TenantVectorOptionsValidator : IValidateOptions<TenantVector
                     }
                 }
 
-                // Rule 7: IntervalSeconds > 0
-                if (metric.IntervalSeconds <= 0)
-                {
-                    failures.Add($"{prefix}.IntervalSeconds must be greater than 0");
-                }
-
-                // Rule 8: Per-tenant duplicate metrics (ip:port:metric_name)
+                // Rule 7: Per-tenant duplicate metrics (ip:port:metric_name)
                 if (!string.IsNullOrWhiteSpace(metric.Ip) && !string.IsNullOrWhiteSpace(metric.MetricName))
                 {
                     var key = $"{metric.Ip}:{metric.Port}:{metric.MetricName}";

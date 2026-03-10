@@ -8,8 +8,7 @@
           {
             "Ip": "127.0.0.1",
             "Port": 10161,
-            "MetricName": "obp_link_state_L1",
-            "IntervalSeconds": 10
+            "MetricName": "obp_link_state_L1"
           }
         ]
       },
@@ -20,8 +19,7 @@
           {
             "Ip": "127.0.0.1",
             "Port": 10162,
-            "MetricName": "npb_cpu_util",
-            "IntervalSeconds": 30
+            "MetricName": "npb_cpu_util"
           }
         ]
       }
