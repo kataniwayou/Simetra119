@@ -18,6 +18,7 @@ public sealed class OidMapService : IOidMapService
 
     private readonly ILogger<OidMapService> _logger;
     private volatile FrozenDictionary<string, string> _map;
+    private volatile FrozenSet<string> _metricNames = FrozenSet<string>.Empty;
 
     /// <summary>
     /// Initializes the service with the provided initial OID map entries.
@@ -30,6 +31,7 @@ public sealed class OidMapService : IOidMapService
     {
         _logger = logger;
         _map = BuildFrozenMap(initialEntries);
+        _metricNames = _map.Values.ToFrozenSet();
 
         _logger.LogInformation(
             "OidMapService initialized with {EntryCount} entries",
@@ -44,6 +46,9 @@ public sealed class OidMapService : IOidMapService
 
     /// <inheritdoc />
     public int EntryCount => _map.Count;
+
+    /// <inheritdoc />
+    public bool ContainsMetricName(string metricName) => _metricNames.Contains(metricName);
 
     /// <inheritdoc />
     public void UpdateMap(Dictionary<string, string> entries)
@@ -61,6 +66,7 @@ public sealed class OidMapService : IOidMapService
 
         // Atomic swap -- volatile write ensures all readers see the new map immediately
         _map = newMap;
+        _metricNames = newMap.Values.ToFrozenSet();
 
         _logger.LogInformation(
             "OidMap hot-reloaded: {EntryCount} entries total, +{Added} added, -{Removed} removed, ~{Changed} changed",

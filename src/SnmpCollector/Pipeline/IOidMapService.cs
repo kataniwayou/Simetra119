@@ -21,6 +21,14 @@ public interface IOidMapService
     int EntryCount { get; }
 
     /// <summary>
+    /// Checks whether a metric name exists as a value in the current OID map.
+    /// Used by TenantVectorOptionsValidator to verify config MetricName references.
+    /// </summary>
+    /// <param name="metricName">The metric name to look up.</param>
+    /// <returns>True if the metric name exists in the current map values.</returns>
+    bool ContainsMetricName(string metricName);
+
+    /// <summary>
     /// Atomically replaces the OID map with the provided entries.
     /// Computes and logs the diff (added, removed, changed) for observability.
     /// Called by the ConfigMap watcher when configuration changes are detected.
