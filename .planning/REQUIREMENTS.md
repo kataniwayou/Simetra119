@@ -54,8 +54,8 @@ Requirements for the stateful data layer that organizes SNMP metrics into priori
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CFG-01 | Phase 25 | Pending |
-| CFG-02 | Phase 25 | Pending |
+| CFG-01 | Phase 25 | Complete |
+| CFG-02 | Phase 25 | Complete |
 | CFG-03 | Phase 28 | Pending |
 | DAT-01 | Phase 26 | Pending |
 | DAT-02 | Phase 26 | Pending |

@@ -35,7 +35,7 @@ See `.planning/MILESTONES.md` and `.planning/milestones/` for archived details.
 **Plans**: TBD
 
 Plans:
-- [ ] 25-01: Config POCOs and IValidateOptions validator with unit tests
+- [x] 25-01: Config POCOs and IValidateOptions validator with unit tests
 
 #### Phase 26: Core Data Types and Registry
 
@@ -109,7 +109,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 25. Config Models | v1.5 | 0/1 | Not started | - |
+| 25. Config Models | v1.5 | 1/1 | Complete | 2026-03-10 |
 | 26. Core Data Types | v1.5 | 0/2 | Not started | - |
 | 27. Pipeline Integration | v1.5 | 0/2 | Not started | - |
 | 28. ConfigMap Watcher | v1.5 | 0/2 | Not started | - |
@@ -117,4 +117,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-10*
+*Last updated: 2026-03-10 after Phase 25 completion*
