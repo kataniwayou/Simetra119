@@ -2,15 +2,10 @@ namespace SnmpCollector.Configuration;
 
 /// <summary>
 /// Configuration for a single tenant within the tenant vector.
-/// Each tenant has a unique ID, a priority for scheduling, and a list of metric slots.
+/// Each tenant has a priority for scheduling and a list of metric slots.
 /// </summary>
 public sealed class TenantOptions
 {
-    /// <summary>
-    /// Unique tenant identifier. Case-insensitive uniqueness enforced by validator.
-    /// </summary>
-    public string Id { get; set; } = string.Empty;
-
     /// <summary>
     /// Scheduling priority for this tenant. Lower values = higher priority.
     /// Any integer is valid (no range constraint).

@@ -32,26 +32,9 @@ public sealed class TenantVectorOptionsValidator : IValidateOptions<TenantVector
         var oidMapEmpty = _oidMapService.EntryCount == 0;
         var loggedOidMapWarning = false;
 
-        // Duplicate tenant ID detection (case-insensitive)
-        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
         for (var i = 0; i < options.Tenants.Count; i++)
         {
             var tenant = options.Tenants[i];
-
-            // Rule 1: Tenant Id required
-            if (string.IsNullOrWhiteSpace(tenant.Id))
-            {
-                failures.Add($"Tenants[{i}].Id is required");
-            }
-            else
-            {
-                // Rule 2: Duplicate tenant IDs (only check non-empty IDs)
-                if (!seenIds.Add(tenant.Id))
-                {
-                    failures.Add($"Tenants[{i}].Id '{tenant.Id}' is a duplicate (case-insensitive)");
-                }
-            }
 
             // Per-tenant duplicate metric detection
             var seenMetrics = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -106,7 +89,7 @@ public sealed class TenantVectorOptionsValidator : IValidateOptions<TenantVector
                     var key = $"{metric.Ip}:{metric.Port}:{metric.MetricName}";
                     if (!seenMetrics.Add(key))
                     {
-                        failures.Add($"{prefix} is a duplicate metric slot ({key}) within tenant '{tenant.Id}'");
+                        failures.Add($"{prefix} is a duplicate metric slot ({key}) within Tenants[{i}]");
                     }
                 }
             }

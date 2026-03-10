@@ -60,46 +60,27 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
     /// <param name="options">Current tenant vector configuration.</param>
     public void Reload(TenantVectorOptions options)
     {
-        // Step 1: Capture current groups snapshot for diff logging and value carry-over.
+        // Step 1: Capture current groups snapshot for value carry-over.
         var oldGroups = _groups;
 
-        // Step 2: Build lookup for carry-over: (tenantId, ip, port, metricName) -> holder.
-        var oldSlotLookup = new Dictionary<(string TenantId, string Ip, int Port, string MetricName),
-            MetricSlotHolder>(StringTupleComparer.Instance);
-
+        // Step 2: Build lookup for carry-over: (ip, port, metricName) -> holder.
+        var oldSlotLookup = new Dictionary<RoutingKey, MetricSlotHolder>(RoutingKeyComparer.Instance);
         foreach (var group in oldGroups)
-        {
             foreach (var tenant in group.Tenants)
-            {
                 foreach (var holder in tenant.Holders)
-                {
-                    var key = (tenant.Id, holder.Ip, holder.Port, holder.MetricName);
-                    oldSlotLookup[key] = holder;
-                }
-            }
-        }
+                    oldSlotLookup[new RoutingKey(holder.Ip, holder.Port, holder.MetricName)] = holder;
 
-        // Step 3: Compute diff statistics for logging.
-        var oldTenantIds = new HashSet<string>(
-            oldGroups.SelectMany(g => g.Tenants).Select(t => t.Id),
-            StringComparer.OrdinalIgnoreCase);
-        var newTenantIds = new HashSet<string>(
-            options.Tenants.Select(t => t.Id),
-            StringComparer.OrdinalIgnoreCase);
-
-        var addedTenants = newTenantIds.Except(oldTenantIds, StringComparer.OrdinalIgnoreCase).ToList();
-        var removedTenants = oldTenantIds.Except(newTenantIds, StringComparer.OrdinalIgnoreCase).ToList();
-        var unchangedTenants = newTenantIds.Intersect(oldTenantIds, StringComparer.OrdinalIgnoreCase).ToList();
-
-        // Step 4: Build new MetricSlotHolders, carrying over old values where metric matches.
+        // Step 3: Build new MetricSlotHolders, carrying over old values where metric matches.
         int carriedOver = 0;
         int totalSlots = 0;
 
         // SortedDictionary with ascending key order (lowest priority int = highest priority = first group).
         var priorityBuckets = new SortedDictionary<int, List<Tenant>>();
 
-        foreach (var tenantOpts in options.Tenants)
+        for (var i = 0; i < options.Tenants.Count; i++)
         {
+            var tenantOpts = options.Tenants[i];
+            var tenantId = $"tenant-{i}";
             var holders = new List<MetricSlotHolder>(tenantOpts.Metrics.Count);
 
             foreach (var metric in tenantOpts.Metrics)
@@ -111,8 +92,8 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                     metric.MetricName,
                     derivedInterval);
 
-                // Carry over existing slot value when the same (tenantId, ip, port, metricName) exists.
-                var lookupKey = (tenantOpts.Id, metric.Ip, metric.Port, metric.MetricName);
+                // Carry over existing slot value when the same (ip, port, metricName) exists.
+                var lookupKey = new RoutingKey(metric.Ip, metric.Port, metric.MetricName);
                 if (oldSlotLookup.TryGetValue(lookupKey, out var oldHolder))
                 {
                     var existingSlot = oldHolder.ReadSlot();
@@ -127,7 +108,7 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                 totalSlots++;
             }
 
-            var tenant = new Tenant(tenantOpts.Id, tenantOpts.Priority, holders);
+            var tenant = new Tenant(tenantId, tenantOpts.Priority, holders);
 
             if (!priorityBuckets.TryGetValue(tenantOpts.Priority, out var bucket))
             {
@@ -138,12 +119,12 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
             bucket.Add(tenant);
         }
 
-        // Step 5: Build IReadOnlyList<PriorityGroup> from sorted buckets.
+        // Step 4: Build IReadOnlyList<PriorityGroup> from sorted buckets.
         var newGroups = priorityBuckets
             .Select(kvp => new PriorityGroup(kvp.Key, kvp.Value))
             .ToList<PriorityGroup>();
 
-        // Step 6: Build routing index: (ip, port, metricName) -> list of holders across all tenants.
+        // Step 5: Build routing index: (ip, port, metricName) -> list of holders across all tenants.
         var routingBuilder = new Dictionary<RoutingKey, List<MetricSlotHolder>>(RoutingKeyComparer.Instance);
 
         foreach (var group in newGroups)
@@ -169,23 +150,19 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                 kvp => (IReadOnlyList<MetricSlotHolder>)kvp.Value,
                 RoutingKeyComparer.Instance);
 
-        // Step 7: Update counts before volatile swap.
+        // Step 6: Update counts before volatile swap.
         TenantCount = options.Tenants.Count;
         SlotCount = totalSlots;
 
-        // Step 8: Volatile swap — readers see either old or new, never a partial mix.
+        // Step 7: Volatile swap — readers see either old or new, never a partial mix.
         _groups = newGroups;
         _routingIndex = newRoutingIndex;
 
-        // Step 9: Structured diff log.
+        // Step 8: Count-based reload log.
         _logger.LogInformation(
-            "TenantVectorRegistry reloaded: tenants={TenantCount}, slots={SlotCount}, " +
-            "added=[{Added}], removed=[{Removed}], unchanged=[{Unchanged}], carried_over={CarriedOver}",
+            "TenantVectorRegistry reloaded: tenants={TenantCount}, slots={SlotCount}, carried_over={CarriedOver}",
             TenantCount,
             SlotCount,
-            string.Join(",", addedTenants),
-            string.Join(",", removedTenants),
-            string.Join(",", unchangedTenants),
             carriedOver);
     }
 
@@ -203,32 +180,5 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
             }
         }
         return 0;
-    }
-
-    /// <summary>
-    /// Case-insensitive equality comparer for (tenantId, ip, port, metricName) tuples.
-    /// Used for carry-over lookup during <see cref="TenantVectorRegistry.Reload"/>.
-    /// </summary>
-    private sealed class StringTupleComparer
-        : IEqualityComparer<(string TenantId, string Ip, int Port, string MetricName)>
-    {
-        public static readonly StringTupleComparer Instance = new();
-
-        private StringTupleComparer() { }
-
-        public bool Equals(
-            (string TenantId, string Ip, int Port, string MetricName) x,
-            (string TenantId, string Ip, int Port, string MetricName) y)
-            => x.Port == y.Port
-               && string.Equals(x.TenantId, y.TenantId, StringComparison.OrdinalIgnoreCase)
-               && string.Equals(x.Ip, y.Ip, StringComparison.OrdinalIgnoreCase)
-               && string.Equals(x.MetricName, y.MetricName, StringComparison.OrdinalIgnoreCase);
-
-        public int GetHashCode((string TenantId, string Ip, int Port, string MetricName) obj)
-            => HashCode.Combine(
-                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.TenantId),
-                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Ip),
-                obj.Port,
-                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.MetricName));
     }
 }
