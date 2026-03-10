@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-09)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Planning next milestone
+**Current focus:** v1.5 Priority Vector Data Layer
 
 ## Current Position
 
-Phase: Not started (defining next milestone)
+Phase: Not started (defining requirements)
 Plan: —
-Status: v1.4 complete, ready for next milestone
-Last activity: 2026-03-10 -- Completed quick-040 (source distribution panels)
+Status: Defining requirements for v1.5
+Last activity: 2026-03-10 -- Milestone v1.5 started
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4
 
@@ -52,7 +52,7 @@ None.
 | 037 | IP+Port as primary device identity | 2026-03-10 | af973c7 | [037-ip-port-primary-device-identity](./quick/037-ip-port-primary-device-identity/) |
 | 038 | Configurable poll timeout percentage | 2026-03-10 | 4984002 | [038-configurable-poll-timeout-multiplier](./quick/038-configurable-poll-timeout-multiplier/) |
 | 039 | Add Source column to business dashboard | 2026-03-10 | d0e1270 | [039-add-source-column-to-business-dashboard](./quick/039-add-source-column-to-business-dashboard/) |
-| 040 | Source distribution panels (rate + pie) | 2026-03-10 | pending | [040-source-distribution-panels](./quick/040-source-distribution-panels/) |
+| 040 | Source distribution panels (rate + pie) | 2026-03-10 | f57cc5c | [040-source-distribution-panels](./quick/040-source-distribution-panels/) |
 
 ### Blockers/Concerns
 

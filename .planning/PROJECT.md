@@ -72,7 +72,16 @@ See `.planning/milestones/v1.4-REQUIREMENTS.md` for full requirement details.
 
 ### Active
 
-(No active requirements — planning next milestone)
+**v1.5 Priority Vector Data Layer**
+
+- Priority Vector configuration (tenantvector.json) with tenants, priorities, and metric slots
+- Tenant metric key: (ip, port, metric_name) — only OID-map-resolved metrics allowed
+- simetra-tenantvector ConfigMap with TenantVectorWatcherService (K8s API watch, hot-reload)
+- In-memory tenant registry with routing index: (ip, port, metric_name) → list of (tenant_id, metric_slot)
+- Metric slots: value cell (int/float/string) + updated_at timestamp, overwritten in place
+- TenantVectorFanOutBehavior in MediatR pipeline after OidResolution, before OtelMetricHandler
+- Fan-out from existing pipeline only — no new poll jobs, consume trap/poll data already flowing
+- Internal only — no external API or Prometheus export for tenant vector state
 
 ### Out of Scope
 
@@ -142,4 +151,4 @@ See `.planning/milestones/v1.4-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-09 after v1.4 milestone completion*
+*Last updated: 2026-03-10 after v1.5 milestone start*
