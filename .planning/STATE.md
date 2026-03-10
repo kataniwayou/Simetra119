@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 ## Current Position
 
 Phase: 27 — third of 5 in v1.5 (Pipeline Integration)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-03-10 — Phase 26 complete (Core Data Types and Registry), verified 5/5 must-haves
+Plan: 01 of 5 complete in phase 27
+Status: In progress
+Last activity: 2026-03-10 — Completed 27-01-PLAN.md (heartbeat normalization, ValueExtractionBehavior, OtelMetricHandler refactor)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [###______] 3/9 v1.5
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [####_____] 4/9 v1.5
 
 ## Milestone History
 
@@ -44,6 +44,10 @@ See `.planning/MILESTONES.md` for details.
 - RoutingKeyComparer.Instance singleton — pass explicitly to FrozenDictionary constructor
 - PriorityGroup is not sealed (C# records cannot be declared sealed)
 - TenantVectorRegistry.Reload() value carry-over: copies MetricSlot value via ReadSlot()/WriteValue(), never copies holder object
+- IsHeartbeat removed from SnmpOidReceived — heartbeat flows as normal metric with MetricName="heartbeat" (D27-01)
+- ValueExtractionBehavior is 5th in pipeline chain; sets ExtractedValue + ExtractedStringValue once — consumers read pre-extracted (D27-01)
+- OidMapService.MergeWithHeartbeatSeed called in both constructor and UpdateMap — heartbeat seed survives every ConfigMap reload (D27-01)
+- OtelMetricHandler reads ExtractedValue/ExtractedStringValue; uses TypeCode.ToString().ToLowerInvariant() for snmpType label (D27-01)
 
 ### Known Tech Debt
 
@@ -55,6 +59,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10
-Stopped at: Phase 26 complete, ready for Phase 27
+Last session: 2026-03-10T19:30:21Z
+Stopped at: Completed 27-01-PLAN.md, ready for 27-02
 Resume file: None
