@@ -100,7 +100,7 @@ public sealed class DeviceRegistryTests
         Assert.True(found);
         Assert.NotNull(device);
         Assert.Equal("npb-core-01", device.Name);
-        Assert.Equal("10.0.10.1", device.IpAddress);
+        Assert.Equal("10.0.10.1", device.ConfigAddress);
         Assert.Equal(161, device.Port);
     }
 
@@ -144,7 +144,7 @@ public sealed class DeviceRegistryTests
         };
 
         var ex = Assert.Throws<InvalidOperationException>(() => CreateRegistry(opts));
-        Assert.Contains("Duplicate IP+Port 10.0.10.1:161", ex.Message);
+        Assert.Contains("Duplicate address+port 10.0.10.1:161", ex.Message);
         Assert.Contains("device-a", ex.Message);
         Assert.Contains("device-b", ex.Message);
     }
@@ -216,9 +216,11 @@ public sealed class DeviceRegistryTests
         var found = sut.TryGetDeviceByName("dns-device", out var device);
         Assert.True(found);
         Assert.NotNull(device);
-        // Should store resolved IP, not the DNS name
-        Assert.True(IPAddress.TryParse(device.IpAddress, out _), "IpAddress should be a resolved IP, not a DNS name");
-        Assert.Equal("127.0.0.1", device.IpAddress);
+        // ConfigAddress should be the raw DNS name from config
+        Assert.Equal("localhost", device.ConfigAddress);
+        // ResolvedIp should be the resolved IP
+        Assert.True(IPAddress.TryParse(device.ResolvedIp, out _), "ResolvedIp should be a resolved IP");
+        Assert.Equal("127.0.0.1", device.ResolvedIp);
     }
 
     [Fact]

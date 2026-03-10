@@ -452,34 +452,32 @@ public static class ServiceCollectionExtensions
             intervalRegistry.Register("heartbeat", heartbeatOptions.IntervalSeconds);
 
             // Phase 6: MetricPollJob per device per poll group.
-            // Resolve DNS to IP at registration time so job keys and job data use resolved IPs,
-            // matching DeviceRegistry's resolved keys for TryGetByIpPort lookups.
+            // Job keys use raw config address (DNS or IP) so operators can correlate to ConfigMap.
             // for loops (not foreach) to avoid lambda variable capture bug (Pitfall 8).
             for (var di = 0; di < devicesOptions.Devices.Count; di++)
             {
                 var device = devicesOptions.Devices[di];
-                var resolvedIp = ResolveIpAddress(device.IpAddress);
                 for (var pi = 0; pi < device.MetricPolls.Count; pi++)
                 {
                     var poll = device.MetricPolls[pi];
-                    var jobKey = new JobKey($"metric-poll-{resolvedIp}_{device.Port}-{pi}");
+                    var jobKey = new JobKey($"metric-poll-{device.IpAddress}_{device.Port}-{pi}");
                     q.AddJob<MetricPollJob>(j => j
                         .WithIdentity(jobKey)
-                        .UsingJobData("ipAddress", resolvedIp)
+                        .UsingJobData("configAddress", device.IpAddress)
                         .UsingJobData("port", device.Port)
                         .UsingJobData("pollIndex", pi)
                         .UsingJobData("intervalSeconds", poll.IntervalSeconds));
 
                     q.AddTrigger(t => t
                         .ForJob(jobKey)
-                        .WithIdentity($"metric-poll-{resolvedIp}_{device.Port}-{pi}-trigger")
+                        .WithIdentity($"metric-poll-{device.IpAddress}_{device.Port}-{pi}-trigger")
                         .StartNow()
                         .WithSimpleSchedule(s => s
                             .WithIntervalInSeconds(poll.IntervalSeconds)
                             .RepeatForever()
                             .WithMisfireHandlingInstructionNextWithRemainingCount()));
 
-                    intervalRegistry.Register($"metric-poll-{resolvedIp}_{device.Port}-{pi}", poll.IntervalSeconds);
+                    intervalRegistry.Register($"metric-poll-{device.IpAddress}_{device.Port}-{pi}", poll.IntervalSeconds);
                 }
             }
         });
@@ -534,19 +532,5 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<GracefulShutdownService>();
 
         return services;
-    }
-
-    /// <summary>
-    /// Resolves a hostname or IP string to a normalized IPv4 address string.
-    /// Used at Quartz job registration to ensure job keys and job data use resolved IPs,
-    /// matching DeviceRegistry's resolved keys.
-    /// </summary>
-    private static string ResolveIpAddress(string ipOrHostname)
-    {
-        if (System.Net.IPAddress.TryParse(ipOrHostname, out var parsed))
-            return parsed.MapToIPv4().ToString();
-
-        var addresses = System.Net.Dns.GetHostAddresses(ipOrHostname);
-        return addresses.First(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork).ToString();
     }
 }

@@ -82,7 +82,7 @@ public sealed class MetricPollJobTests : IDisposable
     private static DeviceInfo MakeDevice(params string[] pollOids)
     {
         var pollGroup = new MetricPollInfo(0, pollOids.ToList(), 30);
-        return new DeviceInfo(DeviceName, DeviceIp, DevicePort, [pollGroup]);
+        return new DeviceInfo(DeviceName, DeviceIp, DeviceIp, DevicePort, [pollGroup]);
     }
 
     private MetricPollJob CreateJob(
@@ -103,13 +103,13 @@ public sealed class MetricPollJobTests : IDisposable
     }
 
     private static IJobExecutionContext MakeContext(
-        string ipAddress = DeviceIp,
+        string configAddress = DeviceIp,
         int port = DevicePort,
         int pollIndex = 0,
         int intervalSeconds = 30,
         CancellationToken cancellationToken = default)
     {
-        return new StubJobExecutionContext(ipAddress, port, pollIndex, intervalSeconds, cancellationToken);
+        return new StubJobExecutionContext(configAddress, port, pollIndex, intervalSeconds, cancellationToken);
     }
 
     private long CountPollExecuted()
@@ -185,7 +185,7 @@ public sealed class MetricPollJobTests : IDisposable
     {
         // Arrange -- device with custom port
         var pollGroup = new MetricPollInfo(0, [IfInOctetsOid], 30);
-        var device = new DeviceInfo("custom-device", "10.0.0.99", 1161, [pollGroup]);
+        var device = new DeviceInfo("custom-device", "10.0.0.99", "10.0.0.99", 1161, [pollGroup]);
 
         var snmpClient = new StubSnmpClient { Response = new List<Variable>() };
         var sender     = new CapturingSender();
@@ -195,7 +195,7 @@ public sealed class MetricPollJobTests : IDisposable
             sender:     sender);
 
         // Act
-        await job.Execute(MakeContext(ipAddress: "10.0.0.99", port: 1161));
+        await job.Execute(MakeContext(configAddress: "10.0.0.99", port: 1161));
 
         // Assert -- StubSnmpClient captured endpoint and community
         Assert.Equal(1161, snmpClient.LastEndpoint!.Port);
@@ -319,7 +319,7 @@ public sealed class MetricPollJobTests : IDisposable
     {
         // Arrange -- device with explicit community string
         var pollGroup = new MetricPollInfo(0, [IfInOctetsOid], 30);
-        var device = new DeviceInfo("custom-device", "10.0.0.99", 1161, [pollGroup], "my-explicit-community");
+        var device = new DeviceInfo("custom-device", "10.0.0.99", "10.0.0.99", 1161, [pollGroup], "my-explicit-community");
 
         var snmpClient = new StubSnmpClient { Response = new List<Variable>() };
         var sender     = new CapturingSender();
@@ -329,7 +329,7 @@ public sealed class MetricPollJobTests : IDisposable
             sender:     sender);
 
         // Act
-        await job.Execute(MakeContext(ipAddress: "10.0.0.99", port: 1161));
+        await job.Execute(MakeContext(configAddress: "10.0.0.99", port: 1161));
 
         // Assert -- community string should be the explicit one, not Simetra.custom-device
         Assert.Equal("my-explicit-community", snmpClient.LastCommunity!.ToString());
@@ -376,10 +376,10 @@ public sealed class MetricPollJobTests : IDisposable
 
         public IReadOnlyList<DeviceInfo> AllDevices => _devices;
 
-        public bool TryGetByIpPort(string ipAddress, int port, [NotNullWhen(true)] out DeviceInfo? device)
+        public bool TryGetByIpPort(string configAddress, int port, [NotNullWhen(true)] out DeviceInfo? device)
         {
             device = _devices.FirstOrDefault(d =>
-                string.Equals(d.IpAddress, ipAddress, StringComparison.OrdinalIgnoreCase)
+                string.Equals(d.ConfigAddress, configAddress, StringComparison.OrdinalIgnoreCase)
                 && d.Port == port);
             return device is not null;
         }
@@ -479,7 +479,7 @@ public sealed class MetricPollJobTests : IDisposable
         private readonly IJobDetail _jobDetail;
 
         public StubJobExecutionContext(
-            string ipAddress,
+            string configAddress,
             int port,
             int pollIndex,
             int intervalSeconds,
@@ -489,14 +489,14 @@ public sealed class MetricPollJobTests : IDisposable
 
             MergedJobDataMap = new JobDataMap
             {
-                ["ipAddress"]       = ipAddress,
+                ["configAddress"]   = configAddress,
                 ["port"]            = port,
                 ["pollIndex"]       = pollIndex,
                 ["intervalSeconds"] = intervalSeconds
             };
 
             _jobDetail = JobBuilder.Create<MetricPollJob>()
-                .WithIdentity($"metric-poll-{ipAddress}_{port}-{pollIndex}")
+                .WithIdentity($"metric-poll-{configAddress}_{port}-{pollIndex}")
                 .Build();
         }
 

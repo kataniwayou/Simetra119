@@ -58,13 +58,13 @@ public sealed class DeviceRegistry : IDeviceRegistry
                 .ToList()
                 .AsReadOnly();
 
-            var info = new DeviceInfo(d.Name, ip.ToString(), d.Port, pollGroups, d.CommunityString);
+            var info = new DeviceInfo(d.Name, d.IpAddress, ip.ToString(), d.Port, pollGroups, d.CommunityString);
 
-            var ipPortKey = IpPortKey(info.IpAddress, info.Port);
+            var ipPortKey = IpPortKey(info.ConfigAddress, info.Port);
             if (byIpPortBuilder.TryGetValue(ipPortKey, out var existing))
             {
                 throw new InvalidOperationException(
-                    $"Duplicate IP+Port {ipPortKey} in device configuration (devices: '{existing.Name}', '{info.Name}')");
+                    $"Duplicate address+port {ipPortKey} in device configuration (devices: '{existing.Name}', '{info.Name}')");
             }
 
             byIpPortBuilder[ipPortKey] = info;
@@ -120,13 +120,13 @@ public sealed class DeviceRegistry : IDeviceRegistry
                 .ToList()
                 .AsReadOnly();
 
-            var info = new DeviceInfo(d.Name, ip.ToString(), d.Port, pollGroups, d.CommunityString);
+            var info = new DeviceInfo(d.Name, d.IpAddress, ip.ToString(), d.Port, pollGroups, d.CommunityString);
 
-            var ipPortKey = IpPortKey(info.IpAddress, info.Port);
+            var ipPortKey = IpPortKey(info.ConfigAddress, info.Port);
             if (byIpPortBuilder.TryGetValue(ipPortKey, out var existing))
             {
                 throw new InvalidOperationException(
-                    $"Duplicate IP+Port {ipPortKey} in device configuration (devices: '{existing.Name}', '{info.Name}')");
+                    $"Duplicate address+port {ipPortKey} in device configuration (devices: '{existing.Name}', '{info.Name}')");
             }
 
             byIpPortBuilder[ipPortKey] = info;

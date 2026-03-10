@@ -62,13 +62,13 @@ public sealed class DynamicPollScheduler
                 existingPollKeys.Add(key.Name);
         }
 
-        // 2. Build desired job set from resolved devices (IPs already resolved by DeviceRegistry)
+        // 2. Build desired job set using config addresses (DNS or IP as configured)
         var desiredJobs = new Dictionary<string, (DeviceInfo Device, int PollIndex, MetricPollInfo Poll)>(StringComparer.Ordinal);
         foreach (var device in resolvedDevices)
         {
             for (var pi = 0; pi < device.PollGroups.Count; pi++)
             {
-                var jobName = $"{JobPrefix}{device.IpAddress}_{device.Port}-{pi}";
+                var jobName = $"{JobPrefix}{device.ConfigAddress}_{device.Port}-{pi}";
                 desiredJobs[jobName] = (device, pi, device.PollGroups[pi]);
             }
         }
@@ -141,7 +141,7 @@ public sealed class DynamicPollScheduler
         var jobKey = new JobKey(jobName);
         var job = JobBuilder.Create<MetricPollJob>()
             .WithIdentity(jobKey)
-            .UsingJobData("ipAddress", device.IpAddress)
+            .UsingJobData("configAddress", device.ConfigAddress)
             .UsingJobData("port", device.Port)
             .UsingJobData("pollIndex", pollIndex)
             .UsingJobData("intervalSeconds", poll.IntervalSeconds)

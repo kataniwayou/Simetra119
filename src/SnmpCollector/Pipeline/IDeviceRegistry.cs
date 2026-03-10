@@ -9,14 +9,15 @@ namespace SnmpCollector.Pipeline;
 public interface IDeviceRegistry
 {
     /// <summary>
-    /// Attempts to find a registered device by its IP address and port.
-    /// Primary lookup used by poll jobs that receive IP+Port from Quartz JobDataMap.
+    /// Attempts to find a registered device by its configured address and port.
+    /// Primary lookup used by poll jobs that receive address+port from Quartz JobDataMap.
+    /// The address matches the raw config value (DNS name or IP), not the resolved IP.
     /// </summary>
-    /// <param name="ipAddress">The device IP address.</param>
+    /// <param name="configAddress">The device address as configured (DNS name or IP).</param>
     /// <param name="port">The device SNMP port.</param>
     /// <param name="device">The device info if found; null otherwise.</param>
     /// <returns>True if the device was found; false otherwise.</returns>
-    bool TryGetByIpPort(string ipAddress, int port, [NotNullWhen(true)] out DeviceInfo? device);
+    bool TryGetByIpPort(string configAddress, int port, [NotNullWhen(true)] out DeviceInfo? device);
 
     /// <summary>
     /// Attempts to find a registered device by its configured name.

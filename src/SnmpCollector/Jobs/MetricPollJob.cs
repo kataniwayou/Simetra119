@@ -57,19 +57,19 @@ public sealed class MetricPollJob : IJob
         _correlation.OperationCorrelationId = _correlation.CurrentCorrelationId;
 
         var map = context.MergedJobDataMap;
-        var ipAddress = map.GetString("ipAddress")!;
+        var configAddress = map.GetString("configAddress")!;
         var port = map.GetInt("port");
         var pollIndex = map.GetInt("pollIndex");
         var intervalSeconds = map.GetInt("intervalSeconds");
         var jobKey = context.JobDetail.Key.Name;
 
-        // Device lookup must succeed before we enter the try block.
+        // Device lookup by config address (DNS or IP as configured).
         // Config errors (device removed after scheduler started) do NOT count as a poll execution.
-        if (!_deviceRegistry.TryGetByIpPort(ipAddress, port, out var device))
+        if (!_deviceRegistry.TryGetByIpPort(configAddress, port, out var device))
         {
             _logger.LogWarning(
-                "Poll job {JobKey}: device at {IpAddress}:{Port} not found in registry -- skipping poll",
-                jobKey, ipAddress, port);
+                "Poll job {JobKey}: device at {ConfigAddress}:{Port} not found in registry -- skipping poll",
+                jobKey, configAddress, port);
             return;
         }
 
@@ -80,7 +80,8 @@ public sealed class MetricPollJob : IJob
             .Select(oid => new Variable(new ObjectIdentifier(oid)))
             .ToList();
 
-        var endpoint = new IPEndPoint(IPAddress.Parse(device.IpAddress), device.Port);
+        // Use resolved IP for actual SNMP GET call
+        var endpoint = new IPEndPoint(IPAddress.Parse(device.ResolvedIp), device.Port);
         var communityStr = !string.IsNullOrEmpty(device.CommunityString)
             ? device.CommunityString
             : CommunityStringHelper.DeriveFromDeviceName(device.Name);
@@ -106,7 +107,7 @@ public sealed class MetricPollJob : IJob
             {
                 _logger.LogInformation(
                     "Device {Name} ({Ip}) recovered after consecutive failures",
-                    device.Name, device.IpAddress);
+                    device.Name, device.ResolvedIp);
                 _pipelineMetrics.IncrementPollRecovered(device.Name);
             }
         }
@@ -115,7 +116,7 @@ public sealed class MetricPollJob : IJob
             // Timeout: the linked CTS fired, but host is not shutting down.
             _logger.LogWarning(
                 "Poll job {JobKey} timed out waiting for SNMP response from {DeviceName} ({Ip})",
-                jobKey, device.Name, device.IpAddress);
+                jobKey, device.Name, device.ResolvedIp);
             RecordFailure(device.Name, device);
         }
         catch (OperationCanceledException)
@@ -129,7 +130,7 @@ public sealed class MetricPollJob : IJob
             // Network error, SNMP error, or any other unexpected failure.
             _logger.LogWarning(ex,
                 "Poll job {JobKey} failed for {DeviceName} ({Ip})",
-                jobKey, device.Name, device.IpAddress);
+                jobKey, device.Name, device.ResolvedIp);
             RecordFailure(device.Name, device);
         }
         finally
@@ -168,7 +169,7 @@ public sealed class MetricPollJob : IJob
             var msg = new SnmpOidReceived
             {
                 Oid = variable.Id.ToString(),
-                AgentIp = IPAddress.Parse(device.IpAddress),
+                AgentIp = IPAddress.Parse(device.ResolvedIp),
                 DeviceName = device.Name,
                 Value = variable.Data,
                 Source = SnmpSource.Poll,
@@ -189,7 +190,7 @@ public sealed class MetricPollJob : IJob
             var failureCount = _unreachabilityTracker.GetFailureCount(deviceName);
             _logger.LogWarning(
                 "Device {Name} ({Ip}) unreachable after {N} consecutive failures",
-                device.Name, device.IpAddress, failureCount);
+                device.Name, device.ResolvedIp, failureCount);
             _pipelineMetrics.IncrementPollUnreachable(deviceName);
         }
     }

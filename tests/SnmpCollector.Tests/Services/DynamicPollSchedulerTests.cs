@@ -36,7 +36,7 @@ public sealed class DynamicPollSchedulerTests
                 Oids: new List<string> { "1.3.6.1.2.1.1.1.0" }.AsReadOnly(),
                 IntervalSeconds: intervalSeconds));
         }
-        return new DeviceInfo(name, ip, port, polls.AsReadOnly(), $"test.{name}");
+        return new DeviceInfo(name, ip, ip, port, polls.AsReadOnly(), $"test.{name}");
     }
 
     private void SetupExistingJobs(params string[] jobNames)
