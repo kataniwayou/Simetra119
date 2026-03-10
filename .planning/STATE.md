@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 Phase: 29 — fifth of 5 in v1.5 (K8s Deployment and E2E Validation) — COMPLETE
 Plan: All plans complete
 Status: Milestone v1.5 complete
-Last activity: 2026-03-11 — Completed quick task 042: Remove IntervalSeconds from tenant vector config
+Last activity: 2026-03-11 — Completed quick task 043: Remove tenant Id from ConfigMap config
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5
 
@@ -44,7 +44,8 @@ See `.planning/MILESTONES.md` for details.
 - FrozenSet<string> for O(1) metric name containment in OidMapService (D25-01)
 - RoutingKeyComparer.Instance singleton — pass explicitly to FrozenDictionary constructor
 - PriorityGroup is not sealed (C# records cannot be declared sealed)
-- TenantVectorRegistry.Reload() value carry-over: copies MetricSlot value via ReadSlot()/WriteValue(), never copies holder object
+- TenantVectorRegistry.Reload() value carry-over: uses (ip, port, metricName) 3-tuple key via RoutingKey; copies MetricSlot value via ReadSlot()/WriteValue(), never copies holder object
+- TenantOptions has no Id property; TenantVectorRegistry auto-generates tenant-{index} Ids at Reload() time (Q043)
 - Heartbeat exports as snmp_gauge{device_name="Simetra", metric_name="Heartbeat", snmp_type="counter32"} with incrementing Counter32 value (Q041)
 - ValueExtractionBehavior is 5th in pipeline chain; sets ExtractedValue + ExtractedStringValue once — consumers read pre-extracted (D27-01)
 - OidMapService.MergeWithHeartbeatSeed called in both constructor and UpdateMap — heartbeat seed survives every ConfigMap reload (D27-01)
@@ -72,6 +73,7 @@ None.
 |---|-------------|------|--------|-----------|
 | 041 | Heartbeat as Counter32 snmp_gauge with device_name=Simetra | 2026-03-10 | 1c3ad32 | [041-heartbeat-counter32-simetra-device](./quick/041-heartbeat-counter32-simetra-device/) |
 | 042 | Remove IntervalSeconds from tenant vector config, derive from DeviceRegistry | 2026-03-11 | bd4ad96 | [042-remove-intervalseconds-from-tenant-config](./quick/042-remove-intervalseconds-from-tenant-config/) |
+| 043 | Remove tenant Id from ConfigMap, auto-generate positional Ids in registry | 2026-03-11 | 21b4017 | [043-remove-tenant-id-from-configmap](./quick/043-remove-tenant-id-from-configmap/) |
 
 ### Blockers/Concerns
 
@@ -80,5 +82,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Completed quick task 042
+Stopped at: Completed quick task 043
 Resume file: None
