@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 Phase: 29 — fifth of 5 in v1.5 (K8s Deployment and E2E Validation) — COMPLETE
 Plan: All plans complete
 Status: Milestone v1.5 complete
-Last activity: 2026-03-10 — Phase 29 complete (K8s Deployment and E2E Validation), verified 10/10 must-haves
+Last activity: 2026-03-10 — Completed quick task 041: Heartbeat as Counter32 with device_name=Simetra
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5
 
@@ -45,7 +45,7 @@ See `.planning/MILESTONES.md` for details.
 - RoutingKeyComparer.Instance singleton — pass explicitly to FrozenDictionary constructor
 - PriorityGroup is not sealed (C# records cannot be declared sealed)
 - TenantVectorRegistry.Reload() value carry-over: copies MetricSlot value via ReadSlot()/WriteValue(), never copies holder object
-- IsHeartbeat removed from SnmpOidReceived — heartbeat flows as normal metric with MetricName="heartbeat" (D27-01)
+- Heartbeat exports as snmp_gauge{device_name="Simetra", metric_name="Heartbeat", snmp_type="counter32"} with incrementing Counter32 value (Q041)
 - ValueExtractionBehavior is 5th in pipeline chain; sets ExtractedValue + ExtractedStringValue once — consumers read pre-extracted (D27-01)
 - OidMapService.MergeWithHeartbeatSeed called in both constructor and UpdateMap — heartbeat seed survives every ConfigMap reload (D27-01)
 - OtelMetricHandler reads ExtractedValue/ExtractedStringValue; uses TypeCode.ToString().ToLowerInvariant() for snmpType label (D27-01)
@@ -64,6 +64,12 @@ See `.planning/MILESTONES.md` for details.
 ### Known Tech Debt
 
 None.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 041 | Heartbeat as Counter32 snmp_gauge with device_name=Simetra | 2026-03-10 | 1c3ad32 | [041-heartbeat-counter32-simetra-device](./quick/041-heartbeat-counter32-simetra-device/) |
 
 ### Blockers/Concerns
 
