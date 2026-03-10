@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 ## Current Position
 
 Phase: 28 — fourth of 5 in v1.5 (ConfigMap Watcher and Local Dev)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-03-10 — Phase 27 complete (Pipeline Integration), verified 10/10 must-haves
+Plan: 02 of 5 in phase 28
+Status: In progress
+Last activity: 2026-03-10 — Completed 28-02 (simetra-tenantvector ConfigMap added to production manifests)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [#####____] 5/9 v1.5
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [######___] 6/9 v1.5
 
 ## Milestone History
 
@@ -52,6 +52,7 @@ See `.planning/MILESTONES.md` for details.
 - MetricSlot.TypeCode (SnmpType) preserved through WriteValue and Reload carry-over; consumers use TypeCode to distinguish Value vs StringValue (D27-02)
 - snmp.tenantvector.routed counter increments once per slot write with device_name tag (D27-02)
 - PipelineIntegrationTests must register ITenantVectorRegistry when using AddSnmpPipeline() (D27-02)
+- simetra-tenantvector ConfigMap uses bare JSON { "Tenants": [] } — NOT { "TenantVector": { ... } }; section wrapper is IConfiguration-only (D28-02)
 
 ### Known Tech Debt
 
@@ -63,6 +64,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10
-Stopped at: Phase 27 complete, ready for Phase 28
+Last session: 2026-03-10T20:17:59Z
+Stopped at: Completed 28-02-PLAN.md
 Resume file: None
