@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 Phase: 29 — fifth of 5 in v1.5 (K8s Deployment and E2E Validation) — COMPLETE
 Plan: All plans complete
 Status: Milestone v1.5 complete
-Last activity: 2026-03-11 — Completed quick task 044: Replace placeholder IPs with DNS names
+Last activity: 2026-03-11 — Completed quick task 045: Remove tenant vector validation
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5
 
@@ -56,7 +56,7 @@ See `.planning/MILESTONES.md` for details.
 - PipelineIntegrationTests must register ITenantVectorRegistry when using AddSnmpPipeline() (D27-02)
 - simetra-tenantvector ConfigMap uses bare JSON { "Tenants": [] } — NOT { "TenantVector": { ... } }; section wrapper is IConfiguration-only (D28-02)
 - TenantVectorWatcherService injects TenantVectorRegistry (concrete), not ITenantVectorRegistry — Reload() is not on the interface (D28-01)
-- Concrete-first validator DI: AddSingleton<TenantVectorOptionsValidator>() + AddSingleton<IValidateOptions<T>>(sp => sp.GetRequiredService<TenantVectorOptionsValidator>()) ensures single instance (D28-01)
+- Concrete-first validator DI: AddSingleton<TenantVectorOptionsValidator>() + AddSingleton<IValidateOptions<T>>(sp => sp.GetRequiredService<TenantVectorOptionsValidator>()) ensures single instance (D28-01); validator is now no-op (Q045)
 - Local dev tenantvector.json uses IConfiguration section wrapper; JsonDocument.Parse + TryGetProperty("TenantVector") extracts inner object before deserialization (D28-01)
 - simetra-tenantvector ConfigMap uses DNS names (same as simetra-devices); TenantVectorRegistry.ResolveIp() maps ConfigAddress to ResolvedIp via IDeviceRegistry at Reload() time (Q044)
 - E2E scenario 28 applies tenantvector ConfigMap directly (no ClusterIP derivation or sed substitution), hot-reload uses obp_r3_power_L1/obp_r4_power_L1 (valid oidmap metrics) for 4th tenant obp-poll-2 (Q044)
@@ -75,6 +75,7 @@ None.
 | 042 | Remove IntervalSeconds from tenant vector config, derive from DeviceRegistry | 2026-03-11 | bd4ad96 | [042-remove-intervalseconds-from-tenant-config](./quick/042-remove-intervalseconds-from-tenant-config/) |
 | 043 | Remove tenant Id from ConfigMap, auto-generate positional Ids in registry | 2026-03-11 | 21b4017 | [043-remove-tenant-id-from-configmap](./quick/043-remove-tenant-id-from-configmap/) |
 | 044 | Replace placeholder IPs with DNS names in tenant vector ConfigMaps | 2026-03-11 | 1883041 | [044-replace-placeholder-ips-with-dns](./quick/044-replace-placeholder-ips-with-dns/) |
+| 045 | Remove tenant vector validation (no-op validator) | 2026-03-11 | ac07691 | [045-remove-tenant-vector-validation](./quick/045-remove-tenant-vector-validation/) |
 
 ### Blockers/Concerns
 
@@ -83,5 +84,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Completed quick task 044
+Stopped at: Completed quick task 045
 Resume file: None
