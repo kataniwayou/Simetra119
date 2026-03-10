@@ -54,27 +54,27 @@ Requirements for the stateful data layer that organizes SNMP metrics into priori
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CFG-01 | TBD | Pending |
-| CFG-02 | TBD | Pending |
-| CFG-03 | TBD | Pending |
-| DAT-01 | TBD | Pending |
-| DAT-02 | TBD | Pending |
-| DAT-03 | TBD | Pending |
-| DAT-04 | TBD | Pending |
-| PIP-01 | TBD | Pending |
-| PIP-02 | TBD | Pending |
-| PIP-03 | TBD | Pending |
-| PIP-04 | TBD | Pending |
-| OBS-01 | TBD | Pending |
-| OBS-02 | TBD | Pending |
-| DEP-01 | TBD | Pending |
-| DEP-02 | TBD | Pending |
+| CFG-01 | Phase 25 | Pending |
+| CFG-02 | Phase 25 | Pending |
+| CFG-03 | Phase 28 | Pending |
+| DAT-01 | Phase 26 | Pending |
+| DAT-02 | Phase 26 | Pending |
+| DAT-03 | Phase 26 | Pending |
+| DAT-04 | Phase 26 | Pending |
+| PIP-01 | Phase 27 | Pending |
+| PIP-02 | Phase 27 | Pending |
+| PIP-03 | Phase 27 | Pending |
+| PIP-04 | Phase 27 | Pending |
+| OBS-01 | Phase 28 | Pending |
+| OBS-02 | Phase 27 | Pending |
+| DEP-01 | Phase 29 | Pending |
+| DEP-02 | Phase 29 | Pending |
 
 **Coverage:**
 - v1.5 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15
+- Mapped to phases: 15
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-10*
-*Last updated: 2026-03-10 after initial definition*
+*Last updated: 2026-03-10 after roadmap creation*
