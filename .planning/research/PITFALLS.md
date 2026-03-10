@@ -1,318 +1,393 @@
 # Domain Pitfalls
 
-**Domain:** E2E system verification for SNMP monitoring pipeline (OTel push to Prometheus via remote write)
-**Researched:** 2026-03-09
-**Confidence:** HIGH (verified against system source code, OTel SDK configuration, Prometheus remote write spec, K8s API watch behavior)
+**Domain:** Priority vector data layer -- stateful fan-out for in-memory tenant metric slots in an SNMP monitoring pipeline
+**Researched:** 2026-03-10
+**Confidence:** HIGH (verified against system source code: MediatR pipeline, FrozenDictionary reload patterns, K8s watcher concurrency model, leader election gating)
 
 ---
 
 ## Critical Pitfalls
 
-Mistakes that produce false pass/fail results or make the test suite unreliable.
+Mistakes that cause data corruption, silent data loss, or require architectural rework.
 
-### Pitfall 1: OTel Export Interval Creates a 15-Second Blind Spot
+### Pitfall 1: Routing Index and OID Map Reload Are Independent -- Stale Metric Names in Tenant Slots
 
 **What goes wrong:**
-Tests query Prometheus immediately after triggering a simulator action (trap, config change) and find no data. The test reports a failure that is actually a timing issue. The SnmpCollector uses a `PeriodicExportingMetricReader` with `exportIntervalMilliseconds: 15_000`. After a metric is recorded in the OTel SDK, it will not be pushed to the OTel Collector until the next 15-second export cycle. Add the OTel Collector's own batching/flush interval and you get a worst-case latency of ~16-18 seconds from metric record to Prometheus queryability.
+The OID map changes (OID `1.3.6.1.2.1.2.2.1.10.1` is renamed from `ifInOctets` to `interface_in_bytes`), but the tenant vector routing index still has entries keyed by `(ip, port, ifInOctets)`. New samples arrive with `MetricName = "interface_in_bytes"` (resolved by the updated OidMapService), miss the routing index lookup, and silently drop -- the tenant slot for the old metric name goes stale while the new name has no slot.
 
 **Why it happens:**
-Developers think "metric was recorded" means "metric is in Prometheus." The push path is: App SDK (15s batch) -> OTel Collector (OTLP receiver) -> prometheusremotewrite exporter -> Prometheus. Each hop adds latency.
+The system has two independent ConfigMap watchers: `OidMapWatcherService` (watches `simetra-oidmaps`) and a future `TenantVectorWatcherService` (watches tenant vector config). These fire independently. The OID map watcher updates `OidMapService` via atomic `FrozenDictionary` swap. The OidResolutionBehavior uses the new map immediately for the next `SnmpOidReceived`. But the tenant vector routing index was built using the OLD metric names and is not aware that metric names changed.
+
+This is the single most dangerous pitfall because the two config sources are coupled by the metric name key but reload independently.
 
 **Consequences:**
-- False negatives: tests fail because they query too early
-- Flaky tests: sometimes the export aligns with the query, sometimes it doesn't
-- Over-engineering: developers add 60-second sleeps everywhere "just in case"
+- Silent data loss: samples with new metric names are not routed to any tenant slot
+- Stale data: tenant slots hold the last value under the old metric name indefinitely
+- No error signal: the pipeline processes successfully (OtelMetricHandler still exports), so pipeline counters look healthy
 
 **Prevention:**
-Use a **poll-until-satisfied** pattern with a maximum timeout rather than fixed sleeps:
+1. **Subscribe the tenant vector routing index to OID map reload events.** When `OidMapService.UpdateMap()` completes, the routing index must rebuild. The simplest approach: have the priority vector service observe the OidMapService (event, callback, or periodic version check) and trigger a routing index rebuild when the OID map version changes.
+
+2. **Add a version stamp to OidMapService.** Currently `UpdateMap()` returns void. Add a monotonically increasing version number (or use the FrozenDictionary reference as a cheap identity check). The tenant vector can compare "did the OID map change since my last routing index build?" on each rebuild or periodically.
+
+3. **Rebuild routing index on ANY config change.** Since tenant vector config and OID map config are both small (hundreds of entries, not millions), rebuilding the routing index on either change is cheap and eliminates ordering dependencies. Use a single `ReloadOrchestrator` that serializes: (a) apply OID map, (b) apply device registry, (c) apply tenant vector config, (d) rebuild routing index from current state of all three.
+
+4. **Log routing misses explicitly.** When a `(ip, port, metric_name)` tuple arrives and no routing entry exists, log at Warning with the tuple. This makes stale routing immediately visible in logs rather than silently dropping.
+
+**Detection:**
+- Tenant slot `updated_at` timestamps stop advancing after an OID map change
+- Warning logs for "no routing entry for (ip, port, metric_name)" appearing after an oidmaps ConfigMap change
+- OTel business metrics still flowing (they use the resolved metric name directly) but tenant vector slots stale
+
+**Phase to address:** Routing index design phase. The routing index rebuild trigger must be designed alongside the index itself, not bolted on later.
+
+---
+
+### Pitfall 2: Non-Atomic Two-Dictionary Swap in DeviceRegistry Creates a Read Window of Inconsistency
+
+**What goes wrong:**
+The existing `DeviceRegistry.ReloadAsync()` performs two volatile writes sequentially:
+```csharp
+_byIpPort = newByIpPort;   // volatile write 1
+_byName = newByName;        // volatile write 2
 ```
-Wait up to 30 seconds, polling Prometheus every 3 seconds, until the expected metric appears.
-If 30 seconds pass without match, report failure with the last query result for diagnosis.
+Between write 1 and write 2, a concurrent reader calling `TryGetByIpPort()` sees the new dictionary while another reader calling `TryGetDeviceByName()` still sees the old dictionary. If the priority vector behavior reads both dictionaries during this window (e.g., looking up device by IP to get the device name, then looking up by name for tenant routing), it can get inconsistent results.
+
+**Why it happens:**
+`volatile` guarantees visibility of each individual write but does NOT guarantee atomicity across two writes. The current system tolerates this because `MetricPollJob` only uses `TryGetByIpPort` and `ChannelConsumerService` only uses `DeviceName` from the envelope. No existing code path reads both dictionaries in sequence for the same request. But the priority vector behavior might.
+
+**Consequences:**
+- Intermittent routing failures during device reload: a sample arrives with IP lookup succeeding against new registry but name lookup failing against old registry (or vice versa)
+- Extremely hard to reproduce: requires a device reload to land between two reads in the same pipeline execution, which is a microsecond-scale window
+
+**Prevention:**
+1. **Do not add a code path that reads both DeviceRegistry dictionaries in sequence for the same request.** The priority vector routing index should use `(ip, port, metric_name)` as its key (as designed), which requires only a single lookup into the routing index -- no DeviceRegistry lookup needed at fan-out time.
+
+2. **If you must cross-reference DeviceRegistry during routing:** Capture the device info at the start of the pipeline (e.g., in a behavior that runs once and attaches the `DeviceInfo` to the request) rather than looking it up again in the fan-out behavior.
+
+3. **For the routing index rebuild (triggered by device registry reload):** The rebuild reads `AllDevices` which returns a snapshot `_byIpPort.Values.ToList()`. This is safe because it reads a single volatile field. The routing index build should use this single snapshot, not interleave reads from both dictionaries.
+
+**Detection:**
+- Sporadic "device not found" warnings during config reload that resolve on the next poll cycle
+- Priority vector routing misses that correlate with device registry reload timestamps
+
+**Phase to address:** Fan-out behavior implementation. Ensure the behavior reads from the routing index only, not from DeviceRegistry.
+
+---
+
+### Pitfall 3: MediatR Behavior Ordering -- Fan-Out Before OidResolution Means No MetricName
+
+**What goes wrong:**
+The fan-out behavior is registered before `OidResolutionBehavior` in the MediatR pipeline. When it executes, `SnmpOidReceived.MetricName` is still `null` (it gets set by OidResolutionBehavior). The routing index lookup by `(ip, port, metric_name)` fails because `metric_name` is null. Every sample misses routing. Zero data reaches tenant slots.
+
+**Why it happens:**
+MediatR behavior registration order in `AddSnmpPipeline()` determines execution order. Currently:
 ```
-The 30-second ceiling is derived from: 15s max export interval + 5s OTel Collector flush margin + 10s safety buffer. For counter metrics (cumulative), wait for the value to be >= expected, not == expected, since additional increments may arrive between checks.
+1. LoggingBehavior       (outermost)
+2. ExceptionBehavior
+3. ValidationBehavior
+4. OidResolutionBehavior (innermost, sets MetricName)
+```
+The fan-out behavior MUST run after OidResolutionBehavior, meaning it must be registered after it (closer to the handler) or integrated into the handler itself. But the MediatR open behavior registration model means "after OidResolution" is actually "between OidResolution and OtelMetricHandler" -- which is inside the OidResolution behavior's `next()` call.
+
+This is counterintuitive: in MediatR's pipeline model, behaviors are nested like middleware. A behavior registered AFTER OidResolutionBehavior runs INSIDE it (after OidResolution calls `next()`). This is correct for fan-out. But if someone registers it BEFORE OidResolution (e.g., between Validation and OidResolution), MetricName will be null.
+
+**Consequences:**
+- Complete data loss to tenant slots -- routing index never matches
+- No error (null metric_name simply does not match any routing entry)
+- Pipeline counters look healthy (OtelMetricHandler still processes the sample)
+
+**Prevention:**
+1. **Register the fan-out behavior AFTER `OidResolutionBehavior` in `AddSnmpPipeline()`.** The registration should be:
+   ```
+   cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));       // 1st
+   cfg.AddOpenBehavior(typeof(ExceptionBehavior<,>));     // 2nd
+   cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));    // 3rd
+   cfg.AddOpenBehavior(typeof(OidResolutionBehavior<,>)); // 4th
+   cfg.AddOpenBehavior(typeof(TenantFanOutBehavior<,>));  // 5th -- MUST be after OidResolution
+   ```
+
+2. **Add a guard clause in the fan-out behavior:** If `msg.MetricName` is null or `"Unknown"`, skip fan-out for this sample. This both prevents null-key routing failures and ensures only OID-map-resolved metrics enter tenant slots (which is the design intent: "only OID-map-resolved metrics allowed").
+
+3. **Add a unit test that verifies fan-out receives a non-null MetricName.** Register the behaviors in order, send an `SnmpOidReceived` through the pipeline, and assert the fan-out behavior saw a non-null MetricName. This test catches accidental reordering.
 
 **Detection:**
-- Tests that pass locally but fail in CI (different timing)
-- Tests that pass when run individually but fail in batch (export cycle alignment shifts)
-- Hardcoded `sleep(60)` calls in test code
+- ALL tenant slots have null or zero values despite active polling
+- Debug logs in fan-out behavior showing `MetricName=null` or `MetricName=Unknown`
+- Unit test failure when behavior registration order changes
 
-**Phase to address:** Test harness/framework setup -- establish the polling utility before writing any verification scenarios.
+**Phase to address:** Behavior registration phase. This must be the first thing validated when the fan-out behavior is wired up.
 
 ---
 
-### Pitfall 2: Metric Staleness Does Not Work as Expected with OTel Remote Write
+### Pitfall 4: Slot Write Torn Reads -- value and updated_at Are Not Atomically Written Together
 
 **What goes wrong:**
-After removing a device or OID from configuration, the test queries Prometheus expecting the old metric to disappear. It does not. The metric persists with its last known value for approximately 5 minutes. The test either (a) waits 5+ minutes causing unacceptable test duration, or (b) falsely concludes removal failed.
+A metric slot holds `(value, updated_at)`. The fan-out behavior writes `slot.Value = newValue` then `slot.UpdatedAt = DateTimeOffset.UtcNow`. A concurrent reader (e.g., a future API or dashboard poller) reads between the two writes: it sees the new value but the OLD timestamp. It incorrectly concludes the value is stale (old timestamp) or, worse, serves the new value with a misleading timestamp.
 
 **Why it happens:**
-The OTel `prometheusremotewrite` exporter does not emit Prometheus staleness markers (stale NaN = `0x7ff0000000000002`) when a metric series stops being reported by a non-Prometheus source. This is a documented limitation: staleness markers are Prometheus-specific, and OTLP sources do not generate the `NoRecordedValue` flag that would trigger them. The OTel Collector continues sending the last known value for up to 5 minutes after the source stops reporting the metric.
+The MediatR pipeline is async but `ISender.Send` is awaited sequentially by both `MetricPollJob.DispatchResponseAsync` and `ChannelConsumerService.ExecuteAsync`. Within a single pod, the pipeline for one sample runs to completion before the next sample starts. So for the write path, there is no concurrent write contention.
 
-Additionally, Prometheus itself applies a 5-minute lookback window (`lookback_delta`) by default. Even if the metric truly stops being written, `last_over_time()` and instant queries will return the stale value for up to 5 minutes.
-
-**Consequences:**
-- Cannot verify metric removal via "query returns no data" within a reasonable test window
-- False confidence that metrics were removed when they were just outside the lookback window
-- Tests that take 5+ minutes per removal scenario
-
-**Prevention:**
-Do NOT verify metric removal by checking for absence in Prometheus queries. Instead:
-
-1. **Verify via log evidence:** After removing an OID from the map, confirm via `kubectl logs` that subsequent polls produce `metric_name=Unknown` for that OID (the OidMapService resolves unmapped OIDs to "Unknown"). This is observable within one poll interval (10 seconds).
-
-2. **Verify via metric_name label change:** Query for `snmp_gauge{metric_name="Unknown",oid="<the-removed-oid>"}` appearing -- this proves the OID is no longer mapped, which is the actual system behavior being tested.
-
-3. **Verify device removal via counter stagnation:** After removing a device, verify that `snmp_poll_executed_total{device_name="<removed>"}` stops incrementing (compare two readings 15+ seconds apart). Do not check for series absence.
-
-4. **Accept the 5-minute staleness window as a known system characteristic**, not a bug.
-
-**Detection:**
-- Tests with 5+ minute waits labeled "waiting for staleness"
-- Tests asserting `result == empty` for removed metrics
-- Flaky tests that pass after long delays but fail with short timeouts
-
-**Phase to address:** Test design phase -- establish removal verification patterns using log evidence and label changes before writing removal scenarios.
-
----
-
-### Pitfall 3: Leader Election Timing Makes Business Metric Verification Non-Deterministic
-
-**What goes wrong:**
-The test queries `snmp_gauge` or `snmp_info` from Prometheus and gets no results, even though the simulator is running and polls are executing. The cause: no pod currently holds leadership, or a leadership transition is in progress, so the `MetricRoleGatedExporter` suppresses all business metrics from export.
-
-**Why it happens:**
-Leader election uses K8s Lease API with configurable durations. During the window between one leader releasing the lease and another acquiring it, no business metrics are exported. The lease configuration (`LeaseDuration`, `RenewDeadline`, `RetryPeriod`) determines the gap. On pod restart or crash, the gap can be seconds to tens of seconds depending on TTL expiry vs. explicit lease deletion.
-
-In the current system, `GracefulShutdownService` explicitly deletes the lease on graceful shutdown (near-instant failover). But if a pod is killed forcefully, followers must wait for the full `LeaseDuration` to expire.
+However, the READ path is a different story. If any consumer reads tenant slots concurrently with the write path (health check, diagnostic endpoint, future API, metrics export), the reader can see a partially-written slot.
 
 **Consequences:**
-- Business metric queries return empty during leadership transitions
-- Tests checking `snmp_gauge` immediately after cluster changes fail sporadically
-- Pipeline metrics (snmp.event.handled) work fine, creating confusion about why business metrics are missing
+- Misleading timestamps on slot values
+- If the reader uses `updated_at` for staleness detection, it may incorrectly flag fresh data as stale (or vice versa)
+- In a multi-threaded read scenario (e.g., OTel export running on a background timer), the torn read window is real
 
 **Prevention:**
-1. **Always verify leader exists before testing business metrics:** Query pipeline metrics first (`snmp_event_handled_total`) -- these export from ALL instances regardless of leadership. If pipeline metrics are flowing but `snmp_gauge` is empty, it is a leadership gap.
+1. **Make the slot an immutable struct and swap atomically.** Instead of mutating two fields, create a new `MetricSlot` value and assign it in a single reference write:
+   ```csharp
+   // Slot is a readonly record struct or sealed class
+   record MetricSlot(double Value, DateTimeOffset UpdatedAt);
 
-2. **Check leadership status via logs:** `kubectl logs -l app=snmp-collector -n simetra | grep "Acquired leadership"` -- confirm which pod holds leadership before running business metric tests.
+   // Atomic swap (single volatile/Interlocked write)
+   _slots[key] = new MetricSlot(newValue, DateTimeOffset.UtcNow);
+   ```
+   A single reference write is atomic on .NET (guaranteed for reference types and structs <= pointer size on the platform). For a struct larger than pointer size, use `Volatile.Write` or store as a reference type.
 
-3. **Wait for leadership stabilization after any cluster change:** After scaling, restarting, or config changes that cause pod restarts, wait for lease acquisition log evidence plus one full OTel export cycle (15s) before querying business metrics.
+2. **Use `Interlocked.Exchange` for the slot reference** if you want an explicit memory barrier guarantee, though for reference types a simple volatile write suffices.
 
-4. **Query with `service_instance_id` label** to verify the leader pod specifically is exporting.
-
-**Detection:**
-- `snmp_gauge` queries return empty while `snmp_event_handled_total` is incrementing
-- Tests pass when run alone but fail after pod restart scenarios
-- Intermittent "no data" results that resolve after re-running
-
-**Phase to address:** Pre-test health check phase -- verify leadership state as a precondition before every business metric test scenario.
-
----
-
-### Pitfall 4: Test Isolation Failure -- Previous Test Metrics Contaminate Next Test
-
-**What goes wrong:**
-Test scenario B queries Prometheus and finds metrics from test scenario A still present. This causes false positives (metrics appear to exist when they should not) or incorrect count assertions (counter values include increments from the previous test).
-
-**Why it happens:**
-Prometheus is an append-only time series database. Once a metric is written, it persists for the configured retention period (30 days in this system). There is no practical way to "reset" Prometheus between tests without losing all data. Combined with the 5-minute staleness window (Pitfall 2), metrics from a previous test are indistinguishable from current metrics unless timestamps are carefully compared.
-
-Additionally, OTel counters use cumulative temporality. `snmp_event_handled_total` never resets to zero between tests -- it monotonically increases across the pod's lifetime. A test that asserts "counter equals 5" will fail if a previous test already incremented it to 12.
-
-**Consequences:**
-- Tests must be run in a specific order to pass
-- Tests cannot be run independently for debugging
-- Counter value assertions are fragile and break when test execution order changes
-
-**Prevention:**
-1. **Never assert counter absolute values.** Instead, record the counter value before the test action, perform the action, wait, then assert the delta: `post_value - pre_value >= expected_increment`.
-
-2. **Use timestamp-bounded queries.** Record `start_time` before the test action. Query with `snmp_gauge{...} @ <timestamp>` or use range queries with `[30s]` windows anchored to the test execution window.
-
-3. **Use unique label values per test scenario.** If testing OID map changes, use OID values or metric names specific to that test scenario. If two tests both use the same OID, their metrics will collide.
-
-4. **For the dedicated test simulator**, use unique device_name and community string per test scenario to naturally isolate metric series by label.
+3. **Do NOT use a lock for slot writes.** The write path runs on the hot pipeline for every sample. Lock contention would degrade throughput. Immutable-swap is lock-free and sufficient.
 
 **Detection:**
-- Tests that pass on first run but fail on second run without cluster restart
-- Counter assertions with exact values that break when test order changes
-- Test failures that reference metrics with timestamps older than the test start time
+- Reader seeing `updated_at` older than expected despite `value` being current
+- Staleness health checks flapping (detecting stale slots that are actually being written)
 
-**Phase to address:** Test design phase -- establish delta-based counter assertions and timestamp-bounded queries as foundational patterns.
+**Phase to address:** Slot data structure design phase. The slot type must be designed as immutable-swap from the start. Retrofitting atomicity onto mutable fields is error-prone.
 
 ---
 
 ## Moderate Pitfalls
 
-Mistakes that cause delays, flaky tests, or missed coverage.
+Mistakes that cause incorrect behavior, performance issues, or unnecessary complexity.
 
-### Pitfall 5: ConfigMap Propagation is Not Instantaneous Across All Replicas
+### Pitfall 5: Routing Index Rebuild Blocks the Pipeline During Config Reload
 
 **What goes wrong:**
-A test applies a ConfigMap change (OID map update, device addition) and immediately checks all 3 replicas for the new behavior. Some replicas have not received the watch event yet, causing partial failures.
+When tenant vector config changes, the routing index rebuilds. If the rebuild holds a lock or blocks while building a new `FrozenDictionary`, all incoming samples queue behind the rebuild. With 3 replicas each polling 10+ devices every 10 seconds, even a 100ms rebuild can cause a visible pipeline stall.
 
 **Why it happens:**
-The system uses K8s API watch (not volume-projected ConfigMaps) via `OidMapWatcherService` and `DeviceWatcherService`. K8s API watch events are typically sub-second, but:
-- The watch event must be delivered to each pod's watcher independently
-- Each watcher serializes reload via `SemaphoreSlim` (one at a time)
-- The `DynamicPollScheduler.ReconcileAsync` must complete (Quartz job registration)
-- If a watch connection was recently closed (~30 min K8s server timeout), the pod reconnects with a 5-second backoff
-
-In practice, all 3 replicas typically converge within 1-3 seconds, but edge cases can extend this to 5-10 seconds.
+The existing pattern in `OidMapService.UpdateMap()` is: compute diff, build new FrozenDictionary, volatile write. The diff computation iterates old and new maps (O(n) where n = entries). This is fast for the OID map (~100 entries). But the tenant vector routing index could be larger: (devices x metric_names x tenants). If there are 50 devices, 20 metrics each, and 5 tenants, the routing index is 5,000 entries. Still fast, but the rebuild should not block readers.
 
 **Prevention:**
-1. After applying a ConfigMap change via `kubectl apply`, wait for log evidence from ALL replicas: `"OID map reload complete"` or `"Device config reload complete"` with the expected entry count.
-2. Add a 5-second post-reload stabilization wait before querying Prometheus, to allow the first post-reload poll cycle to complete and the 15-second export interval to fire.
-3. For tests that verify behavior on a specific pod, filter logs by pod name rather than checking all replicas.
+1. **Follow the existing FrozenDictionary atomic-swap pattern exactly.** Build the new routing index in a local variable, then assign it via a single volatile write. Readers see either the old or new index, never a partially-built one. No lock needed on the read path.
+
+2. **Serialize rebuilds with a SemaphoreSlim(1,1)** (same pattern as `OidMapWatcherService._reloadLock` and `DeviceWatcherService._reloadLock`). This prevents two concurrent config changes from interleaving their rebuild logic. But the semaphore guards the BUILD, not the READ. Readers always read the volatile field directly.
+
+3. **Do not hold the semaphore while building the FrozenDictionary.** The pattern should be:
+   ```
+   await _rebuildLock.WaitAsync(ct);
+   try {
+       var newIndex = BuildRoutingIndex(currentOidMap, currentDevices, currentTenantConfig);
+       _routingIndex = newIndex; // volatile write -- readers see this immediately
+   } finally {
+       _rebuildLock.Release();
+   }
+   ```
 
 **Detection:**
-- Tests that pass 2 out of 3 times (one replica slow to update)
-- Log output showing reload on 2 of 3 pods before the test query fires
+- Pipeline latency spikes correlating with ConfigMap change timestamps
+- `snmp_event_handled_total` rate dropping momentarily during config reload
 
-**Phase to address:** ConfigMap mutation test scenarios -- add per-pod log verification as a precondition after every ConfigMap apply.
+**Phase to address:** Routing index implementation phase. Use the existing codebase patterns (OidMapService, DeviceRegistry) as templates.
 
 ---
 
-### Pitfall 6: Querying Prometheus Counter Rate Over Too Short a Window
+### Pitfall 6: Device Removal Leaves Orphaned Tenant Slots With Stale Data
 
 **What goes wrong:**
-Test uses `rate(snmp_event_handled_total[15s])` and gets zero or `NaN` because there are fewer than 2 data points in the 15-second window. The test concludes the pipeline is not processing events.
+A device is removed from the device registry (via ConfigMap change). The routing index is rebuilt without entries for that device. But the tenant slots for that device's metrics still exist in memory, holding the last known values. If a consumer reads "all slots for tenant X," it gets stale data for a removed device. If the device is later re-added with the same IP:port, the old stale values are served until the first new sample overwrites them.
 
 **Why it happens:**
-Prometheus `rate()` requires at least 2 data points within the specified range to compute a rate. With a 15-second OTel export interval, a `[15s]` window may contain only 1 data point. The rule of thumb is that the range window should be at least 2x the scrape/write interval.
+The routing index controls which NEW samples reach which slots. But existing slots are not garbage-collected when routing entries are removed. The slot storage is a flat dictionary (or similar) that only grows.
 
-For this system (15s export), `rate(...[30s])` is the minimum viable window, and `rate(...[1m])` is safer.
+**Consequences:**
+- Stale data served for removed devices
+- Memory growth over time if devices are frequently added/removed
+- Confusion when a device is re-added and momentarily shows old values
 
 **Prevention:**
-1. **For counter verification, prefer raw value comparison over rate().** Query `snmp_event_handled_total{...}` directly, compare before/after values.
-2. If rate() is needed, use at least `[1m]` window: `rate(snmp_event_handled_total[1m])`.
-3. Never use `irate()` for E2E test assertions -- it uses only the last two data points and is highly volatile.
+1. **On routing index rebuild, compute the diff of slot keys and explicitly remove orphaned slots.** After building the new routing index, compare the old and new sets of `(ip, port, metric_name, tenant)` keys. Any key in the old set but not the new set should have its slot removed (or marked as expired).
+
+2. **Include `updated_at` in consumer reads and let consumers apply their own staleness threshold.** A consumer that sees `updated_at` from 30 minutes ago can decide to treat it as stale. This is simpler than active garbage collection but requires all consumers to implement staleness logic.
+
+3. **Log slot cleanup on rebuild:** "Removed N orphaned slots for device X, tenant Y" at Information level. This provides operational visibility into slot lifecycle.
 
 **Detection:**
-- `rate()` queries returning NaN or 0 when the counter is clearly incrementing (visible via raw value query)
-- Different results depending on when within the export cycle the query runs
+- Slots with `updated_at` timestamps that stopped advancing long ago
+- Memory usage growing linearly with config changes over time
+- Consumer displaying data for devices that no longer exist in the device registry
 
-**Phase to address:** Test harness setup -- document approved PromQL patterns for test assertions.
+**Phase to address:** Routing index rebuild phase. Slot cleanup must be part of the rebuild, not a separate maintenance task.
 
 ---
 
-### Pitfall 7: UDP Trap Delivery is Unreliable by Design
+### Pitfall 7: Per-Pod State Divergence in Multi-Replica Deployment
 
 **What goes wrong:**
-A test triggers a trap from a simulator, then checks Prometheus for the resulting metric. The metric never appears. The trap was lost on the network (UDP has no delivery guarantee) and there is no retry mechanism.
+Each of the 3 replicas maintains its own independent priority vector state. Because pods poll different devices (due to Quartz scheduling timing differences) and receive traps independently, each pod's tenant slots may hold different values for the same `(ip, port, metric_name)` at any given moment. A consumer that reads from different pods on successive requests gets inconsistent data.
 
 **Why it happens:**
-SNMP traps use UDP. Within a K8s cluster, UDP packet loss is rare but not zero, especially under resource contention. The SnmpTrapListenerService listens on port 10162 and has no acknowledgment protocol. If the pod is temporarily unavailable (restart, OOM, CPU throttling), the trap is silently dropped.
+The priority vector is in-memory and per-pod by design. Each pod runs its own MediatR pipeline, receives its own SNMP poll responses, and writes to its own slot storage. There is no cross-pod synchronization.
+
+For the existing OTel metrics path, this is fine: the leader exports business metrics, and Prometheus deduplicates via labels. But the priority vector is a direct-read data structure, not an export-to-Prometheus flow. If any consumer reads from it, the answer depends on which pod it hits.
+
+**Consequences:**
+- Different values returned depending on which pod serves the request
+- Difficulty reasoning about "what is the current value?" when 3 pods each have a different answer
+- If only the leader pod's slots are authoritative (matching the leader-gated export pattern), follower pods maintain slot state for no reason
 
 **Prevention:**
-1. **For trap-based test scenarios, always verify receipt via logs** before checking Prometheus: `"Trap received from {IP}"` or `snmp_trap_received_total` counter increment.
-2. **If trap verification fails, retry the trap send** (up to 3 times with 2-second intervals) before declaring failure.
-3. **Prefer poll-based verification where possible** -- polls are initiated by the collector and have timeout/retry semantics, making them more deterministic than traps.
-4. For the dedicated test simulator, log trap send confirmations on the simulator side to correlate with collector receipt.
+1. **Decide upfront: is tenant vector state leader-only or all-pods?** If leader-only: the fan-out behavior should check `ILeaderElection.IsLeader` and skip slot writes on follower pods. This saves memory and CPU on followers and makes the answer deterministic (always from the leader). If all-pods: document that consumers must either (a) always read from the leader or (b) aggregate across pods.
+
+2. **If leader-only: handle leadership transitions.** When a follower becomes leader, its slots are either empty (if it was skipping writes) or stale (if it was writing but nobody was reading). The new leader must wait for at least one full poll cycle to populate its slots before serving data. Add a health/readiness signal: "tenant vector populated" = at least one sample per routing entry received.
+
+3. **If all-pods: accept eventual consistency.** Document that the value returned is "the most recent sample THIS pod received" and is not globally consistent. For most monitoring use cases, this is acceptable (the value will converge within one poll interval).
 
 **Detection:**
-- Sporadic trap test failures that pass on retry
-- Missing `snmp_trap_received_total` increment despite simulator confirming send
-- Trap tests that work in low-load environments but fail under stress
+- Consumer getting different values when load-balanced across pods
+- After leadership failover, tenant vector returning stale or empty data for a full poll cycle
 
-**Phase to address:** Trap verification scenarios -- build retry logic into trap send utilities.
+**Phase to address:** Architecture decision phase. This is a design-time decision that affects every downstream implementation choice. Must be decided before writing any slot code.
 
 ---
 
-### Pitfall 8: Verifying Pipeline Counters on Wrong Pod Due to Leader-Gating Confusion
+### Pitfall 8: ExceptionBehavior Swallows Fan-Out Errors Silently
 
 **What goes wrong:**
-A test verifies that `snmp_event_handled_total` incremented on the leader pod, but queries Prometheus filtered to a specific `service_instance_id`. The query returns zero because the test is looking at a follower pod. The tester concludes the pipeline is broken.
+The fan-out behavior throws an exception (null reference, routing index not initialized, slot storage full). The `ExceptionBehavior` catches it, logs a Warning, increments the error counter, and returns `default!`. The pipeline continues. No sample reaches either the tenant slots OR the OtelMetricHandler. The business metrics stop exporting silently.
 
 **Why it happens:**
-Pipeline metrics (`SnmpCollector` meter) are exported by ALL instances. Business metrics (`SnmpCollector.Leader` meter) are exported only by the leader. Testers confuse which metrics are gated and which are not.
+The `ExceptionBehavior` is registered as the 2nd behavior (inside Logging, outside everything else). It catches ALL exceptions from downstream behaviors and handlers. If the fan-out behavior (5th) throws, ExceptionBehavior catches it and short-circuits the entire downstream chain, including OtelMetricHandler (the terminal handler). This means a bug in the fan-out behavior kills the existing OTel export path.
 
-Additionally, OTel resource attributes add `service_instance_id` and `k8s_pod_name` labels to ALL metrics (both pipeline and business). When querying pipeline counters, filtering by a specific pod's identity is valid. But for business metrics, only the leader's pod identity will have data.
+The current pipeline has no behavior that throws in normal operation (OidResolution never throws, Validation short-circuits via `return default!` not via exception). The fan-out behavior introduces a new exception source inside the pipeline.
+
+**Consequences:**
+- A bug in fan-out (new code) kills OTel export (existing, working code)
+- Silent: ExceptionBehavior logs a Warning but the metric export just stops
+- Prometheus dashboards go flat with no obvious error signal
 
 **Prevention:**
-Document and reference this lookup table in every test scenario:
+1. **The fan-out behavior MUST catch its own exceptions internally and NOT let them propagate.** The pattern:
+   ```csharp
+   // In TenantFanOutBehavior.Handle():
+   if (notification is SnmpOidReceived msg && msg.MetricName != null)
+   {
+       try
+       {
+           FanOutToTenantSlots(msg);
+       }
+       catch (Exception ex)
+       {
+           _logger.LogWarning(ex, "Tenant fan-out failed for {MetricName}", msg.MetricName);
+           // Do NOT re-throw. Let the pipeline continue to OtelMetricHandler.
+       }
+   }
+   return await next(); // ALWAYS call next() regardless of fan-out success
+   ```
 
-| Metric | Exported By | Filter By Pod? |
-|--------|------------|----------------|
-| `snmp_event_handled_total` | All instances | Yes (each pod has its own count) |
-| `snmp_poll_executed_total` | All instances | Yes |
-| `snmp_trap_received_total` | All instances | Yes |
-| `snmp_gauge` | Leader only | Only leader pod will have data |
-| `snmp_info` | Leader only | Only leader pod will have data |
+2. **ALWAYS call `next()` unconditionally.** The fan-out behavior is supplementary (writes to tenant slots) not gatekeeping (decides whether the sample proceeds). It must never short-circuit the pipeline.
 
-For pipeline counter verification across the cluster, omit the pod identity filter and sum: `sum(snmp_event_handled_total{device_name="OBP-01"})`.
+3. **Add an integration test that verifies: when fan-out throws, OtelMetricHandler still receives the sample.** Register a fan-out behavior that always throws, send a sample, and assert the handler's `_pipelineMetrics.IncrementHandled()` was called.
 
 **Detection:**
-- Queries returning data for some pods but not others
-- Business metric queries that only work when filtered to one specific pod
-- Confusion about why removing the pod filter changes results
+- `snmp_event_handled_total` stops incrementing while `snmp_event_published_total` continues
+- `snmp_pipeline_errors_total` incrementing on every sample
+- Prometheus `snmp_gauge` goes flat but pod logs show no obvious failure
 
-**Phase to address:** Test harness documentation -- create a metric reference card before writing test scenarios.
+**Phase to address:** Fan-out behavior implementation phase. The try/catch-and-continue pattern must be the FIRST thing written in the behavior, before any fan-out logic.
 
 ---
 
-### Pitfall 9: Heartbeat Metrics Contaminating Test Assertions
+### Pitfall 9: FrozenDictionary Rebuild Allocates on Every Config Change -- GC Pressure in Long-Running Pod
 
 **What goes wrong:**
-A test counts total `snmp_event_handled_total` increments after triggering a poll and finds more increments than expected. The extra increments come from the HeartbeatJob, which fires on a separate schedule and also increments `snmp_event_handled_total` (with `device_name` derived from the heartbeat's internal routing).
+The routing index uses `FrozenDictionary<TKey, TValue>` (matching OidMapService and DeviceRegistry patterns). Each config reload creates a new FrozenDictionary and abandons the old one. In a long-running pod with frequent config changes (e.g., automated OID map updates from a CI pipeline), the Gen2 GC heap accumulates abandoned FrozenDictionary instances.
 
 **Why it happens:**
-The HeartbeatJob sends a loopback trap through the full MediatR pipeline. The `OtelMetricHandler` increments `snmp_event_handled_total` for heartbeats (with `IsHeartbeat=true` flag). Heartbeat events are correctly suppressed from `snmp_gauge`/`snmp_info` export, but pipeline counters still count them. The heartbeat runs independently on a timer, so its increments arrive at unpredictable times relative to the test.
+`FrozenDictionary` is optimized for read performance by pre-computing hash buckets. Creating one is more expensive than creating a regular `Dictionary` (it does internal optimization passes). The abandoned old dictionary must be collected by GC. For the OID map (~100 entries) and device registry (~50 entries), this is trivial. But if the routing index is large (5,000+ entries with nested slot references), the allocation and GC cost per reload increases.
+
+**Consequences:**
+- Gen2 GC pauses during config reload in long-running pods
+- Memory spikes during reload (old + new dictionaries both in memory until GC)
+- In extreme cases (very large routing index + frequent reloads), observable pipeline latency spikes during GC
 
 **Prevention:**
-1. **Always filter counter queries by `device_name`.** Heartbeat events use a specific device name (likely the pod's own identity or a sentinel value). Test scenarios should query `snmp_event_handled_total{device_name="OBP-01"}` rather than unfiltered `snmp_event_handled_total`.
-2. **Use delta-based assertions** (Pitfall 4 prevention) so that background heartbeat increments between the "before" and "after" snapshots are excluded by the device_name filter.
-3. **Verify heartbeat behavior is correct in a dedicated test**, not as a side effect of other tests.
+1. **This is unlikely to be a real problem at the expected scale.** With 50 devices x 20 metrics x 5 tenants = 5,000 routing entries, a FrozenDictionary is ~200KB. Two copies during reload = ~400KB. Gen2 GC of this size is sub-millisecond. Do not optimize prematurely.
+
+2. **If scale grows beyond expectations (1000+ devices):** Consider using a `ConcurrentDictionary` for the routing index instead of FrozenDictionary. The read performance difference is negligible for lookup operations (both are O(1)). ConcurrentDictionary supports incremental updates without full rebuild.
+
+3. **Monitor via `System.Runtime` GC metrics** already exported by OTel (`gc_heap_size`, `gc_count`). If Gen2 collections spike after config reloads, investigate.
 
 **Detection:**
-- Counter increments higher than expected by a small, varying amount
-- Increments that occur even when no simulator is sending data
-- The extra count matches the heartbeat interval pattern
+- Gen2 GC count incrementing after config reloads (visible in Prometheus via `process_runtime_dotnet_gc_collections_total{generation="gen2"}`)
+- Pod memory usage sawtoothing during frequent config changes
 
-**Phase to address:** Pipeline counter verification scenarios -- filter by device_name in all counter queries.
+**Phase to address:** Not a priority for initial implementation. Monitor after deployment. Only optimize if metrics show a problem.
 
 ---
 
 ## Minor Pitfalls
 
-Mistakes that cause annoyance or confusion but are fixable.
+Mistakes that cause confusion or minor bugs but are easily fixed.
 
-### Pitfall 10: kubectl logs Buffer Truncation Losing Evidence
+### Pitfall 10: Heartbeat Samples Polluting Tenant Slots
 
 **What goes wrong:**
-A test checks `kubectl logs` for evidence of a specific event (OID map reload, trap receipt) but the log line has already scrolled out of the buffer. The test reports "no evidence found" when the event actually occurred.
-
-**Why it happens:**
-Default `kubectl logs` returns the last ~4096 lines or the current container's log buffer. In a high-throughput system with verbose logging, log lines from 30 seconds ago may already be truncated.
+The HeartbeatJob sends a loopback trap through the full MediatR pipeline. If the fan-out behavior does not filter out heartbeat messages, it attempts to route them to tenant slots. The heartbeat uses a sentinel DeviceName and has `IsHeartbeat = true`, but if the routing index does not explicitly exclude heartbeats, they either (a) match no routing entry (harmless miss) or (b) accidentally match a routing entry if the sentinel IP/port collides with a real device.
 
 **Prevention:**
-1. Use `kubectl logs --since=30s` to scope log retrieval to the test's time window.
-2. Use `kubectl logs --timestamps` to correlate log entries with test execution time.
-3. For critical evidence, capture logs to a file immediately after the action rather than querying later.
-4. Consider querying Elasticsearch (the system exports logs via OTel Collector) for structured log search, though this adds another hop with its own latency.
+1. **Check `msg.IsHeartbeat` early in the fan-out behavior and skip.** This matches the pattern in `OidResolutionBehavior` and `OtelMetricHandler`:
+   ```csharp
+   if (msg.IsHeartbeat) return await next();
+   ```
+
+2. **Check `msg.MetricName == OidMapService.Unknown` and skip.** Unresolved OIDs should not enter tenant slots (design decision: "only OID-map-resolved metrics allowed").
 
 **Detection:**
-- Log evidence queries that return empty despite the action clearly succeeding (metric appeared in Prometheus)
-- Inconsistent log evidence between fast and slow test runs
+- Tenant slots with DeviceName matching the heartbeat sentinel
+- Unexpected routing misses logged for heartbeat OIDs
 
-**Phase to address:** Test harness setup -- build log capture utilities with timestamp scoping.
+**Phase to address:** Fan-out behavior implementation. Add guard clauses at the top of the behavior.
 
 ---
 
-### Pitfall 11: Port-Forward Instability During Long Test Runs
+### Pitfall 11: Tenant Config Validation Gap -- Invalid Metric Names Pass Silently
 
 **What goes wrong:**
-The test suite uses `kubectl port-forward svc/prometheus 9090:9090` to query Prometheus. Mid-suite, the port-forward drops silently. Subsequent Prometheus queries fail with connection refused, and the test reports metric verification failures.
+A tenant vector ConfigMap references a metric name that does not exist in the current OID map (typo or stale config). The routing index is built with entries that will never match any incoming sample. The tenant slot is created but never written to. No error is logged.
 
 **Prevention:**
-1. Verify port-forward is alive before each Prometheus query attempt (quick health check: `GET /api/v1/status/buildinfo`).
-2. Implement automatic port-forward reconnection in the test harness.
-3. Alternatively, use `kubectl exec` to run `curl` against the in-cluster Prometheus service directly, bypassing port-forward entirely.
+1. **During routing index build, cross-reference tenant config metric names against the current OID map's known metric names.** Log a Warning for any metric name in tenant config that is not in the OID map: "Tenant 'X' references metric 'Y' which is not in the current OID map -- slot will not receive data."
+
+2. **This is a warning, not an error.** The metric might be added to the OID map later. But the warning gives operators visibility into misconfiguration.
+
+3. **Consider a startup health check** that verifies at least 80% of tenant-referenced metric names exist in the OID map. This catches bulk misconfiguration without being brittle to individual OID map timing.
 
 **Detection:**
-- Tests that fail mid-suite with connection errors, not assertion errors
-- Failures that correlate with test duration rather than test content
+- Tenant slots with `updated_at = null` (never written to)
+- Warning logs during routing index build listing unmatched metric names
 
-**Phase to address:** Test harness infrastructure -- build resilient Prometheus query utility.
+**Phase to address:** Routing index build phase. Add cross-reference validation as part of the build.
+
+---
+
+### Pitfall 12: Forgetting to Skip Fan-Out for Unresolved ("Unknown") Metrics
+
+**What goes wrong:**
+An OID arrives that is not in the OID map. `OidResolutionBehavior` sets `MetricName = "Unknown"`. The fan-out behavior routes by `(ip, port, "Unknown")`. If a tenant happens to have a catch-all or wildcard routing entry, ALL unresolved OIDs from ALL devices pile into one slot, overwriting each other. The slot value is meaningless (whichever unresolved OID was polled last wins).
+
+**Prevention:**
+1. **Skip fan-out when `msg.MetricName == OidMapService.Unknown`.** This is the correct behavior: the design states "only OID-map-resolved metrics allowed" in the priority vector.
+
+2. **Do not support wildcard metric names in tenant routing config.** The metric name must be an exact match against the OID map's resolved names.
+
+**Detection:**
+- A slot with `metric_name = "Unknown"` receiving updates from multiple devices
+- Rapid `updated_at` changes on a slot that should be device-specific
+
+**Phase to address:** Fan-out behavior guard clauses, routing config validation.
 
 ---
 
@@ -320,49 +395,56 @@ The test suite uses `kubectl port-forward svc/prometheus 9090:9090` to query Pro
 
 | Phase Topic | Likely Pitfall | Mitigation |
 |-------------|---------------|------------|
-| Test harness setup | Fixed sleeps instead of poll-until-satisfied (Pitfall 1) | Build polling utility as first deliverable; 30s timeout, 3s poll interval |
-| Pipeline counter verification | Heartbeat contamination (Pitfall 9), absolute value assertions (Pitfall 4) | Filter by device_name; use delta assertions |
-| Business metric verification | Leader gap (Pitfall 3), staleness confusion (Pitfall 2) | Verify leadership first; verify via label changes not absence |
-| OID map mutation tests | ConfigMap propagation delay (Pitfall 5), staleness (Pitfall 2) | Wait for reload logs from all pods; check for metric_name="Unknown" |
-| Device lifecycle tests | Staleness prevents absence verification (Pitfall 2) | Verify via counter stagnation and log evidence |
-| Trap-based scenarios | UDP unreliability (Pitfall 7), heartbeat noise (Pitfall 9) | Retry trap sends; filter by device_name |
-| Test simulator design | Metric collision with production simulators (Pitfall 4) | Use unique device_name and community string per test scenario |
-| ConfigMap watcher tests | All-replica convergence timing (Pitfall 5) | Per-pod log verification before metric queries |
-| Multi-scenario test runs | Port-forward drops (Pitfall 11), log truncation (Pitfall 10) | Health-check port-forward; scope logs with --since |
+| Architecture decision: leader-only vs all-pods | Per-pod divergence (Pitfall 7) | Decide before writing slot code; if leader-only, gate fan-out behind IsLeader |
+| Slot data structure design | Torn reads (Pitfall 4) | Use immutable record + atomic swap from day one |
+| Fan-out behavior registration | Wrong pipeline ordering (Pitfall 3) | Register AFTER OidResolutionBehavior; add unit test for ordering |
+| Fan-out behavior implementation | Exception kills OTel export (Pitfall 8) | Internal try/catch; always call next(); integration test |
+| Fan-out behavior guard clauses | Heartbeat/Unknown pollution (Pitfalls 10, 12) | Check IsHeartbeat and MetricName early |
+| Routing index design | OID map reload desync (Pitfall 1) | Subscribe to OidMapService changes; rebuild routing on any config change |
+| Routing index implementation | Pipeline blocking during rebuild (Pitfall 5) | FrozenDictionary atomic swap; SemaphoreSlim on build only |
+| Routing index rebuild | Orphaned slots for removed devices (Pitfall 6) | Compute diff on rebuild; remove orphaned slots |
+| Tenant config validation | Invalid metric name references (Pitfall 11) | Cross-reference against OID map; log warnings |
+| Multi-config reload coordination | Independent watcher race (Pitfall 1) | Centralized rebuild trigger; serialize all config changes |
 
 ---
 
-## Key Timing Constants Reference
+## Concurrency Model Summary
 
-These are the actual values from the system source code and K8s manifests:
+The existing system's concurrency model is crucial context for the priority vector design:
 
-| Constant | Value | Source |
-|----------|-------|--------|
-| OTel export interval | 15 seconds | `ServiceCollectionExtensions.cs` line 105: `exportIntervalMilliseconds: 15_000` |
-| Prometheus scrape interval | N/A (remote write, not scrape) | `prometheus.yaml`: uses `--web.enable-remote-write-receiver` |
-| Prometheus staleness lookback | 5 minutes (default) | Prometheus default `lookback_delta` |
-| Device poll interval | 10 seconds | `devices.json` configuration |
-| Heartbeat interval | Configurable via `HeartbeatJobOptions` | `appsettings.json` |
-| K8s watch reconnect backoff | 5 seconds | `OidMapWatcherService.cs` line 131: `TimeSpan.FromSeconds(5)` |
-| K8s watch server timeout | ~30 minutes | K8s API server default |
-| OTel metric temporality | Cumulative | `ServiceCollectionExtensions.cs` line 107: `TemporalityPreference = Cumulative` |
-| Prometheus retention | 30 days | `prometheus.yaml`: `--storage.tsdb.retention.time=30d` |
-| Graceful shutdown budget | 30 seconds | `deployment.yaml`: `terminationGracePeriodSeconds: 30` |
-| Lease explicit delete | On graceful shutdown | `K8sLeaseElection.StopAsync()` deletes lease |
+| Component | Threading Model | Safe For Concurrent Access? |
+|-----------|----------------|---------------------------|
+| MediatR pipeline (single request) | Single-threaded within one `ISender.Send` call | Yes -- no concurrent writes from pipeline |
+| MetricPollJob (per device) | Concurrent across devices (Quartz thread pool) | Each device's samples are serialized by `DisallowConcurrentExecution`, but DIFFERENT devices run concurrently |
+| ChannelConsumerService | Single reader on the trap channel | Serialized -- one sample at a time |
+| OidMapService reload | `SemaphoreSlim(1,1)` in OidMapWatcherService | Serialized writes, lock-free reads via volatile |
+| DeviceRegistry reload | `SemaphoreSlim(1,1)` in DeviceWatcherService | Serialized writes, lock-free reads via volatile |
+
+**Implication for priority vector:** Multiple `MetricPollJob` instances can call `ISender.Send` concurrently (one per device on different Quartz threads). Each Send runs the full behavior pipeline including the fan-out behavior. If two devices have metrics routed to the same tenant slot, the slot receives concurrent writes from different threads. The slot write MUST be safe for concurrent access (immutable-swap via `ConcurrentDictionary` or `Interlocked`).
+
+This is NOT the same as "pipeline is synchronous within a single request." The pipeline is synchronous for ONE request, but multiple requests run concurrently across Quartz threads.
 
 ---
 
 ## Sources
 
-- Prometheus Remote-Write 1.0 specification (staleness markers): [Prometheus Remote Write Spec](https://prometheus.io/docs/specs/prw/remote_write_spec/) -- HIGH confidence (official spec)
-- Prometheus staleness behavior: [Staleness and PromQL - Robust Perception](https://www.robustperception.io/staleness-and-promql/) -- HIGH confidence (official Prometheus consulting)
-- OTel prometheusremotewrite exporter staleness gap: [Issue #6620](https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/6620) -- HIGH confidence (official OTel repo issue)
-- OTel prometheusremotewrite keeps sending stale data: [Issue #27893](https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/27893) -- HIGH confidence (official OTel repo issue, confirmed by maintainers)
-- Prometheus remote write staleness compliance gap: [Issue #38](https://github.com/open-telemetry/prometheus-interoperability-spec/issues/38) -- HIGH confidence (official interop spec)
-- K8s ConfigMap propagation delay: [Kubernetes ConfigMaps docs](https://kubernetes.io/docs/concepts/configuration/configmap/) -- HIGH confidence (official K8s docs)
-- K8s ConfigMap watch delay vs volume mount: [Kubernetes issue #30189](https://github.com/kubernetes/kubernetes/issues/30189) -- MEDIUM confidence (community issue with maintainer responses)
-- System source code analysis: `ServiceCollectionExtensions.cs`, `MetricRoleGatedExporter.cs`, `OtelMetricHandler.cs`, `OidMapWatcherService.cs`, `K8sLeaseElection.cs`, `PipelineMetricService.cs`, `SnmpMetricFactory.cs` -- HIGH confidence (direct source verification)
+- System source code analysis (HIGH confidence, direct verification):
+  - `OidMapService.cs`: volatile FrozenDictionary swap, UpdateMap() pattern
+  - `DeviceRegistry.cs`: dual volatile FrozenDictionary swap, ReloadAsync() pattern
+  - `OidResolutionBehavior.cs`: MetricName enrichment point in pipeline
+  - `OtelMetricHandler.cs`: terminal handler, heartbeat filtering
+  - `ExceptionBehavior.cs`: catch-all swallowing pattern
+  - `ServiceCollectionExtensions.cs`: behavior registration order, DI patterns
+  - `MetricPollJob.cs`: concurrent execution model, DisallowConcurrentExecution
+  - `ChannelConsumerService.cs`: single consumer, sequential dispatch
+  - `OidMapWatcherService.cs`: SemaphoreSlim reload serialization
+  - `DeviceWatcherService.cs`: SemaphoreSlim reload serialization, dual-step reload (registry + scheduler)
+  - `LivenessVectorService.cs`: ConcurrentDictionary slot pattern (architectural reference)
+  - `MetricRoleGatedExporter.cs`: leader-gating pattern for export
+  - `SnmpOidReceived.cs`: request message structure, mutable MetricName
+- .NET FrozenDictionary documentation: thread-safe for concurrent reads after construction (HIGH confidence, official .NET docs)
+- .NET memory model: reference-type assignments are atomic on all .NET implementations (HIGH confidence, ECMA-335 spec)
 
 ---
-*Pitfalls research for: E2E system verification of SNMP monitoring pipeline*
-*Researched: 2026-03-09*
+*Pitfalls research for: Priority vector data layer -- stateful fan-out for in-memory tenant metric slots*
+*Researched: 2026-03-10*

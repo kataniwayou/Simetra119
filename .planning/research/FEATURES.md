@@ -1,260 +1,317 @@
-# Feature Landscape: E2E System Verification
+# Feature Landscape: Priority Vector Data Layer
 
-**Domain:** E2E test scenarios for SNMP monitoring pipeline (SnmpCollector -> OTel -> Prometheus)
-**Researched:** 2026-03-09
-**Confidence:** HIGH -- derived directly from codebase analysis of shipped v1.0-v1.3 features
+**Domain:** Stateful in-memory data layer for SNMP metric prioritization
+**Researched:** 2026-03-10
+**Confidence:** HIGH -- derived from tenantvector.txt spec and codebase analysis of existing pipeline
 
 ---
 
 ## Table Stakes
 
-Test scenarios that MUST pass for the system to be considered working. Each maps to a shipped feature that has no E2E verification yet.
+Features the data layer MUST have for downstream consumers (future decision logic) to be viable.
 
-### Category 1: Pipeline Counter Verification
+### TS-01: Tenant Vector Configuration Model
 
-All 10 pipeline counters must be provably incrementing in Prometheus with correct `device_name` labels.
+**What:** Strongly-typed C# model for tenantvector.json: `TenantVectorConfig` containing a list of `TenantConfig` objects, each with `id`, `priority`, `graceMultiplier`, and a list of `MetricSlotConfig` objects with `ip`, `port`, `oid`, `source` (poll/trap), `intervalSeconds`.
+**Why Expected:** Without a deserialization target, the config cannot be loaded. This is the foundation everything else depends on.
+**Complexity:** Low
+**Depends On:** Nothing -- pure model classes
 
-| Test Scenario | What It Proves | Complexity | Depends On | Prometheus Query |
-|---------------|----------------|------------|------------|------------------|
-| TC-01: snmp_poll_executed_total increments | MetricPollJob fires and completes poll cycles | LOW | Existing OBP/NPB simulators running | `snmp_poll_executed_total{device_name="OBP-01"}` |
-| TC-02: snmp_event_published_total increments | ChannelConsumerService dispatches trap varbinds into MediatR pipeline | LOW | OBP simulator sending traps | `snmp_event_published_total{device_name="OBP-01"}` |
-| TC-03: snmp_event_handled_total increments | OtelMetricHandler successfully processes notifications (including heartbeat) | LOW | OBP/NPB simulators + HeartbeatJob | `snmp_event_handled_total` |
-| TC-04: snmp_trap_received_total increments | ChannelConsumerService counts each trap varbind consumed from channel | LOW | OBP simulator sending traps | `snmp_trap_received_total{device_name="OBP-01"}` |
-| TC-05: snmp_gauge exists with correct labels | RecordGauge produces metric_name, oid, device_name, ip, source, snmp_type labels | MEDIUM | Leader pod exporting + simulators | `snmp_gauge{device_name="OBP-01"}` |
-| TC-06: snmp_info exists with correct labels | RecordInfo produces metric_name, oid, device_name, ip, source, snmp_type, value labels | MEDIUM | Leader pod exporting + OBP NMU OIDs | `snmp_info{device_name="OBP-01"}` |
-| TC-07: Heartbeat does NOT appear in snmp_gauge/snmp_info | IsHeartbeat flag causes OtelMetricHandler to skip metric export | LOW | HeartbeatJob running | `snmp_gauge{metric_name=~".*heartbeat.*"}` should return empty |
-| TC-08: snmp_event_published > snmp_event_handled (or equal) | Published >= handled proves no events silently bypass the pipeline | LOW | Running system with traffic | Compare two counters |
-| TC-09: snmp_poll_executed_total for NPB-01 | Second device also has poll activity | LOW | NPB simulator running | `snmp_poll_executed_total{device_name="NPB-01"}` |
-| TC-10: Pipeline counters have device_name label | All counters carry device_name tag (verified in PipelineMetricService code) | LOW | Any traffic | `snmp_event_handled_total` group by device_name |
+### TS-02: TenantVectorWatcherService (ConfigMap Hot-Reload)
 
-**Notes:**
-- TC-05 and TC-06 require the querying pod to be the leader (MetricRoleGatedExporter gates business metrics). Verification approach: query Prometheus directly since leader exports on scrape cycle.
-- TC-07 is a negative test: absence of data. The heartbeat device name is `__heartbeat__` (from HeartbeatJobOptions.HeartbeatDeviceName).
-- TC-08 is a consistency check. If published < handled, something is generating notifications outside the normal path.
+**What:** BackgroundService that watches the `simetra-tenantvector` ConfigMap via K8s API and triggers a full rebuild of the in-memory data structures on change. Must follow the exact same pattern as OidMapWatcherService: initial load, then watch loop with 5s reconnect on error, SemaphoreSlim serialization, graceful handling of malformed JSON / missing keys / null deserialization.
+**Why Expected:** The existing system uses ConfigMap watchers for all dynamic configuration (OidMap, Devices). A third watcher for the tenant vector is the established pattern. Without hot-reload, any config change requires a pod restart.
+**Complexity:** Medium
+**Depends On:** TS-01 (config model), existing K8s client infrastructure (IKubernetes injection)
 
-### Category 2: Business Metric Correctness
+### TS-03: Tenant Registry with Priority Groups
 
-The two business instruments (snmp_gauge, snmp_info) must carry correct SNMP type codes and resolve OIDs to metric names.
+**What:** Singleton service that holds the fully materialized tenant vector in memory. Internal structure: an ordered list of priority groups, where each group contains one or more tenants at the same priority level. Tenants within a group are ordered by their position in the config array. Each tenant contains its metric slots as value cells.
+**Why Expected:** This is the core data structure the spec defines. Without it, there is nothing for decision logic to evaluate.
+**Complexity:** Medium
+**Depends On:** TS-01 (config model), TS-02 (watcher feeds it)
 
-| Test Scenario | What It Proves | Complexity | Depends On |
-|---------------|----------------|------------|------------|
-| TC-11: Integer32 values appear with snmp_type="integer32" | OtelMetricHandler switch on SnmpType.Integer32 works | LOW | OBP link_state/channel OIDs (Integer32) |
-| TC-12: Counter64 values appear with snmp_type="counter64" | OtelMetricHandler switch on SnmpType.Counter64 works | LOW | NPB traffic counter OIDs |
-| TC-13: OctetString values appear as snmp_info with value label | RecordInfo path works, string value truncation at 128 chars | LOW | OBP NMU info OIDs (OctetString) |
-| TC-14: source="poll" label on polled metrics | MetricPollJob sets Source=Poll | LOW | Any polled metric |
-| TC-15: source="trap" label on trapped metrics | ChannelConsumerService sets Source=Trap | LOW | OBP StateChange trap |
-| TC-16: metric_name resolves to human-readable name | OidResolutionBehavior resolves via OidMapService | LOW | OID map loaded with OBP/NPB entries |
-| TC-17: Gauge32, TimeTicks types produce snmp_gauge | All numeric types route to RecordGauge | MEDIUM | Test simulator with these types |
+### TS-04: Metric Slot Value Cell
 
-**Notes:**
-- Counter32 is used by OBP/NPB but is recorded as a gauge (Prometheus rate() handles delta). The snmp_type label distinguishes it.
-- TC-17 requires the test simulator because existing simulators only produce Integer32, Counter64, and OctetString.
+**What:** Per-tenant, per-metric mutable cell holding: `value` (object -- int, long, uint, ulong, string depending on SNMP type), `updated_at` (DateTimeOffset), and the slot's address key `(ip, port, oid)`. The cell is overwritten in-place on each sample arrival. No history buffer.
+**Why Expected:** The spec explicitly defines single-cell semantics: "When a new sample arrives, the value and updated_at are overwritten in place. The previous value is discarded."
+**Complexity:** Low
+**Depends On:** TS-03 (cells live inside tenants in the registry)
 
-### Category 3: Unknown OID Handling
+### TS-05: Routing Index -- (ip, port, metric_name) Fan-Out
 
-Unmapped OIDs must resolve to "Unknown" metric_name and still flow through the pipeline.
+**What:** A dictionary mapping `(ip, port, metric_name)` to a list of `(tenant_id, metric_slot_ref)` pairs. Built at load time from all metric slots across all tenants. When a sample arrives matching a key, every slot in the list gets its value cell updated. This is the fan-out mechanism.
+**Why Expected:** Without routing, incoming samples cannot reach tenant metric slots. This is the bridge between the existing pipeline and the tenant vector.
+**Complexity:** Medium
+**Depends On:** TS-03 (registry provides the tenants to index), TS-06 (pipeline integration feeds samples)
 
-| Test Scenario | What It Proves | Complexity | Depends On |
-|---------------|----------------|------------|------------|
-| TC-18: Unmapped poll OID resolves to metric_name="Unknown" | OidMapService.Resolve returns "Unknown" for missing OIDs | LOW | Test simulator with OID not in oidmaps.json |
-| TC-19: Unmapped trap OID resolves to metric_name="Unknown" | Same path via trap ingestion | LOW | Test simulator sending trap with unmapped OID |
-| TC-20: Unknown OIDs still increment snmp_event_handled_total | Pipeline does not reject unknown OIDs (OidResolutionBehavior always calls next()) | LOW | Verify counter after unknown OID arrives |
-| TC-21: Unknown OIDs appear in snmp_gauge/snmp_info | Business metrics recorded even with metric_name="Unknown" | LOW | Query `snmp_gauge{metric_name="Unknown"}` |
+**Key design note on the routing key:** The spec uses `(ip, port, oid)` but the milestone context says `(ip, port, metric_name)`. The spec also says "only OID-map-resolved metrics allowed (Unknown filtered out)." Using `metric_name` (the OID-resolved name) as the routing key rather than raw OID is the correct choice because:
+1. It naturally filters out Unknown OIDs -- if an OID does not resolve, it has no metric_name to match.
+2. Config authors think in metric names ("obp_r1_power_L1"), not raw OIDs ("1.3.6.1.4.1.47477.10.21.1.3.4.0").
+3. It decouples the tenant vector from OID map changes -- if an OID is remapped to a new name, the tenant vector config uses the new name.
 
-**Notes:**
-- These tests are critical because "Unknown" is the discovery mechanism. Operators filter Grafana for metric_name="Unknown" to find unmapped OIDs.
-- The OidResolutionBehavior never short-circuits -- it logs at Debug level and continues. This is by design.
+### TS-06: Pipeline Integration -- TenantVectorBehavior or Post-Handler Hook
+
+**What:** A mechanism to feed resolved SNMP samples into the routing index. Two options:
+
+- **Option A (MediatR behavior):** A new `IPipelineBehavior` that runs after OidResolutionBehavior, reads `MetricName`, `AgentIp`, and the device's port (from DeviceRegistry lookup), and writes to matching routing index slots. Always calls `next()` -- never short-circuits.
+- **Option B (Post-handler notification):** OtelMetricHandler publishes a lightweight notification after processing; a separate handler writes to routing index.
+
+**Recommendation: Option A (pipeline behavior)** because:
+- It follows the existing pattern (behaviors are the pipeline's extension point).
+- It can access `SnmpOidReceived` properties directly (no new message type needed).
+- It runs before the terminal handler, so the value cell is updated even if OtelMetricHandler has issues.
+- The behavior order becomes: Logging -> Exception -> Validation -> OidResolution -> **TenantVectorRouting** -> OtelMetricHandler.
+
+**Why Expected:** Without pipeline integration, the tenant vector is an empty data structure that never receives data.
+**Complexity:** Medium
+**Depends On:** TS-05 (routing index to write into), existing MediatR pipeline, DeviceRegistry (for port lookup)
+
+### TS-07: Port Resolution for Routing Key
+
+**What:** The `SnmpOidReceived` message currently carries `AgentIp` (IPAddress) but NOT `Port`. The routing key requires `(ip, port, metric_name)`. Port must be resolved from DeviceRegistry via `TryGetByIpPort` or derived from the device name.
+
+**Problem:** DeviceRegistry.TryGetByIpPort requires both IP and port -- but we only have IP from the message. The lookup is backwards: we need the port, but the lookup requires the port.
+
+**Resolution approaches:**
+1. **Use DeviceName as lookup key:** `SnmpOidReceived.DeviceName` is always set (validated by ValidationBehavior). Use `DeviceRegistry.TryGetDeviceByName(deviceName)` to get `DeviceInfo.Port`. This is reliable because DeviceName is set by both the poll path (from JobDataMap) and the trap path (from community string).
+2. **Add Port to SnmpOidReceived:** Enrich the message with port at creation time (MetricPollJob already knows the port; ChannelConsumerService can resolve it).
+
+**Recommendation: Option 1 (DeviceName lookup)** because it requires zero changes to existing code. The behavior does `_deviceRegistry.TryGetDeviceByName(msg.DeviceName)` and reads `.Port` from the result.
+
+**Why Expected:** Without port, the routing key is incomplete and cannot match config entries that specify port.
+**Complexity:** Low
+**Depends On:** Existing DeviceRegistry, TS-06 (the behavior that needs the port)
+
+### TS-08: Unknown Metric Filtering
+
+**What:** Samples where `MetricName == OidMapService.Unknown` must NOT be routed to the tenant vector. The spec says "only OID-map-resolved metrics allowed."
+**Why Expected:** Routing unknown metrics would pollute tenant value cells with unidentifiable data. The routing index naturally handles this if keyed by metric_name -- no Unknown entries will exist in the index. But the behavior must explicitly check and skip before attempting a routing lookup.
+**Complexity:** Low
+**Depends On:** TS-06 (the behavior checks MetricName before routing)
+
+### TS-09: Heartbeat Filtering
+
+**What:** Heartbeat messages (`IsHeartbeat == true`) must NOT be routed to the tenant vector. Heartbeats are internal liveness signals, not real SNMP data.
+**Why Expected:** The existing pipeline already skips heartbeats in OtelMetricHandler. The tenant vector behavior must do the same.
+**Complexity:** Low
+**Depends On:** TS-06 (the behavior checks IsHeartbeat before routing)
+
+### TS-10: Atomic Rebuild on Config Change
+
+**What:** When tenantvector.json changes (via ConfigMap watcher), the entire tenant registry, all value cells, and the routing index must be rebuilt atomically using the FrozenDictionary volatile-swap pattern. The old structure continues serving reads until the new one is fully built, then a single volatile write swaps in the new structure.
+**Why Expected:** This is the established concurrency pattern in the codebase (OidMapService, DeviceRegistry both use it). Without atomic swap, concurrent reads during a rebuild could see partially constructed state.
+**Complexity:** Medium
+**Depends On:** TS-02 (watcher triggers rebuild), TS-03 (registry is what gets rebuilt), TS-05 (routing index is rebuilt alongside)
 
 ---
 
 ## Differentiators
 
-Edge case tests that reveal hidden bugs. These go beyond "does it work" to "does it work under mutation and stress."
+Features that make the data layer robust and production-ready. Not strictly required for basic functionality, but strongly recommended.
 
-### Category 4: Business Metric Mutations (OID Map Hot-Reload)
+### D-01: Config Validation at Load Time
 
-These test the OidMapWatcherService -> OidMapService.UpdateMap -> FrozenDictionary atomic swap path.
+**What:** When tenantvector.json is loaded, validate:
+- All tenant IDs are unique within the vector
+- All metric slot OIDs resolve to a known metric_name in the current OID map (warn if not)
+- No duplicate `(ip, port, oid)` within a single tenant (error -- pointless)
+- Priority values are valid integers
+- Source is either "poll" or "trap"
+- IntervalSeconds > 0
+- IP addresses are parseable
+- Port is in valid range (1-65535)
+- Referenced devices exist in DeviceRegistry (warn if not -- device may be added later)
 
-| Test Scenario | What It Reveals | Complexity | Depends On |
-|---------------|-----------------|------------|------------|
-| TC-22: Rename OID mapping -> metric_name changes in Prometheus | OidMapService.UpdateMap atomic swap takes effect on next poll/trap | MEDIUM | kubectl edit ConfigMap simetra-oidmaps |
-| TC-23: Remove OID mapping -> metric_name reverts to "Unknown" | Removed OID falls through to OidMapService.Unknown constant | MEDIUM | kubectl edit ConfigMap simetra-oidmaps |
-| TC-24: Add new OID mapping -> previously-Unknown OID gets name | New entry in map resolves OID that was previously unmapped | MEDIUM | kubectl edit ConfigMap simetra-oidmaps |
-| TC-25: Rapid successive OID map changes -> no crash | SemaphoreSlim serialization in OidMapWatcherService prevents race | MEDIUM | Multiple rapid ConfigMap edits |
-| TC-26: OID map change logged with diff (added/removed/changed) | OidMapService.UpdateMap logs structured diff | LOW | kubectl logs after ConfigMap edit |
+**Value Proposition:** Catches misconfiguration at load time with structured log output instead of silent misbehavior at runtime. Follows the pattern set by DeviceRegistry (throws on duplicate IP+Port).
+**Complexity:** Medium
+**Depends On:** TS-01 (model to validate), OidMapService (to verify OID resolution), DeviceRegistry (to verify device existence)
 
-**Notes:**
-- TC-22 is the most important mutation test. After renaming `obp_r1_power_L1` to `obp_r1_power_L1_renamed`, the OLD metric_name should stop appearing in new samples and the NEW name should appear.
-- Prometheus retains old time series for its retention period, so the old name won't disappear -- but new samples should only carry the new name. Verification: query with a recent time window (last 30s).
-- TC-25 tests the SemaphoreSlim gate. The watcher deserializes JSON and calls UpdateMap under the lock.
+### D-02: Structured Diff Logging on Reload
 
-### Category 5: Device Lifecycle (Device Config Hot-Reload)
+**What:** When the tenant vector config is reloaded, log a structured diff: tenants added, tenants removed, tenants with changed metric slots. Follow the pattern established by OidMapService.UpdateMap which logs added/removed/changed entries.
+**Value Proposition:** Operators can see exactly what changed without comparing config files. Critical for troubleshooting in production.
+**Complexity:** Low
+**Depends On:** TS-10 (rebuild path where diff is computed)
 
-These test DeviceWatcherService -> DeviceRegistry.ReloadAsync -> DynamicPollScheduler.ReconcileAsync.
+### D-03: Diagnostic Snapshot Accessor
 
-| Test Scenario | What It Reveals | Complexity | Depends On |
-|---------------|-----------------|------------|------------|
-| TC-27: Add new device -> poll jobs created, metrics appear | DynamicPollScheduler adds Quartz jobs for new device | HIGH | Test simulator as new device + ConfigMap edit |
-| TC-28: Remove device -> poll jobs removed, no new metrics | DynamicPollScheduler removes Quartz jobs, liveness vector cleaned | HIGH | Remove device from ConfigMap |
-| TC-29: Change poll interval -> Quartz trigger rescheduled | DynamicPollScheduler reschedules via JobIntervalRegistry comparison | MEDIUM | Change intervalSeconds in ConfigMap |
-| TC-30: Add device with unreachable IP -> snmp_poll_unreachable_total fires | DeviceUnreachabilityTracker marks device after 3 consecutive failures | MEDIUM | Add device pointing to non-existent IP |
-| TC-31: Device recovers after being unreachable -> snmp_poll_recovered_total fires | DeviceUnreachabilityTracker.RecordSuccess returns true on transition | MEDIUM | Start simulator after unreachable threshold hit |
+**What:** A read-only accessor on the tenant registry that returns the current state: number of tenants, number of groups, total metric slots, routing index size, per-tenant slot count with latest `updated_at` values. NOT an HTTP API -- just a method that health checks or diagnostic logging can call.
+**Value Proposition:** Makes the data layer inspectable without an external API. Future health checks can verify "are metric slots receiving updates?" without adding an HTTP endpoint.
+**Complexity:** Low
+**Depends On:** TS-03 (registry to inspect)
 
-**Notes:**
-- TC-27 is the highest complexity test because it requires: (1) test simulator running on a known IP/port, (2) devices.json ConfigMap update with new device entry, (3) waiting for DynamicPollScheduler reconciliation, (4) verifying new metrics appear in Prometheus.
-- TC-28 negative verification: after device removal, `snmp_poll_executed_total{device_name="removed-device"}` should stop incrementing (no new samples in recent window).
-- TC-30 requires the threshold of 3 consecutive failures (hardcoded in DeviceUnreachabilityTracker). Test must wait for 3 poll cycles.
+### D-04: Tenant Vector Pipeline Counter
 
-### Category 6: ConfigMap Watcher Resilience
+**What:** An OTel counter `snmp_tenantvector_routed_total` that increments each time a sample is successfully routed to at least one tenant metric slot. Optionally with a `tenant_count` attribute showing how many slots were updated (fan-out degree). Follows the existing PipelineMetricService pattern.
+**Value Proposition:** Provides observability into whether the tenant vector is receiving data. A zero-increment counter means either no matching samples or a routing bug.
+**Complexity:** Low
+**Depends On:** TS-06 (the behavior that does the routing increments the counter)
 
-These test the K8s API watch loop behavior under error conditions.
+### D-05: Thread-Safe Value Cell Updates
 
-| Test Scenario | What It Reveals | Complexity | Depends On |
-|---------------|-----------------|------------|------------|
-| TC-32: Invalid JSON in oidmaps.json -> previous map retained | JsonException caught in HandleConfigMapChangedAsync, skips reload | MEDIUM | kubectl edit with malformed JSON |
-| TC-33: Invalid JSON in devices.json -> previous devices retained | Same pattern in DeviceWatcherService | MEDIUM | kubectl edit with malformed JSON |
-| TC-34: Missing key in ConfigMap -> warning logged, no crash | `configMap.Data.TryGetValue` returns false, early return | LOW | Remove oidmaps.json key from ConfigMap |
-| TC-35: Null deserialized result -> warning logged, no crash | `oidMap is null` guard in HandleConfigMapChangedAsync | LOW | Set key to `null` in ConfigMap |
-| TC-36: Watch reconnection after disconnect | Watch loop catches exception, waits 5s, reconnects | HIGH | Hard to trigger naturally; verify via log pattern |
+**What:** Ensure that concurrent sample arrivals for the same `(ip, port, metric_name)` do not corrupt value cells. Since poll jobs and trap processing run concurrently on different threads, two samples for the same metric could arrive simultaneously. The value cell write (value + updated_at) must be atomic from the reader's perspective.
 
-**Notes:**
-- TC-32 and TC-33 are the most valuable resilience tests. A typo in a ConfigMap edit should never crash the collector.
-- TC-36 is hard to test deterministically. The K8s API server closes watch connections after ~30 minutes. Verification approach: check logs for "watch connection closed, reconnecting" pattern. This happens naturally over time.
-- For TC-32/TC-33, after fixing the JSON, the watcher should detect the Modified event and reload successfully.
+Options:
+- **Lock per cell:** Fine-grained but many locks for many cells.
+- **Interlocked + immutable cell record:** Replace the entire cell record atomically via `Volatile.Write` or `Interlocked.Exchange`. Since cells are small (value + timestamp), creating a new immutable cell and swapping it in is cheap.
+- **Accept last-writer-wins without atomicity:** Value and updated_at are two separate writes; a reader might see new value with old timestamp. In practice, this is unlikely to matter since both are written in the same method call and the reader (future decision logic) is not time-critical.
 
-### Category 7: Community String Authentication
-
-| Test Scenario | What It Reveals | Complexity | Depends On |
-|---------------|-----------------|------------|------------|
-| TC-37: Trap with wrong community string -> snmp_trap_auth_failed_total increments | CommunityStringHelper.TryExtractDeviceName returns false, counter fired | MEDIUM | Test simulator with wrong community |
-| TC-38: Trap with valid Simetra.{name} community -> processed normally | CommunityStringHelper extracts device name correctly | LOW | Existing simulator already proves this |
-| TC-39: Trap with "public" community -> auth failed (not Simetra.* prefix) | Standard default community rejected | LOW | Test simulator with community="public" |
-
-### Category 8: Leader Election Gating
-
-| Test Scenario | What It Reveals | Complexity | Depends On |
-|---------------|-----------------|------------|------------|
-| TC-40: Only leader exports snmp_gauge/snmp_info | MetricRoleGatedExporter filters SnmpCollector.Leader meter on followers | HIGH | 3-replica deployment, identify leader |
-| TC-41: All replicas export pipeline counters | Pipeline counters on SnmpCollector meter pass through regardless of role | MEDIUM | Query pipeline counters grouped by pod |
-| TC-42: Leader failover -> new leader exports business metrics | K8s Lease handoff works; new leader's MetricRoleGatedExporter starts passing | HIGH | Kill leader pod, verify new leader exports |
-
-**Notes:**
-- TC-40 and TC-41 together prove the gating logic. Pipeline counters (SnmpCollector meter) should have 3x pod labels. Business metrics (SnmpCollector.Leader meter) should come from exactly one pod.
-- TC-42 is the most complex test in the entire suite. It requires killing a specific pod and verifying continuity. This may be too disruptive for automated E2E and could be manual-only.
+**Recommendation: Immutable cell record with Volatile.Write.** Create a `readonly record struct MetricCell(object Value, DateTimeOffset UpdatedAt)` and swap it atomically. Clean, zero-lock, matches the project's FrozenDictionary philosophy.
+**Complexity:** Low
+**Depends On:** TS-04 (cell design)
 
 ---
 
 ## Anti-Features
 
-Tests NOT to build, and why.
+Things to deliberately NOT build in this milestone.
 
-| Anti-Test | Why It Seems Useful | Why NOT to Build | What to Do Instead |
-|-----------|---------------------|------------------|-------------------|
-| Automated pod kill / chaos testing | "Verify failover automatically" | Pod kills affect the entire cluster state, interfere with other tests, and are hard to make idempotent. Chaos testing is a separate discipline with dedicated tools (Litmus, Chaos Mesh). | Document TC-42 as a manual verification step. Run it once, record evidence, don't automate it in the E2E suite. |
-| Performance / load testing | "How many traps/sec can the pipeline handle?" | Performance testing requires dedicated infrastructure, baseline establishment, and statistical analysis. It's a separate effort from functional E2E verification. | Note as a future milestone. The E2E suite verifies correctness, not throughput. |
-| Grafana dashboard rendering tests | "Verify dashboards show data correctly" | Grafana rendering requires browser automation (Playwright/Selenium), which is a separate testing domain. The E2E suite verifies data in Prometheus; Grafana is a visualization layer. | Verify Prometheus has correct data. Dashboard correctness is a visual inspection task. |
-| SNMP v3 authentication tests | "Test v3 auth/encryption paths" | The system only supports v2c (explicit constraint). Testing v3 would test unsupported functionality. | Out of scope per project constraints. |
-| Embedded TSDB query tests | "Query metrics directly from the collector" | The system has no embedded TSDB. Metrics flow through OTel to Prometheus. Testing anything other than Prometheus queries tests the wrong thing. | All verification through Prometheus HTTP API only. |
-| Unit test duplication as E2E | "Re-run unit test assertions against live system" | 138 unit tests already cover component-level behavior. E2E tests should verify integration, not re-test units. | E2E tests focus on cross-component data flow: SNMP -> pipeline -> OTel -> Prometheus. |
-| Exhaustive OID coverage tests | "Test every one of the 92 OIDs individually" | 92 individual OID assertions would be brittle and slow. The OID map is a flat dictionary; if one OID resolves, the mechanism works for all. | Test a representative sample: one Integer32, one Counter64, one OctetString, one unmapped OID. |
-| Network partition simulation | "What if the OTel collector is unreachable?" | Network partition testing requires infrastructure-level manipulation (iptables rules, network policies). Too complex for a kubectl-based E2E suite. | Document as a known risk. The OTel SDK has retry/backoff built in. |
-| ConfigMap delete tests | "What if someone deletes the entire ConfigMap?" | Both watchers already handle WatchEventType.Deleted by logging a warning and retaining current state (verified in code). The behavior is simple enough to trust from code review. | Note the behavior in the report. No E2E test needed -- the code path is 3 lines with a log statement. |
+### AF-01: Decision Logic / Evaluation Engine
+
+**What:** Do NOT implement the priority-group evaluation cascade ("Group 1 before Group 2 before Group 3"). Do NOT implement any decision-making based on metric values. Do NOT implement "is this tenant clear?" logic.
+**Why Avoid:** The spec describes evaluation as a separate concern. This milestone builds the DATA LAYER only -- the stateful substrate that holds metric values. Decision logic is a future milestone.
+**What to Do Instead:** Build the data layer so decision logic can trivially iterate groups in priority order and read value cells. The data structure enables the logic without containing it.
+
+### AF-02: GraceMultiplier / Staleness Detection
+
+**What:** Do NOT implement grace period logic (metric slot is "stale" if `now - updated_at > intervalSeconds * graceMultiplier`). Do NOT implement any timeout or expiry behavior on metric slots.
+**Why Avoid:** GraceMultiplier is referenced in the spec but its semantics belong to the evaluation engine, not the data layer. The data layer stores `updated_at` and `intervalSeconds` -- the decision logic computes staleness.
+**What to Do Instead:** Store `intervalSeconds` and `graceMultiplier` as config values on the metric slot so the future evaluation engine can use them. Do not act on them.
+
+### AF-03: External API / HTTP Endpoints
+
+**What:** Do NOT expose the tenant vector via REST API, gRPC, or any external interface.
+**Why Avoid:** The spec says "Internal only -- no external API, no Prometheus export." The tenant vector is consumed by in-process decision logic, not external systems.
+**What to Do Instead:** Provide internal C# interfaces (ITenantVectorRegistry) for in-process consumers. D-03 (diagnostic snapshot) is the furthest extent of accessibility.
+
+### AF-04: Prometheus Metric Export of Tenant Data
+
+**What:** Do NOT create OTel instruments that export per-tenant or per-slot metric values to Prometheus.
+**Why Avoid:** The spec says "no Prometheus export." Tenant metric values are internal state. The existing `snmp_gauge` / `snmp_info` instruments already export raw SNMP data to Prometheus. Duplicating that data through the tenant lens would create cardinality explosion (tenants x metrics x labels).
+**What to Do Instead:** D-04 (pipeline counter for routing) is acceptable because it counts routing events, not metric values. It does not expose tenant-level data.
+
+### AF-05: Tenant-Specific Polling
+
+**What:** Do NOT create new Quartz poll jobs for tenant metric slots. Do NOT modify the existing MetricPollJob or DynamicPollScheduler.
+**Why Avoid:** The spec says metric slots declare `source` (poll/trap) and `intervalSeconds`, but the existing poll infrastructure already handles all SNMP polling. The tenant vector consumes data from the pipeline -- it does not generate new SNMP traffic. The spec's `intervalSeconds` on a metric slot is metadata for staleness calculation, not a polling directive.
+**What to Do Instead:** The tenant vector behavior (TS-06) passively observes samples flowing through the existing pipeline. Tenants that reference a metric will receive updates whenever the existing poll/trap system produces a matching sample.
+
+### AF-06: History / Time-Series Buffer
+
+**What:** Do NOT implement any per-metric-slot history buffer, ring buffer, or time-series storage.
+**Why Avoid:** The spec is explicit: "There is no per-metric history buffer -- history is the job of the decision_series." Each slot holds exactly one value cell (latest sample only).
+**What to Do Instead:** Store `value` and `updated_at` only. If decision logic needs history, it will be a separate data structure in a future milestone.
+
+### AF-07: Cross-Tenant Deduplication of Polling
+
+**What:** Do NOT deduplicate or optimize when multiple tenants reference the same `(ip, port, oid)`. Do NOT merge polling requests or share value cells across tenants.
+**Why Avoid:** The spec is explicit: "Each tenant maintains its own independent slot for that address -- its own value cell, its own updated_at." Independence is by design. Shared cells would create coupling between tenants that the spec explicitly forbids.
+**What to Do Instead:** When a sample arrives, iterate all matching slots in the routing index and update each independently. The fan-out cost is a dictionary lookup + N cell writes, which is trivially fast for realistic tenant counts.
+
+### AF-08: Persistence / Durable Storage
+
+**What:** Do NOT persist tenant vector state to disk, database, or any durable storage.
+**Why Avoid:** The tenant vector is an ephemeral in-memory structure rebuilt from config on startup. Metric values are transient snapshots, not historical data. Persistence adds complexity with no value -- the next poll cycle will repopulate all cells.
+**What to Do Instead:** Accept that on pod restart, all value cells start empty (null value, no updated_at). The first poll/trap cycle repopulates them.
 
 ---
 
 ## Feature Dependencies
 
 ```
-[Test Simulator]
-    |-- required by --> TC-17 (Gauge32, TimeTicks types)
-    |-- required by --> TC-18, TC-19 (unmapped OIDs for poll and trap)
-    |-- required by --> TC-27 (new device lifecycle)
-    |-- required by --> TC-30, TC-31 (unreachable device)
-    |-- required by --> TC-37, TC-39 (wrong community string traps)
+TS-01 (Config Model)
+    |
+    +--> TS-02 (ConfigMap Watcher) --> TS-10 (Atomic Rebuild)
+    |                                      |
+    +--> TS-03 (Tenant Registry) ----------+
+    |         |
+    |         +--> TS-04 (Value Cells) --> D-05 (Thread Safety)
+    |         |
+    |         +--> D-03 (Diagnostic Snapshot)
+    |
+    +--> TS-05 (Routing Index)
+              |
+              +--> TS-06 (Pipeline Behavior) --> TS-07 (Port Resolution)
+              |         |                    --> TS-08 (Unknown Filter)
+              |         |                    --> TS-09 (Heartbeat Filter)
+              |         |
+              |         +--> D-04 (Pipeline Counter)
+              |
+              +--> D-01 (Config Validation)
 
-[Existing OBP Simulator]
-    |-- sufficient for --> TC-01 through TC-06 (pipeline counters)
-    |-- sufficient for --> TC-11, TC-13, TC-14, TC-15, TC-16 (type correctness)
-    |-- sufficient for --> TC-22 through TC-26 (OID map mutations)
-
-[Existing NPB Simulator]
-    |-- sufficient for --> TC-09 (second device poll activity)
-    |-- sufficient for --> TC-12 (Counter64 type)
-
-[kubectl + Prometheus HTTP API]
-    |-- required by --> ALL test scenarios (verification method)
-
-[3-Replica Deployment]
-    |-- required by --> TC-40, TC-41, TC-42 (leader election gating)
+D-02 (Diff Logging) depends on TS-10 (Atomic Rebuild)
 ```
 
-### Dependency Summary
+### Critical Path
 
-The test simulator is required for 9 of the 42 test scenarios. The remaining 33 can use existing infrastructure. This means:
+The minimum viable path is: TS-01 -> TS-03 + TS-04 -> TS-05 -> TS-06 + TS-07 + TS-08 + TS-09 -> TS-02 + TS-10
 
-1. **Phase 1 (no test simulator):** Run TC-01 through TC-16, TC-22 through TC-26, TC-38 -- 22 tests using existing simulators only.
-2. **Phase 2 (with test simulator):** Run TC-17 through TC-21, TC-27 through TC-31, TC-37, TC-39 -- 12 tests requiring the dedicated simulator.
-3. **Phase 3 (watcher resilience):** Run TC-32 through TC-36 -- 5 tests requiring ConfigMap manipulation.
-4. **Phase 4 (leader election):** Run TC-40 through TC-42 -- 3 tests requiring multi-replica awareness.
+Explanation: You can build and test the data structures (registry, cells, routing index) and pipeline integration first using hardcoded test config. Then add the ConfigMap watcher and atomic rebuild last. This allows unit testing the core logic before introducing K8s dependencies.
 
 ---
 
-## Test Simulator Requirements
+## MVP Recommendation
 
-Based on the test scenarios that cannot use existing OBP/NPB simulators:
+For the priority vector data layer milestone, prioritize in this order:
 
-| Capability | Required By | Why Existing Simulators Cannot Cover |
-|------------|-------------|--------------------------------------|
-| Serve OIDs NOT in oidmaps.json | TC-18, TC-19, TC-21 | OBP/NPB simulators serve only mapped OIDs |
-| Serve Gauge32 and TimeTicks types | TC-17 | OBP uses Integer32; NPB uses Counter64; neither produces Gauge32/TimeTicks |
-| Send traps with wrong community string | TC-37, TC-39 | OBP/NPB simulators hardcode Simetra.{DeviceName} community |
-| Be addable/removable as a device | TC-27, TC-28, TC-29 | OBP/NPB are permanent fixtures; test simulator is ephemeral |
-| Be startable/stoppable on demand | TC-30, TC-31 | OBP/NPB run continuously; test simulator needs controlled lifecycle |
-| Use configurable community string | TC-37, TC-39 | Must send traps with arbitrary community strings |
+**Must build (10 features -- all table stakes):**
+1. TS-01: Config model (foundation)
+2. TS-03: Tenant registry with priority groups (core structure)
+3. TS-04: Metric slot value cells (data storage)
+4. TS-05: Routing index (fan-out mechanism)
+5. TS-06: Pipeline behavior (data flow)
+6. TS-07: Port resolution (routing key completion)
+7. TS-08: Unknown metric filtering (data quality)
+8. TS-09: Heartbeat filtering (data quality)
+9. TS-02: ConfigMap watcher (operational necessity)
+10. TS-10: Atomic rebuild (concurrency safety)
 
-**Recommendation:** Single Python script using pysnmp (same stack as existing simulators). Configurable via environment variables: DEVICE_NAME, COMMUNITY, SERVE_UNMAPPED_OIDS (bool), SNMP_TYPES (list of types to serve). Deployed as a K8s pod but can be started/stopped via `kubectl scale`.
+**Should build (4 differentiators):**
+1. D-01: Config validation (catches mistakes early)
+2. D-02: Diff logging (operational visibility)
+3. D-04: Pipeline counter (observability)
+4. D-05: Thread-safe value cells (correctness)
+
+**Defer (1 differentiator):**
+- D-03: Diagnostic snapshot -- useful but not needed until decision logic exists to consume it. Can be added when there is a consumer.
+
+**Explicitly do NOT build (8 anti-features):**
+- AF-01 through AF-08 as documented above.
 
 ---
 
-## Complexity Assessment
+## Spec Ambiguity Notes
 
-| Complexity | Count | Test IDs |
-|------------|-------|----------|
-| LOW | 19 | TC-01, TC-02, TC-03, TC-04, TC-07, TC-08, TC-09, TC-10, TC-11, TC-12, TC-13, TC-14, TC-15, TC-16, TC-18, TC-19, TC-20, TC-34, TC-35 |
-| MEDIUM | 16 | TC-05, TC-06, TC-17, TC-21, TC-22, TC-23, TC-24, TC-25, TC-26, TC-29, TC-30, TC-31, TC-32, TC-33, TC-37, TC-41 |
-| HIGH | 7 | TC-27, TC-28, TC-36, TC-39, TC-40, TC-42 |
+### OID vs metric_name as routing key
 
-**Total: 42 test scenarios across 8 categories.**
+The spec (tenantvector.txt) uses `oid` in the metric slot definition and `(ip, port, oid)` as the routing key. The milestone context uses `(ip, port, metric_name)`. These are reconcilable:
 
----
+- **Config file (tenantvector.json):** Metric slots specify `oid` (the raw OID string). This is what the config author writes.
+- **Runtime routing index:** Keyed by `(ip, port, metric_name)` where `metric_name` is the OID-map-resolved name. This is what the pipeline behavior uses to match incoming samples.
+- **At load time:** The watcher resolves each configured OID to its metric_name via OidMapService. If an OID does not resolve (Unknown), the slot is logged as a warning (D-01) and excluded from the routing index.
 
-## MVP Test Recommendation
+This means the routing index is rebuilt not only when tenantvector.json changes, but also when the OID map changes (since metric_name mappings may change). This cross-dependency should be handled by having the TenantVectorWatcherService listen for OID map reloads as well, or by having OidMapService notify the tenant registry of changes.
 
-For the E2E verification milestone, prioritize in this order:
+### Port in SnmpOidReceived
 
-**Must run (28 tests):** Categories 1-4 (pipeline counters, business metric correctness, unknown OID handling, OID map mutations). These verify the core data flow from SNMP to Prometheus.
-
-**Should run (8 tests):** Categories 5-6 (device lifecycle, ConfigMap watcher resilience). These verify operational reliability under configuration changes.
-
-**Run if time permits (6 tests):** Categories 7-8 (community string auth, leader election gating). These verify security and HA behaviors that are already well-covered by unit tests (138 existing tests).
-
-**Explicitly skip:** All anti-features listed above. Document the rationale in the test report.
+The current `SnmpOidReceived` message does not carry a port. The recommended approach (TS-07) uses DeviceName-based lookup via DeviceRegistry. This works for all current data paths but assumes every sample has a known DeviceName with a registered device. This is guaranteed by ValidationBehavior (rejects null DeviceName) and the device registration requirement.
 
 ---
 
 ## Sources
 
-- Codebase analysis: `src/SnmpCollector/Telemetry/PipelineMetricService.cs` -- all 10 pipeline counter definitions (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Pipeline/Handlers/OtelMetricHandler.cs` -- SnmpType switch, heartbeat suppression, RecordGauge/RecordInfo paths (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Pipeline/OidMapService.cs` -- FrozenDictionary atomic swap, UpdateMap diff logging, Unknown constant (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Services/OidMapWatcherService.cs` -- K8s watch loop, SemaphoreSlim, JsonException handling, reconnect logic (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Services/DeviceWatcherService.cs` -- device reload, DynamicPollScheduler reconciliation (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Services/SnmpTrapListenerService.cs` -- community string validation, TrapAuthFailed counter (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Pipeline/DeviceUnreachabilityTracker.cs` -- 3-failure threshold, transition detection (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Telemetry/MetricRoleGatedExporter.cs` -- meter-name gating, follower filtering (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Telemetry/SnmpMetricFactory.cs` -- snmp_gauge and snmp_info instrument creation, label sets (HIGH confidence)
-- Codebase analysis: `simulators/obp/obp_simulator.py` -- OBP OID set, trap behavior, community string convention (HIGH confidence)
+- Spec analysis: `Docs/tenantvector.txt` -- Priority vector design specification (HIGH confidence)
+- Codebase analysis: `src/SnmpCollector/Pipeline/SnmpOidReceived.cs` -- message model, no Port field (HIGH confidence)
+- Codebase analysis: `src/SnmpCollector/Pipeline/OidMapService.cs` -- FrozenDictionary pattern, Unknown constant (HIGH confidence)
+- Codebase analysis: `src/SnmpCollector/Pipeline/DeviceRegistry.cs` -- TryGetDeviceByName, FrozenDictionary atomic swap (HIGH confidence)
+- Codebase analysis: `src/SnmpCollector/Services/OidMapWatcherService.cs` -- ConfigMap watcher pattern, SemaphoreSlim, reconnect (HIGH confidence)
+- Codebase analysis: `src/SnmpCollector/Pipeline/Handlers/OtelMetricHandler.cs` -- terminal handler, heartbeat skip, type dispatch (HIGH confidence)
+- Codebase analysis: `src/SnmpCollector/Pipeline/Behaviors/OidResolutionBehavior.cs` -- MetricName enrichment (HIGH confidence)
+- Codebase analysis: `src/SnmpCollector/Pipeline/Behaviors/ValidationBehavior.cs` -- DeviceName null rejection (HIGH confidence)
+- Codebase analysis: `src/SnmpCollector/Jobs/MetricPollJob.cs` -- port from JobDataMap, DeviceName from device (HIGH confidence)
+- Codebase analysis: `src/SnmpCollector/Services/SnmpTrapListenerService.cs` -- trap path, no port in VarbindEnvelope (HIGH confidence)
 
 ---
-*Feature research for: E2E system verification of SNMP monitoring pipeline*
-*Researched: 2026-03-09*
+*Feature research for: Priority Vector Data Layer*
+*Researched: 2026-03-10*

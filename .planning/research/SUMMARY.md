@@ -1,161 +1,174 @@
 # Project Research Summary
 
-**Project:** SnmpCollector v1.4 -- E2E System Verification
-**Domain:** End-to-end test infrastructure for K8s-based SNMP monitoring pipeline
-**Researched:** 2026-03-09
+**Project:** SnmpCollector -- Priority Vector Data Layer
+**Domain:** Stateful in-memory fan-out data layer for SNMP metric tenant prioritization
+**Researched:** 2026-03-10
 **Confidence:** HIGH
 
 ## Executive Summary
 
-The SnmpCollector v1.4 milestone is a verification-only effort: build an E2E test harness that proves the full SNMP-to-Prometheus pipeline works correctly under normal operation, configuration mutations, and edge cases. The existing system (C# .NET 9, OTel, MediatR, Quartz.NET, 3-replica K8s deployment with leader election) is not modified. The test infrastructure is purely additive -- a bash/Python harness that exercises the system through its existing interfaces (SNMP UDP, ConfigMap K8s API, Prometheus HTTP API) and reports pass/fail results.
+The Priority Vector Data Layer is a pure pattern-replication milestone. Every building block -- volatile FrozenDictionary swap, ConcurrentDictionary with reference-type values, MediatR open generic behaviors, K8s ConfigMap watchers with SemaphoreSlim serialization -- already exists in the SnmpCollector codebase with proven implementations. Zero new NuGet packages are required. The work is creating new service classes that apply established patterns to a new domain: routing incoming SNMP samples to per-tenant metric slots based on a priority-ordered configuration.
 
-The recommended approach is a bash test runner (`run-e2e.sh`) orchestrating 42 test scenarios across 8 categories, with a dedicated Python SNMP test simulator (`e2e-sim`) for edge cases that existing OBP/NPB simulators cannot cover. The test runner queries Prometheus directly via HTTP API and parses kubectl logs for evidence. ConfigMap manipulation follows an extract-merge-apply pattern with snapshot/restore safety. No new heavyweight dependencies -- just `curl`, `jq`, `kubectl`, and a pysnmp-based simulator matching the existing simulator stack.
+The recommended approach is bottom-up construction: config models first, then core data types (slots, routing index), then the MediatR fan-out behavior that bridges the existing pipeline to the new data layer, and finally the ConfigMap watcher for hot-reload. This order maximizes unit-testability at each step and defers K8s integration to the end. The architecture adds a single new behavior to the MediatR pipeline (position 5, after OidResolution) that performs a FrozenDictionary lookup and writes to tenant slots as a side-effect, then unconditionally calls `next()` so existing OTel export is never disrupted.
 
-The dominant risk is timing: the OTel push pipeline introduces a 15-25 second latency between metric recording and Prometheus queryability, and Prometheus metric staleness persists for 5 minutes after a series stops being written. These two characteristics mean tests must use poll-until-satisfied patterns (never fixed sleeps) and verify metric removal via label changes or counter stagnation (never via absence queries). Leader election adds a third timing dimension -- business metrics only export from the leader pod, so tests must verify leadership state before asserting on `snmp_gauge`/`snmp_info`. All three timing pitfalls are well-understood and have documented mitigations.
+The primary risk is the cross-dependency between the OID map and the tenant vector routing index: if OID-to-metric-name mappings change, the routing index silently becomes stale. This must be addressed at design time by subscribing the routing index rebuild to OID map change events. The secondary risk is the fan-out behavior accidentally killing the existing OTel export pipeline if it throws an exception -- prevented by mandatory internal try/catch with unconditional `next()` invocation. Both risks have clear, proven mitigation patterns.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The E2E stack aligns with the existing Python simulator ecosystem to minimize cognitive overhead. No C# code changes or new heavyweight dependencies.
+No new dependencies. All data structures use .NET 9 BCL types already proven in this codebase. This is a pattern replication decision, not a technology decision.
 
 **Core technologies:**
-- **pytest 9.0.2 + requests + tenacity:** Test runner, HTTP queries, retry-with-backoff for Prometheus polling. Python is the right glue language for subprocess (kubectl) and HTTP (Prometheus API) orchestration
-- **pysnmp 7.1.22:** Dedicated test simulator matching existing OBP/NPB simulator patterns exactly. Same imports, same engine setup, deterministic behavior
-- **kubectl CLI (subprocess):** Four operations needed (logs, get, patch, rollout). CLI calls are simpler than pulling in the kubernetes Python client for this narrow use case
-- **bash (run-e2e.sh):** Orchestration script extending the existing `verify-e2e.sh` pattern. Dependencies: `curl`, `jq`, `kubectl` -- already available
-
-**Explicitly rejected:** kubernetes Python client (overkill), pytest-xdist (shared state prevents parallelism), testcontainers (system already deployed on K8s), Selenium/Playwright (no browser UI), pytest-asyncio (no async code needed).
+- `FrozenDictionary<RoutingKey, IReadOnlyList<TenantSlotRef>>`: routing index -- volatile swap for lock-free reads, matching OidMapService and DeviceRegistry
+- `ConcurrentDictionary` or direct slot references in `TenantVector`: slot storage -- matching LivenessVectorService and DeviceUnreachabilityTracker patterns
+- `Volatile.Write/Read` on slot fields: thread-safe value cell updates without locks
+- `MediatR IPipelineBehavior<,>`: fan-out behavior -- 5th open generic behavior following the established registration pattern
+- `BackgroundService` + K8s ConfigMap watch: structural clone of OidMapWatcherService for tenantvector.json hot-reload
 
 ### Expected Features
 
-**Must have (28 test scenarios -- Categories 1-4):**
-- Pipeline counter verification (10 counters, all incrementing with correct `device_name` labels) -- TC-01 through TC-10
-- Business metric correctness (snmp_gauge/snmp_info with correct snmp_type, source, metric_name labels) -- TC-11 through TC-17
-- Unknown OID handling (unmapped OIDs resolve to metric_name="Unknown", still flow through pipeline) -- TC-18 through TC-21
-- OID map hot-reload (rename/remove/add OID mappings via ConfigMap, verify metric_name changes) -- TC-22 through TC-26
+**Must have (10 table stakes):**
+- TS-01: Config model (`TenantVectorOptions` POCO hierarchy)
+- TS-02: ConfigMap watcher (`TenantVectorWatcherService` watching `simetra-tenantvector`)
+- TS-03: Tenant registry with priority groups (ordered by priority, grouped tenants)
+- TS-04: Metric slot value cells (single-cell, last-writer-wins, in-place overwrite)
+- TS-05: Routing index -- `(ip, port, metric_name)` fan-out via FrozenDictionary
+- TS-06: Pipeline behavior (`TenantVectorFanOutBehavior`, position 5 after OidResolution)
+- TS-07: Port resolution via DeviceName lookup (no changes to SnmpOidReceived)
+- TS-08: Unknown metric filtering (skip `MetricName == "Unknown"`)
+- TS-09: Heartbeat filtering (skip `IsHeartbeat == true`)
+- TS-10: Atomic rebuild on config change (FrozenDictionary volatile swap)
 
-**Should have (8 test scenarios -- Categories 5-6):**
-- Device lifecycle (add/remove devices via ConfigMap, verify poll job creation/removal) -- TC-27 through TC-31
-- ConfigMap watcher resilience (invalid JSON, missing keys, null values -- system retains previous config) -- TC-32 through TC-36
+**Should have (4 differentiators):**
+- D-01: Config validation at load time (unique IDs, valid metric references, valid ranges)
+- D-02: Structured diff logging on reload (added/removed/changed tenants)
+- D-04: Pipeline counter `snmp_tenantvector_routed_total` for observability
+- D-05: Thread-safe value cells via immutable record + Volatile.Write swap
 
 **Defer:**
-- Community string auth tests (TC-37 through TC-39) -- already well-covered by unit tests
-- Leader election gating tests (TC-40 through TC-42) -- TC-42 (failover) is too disruptive for automated E2E; document as manual verification
-- Performance/load testing, chaos testing, Grafana dashboard rendering -- separate disciplines, not E2E functional verification
+- D-03: Diagnostic snapshot accessor -- no consumer exists yet; add when evaluation engine is built
+- AF-01 through AF-08: Decision logic, staleness detection, external APIs, Prometheus export of tenant data, tenant-specific polling, history buffers, cross-tenant dedup, persistence -- all explicitly out of scope
 
 ### Architecture Approach
 
-The test runner lives on the host machine (not in-cluster), matching the existing `verify-e2e.sh` pattern. It interacts with 4 integration surfaces: SNMP UDP (simulator <-> collector), ConfigMap K8s API (test runner -> watchers), Prometheus HTTP API (verification queries), and pod logs (evidence collection). A dedicated test simulator (`e2e-sim`) uses enterprise OID subtree `47477.999` to isolate from production OBP/NPB OIDs, with community string `Simetra.E2E-SIM`.
+The fan-out behavior inserts as position 5 in the MediatR pipeline (after OidResolution sets MetricName, before OtelMetricHandler). It performs a single FrozenDictionary lookup on the routing index, writes to matching tenant slots via Volatile.Write, and always calls `next()`. The routing index and tenant registry are singletons rebuilt atomically via volatile FrozenDictionary swap when the ConfigMap changes. Only 3 existing files are modified: `ServiceCollectionExtensions.cs` (~25 lines), `Program.cs` (~15 lines for local-dev fallback). All other existing code is untouched.
 
 **Major components:**
-1. **Test Simulator (e2e-sim)** -- Deterministic SNMP agent serving mapped + unmapped OIDs, sending traps on 10s intervals, controllable lifecycle via `kubectl scale`
-2. **Test Runner (run-e2e.sh)** -- Sequential scenario orchestration with ConfigMap snapshot/restore, Prometheus polling, log evidence collection, and plain-text report output
-3. **ConfigMap Fixtures (tests/e2e/fixtures/)** -- OID map entries and device config for E2E-SIM, merged into existing ConfigMaps via extract-jq-apply pattern
-4. **K8s Manifest (e2e-simulator.yaml)** -- Deployment + Service following exact same pattern as existing OBP/NPB simulator manifests
+1. **Configuration Models** (`Configuration/`) -- POCOs for tenantvector.json deserialization + IValidateOptions validator
+2. **Core Data Types** (`Pipeline/`) -- `RoutingKey` record struct, `TenantSlot` mutable cell with Volatile semantics, `Tenant` runtime model, `TenantVector` priority-grouped container
+3. **TenantVectorRegistry** (`Pipeline/`) -- singleton holding FrozenDictionary routing index + volatile swap; `ITenantVectorRegistry` interface with `TryRoute()` and `Reload()`
+4. **TenantVectorFanOutBehavior** (`Pipeline/Behaviors/`) -- MediatR behavior wiring pipeline to registry
+5. **TenantVectorWatcherService** (`Services/`) -- BackgroundService watching `simetra-tenantvector` ConfigMap
+6. **K8s ConfigMap** (`deploy/`) -- `simetra-tenantvector` ConfigMap manifest + local dev `tenantvector.json`
 
 ### Critical Pitfalls
 
-1. **OTel 15-second export blind spot** -- Metrics take 15-25s to reach Prometheus. Use poll-until-satisfied with 30s timeout and 3s interval, never fixed sleeps. Build the polling utility as the first deliverable.
+1. **OID map reload desync (Pitfall 1, CRITICAL)** -- OID map rename changes metric names but routing index still uses old names, causing silent data loss. **Prevent:** Subscribe routing index rebuild to OID map change events; rebuild on ANY config source change; log routing misses at Warning level.
 
-2. **Prometheus 5-minute staleness window** -- Removed metrics persist for 5 minutes. Never verify removal by checking for absence. Instead verify via metric_name="Unknown" label change (OID removal) or counter stagnation (device removal).
+2. **Fan-out exception kills OTel export (Pitfall 8, CRITICAL)** -- ExceptionBehavior catches fan-out errors and short-circuits the entire downstream chain including OtelMetricHandler. **Prevent:** Fan-out behavior MUST catch its own exceptions internally and ALWAYS call `next()` unconditionally. Add integration test proving OtelMetricHandler fires even when fan-out throws.
 
-3. **Leader election gaps** -- Business metrics (snmp_gauge/snmp_info) only export from the leader pod. Always verify leadership state before asserting on business metrics. Pipeline counters export from all instances and are safe to query without leader checks.
+3. **Wrong behavior registration order (Pitfall 3, CRITICAL)** -- Registering fan-out before OidResolution means MetricName is null, all routing lookups miss silently. **Prevent:** Register AFTER OidResolutionBehavior (position 5); add guard clause for null/Unknown MetricName; add unit test for ordering.
 
-4. **Test isolation via cumulative counters** -- OTel uses cumulative temporality; counters never reset. Never assert absolute counter values. Record before/after values and assert on deltas. Filter all counter queries by `device_name` to exclude heartbeat noise.
+4. **Torn reads on slot value+timestamp (Pitfall 4, MODERATE)** -- Two-field write (value, timestamp) is not atomic; concurrent reader sees inconsistent pair. **Prevent:** Use immutable record + atomic reference swap via Volatile.Write from day one. Do NOT use mutable two-field approach.
 
-5. **ConfigMap propagation timing** -- K8s API watch events take 1-3s to reach all replicas (up to 10s edge case). Wait for reload log evidence from all pods before querying Prometheus.
+5. **Per-pod state divergence (Pitfall 7, MODERATE)** -- 3 replicas hold different slot values; no cross-pod sync. **Prevent:** Decide leader-only vs all-pods upfront. If leader-only, gate fan-out behind IsLeader check. Document the choice.
 
 ## Implications for Roadmap
 
-Based on research, the build follows a strict dependency chain. Each phase produces a standalone deliverable that can be validated before the next phase begins.
+Based on research, suggested phase structure:
 
-### Phase 1: Test Simulator
+### Phase 1: Config Models and Validation
+**Rationale:** Pure foundation with zero dependencies on existing code. Enables all downstream phases. Fully unit-testable in isolation.
+**Delivers:** `TenantVectorOptions`, `TenantOptions`, `TenantMetricOptions` POCOs; `TenantVectorOptionsValidator`; unit tests for validation rules.
+**Addresses:** TS-01, D-01
+**Avoids:** No pitfalls -- pure model classes.
 
-**Rationale:** Everything depends on having a controllable SNMP device. The simulator can be validated standalone before any test infrastructure exists.
-**Delivers:** `simulators/e2e/e2e_simulator.py`, Dockerfile, K8s manifest, OID map fixture entries
-**Addresses:** Test simulator requirements from FEATURES.md (9 of 42 scenarios require it)
-**Avoids:** Anti-Pattern 2 (modifying existing simulators) -- uses dedicated `.999` OID space
+### Phase 2: Core Data Types and Registry
+**Rationale:** Builds the in-memory data structures that all runtime behavior depends on. Can be tested with hardcoded config, no K8s dependency. Must design slot atomicity correctly from the start (Pitfall 4).
+**Delivers:** `RoutingKey`, `TenantSlot`, `Tenant`, `TenantVector`, `ITenantVectorRegistry`, `TenantVectorRegistry` with FrozenDictionary routing index and volatile swap. Structured diff logging on rebuild. Orphaned slot cleanup.
+**Addresses:** TS-03, TS-04, TS-05, TS-10, D-02, D-05
+**Avoids:** Pitfall 4 (torn reads -- use immutable slot swap), Pitfall 5 (rebuild blocking -- atomic swap pattern), Pitfall 6 (orphaned slots -- compute diff on rebuild)
 
-### Phase 2: Test Harness Framework + Pipeline Counter Verification
+### Phase 3: Pipeline Integration (Fan-Out Behavior)
+**Rationale:** Connects the new data layer to the existing pipeline. This is where the critical ordering and exception-safety pitfalls live. Must be implemented with defensive patterns from the first line of code.
+**Delivers:** `TenantVectorFanOutBehavior`, DI registration in `ServiceCollectionExtensions.cs`, guard clauses for heartbeat/Unknown filtering, port resolution via DeviceName, internal try/catch, pipeline counter.
+**Addresses:** TS-06, TS-07, TS-08, TS-09, D-04
+**Avoids:** Pitfall 3 (wrong order -- register after OidResolution), Pitfall 8 (exception kills export -- internal catch + unconditional next()), Pitfall 10 (heartbeat pollution), Pitfall 12 (Unknown pollution)
 
-**Rationale:** Establishes the test framework (polling utility, log capture, report format) using only existing OBP/NPB simulators -- no test simulator dependency. Pipeline counters are the simplest verification target and prove the framework works.
-**Delivers:** `tests/e2e/run-e2e.sh` with pre-flight checks, Prometheus query utilities, Phase 1 scenarios (TC-01 through TC-10)
-**Addresses:** FEATURES Category 1 (pipeline counters), 10 test scenarios
-**Avoids:** Pitfall 1 (fixed sleeps), Pitfall 4 (absolute counter values), Pitfall 9 (heartbeat contamination)
+### Phase 4: ConfigMap Watcher and Local Dev
+**Rationale:** Last production code phase because it introduces K8s infrastructure dependency. The data layer and pipeline integration are already testable with hardcoded config. The watcher is a structural clone of OidMapWatcherService.
+**Delivers:** `TenantVectorWatcherService`, `simetra-tenantvector` ConfigMap manifest, local-dev fallback in `Program.cs`, DI registration for watcher, OID map change notification subscription.
+**Addresses:** TS-02
+**Avoids:** Pitfall 1 (OID map desync -- subscribe to OidMapService changes and trigger routing rebuild), Pitfall 5 (rebuild blocking -- SemaphoreSlim on build only)
 
-### Phase 3: Test Simulator Integration + Business Metric Verification
-
-**Rationale:** First phase that deploys the test simulator and exercises ConfigMap manipulation (add E2E-SIM device + OID entries). The ConfigMap snapshot/restore pattern built here is reused by all subsequent mutation phases.
-**Delivers:** ConfigMap fixture files, merge/restore logic, Phase 2 scenarios (TC-11 through TC-21)
-**Addresses:** FEATURES Categories 2-3 (business metric correctness, unknown OID handling), 11 test scenarios
-**Avoids:** Pitfall 3 (leader gaps -- verify leadership first), Pitfall 5 (ConfigMap propagation -- wait for reload logs)
-
-### Phase 4: OID Map Mutation + Device Lifecycle Tests
-
-**Rationale:** Depends on Phase 3's ConfigMap infrastructure being proven stable. These are the most operationally valuable tests -- they verify the system handles configuration changes correctly at runtime.
-**Delivers:** Phases 3-5 scenarios (TC-22 through TC-31)
-**Addresses:** FEATURES Categories 4-5 (OID map hot-reload, device lifecycle), 10 test scenarios
-**Avoids:** Pitfall 2 (staleness -- verify via label changes not absence), Pitfall 5 (propagation -- per-pod log verification)
-
-### Phase 5: Watcher Resilience + Trap Verification + Report
-
-**Rationale:** These are the remaining scenarios that round out coverage. Watcher resilience tests (invalid JSON, missing keys) are defensive; trap verification exercises the UDP path. Final report generation wraps the suite.
-**Delivers:** Phases 6-8 scenarios (TC-32 through TC-39), comprehensive report output
-**Addresses:** FEATURES Categories 6-7 (ConfigMap resilience, community string auth), 8 test scenarios
-**Avoids:** Pitfall 7 (UDP unreliability -- retry trap sends), Anti-Pattern 5 (not snapshotting ConfigMaps)
+### Phase 5: E2E Validation and K8s Deployment
+**Rationale:** Final integration verification in the actual K8s environment with real ConfigMaps and multi-replica deployment.
+**Delivers:** E2E test scenarios, ConfigMap applied, watcher picks up config, samples route to tenant slots, Prometheus counter incrementing.
+**Addresses:** Validation of all table stakes working together.
+**Avoids:** Pitfall 7 (per-pod divergence -- validate leader-only/all-pods decision in multi-replica deployment)
 
 ### Phase Ordering Rationale
 
-- **Simulator first** because 9 test scenarios require it and the framework needs a controllable SNMP device for anything beyond pipeline counter verification
-- **Framework + pipeline counters second** because they establish the polling, log capture, and reporting patterns that every subsequent phase reuses, and they can run without the test simulator
-- **Business metrics third** because they exercise the full data path (SNMP -> MediatR -> OTel -> Prometheus) and introduce ConfigMap manipulation patterns
-- **Mutations fourth** because they depend on proven ConfigMap infrastructure and are the highest-value operational tests
-- **Resilience + traps last** because they are defensive edge cases with lower business impact -- valuable but not blocking
+- **Bottom-up by dependency:** Config models have zero deps, data types depend on models, registry depends on data types, behavior depends on registry, watcher depends on registry. Each phase is testable before the next begins.
+- **Defer K8s to the end:** Phases 1-3 are pure C# with no K8s dependency. This means faster iteration cycles and no need for a running cluster during core development.
+- **Critical pitfalls concentrated in Phase 3:** The fan-out behavior is where most things can go wrong (ordering, exceptions, filtering). Isolating it as its own phase forces focused attention on defensive patterns.
+- **OID map cross-dependency in Phase 4:** The watcher phase is where the OID map desync pitfall (Pitfall 1) must be addressed, because the watcher is the component that triggers routing index rebuilds.
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 4 (Device Lifecycle):** The DynamicPollScheduler reconciliation timing is complex. May need to verify exact Quartz job teardown behavior and liveness vector cleanup during planning.
+- **Phase 3 (Pipeline Integration):** Verify exact MediatR behavior registration semantics for open generics. Confirm that position 5 means "inside OidResolution's next() call." Write a spike test before committing to the design.
+- **Phase 4 (ConfigMap Watcher):** Research the OID map change notification mechanism. OidMapService currently has no event/callback for map updates. Either add one or use a version-stamp polling approach.
+- **Phase 5 (E2E):** Requires leader-only vs all-pods decision (Pitfall 7) to be resolved before testing. This is an architecture decision, not a research gap.
 
-Phases with standard patterns (skip research-phase):
-- **Phase 1 (Test Simulator):** Existing OBP/NPB simulators provide a complete reference implementation. Copy the pattern.
-- **Phase 2 (Framework + Counters):** Well-established pattern from existing `verify-e2e.sh`. Extend, don't reinvent.
-- **Phase 3 (Business Metrics):** Prometheus HTTP API queries are straightforward. Leader verification is the only nuance (documented in Pitfall 3).
-- **Phase 5 (Resilience + Traps):** ConfigMap error handling is simple code paths (3-line guards). Trap retry is straightforward.
+Phases with standard patterns (skip additional research):
+- **Phase 1 (Config Models):** Established POCO + IValidateOptions pattern. No research needed.
+- **Phase 2 (Core Data Types):** FrozenDictionary, ConcurrentDictionary, Volatile patterns all proven in codebase. No research needed.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All versions verified against PyPI. Stack aligns with existing simulator ecosystem. No novel dependencies. |
-| Features | HIGH | All 42 test scenarios derived directly from codebase analysis of shipped features. Every scenario maps to a specific code path. |
-| Architecture | HIGH | Architecture mirrors existing `verify-e2e.sh` pattern and simulator deployment patterns. No architectural novelty. |
-| Pitfalls | HIGH | Critical pitfalls verified against OTel SDK source, Prometheus remote write spec, and K8s API watch documentation. Timing constants extracted from actual source code. |
+| Stack | HIGH | Zero new packages. All BCL types proven in 3+ locations in the codebase. |
+| Features | HIGH | Derived from authoritative spec (tenantvector.txt) and direct codebase analysis. Clear table-stakes/differentiator/anti-feature boundaries. |
+| Architecture | HIGH | Every pattern (FrozenDictionary swap, MediatR behavior, ConfigMap watcher) is a structural clone of existing code. Build order validated against actual dependency graph. |
+| Pitfalls | HIGH | All pitfalls verified against source code. Concurrency model analyzed from actual threading paths (Quartz pool, Channel consumer, async pipeline). |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Leader election failover test (TC-42):** Intentionally deferred as manual-only. Pod kill is too disruptive for automated E2E. Run once, record evidence, document results.
-- **K8s watch reconnection (TC-36):** Hard to trigger deterministically. Watch connections close naturally every ~30 minutes. Verify via log observation during long-running operation, not as an automated test.
-- **OTel export interval coupling:** The 15-second export interval drives the 30-second test timeout budget. If this changes in a future release, test timeouts must be adjusted accordingly.
-- **pytest vs bash decision:** STACK.md recommends pytest; ARCHITECTURE.md describes a bash runner extending `verify-e2e.sh`. Both are viable. Recommendation: **start with bash** to stay consistent with the existing `verify-e2e.sh` pattern and avoid introducing a Python test dependency for the runner. Migrate to pytest only if the suite exceeds ~500 lines or needs parameterized test cases.
+- **Leader-only vs all-pods decision (Pitfall 7):** Not resolved by research. Requires a product-level decision about whether the tenant vector is consumed only on the leader pod or on all pods. This decision affects fan-out gating, memory usage on followers, and leadership transition behavior. **Must be decided before Phase 3 implementation.**
+
+- **OID map change notification mechanism (Pitfall 1):** OidMapService currently has no event or callback for map updates. The routing index rebuild needs a trigger. Options: (a) add an event to OidMapService, (b) version-stamp polling, (c) have both watchers funnel through a centralized reload orchestrator. **Must be decided during Phase 4 planning.**
+
+- **RoutingKey design: record struct vs composite string:** STACK.md recommends composite string key `"{ip}:{port}:{metricName}"`. ARCHITECTURE.md recommends `readonly record struct RoutingKey`. The record struct is cleaner (proper equality, no formatting ambiguity) and avoids per-lookup string allocation. FrozenDictionary with record struct keys works correctly. **Recommendation: use record struct as ARCHITECTURE.md specifies.** The string key suggestion in STACK.md is superseded.
+
+- **Value type in MetricSlot:** FEATURES.md specifies `object` (int, long, uint, ulong, string) to match SNMP type diversity. STACK.md specifies `double`. ARCHITECTURE.md specifies `double` + optional `string?`. **Recommendation: use double + string? as ARCHITECTURE.md specifies.** Most SNMP numeric types fit in double; string covers DisplayString OIDs.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Codebase analysis: `PipelineMetricService.cs`, `OtelMetricHandler.cs`, `OidMapService.cs`, `OidMapWatcherService.cs`, `DeviceWatcherService.cs`, `MetricRoleGatedExporter.cs`, `SnmpTrapListenerService.cs`, `DeviceUnreachabilityTracker.cs`, `ServiceCollectionExtensions.cs`
-- Codebase analysis: `simulators/obp/obp_simulator.py`, `simulators/npb/` -- simulator architecture patterns
-- Codebase analysis: `deploy/k8s/verify-e2e.sh` -- existing E2E verification pattern
-- [Prometheus Remote Write Spec](https://prometheus.io/docs/specs/prw/remote_write_spec/) -- staleness marker behavior
-- [Prometheus HTTP API](https://prometheus.io/docs/prometheus/latest/querying/api/) -- query endpoints
-- [OTel Collector Issue #27893](https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/27893) -- remote write staleness gap
+- `Docs/tenantvector.txt` -- authoritative design specification for priority vector
+- Direct codebase analysis of all referenced source files (14 files in ARCHITECTURE.md, 10 in FEATURES.md, 10 in STACK.md, 17 in PITFALLS.md)
 
-### Secondary (MEDIUM confidence)
-- [K8s Issue #30189](https://github.com/kubernetes/kubernetes/issues/30189) -- ConfigMap watch propagation delays
-- PyPI version verification: pytest 9.0.2, requests 2.32.5, tenacity 9.1.4, pysnmp 7.1.22
+### Key Source Files Referenced
+- `DeviceRegistry.cs` -- volatile FrozenDictionary swap, dual-dictionary pattern
+- `OidMapService.cs` -- volatile FrozenDictionary swap, diff logging
+- `DeviceUnreachabilityTracker.cs` -- ConcurrentDictionary with reference-type inner class + volatile fields
+- `LivenessVectorService.cs` -- ConcurrentDictionary for timestamp slots
+- `OidResolutionBehavior.cs` -- open generic behavior pattern, MetricName enrichment
+- `OidMapWatcherService.cs` -- ConfigMap watch + SemaphoreSlim reload serialization
+- `ServiceCollectionExtensions.cs` -- behavior registration order, DI patterns
+- `ExceptionBehavior.cs` -- catch-all that can swallow downstream errors
+- `MetricPollJob.cs` -- concurrent execution model, DeviceName/AgentIp construction
+- `SnmpOidReceived.cs` -- message contract (no Port field)
+
+### External References
+- [FrozenDictionary benchmarks](https://dotnetbenchmarks.com/benchmark/1005) -- 43-69% faster reads vs Dictionary
+- [Volatile vs Interlocked vs Lock](https://code-maze.com/csharp-volatile-interlocked-lock/) -- memory model semantics
 
 ---
-*Research completed: 2026-03-09*
+*Research completed: 2026-03-10*
 *Ready for roadmap: yes*

@@ -1,217 +1,217 @@
-# Technology Stack: E2E System Verification
+# Technology Stack: Priority Vector Data Layer
 
-**Project:** SnmpCollector E2E Testing
-**Researched:** 2026-03-09
-**Confidence:** HIGH (versions verified against PyPI and official documentation)
-
----
-
-## Context
-
-The SnmpCollector application stack is already established and validated (C# .NET 9, SharpSnmpLib, OTel, MediatR, Quartz.NET, KubernetesClient). This document covers ONLY the additions needed for E2E system verification -- the test harness that validates the full pipeline from SNMP simulator through to Prometheus metrics.
-
-Existing simulators (OBP, NPB) use Python 3.12 + pysnmp 7.1.22. The E2E test stack aligns with these to minimize cognitive overhead and share SNMP patterns.
+**Project:** SnmpCollector -- Priority Vector Data Layer
+**Researched:** 2026-03-10
+**Overall confidence:** HIGH (all recommendations use BCL types already proven in this codebase)
 
 ---
 
-## Recommended E2E Stack
+## Executive Decision
 
-### Test Runner
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| pytest | 9.0.2 | Test orchestration, assertions, fixtures, reporting | Industry standard Python test runner. Superior to bash scripts: structured assertions, fixture-based setup/teardown, parallel execution via plugins, JUnit XML output for CI. Already the natural choice given existing Python simulator ecosystem. |
-
-**Why not bash scripts:** Bash works for a single happy-path smoke test. E2E suites need: parameterized test cases, structured assertions with meaningful diff output, fixture-scoped setup/teardown (deploy simulator -> run tests -> cleanup), timeout handling, and CI-friendly reporting. pytest provides all of this. A bash script that grows beyond 100 lines becomes unmaintainable.
-
-**Why not a C# xUnit E2E project:** The tests interact with external systems (kubectl, Prometheus HTTP API, SNMP simulators) via subprocess calls and HTTP requests. Python is a better glue language for this. The existing C# test project (`tests/SnmpCollector.Tests/`) handles unit/integration tests; E2E lives in a separate Python harness.
-
-### HTTP & Verification
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| requests | 2.32.5 | Prometheus HTTP API queries | Standard Python HTTP client. No async needed -- E2E tests are sequential by nature (send SNMP, wait, query Prometheus). Zero learning curve. |
-
-**Why not httpx or aiohttp:** The E2E tests are inherently sequential -- send a trap, wait for pipeline processing, query Prometheus. Async adds complexity with zero benefit. `requests` is the simplest correct choice.
-
-### SNMP Test Simulator
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| pysnmp | 7.1.22 | Dedicated E2E test simulator | Matches existing OBP/NPB simulators exactly. Same import patterns, same SNMP engine setup. Enables edge-case scenarios (counter wraps, rapid traps, invalid OIDs) that production simulators cannot expose without contaminating their purpose. |
-
-**Why a dedicated test simulator instead of reusing OBP/NPB:** The production simulators (OBP, NPB) model real device behavior -- they random-walk power values and send traps on realistic intervals. E2E tests need deterministic, controllable behavior: "set this OID to exactly this value, send exactly one trap now, return a counter that wraps at exactly 2^32-1." A test simulator is purpose-built for verifiability, not realism.
-
-### K8s Interaction
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| kubectl (CLI) | (cluster-matched) | Log parsing, ConfigMap patching, pod management | Already available in the deployment environment. Subprocess calls from Python are simpler than pulling in the kubernetes Python client for the narrow operations needed (get logs, patch configmap, rollout restart). |
-
-**Why not the `kubernetes` Python client library:** The E2E tests need exactly four kubectl operations: `kubectl logs`, `kubectl get`, `kubectl patch configmap`, and `kubectl rollout restart`. Subprocess calls to kubectl are 5 lines each and require no dependency. The kubernetes Python client adds a 15MB dependency with auth complexity for operations that are simpler as CLI calls. If the test suite eventually needs programmatic K8s object creation (deploying test-specific pods), revisit this decision.
-
-### Test Timing & Retry
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| tenacity | 9.1.4 | Retry with backoff for async pipeline verification | E2E tests must poll Prometheus until metrics appear (pipeline has latency: SNMP poll -> MediatR -> OTel -> Collector -> remote_write -> Prometheus). tenacity provides declarative retry with configurable stop/wait strategies, cleaner than hand-rolled while loops. |
-
-**Why tenacity over hand-rolled retry:** Every E2E test that queries Prometheus needs a "wait until metric appears" pattern. Without a retry library, every test function contains a while loop with sleep, timeout check, and assertion. With tenacity: `@retry(stop=stop_after_delay(30), wait=wait_fixed(2))` -- one decorator, clear intent.
+**Zero new NuGet packages.** Every data structure needed ships in the .NET 9 BCL. The codebase already demonstrates the exact patterns required (volatile FrozenDictionary swap, ConcurrentDictionary for mutable state, reference-class wrappers for atomic field updates). This milestone extends existing patterns to a new domain -- it does not introduce new technology.
 
 ---
 
-## What NOT to Add
+## Recommended Stack Additions
 
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| kubernetes Python client | Heavyweight (15MB+), complex auth setup, overkill for 4 CLI operations | `subprocess.run(["kubectl", ...])` |
-| selenium / playwright | No browser UI to test. Grafana dashboard validation is out of scope for E2E. | Direct Prometheus HTTP API queries |
-| testcontainers-python | The K8s cluster and all services already run. E2E tests validate the deployed system, not spin up a new one. | kubectl against existing namespace |
-| pytest-asyncio | No async code in the test harness. SNMP sending, HTTP queries, and kubectl calls are all synchronous. | Standard synchronous pytest |
-| docker-compose test orchestration | System is deployed on K8s. Docker-compose would create a parallel universe that does not validate the real deployment. | Test against live K8s namespace |
-| pysnmp-lextudio | This is the old fork name. The canonical package is now just `pysnmp` (maintained by LeXtudio). Do not install both. | `pysnmp==7.1.22` |
-| pytest-xdist (parallel) | E2E tests share cluster state (metrics in Prometheus, logs in pods). Parallel execution causes flaky tests from metric cross-contamination. | Sequential execution (default pytest) |
+### 1. Tenant Metric Slot Storage
+
+| Decision | Type | Namespace | Why |
+|----------|------|-----------|-----|
+| Slot container | `ConcurrentDictionary<string, MetricSlot>` | `System.Collections.Concurrent` | Same pattern as `LivenessVectorService` and `DeviceUnreachabilityTracker`. Pipeline thread writes value + timestamp; future consumers read. Lock-free for single-writer-per-key. |
+| Slot value type | `sealed class MetricSlot` with `volatile` fields | BCL primitives | Reference type allows atomic swap of the dictionary entry. Volatile fields ensure cross-thread visibility without locks, matching `DeviceState` in `DeviceUnreachabilityTracker`. |
+| Timestamp | `DateTimeOffset` via `volatile` field | `System` | Matches `LivenessVectorService` pattern. UTC only. |
+
+**Concrete type design:**
+
+```csharp
+/// <summary>
+/// Single metric value slot for a tenant. Written by pipeline thread,
+/// potentially read by future consumers (API, export).
+/// Reference type: ConcurrentDictionary stores reference, so reads always
+/// get a consistent snapshot of (Value, UpdatedAt).
+/// </summary>
+public sealed class MetricSlot
+{
+    private volatile double _value;
+    private volatile DateTimeOffset _updatedAt;
+
+    public double Value => _value;
+    public DateTimeOffset UpdatedAt => _updatedAt;
+
+    public void Update(double value, DateTimeOffset timestamp)
+    {
+        _value = value;
+        _updatedAt = timestamp;
+    }
+}
+```
+
+**Why NOT a struct:** ConcurrentDictionary with value-type entries requires `AddOrUpdate` with closures for atomic update. A reference-type entry lets us mutate in-place after `GetOrAdd`, which is lock-free for the common path. This is the exact pattern `DeviceUnreachabilityTracker.DeviceState` uses.
+
+**Why NOT `Interlocked` for double:** `Interlocked.Exchange(ref double, ...)` exists in .NET but adds complexity. The pipeline has `[DisallowConcurrentExecution]` per device, so a given slot is written by at most one thread at a time. Volatile is sufficient for visibility, and torn reads on `double` are not possible on x64 (64-bit aligned). Defensive `Interlocked` could be added later if multi-writer becomes a concern.
+
+### 2. Routing Index (Lookup Structure)
+
+| Decision | Type | Namespace | Why |
+|----------|------|-----------|-----|
+| Routing index | `volatile FrozenDictionary<string, IReadOnlyList<TenantMetricRoute>>` | `System.Collections.Frozen` | Exact same pattern as `OidMapService._map` and `DeviceRegistry._byIpPort`. Built once on config load, atomically swapped on reload. O(1) lookup per sample. |
+| Composite key | `string` formatted as `"{ip}:{port}:{metricName}"` | N/A | Matches `DeviceRegistry.IpPortKey()` pattern. String key avoids tuple allocation per lookup. Case-insensitive via `StringComparer.OrdinalIgnoreCase`. |
+| Route target | `record TenantMetricRoute(string TenantId, int Priority, string SlotKey)` | N/A | Immutable record. SlotKey is the ConcurrentDictionary key for the MetricSlot. Priority is stored for future consumer ordering. |
+
+**Atomic swap pattern (already proven in codebase):**
+
+```csharp
+// Field declaration
+private volatile FrozenDictionary<string, IReadOnlyList<TenantMetricRoute>> _routingIndex;
+
+// Rebuild on config reload (called from watcher service under SemaphoreSlim)
+public void Rebuild(TenantVectorConfig config)
+{
+    var builder = new Dictionary<string, List<TenantMetricRoute>>(StringComparer.OrdinalIgnoreCase);
+    // ... populate from config ...
+
+    // Freeze lists, then freeze dictionary
+    var frozen = builder.ToDictionary(
+            kv => kv.Key,
+            kv => (IReadOnlyList<TenantMetricRoute>)kv.Value.AsReadOnly(),
+            StringComparer.OrdinalIgnoreCase)
+        .ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+    _routingIndex = frozen; // volatile write = atomic swap
+}
+```
+
+**Why FrozenDictionary and NOT ImmutableDictionary:**
+- FrozenDictionary reads are ~43-69% faster than standard Dictionary (per benchmarks). ImmutableDictionary reads are *slower* than standard Dictionary.
+- We never mutate the index -- we rebuild and swap. FrozenDictionary is purpose-built for this "build once, read many" pattern.
+- Already proven in this codebase with 3 separate services.
+
+**Why NOT `ImmutableInterlocked.Update()`:**
+- `ImmutableInterlocked` is designed for CAS-loop updates to `ImmutableDictionary` fields. We don't need CAS because rebuilds are serialized by the watcher's `SemaphoreSlim` (see `OidMapWatcherService._reloadLock`).
+- Volatile write is sufficient when writes are serialized. This is the exact pattern used by `OidMapService.UpdateMap()` and `DeviceRegistry.ReloadAsync()`.
+
+### 3. Configuration Model
+
+| Decision | Type | Namespace | Why |
+|----------|------|-----------|-----|
+| Config deserialization | `System.Text.Json` with `JsonSerializerOptions` | `System.Text.Json` | Same as `OidMapWatcherService` and `DeviceWatcherService`. Already in BCL, already the project standard. |
+| Config binding | POCO classes with `required` properties and `[Required]` validation | `System.ComponentModel.DataAnnotations` | Matches existing `DevicesOptions` / `DeviceOptions` pattern with `Microsoft.Extensions.Options.DataAnnotations`. |
+| Config source | Separate ConfigMap key, deserialized directly in watcher | N/A | Matches `OidMapWatcherService` pattern (reads JSON from ConfigMap data key, deserializes, calls service update method). Keeps tenant config independent of main appsettings. |
+
+**Config shape (`tenantvector.json`):**
+
+```json
+{
+  "tenants": [
+    {
+      "id": "tenant-alpha",
+      "priority": 1,
+      "metrics": [
+        { "device": "switch-01", "metricName": "ifInOctets" },
+        { "device": "switch-01", "metricName": "ifOutOctets" }
+      ]
+    }
+  ]
+}
+```
+
+### 4. MediatR Fan-Out Behavior
+
+| Decision | Type | Namespace | Why |
+|----------|------|-----------|-----|
+| Behavior type | `IPipelineBehavior<TNotification, TResponse>` | `MediatR` | Same open generic pattern as `OidResolutionBehavior`. Registered via `cfg.AddOpenBehavior()` in `ServiceCollectionExtensions`. |
+| Pipeline position | After `OidResolutionBehavior` (5th behavior, innermost before handler) | N/A | Needs resolved `MetricName` to perform routing lookup. Must NOT short-circuit -- always calls `next()`. |
+| Registration | `cfg.AddOpenBehavior(typeof(TenantFanOutBehavior<,>));` after OidResolution line | N/A | Single line addition to existing `AddMediatR` block. |
+
+**Pipeline order after addition:**
+
+```
+Logging -> Exception -> Validation -> OidResolution -> TenantFanOut -> OtelMetricHandler
+```
+
+The fan-out behavior reads the routing index (volatile FrozenDictionary read), writes to matching MetricSlots (ConcurrentDictionary update), then calls `next()`. Zero allocation in the hot path if no tenants match (just a dictionary lookup returning false).
+
+### 5. Watcher Service for Config Reload
+
+| Decision | Type | Namespace | Why |
+|----------|------|-----------|-----|
+| Watcher | `BackgroundService` watching K8s ConfigMap | `Microsoft.Extensions.Hosting` | Clone of `OidMapWatcherService` pattern. Same watch loop, same `SemaphoreSlim` serialization, same error handling. |
+| Reload target | Routing index service (rebuild + volatile swap) + slot cleanup | N/A | On reload: rebuild FrozenDictionary, swap, prune orphaned slots from ConcurrentDictionary. |
 
 ---
 
-## Integration Points with Existing Stack
+## What NOT to Add (and Why)
 
-### Prometheus HTTP API
-
-The E2E tests query Prometheus directly via its HTTP API. Key endpoints:
-
-| Endpoint | Method | Purpose in E2E |
-|----------|--------|----------------|
-| `/api/v1/query` | GET | Instant query -- "does metric X with label Y exist right now?" |
-| `/api/v1/query_range` | GET | Range query -- "did metric X appear within the last N seconds?" |
-| `/api/v1/series` | GET | Series metadata -- "what series match this selector?" |
-
-**Access pattern:** Port-forward Prometheus (`kubectl port-forward svc/prometheus 9090:9090 -n simetra`) before test execution. Tests hit `http://localhost:9090`.
-
-**Key queries for verification:**
-```python
-# Verify gauge metric arrived
-requests.get("http://localhost:9090/api/v1/query", params={
-    "query": 'snmp_gauge{device="TEST-DEVICE", metric_name="link_state"}'
-})
-
-# Verify counter metric with delta
-requests.get("http://localhost:9090/api/v1/query_range", params={
-    "query": 'snmp_counter{device="TEST-DEVICE"}',
-    "start": start_ts,
-    "end": end_ts,
-    "step": "5s"
-})
-```
-
-### kubectl Log Parsing
-
-Tests verify pipeline behavior by parsing structured logs from collector pods:
-
-```python
-result = subprocess.run(
-    ["kubectl", "logs", "-l", "app=snmp-collector", "-n", "simetra",
-     "--since=60s", "--tail=100"],
-    capture_output=True, text=True
-)
-# Parse for expected log patterns
-assert "MetricPollJob completed" in result.stdout
-```
-
-### ConfigMap Hot-Reload Testing
-
-Tests verify the ConfigMap watcher by patching config and observing behavior:
-
-```python
-# Patch ConfigMap
-subprocess.run([
-    "kubectl", "patch", "configmap", "snmp-collector-config",
-    "-n", "simetra", "--type=merge",
-    "-p", json.dumps({"data": {"appsettings.Production.json": new_config}})
-])
-# Wait and verify pods picked up new config via logs
-```
-
-### Test Simulator Integration
-
-The dedicated test simulator runs as a K8s pod in the same namespace, reachable by the collector's SNMP polling:
-
-```
-tests/e2e/
-  simulator/
-    test_simulator.py    # Deterministic SNMP agent
-    Dockerfile
-    requirements.txt     # pysnmp==7.1.22
-  conftest.py            # pytest fixtures (deploy simulator, port-forward, cleanup)
-  test_poll_pipeline.py  # Poll -> OTel -> Prometheus verification
-  test_trap_pipeline.py  # Trap -> MediatR -> OTel -> Prometheus verification
-  test_config_reload.py  # ConfigMap patch -> hot-reload verification
-  test_leader_election.py # Multi-replica behavior verification
-```
+| Rejected Option | Why Not |
+|-----------------|---------|
+| **Redis / external cache** | In-memory is correct. Slots are per-pod, written and read locally. No cross-pod sharing needed. If multi-pod query is needed later, that is an API concern, not a data structure concern. |
+| **`System.Collections.Immutable`** | `ImmutableDictionary` is slower for reads than `FrozenDictionary`. `ImmutableInterlocked` adds CAS-loop complexity we don't need (writes are serialized). |
+| **`ReaderWriterLockSlim`** | Volatile + FrozenDictionary swap is lock-free for readers. RWLS would add contention where none exists. |
+| **`Channel<T>` for fan-out** | Fan-out is synchronous (write a value to a slot). No queuing needed. Channel is for producer-consumer decoupling (like trap ingestion), not for value updates. |
+| **`System.Reactive` / Rx.NET** | Massive dependency for a problem solved by a dictionary write. |
+| **Any new NuGet package** | All types needed are in BCL or existing dependencies. Adding a package for this would be over-engineering. |
+| **`lock` statement** | Volatile swap + ConcurrentDictionary gives lock-free reads on the hot path. `lock` would serialize pipeline throughput. |
+| **Persistent storage / SQLite** | This is a hot-path data structure. Values are ephemeral (overwritten every poll cycle). Persistence adds latency for zero benefit. |
 
 ---
 
-## Installation
+## Existing Dependencies (No Changes)
 
-```bash
-# Create test virtualenv
-python -m venv tests/e2e/.venv
-source tests/e2e/.venv/bin/activate  # or .venv/Scripts/activate on Windows
+All existing packages remain at current versions. No upgrades needed.
 
-# Install test dependencies
-pip install pytest==9.0.2 requests==2.32.5 tenacity==9.1.4
+| Package | Version | Role in This Feature |
+|---------|---------|---------------------|
+| `MediatR` | 12.5.0 | `IPipelineBehavior` for fan-out behavior |
+| `KubernetesClient` | 18.0.13 | ConfigMap watch for `tenantvector.json` |
+| `Microsoft.Extensions.Options.DataAnnotations` | 9.0.0 | Config validation |
+| `Microsoft.Extensions.Hosting` | 9.0.0 | `BackgroundService` for watcher |
 
-# Test simulator uses same pysnmp as production simulators
-pip install pysnmp==7.1.22
-```
-
-**requirements.txt for `tests/e2e/`:**
-```
-pytest==9.0.2
-requests==2.32.5
-tenacity==9.1.4
-pysnmp==7.1.22
-```
+No new `PackageReference` entries in `.csproj`.
 
 ---
 
-## Pipeline Latency Budget
+## Pattern Reuse Map
 
-Understanding the end-to-end latency is critical for setting test timeouts:
+| Pattern | Existing Example | New Application |
+|---------|-----------------|-----------------|
+| Volatile FrozenDictionary swap | `OidMapService._map`, `DeviceRegistry._byIpPort` | Routing index `_routingIndex` |
+| ConcurrentDictionary with reference-type value | `DeviceUnreachabilityTracker._state` | `TenantMetricSlotStore._slots` |
+| Volatile fields on inner class | `DeviceState._count`, `DeviceState._isUnreachable` | `MetricSlot._value`, `MetricSlot._updatedAt` |
+| K8s ConfigMap watcher + SemaphoreSlim | `OidMapWatcherService` | `TenantVectorWatcherService` |
+| Open generic pipeline behavior | `OidResolutionBehavior<,>` | `TenantFanOutBehavior<,>` |
+| Composite string key for dictionary | `DeviceRegistry.IpPortKey("{ip}:{port}")` | `"{ip}:{port}:{metricName}"` routing key |
 
-| Stage | Expected Latency | Notes |
-|-------|-------------------|-------|
-| SNMP poll/trap -> MediatR pipeline | < 100ms | In-process, fast |
-| OTel SDK collection interval | 5-15s | Configurable via `PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds` |
-| OTel Collector -> remote_write | 1-5s | Batch + flush |
-| Prometheus ingestion | < 1s | Near-instant on write path |
-| **Total worst case** | **~25s** | Conservative; most metrics appear within 10-15s |
-
-**Recommendation:** Set default test retry timeout to 30 seconds with 2-second polling interval. This covers the worst case with margin. Individual tests can override for faster-expected scenarios.
+**This is not a technology decision -- it is a pattern replication decision.** Every building block already exists in the codebase. The milestone creates new service classes using established patterns.
 
 ---
 
-## Version Compatibility
+## Confidence Assessment
 
-| Package | Python Version | Notes |
-|---------|---------------|-------|
-| pytest 9.0.2 | 3.9+ | Matches Python 3.12 used by existing simulators |
-| requests 2.32.5 | 3.8+ | Universal compatibility |
-| tenacity 9.1.4 | 3.9+ | Compatible with Python 3.12 |
-| pysnmp 7.1.22 | 3.9+ | Same version as OBP/NPB simulators |
-
-**Python version:** Use 3.12 to match existing simulator Dockerfiles.
+| Area | Confidence | Reason |
+|------|------------|--------|
+| ConcurrentDictionary for slots | HIGH | Proven in `LivenessVectorService`, `DeviceUnreachabilityTracker`, `SnmpMetricFactory` |
+| FrozenDictionary for routing index | HIGH | Proven in `OidMapService`, `DeviceRegistry`. BCL type since .NET 8, unchanged in .NET 9 |
+| Volatile swap pattern | HIGH | Used in 5+ locations in codebase. Well-understood .NET memory model behavior on x64 |
+| MediatR open behavior | HIGH | 4 existing behaviors demonstrate the pattern |
+| K8s ConfigMap watcher | HIGH | 2 existing watchers demonstrate the pattern |
+| No new packages needed | HIGH | All types in BCL or existing dependencies |
 
 ---
 
 ## Sources
 
-- [PyPI: pytest 9.0.2](https://pypi.org/project/pytest/) -- version verified 2026-03-09
-- [PyPI: requests 2.32.5](https://pypi.org/project/requests/) -- version verified 2026-03-09
-- [PyPI: pysnmp 7.1.22](https://pypi.org/project/pysnmp/) -- version verified, matches existing simulators
-- [Prometheus HTTP API](https://prometheus.io/docs/prometheus/latest/querying/api/) -- instant query, range query, series endpoints documented
-- [PyPI: tenacity](https://pypi.org/project/tenacity/) -- retry library for polling patterns
+- Codebase: `DeviceRegistry.cs` -- volatile FrozenDictionary swap pattern (lines 19-20, 141-143)
+- Codebase: `OidMapService.cs` -- volatile FrozenDictionary swap with diff logging (lines 20, 62-63)
+- Codebase: `DeviceUnreachabilityTracker.cs` -- ConcurrentDictionary with reference-type inner class + volatile fields (lines 17, 42-74)
+- Codebase: `LivenessVectorService.cs` -- ConcurrentDictionary for timestamp slots (lines 11, 15-17)
+- Codebase: `OidResolutionBehavior.cs` -- open generic pipeline behavior pattern
+- Codebase: `OidMapWatcherService.cs` -- K8s ConfigMap watch + SemaphoreSlim reload serialization
+- Codebase: `ServiceCollectionExtensions.cs` -- behavior registration order (lines 336-341)
+- [FrozenDictionary benchmarks](https://dotnetbenchmarks.com/benchmark/1005) -- 43-69% faster reads vs Dictionary
+- [Volatile vs Interlocked vs Lock](https://code-maze.com/csharp-volatile-interlocked-lock/) -- memory model semantics
+- [High-Performance Dictionary Strategies in .NET](https://medium.com/@rserit/high-performance-dictionary-strategies-in-net-immutable-and-frozen-dictionary-c54ffb05f8ce) -- FrozenDictionary read perf for concurrent scenarios
 
 ---
-*Stack research for: E2E System Verification*
-*Researched: 2026-03-09*
+*Stack research for: Priority Vector Data Layer*
+*Researched: 2026-03-10*
