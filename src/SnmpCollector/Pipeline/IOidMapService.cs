@@ -22,7 +22,6 @@ public interface IOidMapService
 
     /// <summary>
     /// Checks whether a metric name exists as a value in the current OID map.
-    /// Used by TenantVectorOptionsValidator to verify config MetricName references.
     /// </summary>
     /// <param name="metricName">The metric name to look up.</param>
     /// <returns>True if the metric name exists in the current map values.</returns>
