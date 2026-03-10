@@ -132,6 +132,9 @@ public sealed class OidResolutionBehaviorTests
 
         public int EntryCount => _knownOid is not null ? 1 : 0;
 
+        public bool ContainsMetricName(string metricName) =>
+            metricName == _metricName;
+
         public void UpdateMap(Dictionary<string, string> entries) { }
     }
 }
