@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-09)
 Phase: Not started (defining next milestone)
 Plan: —
 Status: v1.4 complete, ready for next milestone
-Last activity: 2026-03-09 -- v1.4 E2E System Verification milestone completed and archived
+Last activity: 2026-03-10 -- Completed quick-037 (IP+Port as primary device identity)
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4
 
@@ -38,6 +38,8 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 - Community string convention: Simetra.{DeviceName} for both auth and device identity
 - Split config: simetra-oidmaps ConfigMap + simetra-devices ConfigMap + simetra-config
 - K8s directory mount at /app/config (no subPath) enables ConfigMap hot-reload
+- DeviceRegistry primary key: (IP, Port); secondary: Name (trap listener compatibility)
+- Quartz job key format: metric-poll-{ip}_{port}-{pollIndex} (underscore separator)
 
 ### Known Tech Debt
 
@@ -49,6 +51,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09
-Stopped at: v1.4 milestone completed and archived
+Last session: 2026-03-10
+Stopped at: Completed quick-037 (IP+Port as primary device identity)
 Resume file: None
