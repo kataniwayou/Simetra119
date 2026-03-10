@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Quartz;
 using Quartz.Impl.Matchers;
-using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
 using SnmpCollector.Services;
 using Xunit;
@@ -27,25 +26,17 @@ public sealed class DynamicPollSchedulerTests
             NullLogger<DynamicPollScheduler>.Instance);
     }
 
-    private static DeviceOptions MakeDevice(string name, int intervalSeconds, int pollCount = 1)
+    private static DeviceInfo MakeDevice(string name, string ip, int port, int intervalSeconds, int pollCount = 1)
     {
-        var device = new DeviceOptions
-        {
-            Name = name,
-            IpAddress = "127.0.0.1",
-            Port = 161,
-            CommunityString = $"test.{name}",
-            MetricPolls = new List<MetricPollOptions>()
-        };
+        var polls = new List<MetricPollInfo>();
         for (int i = 0; i < pollCount; i++)
         {
-            device.MetricPolls.Add(new MetricPollOptions
-            {
-                IntervalSeconds = intervalSeconds,
-                Oids = new List<string> { "1.3.6.1.2.1.1.1.0" }
-            });
+            polls.Add(new MetricPollInfo(
+                PollIndex: i,
+                Oids: new List<string> { "1.3.6.1.2.1.1.1.0" }.AsReadOnly(),
+                IntervalSeconds: intervalSeconds));
         }
-        return device;
+        return new DeviceInfo(name, ip, port, polls.AsReadOnly(), $"test.{name}");
     }
 
     private void SetupExistingJobs(params string[] jobNames)
@@ -63,7 +54,7 @@ public sealed class DynamicPollSchedulerTests
     {
         SetupExistingJobs(); // no existing jobs
 
-        await _sut.ReconcileAsync(new[] { MakeDevice("DEV-01", 10) }, CancellationToken.None);
+        await _sut.ReconcileAsync(new[] { MakeDevice("DEV-01", "127.0.0.1", 161, 10) }, CancellationToken.None);
 
         await _scheduler.Received(1).ScheduleJob(
             Arg.Any<IJobDetail>(), Arg.Any<ITrigger>(), Arg.Any<CancellationToken>());
@@ -78,7 +69,7 @@ public sealed class DynamicPollSchedulerTests
         _intervalRegistry.TryGetInterval("metric-poll-127.0.0.1_161-0", out Arg.Any<int>())
             .Returns(x => { x[1] = 10; return true; });
 
-        await _sut.ReconcileAsync(Array.Empty<DeviceOptions>(), CancellationToken.None);
+        await _sut.ReconcileAsync(Array.Empty<DeviceInfo>(), CancellationToken.None);
 
         await _scheduler.Received(1).DeleteJob(
             Arg.Is<JobKey>(k => k.Name == "metric-poll-127.0.0.1_161-0"),
@@ -95,7 +86,7 @@ public sealed class DynamicPollSchedulerTests
             .Returns(x => { x[1] = 10; return true; });
 
         // Interval changed from 10 to 30
-        await _sut.ReconcileAsync(new[] { MakeDevice("DEV-01", 30) }, CancellationToken.None);
+        await _sut.ReconcileAsync(new[] { MakeDevice("DEV-01", "127.0.0.1", 161, 30) }, CancellationToken.None);
 
         await _scheduler.Received(1).RescheduleJob(
             Arg.Any<TriggerKey>(), Arg.Any<ITrigger>(), Arg.Any<CancellationToken>());
@@ -111,7 +102,7 @@ public sealed class DynamicPollSchedulerTests
             .Returns(x => { x[1] = 10; return true; });
 
         // Same interval = no changes
-        await _sut.ReconcileAsync(new[] { MakeDevice("DEV-01", 10) }, CancellationToken.None);
+        await _sut.ReconcileAsync(new[] { MakeDevice("DEV-01", "127.0.0.1", 161, 10) }, CancellationToken.None);
 
         await _scheduler.DidNotReceive().ScheduleJob(
             Arg.Any<IJobDetail>(), Arg.Any<ITrigger>(), Arg.Any<CancellationToken>());

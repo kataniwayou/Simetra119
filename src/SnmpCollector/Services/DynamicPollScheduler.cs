@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Quartz;
 using Quartz.Impl.Matchers;
-using SnmpCollector.Configuration;
 using SnmpCollector.Jobs;
 using SnmpCollector.Pipeline;
 
@@ -46,9 +45,9 @@ public sealed class DynamicPollScheduler
     /// <item>Reschedules jobs whose interval has changed.</item>
     /// </list>
     /// </summary>
-    /// <param name="newDevices">The desired device list from the updated configuration.</param>
+    /// <param name="resolvedDevices">The desired device list with resolved IPs from DeviceRegistry.</param>
     /// <param name="ct">Cancellation token.</param>
-    public async Task ReconcileAsync(IReadOnlyList<DeviceOptions> newDevices, CancellationToken ct)
+    public async Task ReconcileAsync(IReadOnlyList<DeviceInfo> resolvedDevices, CancellationToken ct)
     {
         var scheduler = await _schedulerFactory.GetScheduler(ct).ConfigureAwait(false);
 
@@ -63,14 +62,14 @@ public sealed class DynamicPollScheduler
                 existingPollKeys.Add(key.Name);
         }
 
-        // 2. Build desired job set from new device config
-        var desiredJobs = new Dictionary<string, (DeviceOptions Device, int PollIndex, MetricPollOptions Poll)>(StringComparer.Ordinal);
-        foreach (var device in newDevices)
+        // 2. Build desired job set from resolved devices (IPs already resolved by DeviceRegistry)
+        var desiredJobs = new Dictionary<string, (DeviceInfo Device, int PollIndex, MetricPollInfo Poll)>(StringComparer.Ordinal);
+        foreach (var device in resolvedDevices)
         {
-            for (var pi = 0; pi < device.MetricPolls.Count; pi++)
+            for (var pi = 0; pi < device.PollGroups.Count; pi++)
             {
                 var jobName = $"{JobPrefix}{device.IpAddress}_{device.Port}-{pi}";
-                desiredJobs[jobName] = (device, pi, device.MetricPolls[pi]);
+                desiredJobs[jobName] = (device, pi, device.PollGroups[pi]);
             }
         }
 
@@ -134,9 +133,9 @@ public sealed class DynamicPollScheduler
     private async Task ScheduleJobAsync(
         IScheduler scheduler,
         string jobName,
-        DeviceOptions device,
+        DeviceInfo device,
         int pollIndex,
-        MetricPollOptions poll,
+        MetricPollInfo poll,
         CancellationToken ct)
     {
         var jobKey = new JobKey(jobName);

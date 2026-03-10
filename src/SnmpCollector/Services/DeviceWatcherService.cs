@@ -197,8 +197,8 @@ public sealed class DeviceWatcherService : BackgroundService
             // 1. Reload device registry (async DNS resolution)
             await _deviceRegistry.ReloadAsync(devices).ConfigureAwait(false);
 
-            // 2. Reconcile Quartz poll jobs to match new device config
-            await _pollScheduler.ReconcileAsync(devices, ct).ConfigureAwait(false);
+            // 2. Reconcile Quartz poll jobs using resolved devices (IPs from registry)
+            await _pollScheduler.ReconcileAsync(_deviceRegistry.AllDevices, ct).ConfigureAwait(false);
 
             _logger.LogInformation(
                 "Device reload complete: {DeviceCount} devices",

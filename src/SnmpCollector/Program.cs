@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using SnmpCollector.Extensions;
+using SnmpCollector.HealthChecks;
 using SnmpCollector.Pipeline;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -88,9 +89,9 @@ if (!k8s.KubernetesClientConfiguration.IsInCluster())
             var deviceRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.IDeviceRegistry>();
             await deviceRegistry.ReloadAsync(devices);
 
-            // Reconcile poll jobs to match the loaded device config
+            // Reconcile poll jobs using resolved devices (IPs from registry)
             var pollScheduler = app.Services.GetRequiredService<SnmpCollector.Services.DynamicPollScheduler>();
-            await pollScheduler.ReconcileAsync(devices, CancellationToken.None);
+            await pollScheduler.ReconcileAsync(deviceRegistry.AllDevices, CancellationToken.None);
         }
     }
 }
@@ -100,6 +101,7 @@ if (!k8s.KubernetesClientConfiguration.IsInCluster())
 app.MapHealthChecks("/healthz/startup", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("startup"),
+    ResponseWriter = HealthCheckJsonWriter.WriteResponse,
     ResultStatusCodes =
     {
         [HealthStatus.Healthy] = StatusCodes.Status200OK,
@@ -110,6 +112,7 @@ app.MapHealthChecks("/healthz/startup", new HealthCheckOptions
 app.MapHealthChecks("/healthz/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready"),
+    ResponseWriter = HealthCheckJsonWriter.WriteResponse,
     ResultStatusCodes =
     {
         [HealthStatus.Healthy] = StatusCodes.Status200OK,
@@ -120,6 +123,7 @@ app.MapHealthChecks("/healthz/ready", new HealthCheckOptions
 app.MapHealthChecks("/healthz/live", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("live"),
+    ResponseWriter = HealthCheckJsonWriter.WriteResponse,
     ResultStatusCodes =
     {
         [HealthStatus.Healthy] = StatusCodes.Status200OK,
