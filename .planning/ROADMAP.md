@@ -7,7 +7,7 @@
 - ✅ **v1.2 Operational Enhancements** - Phases 15-16 (shipped 2026-03-08)
 - ✅ **v1.3 Grafana Dashboards** - Phases 18-19 (shipped 2026-03-09)
 - ✅ **v1.4 E2E System Verification** - Phases 20-24 (shipped 2026-03-09)
-- 🚧 **v1.5 Priority Vector Data Layer** - Phases 25-29 (in progress)
+- ✅ **v1.5 Priority Vector Data Layer** - Phases 25-29 (shipped 2026-03-10)
 
 ## Phases
 
@@ -18,7 +18,7 @@ See `.planning/MILESTONES.md` and `.planning/milestones/` for archived details.
 
 </details>
 
-### 🚧 v1.5 Priority Vector Data Layer (In Progress)
+### ✅ v1.5 Priority Vector Data Layer (Shipped 2026-03-10)
 
 **Milestone Goal:** Stateful in-memory data layer that organizes SNMP metrics into prioritized tenants with independent value cells and fan-out routing from the existing pipeline.
 
@@ -97,11 +97,11 @@ Plans:
   2. Deployment.yaml mounts the ConfigMap so TenantVectorWatcherService can read it
   3. After deployment, snmp_tenantvector_routed_total counter is incrementing in Prometheus (proving samples are routing to tenant slots)
   4. ConfigMap update triggers watcher reload and diff log entries appear in pod logs
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 29-01: ConfigMap manifest and deployment.yaml updates
-- [ ] 29-02: E2E validation of fan-out routing and hot-reload
+- [x] 29-01: ConfigMap manifest and deployment.yaml updates
+- [x] 29-02: E2E validation of fan-out routing and hot-reload
 
 ## Progress
 
@@ -113,8 +113,8 @@ Plans:
 | 26. Core Data Types | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 27. Pipeline Integration | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 28. ConfigMap Watcher | v1.5 | 2/2 | Complete | 2026-03-10 |
-| 29. K8s Deployment | v1.5 | 0/2 | Not started | - |
+| 29. K8s Deployment | v1.5 | 2/2 | Complete | 2026-03-10 |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-10 after Phase 28 completion*
+*Last updated: 2026-03-10 after Phase 29 completion*
