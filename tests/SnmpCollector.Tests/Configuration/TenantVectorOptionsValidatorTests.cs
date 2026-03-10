@@ -41,8 +41,7 @@ public class TenantVectorOptionsValidatorTests
                     {
                         Ip = "10.0.0.1",
                         Port = 161,
-                        MetricName = "obp_link_state_L1",
-                        IntervalSeconds = 10
+                        MetricName = "obp_link_state_L1"
                     }
                 ]
             }
@@ -73,7 +72,7 @@ public class TenantVectorOptionsValidatorTests
                     Ip = "10.0.0.2",
                     Port = 161,
                     MetricName = "npb_cpu_util",
-                    IntervalSeconds = 30
+
                 }
             ]
         });
@@ -110,7 +109,7 @@ public class TenantVectorOptionsValidatorTests
             Ip = "10.0.0.1",
             Port = 161,
             MetricName = "obp_link_state_L1",
-            IntervalSeconds = 10
+
         };
 
         var options = new TenantVectorOptions
@@ -134,7 +133,7 @@ public class TenantVectorOptionsValidatorTests
                             Ip = "10.0.0.1",
                             Port = 161,
                             MetricName = "obp_link_state_L1",
-                            IntervalSeconds = 10
+                
                         }
                     ]
                 }
@@ -289,28 +288,6 @@ public class TenantVectorOptionsValidatorTests
     }
 
     [Fact]
-    public void Validate_IntervalSecondsZero_Fails()
-    {
-        var options = ValidOptions();
-        options.Tenants[0].Metrics[0].IntervalSeconds = 0;
-
-        var result = _validator.Validate(null, options);
-        Assert.True(result.Failed);
-        Assert.Contains(result.Failures, f => f.Contains("IntervalSeconds must be greater than 0"));
-    }
-
-    [Fact]
-    public void Validate_IntervalSecondsNegative_Fails()
-    {
-        var options = ValidOptions();
-        options.Tenants[0].Metrics[0].IntervalSeconds = -1;
-
-        var result = _validator.Validate(null, options);
-        Assert.True(result.Failed);
-        Assert.Contains(result.Failures, f => f.Contains("IntervalSeconds must be greater than 0"));
-    }
-
-    [Fact]
     public void Validate_DuplicateMetricWithinTenant_Fails()
     {
         var options = ValidOptions();
@@ -318,8 +295,7 @@ public class TenantVectorOptionsValidatorTests
         {
             Ip = "10.0.0.1",
             Port = 161,
-            MetricName = "obp_link_state_L1",
-            IntervalSeconds = 15
+            MetricName = "obp_link_state_L1"
         });
 
         var result = _validator.Validate(null, options);
@@ -342,10 +318,9 @@ public class TenantVectorOptionsValidatorTests
                     [
                         new MetricSlotOptions
                         {
-                            Ip = "",           // Error 2: empty IP
-                            Port = 0,          // Error 3: invalid port
-                            MetricName = "",   // Error 4: empty metric name
-                            IntervalSeconds = 0 // Error 5: invalid interval
+                            Ip = "",           // Error 1b: empty IP
+                            Port = 0,          // Error 2: invalid port
+                            MetricName = ""    // Error 3: empty metric name
                         }
                     ]
                 }

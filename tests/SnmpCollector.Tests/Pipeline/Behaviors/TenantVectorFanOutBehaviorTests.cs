@@ -200,7 +200,10 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
     public async Task SkipsWhenNoMatchingRoute()
     {
         // Real registry with no tenants loaded — TryRoute returns false
-        var registry = new TenantVectorRegistry(NullLogger<TenantVectorRegistry>.Instance);
+        var registry = new TenantVectorRegistry(
+            NSubstitute.Substitute.For<IDeviceRegistry>(),
+            NSubstitute.Substitute.For<IOidMapService>(),
+            NullLogger<TenantVectorRegistry>.Instance);
         var deviceRegistry = new StubDeviceRegistry("test-device", "10.0.0.1", 161);
         var behavior = CreateBehavior(registry, deviceRegistry);
 
@@ -301,7 +304,10 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
 
     private static TenantVectorRegistry CreateRegistryWithRoute(string ip, int port, string metricName)
     {
-        var registry = new TenantVectorRegistry(NullLogger<TenantVectorRegistry>.Instance);
+        var registry = new TenantVectorRegistry(
+            NSubstitute.Substitute.For<IDeviceRegistry>(),
+            NSubstitute.Substitute.For<IOidMapService>(),
+            NullLogger<TenantVectorRegistry>.Instance);
         registry.Reload(new TenantVectorOptions
         {
             Tenants = new List<TenantOptions>
@@ -312,7 +318,7 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
                     Priority = 1,
                     Metrics = new List<MetricSlotOptions>
                     {
-                        new() { Ip = ip, Port = port, MetricName = metricName, IntervalSeconds = 30 }
+                        new() { Ip = ip, Port = port, MetricName = metricName }
                     }
                 }
             }
@@ -322,7 +328,10 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
 
     private static TenantVectorRegistry CreateRegistryWithTwoTenants(string ip, int port, string metricName)
     {
-        var registry = new TenantVectorRegistry(NullLogger<TenantVectorRegistry>.Instance);
+        var registry = new TenantVectorRegistry(
+            NSubstitute.Substitute.For<IDeviceRegistry>(),
+            NSubstitute.Substitute.For<IOidMapService>(),
+            NullLogger<TenantVectorRegistry>.Instance);
         registry.Reload(new TenantVectorOptions
         {
             Tenants = new List<TenantOptions>
@@ -333,7 +342,7 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
                     Priority = 1,
                     Metrics = new List<MetricSlotOptions>
                     {
-                        new() { Ip = ip, Port = port, MetricName = metricName, IntervalSeconds = 30 }
+                        new() { Ip = ip, Port = port, MetricName = metricName }
                     }
                 },
                 new()
@@ -342,7 +351,7 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
                     Priority = 2,
                     Metrics = new List<MetricSlotOptions>
                     {
-                        new() { Ip = ip, Port = port, MetricName = metricName, IntervalSeconds = 30 }
+                        new() { Ip = ip, Port = port, MetricName = metricName }
                     }
                 }
             }
@@ -352,7 +361,10 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
 
     private static TenantVectorRegistry CreateRegistryWithThreeTenants(string ip, int port, string metricName)
     {
-        var registry = new TenantVectorRegistry(NullLogger<TenantVectorRegistry>.Instance);
+        var registry = new TenantVectorRegistry(
+            NSubstitute.Substitute.For<IDeviceRegistry>(),
+            NSubstitute.Substitute.For<IOidMapService>(),
+            NullLogger<TenantVectorRegistry>.Instance);
         registry.Reload(new TenantVectorOptions
         {
             Tenants = new List<TenantOptions>
@@ -363,7 +375,7 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
                     Priority = 1,
                     Metrics = new List<MetricSlotOptions>
                     {
-                        new() { Ip = ip, Port = port, MetricName = metricName, IntervalSeconds = 30 }
+                        new() { Ip = ip, Port = port, MetricName = metricName }
                     }
                 },
                 new()
@@ -372,7 +384,7 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
                     Priority = 2,
                     Metrics = new List<MetricSlotOptions>
                     {
-                        new() { Ip = ip, Port = port, MetricName = metricName, IntervalSeconds = 30 }
+                        new() { Ip = ip, Port = port, MetricName = metricName }
                     }
                 },
                 new()
@@ -381,7 +393,7 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
                     Priority = 3,
                     Metrics = new List<MetricSlotOptions>
                     {
-                        new() { Ip = ip, Port = port, MetricName = metricName, IntervalSeconds = 30 }
+                        new() { Ip = ip, Port = port, MetricName = metricName }
                     }
                 }
             }

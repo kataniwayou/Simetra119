@@ -75,7 +75,10 @@ public sealed class PipelineIntegrationTests : IDisposable
         // Phase 27: TenantVectorFanOutBehavior requires ITenantVectorRegistry.
         // Register empty registry (no tenants configured) — fan-out is a no-op in these tests.
         services.AddSingleton<TenantVectorRegistry>(sp =>
-            new TenantVectorRegistry(sp.GetRequiredService<ILogger<TenantVectorRegistry>>()));
+            new TenantVectorRegistry(
+                sp.GetRequiredService<IDeviceRegistry>(),
+                sp.GetRequiredService<IOidMapService>(),
+                sp.GetRequiredService<ILogger<TenantVectorRegistry>>()));
         services.AddSingleton<ITenantVectorRegistry>(sp => sp.GetRequiredService<TenantVectorRegistry>());
 
         // Phase 3 MediatR pipeline (registers SnmpMetricFactory by default)
@@ -185,7 +188,10 @@ public sealed class PipelineIntegrationTests : IDisposable
         services.AddSingleton<IOidMapService>(sp => sp.GetRequiredService<OidMapService>());
         // Phase 27: TenantVectorFanOutBehavior requires ITenantVectorRegistry.
         services.AddSingleton<TenantVectorRegistry>(sp =>
-            new TenantVectorRegistry(sp.GetRequiredService<ILogger<TenantVectorRegistry>>()));
+            new TenantVectorRegistry(
+                sp.GetRequiredService<IDeviceRegistry>(),
+                sp.GetRequiredService<IOidMapService>(),
+                sp.GetRequiredService<ILogger<TenantVectorRegistry>>()));
         services.AddSingleton<ITenantVectorRegistry>(sp => sp.GetRequiredService<TenantVectorRegistry>());
         services.AddSnmpPipeline();
         // Override with a factory that throws to simulate downstream error

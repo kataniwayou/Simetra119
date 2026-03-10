@@ -302,7 +302,10 @@ public static class ServiceCollectionExtensions
 
         // --- Phase 26: Tenant vector registry ---
         services.AddSingleton<TenantVectorRegistry>(sp =>
-            new TenantVectorRegistry(sp.GetRequiredService<ILogger<TenantVectorRegistry>>()));
+            new TenantVectorRegistry(
+                sp.GetRequiredService<IDeviceRegistry>(),
+                sp.GetRequiredService<IOidMapService>(),
+                sp.GetRequiredService<ILogger<TenantVectorRegistry>>()));
         services.AddSingleton<ITenantVectorRegistry>(sp => sp.GetRequiredService<TenantVectorRegistry>());
 
         // --- Phase 2 pipeline singletons ---

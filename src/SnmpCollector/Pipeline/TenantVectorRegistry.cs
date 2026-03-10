@@ -14,6 +14,8 @@ namespace SnmpCollector.Pipeline;
 /// </summary>
 public sealed class TenantVectorRegistry : ITenantVectorRegistry
 {
+    private readonly IDeviceRegistry _deviceRegistry;
+    private readonly IOidMapService _oidMapService;
     private readonly ILogger<TenantVectorRegistry> _logger;
 
     // Volatile fields: readers always observe a fully-constructed object reference.
@@ -22,8 +24,13 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
     private volatile FrozenDictionary<RoutingKey, IReadOnlyList<MetricSlotHolder>> _routingIndex
         = FrozenDictionary<RoutingKey, IReadOnlyList<MetricSlotHolder>>.Empty;
 
-    public TenantVectorRegistry(ILogger<TenantVectorRegistry> logger)
+    public TenantVectorRegistry(
+        IDeviceRegistry deviceRegistry,
+        IOidMapService oidMapService,
+        ILogger<TenantVectorRegistry> logger)
     {
+        _deviceRegistry = deviceRegistry;
+        _oidMapService = oidMapService;
         _logger = logger;
     }
 
@@ -97,11 +104,12 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
 
             foreach (var metric in tenantOpts.Metrics)
             {
+                var derivedInterval = DeriveIntervalSeconds(metric.Ip, metric.Port, metric.MetricName);
                 var newHolder = new MetricSlotHolder(
                     metric.Ip,
                     metric.Port,
                     metric.MetricName,
-                    metric.IntervalSeconds);
+                    derivedInterval);
 
                 // Carry over existing slot value when the same (tenantId, ip, port, metricName) exists.
                 var lookupKey = (tenantOpts.Id, metric.Ip, metric.Port, metric.MetricName);
@@ -179,6 +187,22 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
             string.Join(",", removedTenants),
             string.Join(",", unchangedTenants),
             carriedOver);
+    }
+
+    private int DeriveIntervalSeconds(string ip, int port, string metricName)
+    {
+        if (!_deviceRegistry.TryGetByIpPort(ip, port, out var device))
+            return 0;
+
+        foreach (var pollGroup in device.PollGroups)
+        {
+            foreach (var oid in pollGroup.Oids)
+            {
+                if (string.Equals(_oidMapService.Resolve(oid), metricName, StringComparison.OrdinalIgnoreCase))
+                    return pollGroup.IntervalSeconds;
+            }
+        }
+        return 0;
     }
 
     /// <summary>
