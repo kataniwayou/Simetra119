@@ -68,8 +68,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 27-01-PLAN.md -- Heartbeat normalization, ValueExtractionBehavior, OtelMetricHandler refactor to pre-extracted values
-- [ ] 27-02-PLAN.md -- MetricSlot TypeCode, TenantVectorFanOutBehavior, pipeline counter, DI registration
+- [x] 27-01: Heartbeat normalization, ValueExtractionBehavior, OtelMetricHandler refactor to pre-extracted values
+- [x] 27-02: MetricSlot TypeCode, TenantVectorFanOutBehavior, pipeline counter, DI registration
 
 #### Phase 28: ConfigMap Watcher and Local Dev
 
@@ -111,10 +111,10 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 25. Config Models | v1.5 | 1/1 | Complete | 2026-03-10 |
 | 26. Core Data Types | v1.5 | 2/2 | Complete | 2026-03-10 |
-| 27. Pipeline Integration | v1.5 | 0/2 | Not started | - |
+| 27. Pipeline Integration | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 28. ConfigMap Watcher | v1.5 | 0/2 | Not started | - |
 | 29. K8s Deployment | v1.5 | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-10 after Phase 27 planning*
+*Last updated: 2026-03-10 after Phase 27 completion*

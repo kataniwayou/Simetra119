@@ -61,12 +61,12 @@ Requirements for the stateful data layer that organizes SNMP metrics into priori
 | DAT-02 | Phase 26 | Complete |
 | DAT-03 | Phase 26 | Complete |
 | DAT-04 | Phase 26 | Complete |
-| PIP-01 | Phase 27 | Pending |
-| PIP-02 | Phase 27 | Pending |
-| PIP-03 | Phase 27 | Pending |
-| PIP-04 | Phase 27 | Pending |
+| PIP-01 | Phase 27 | Complete |
+| PIP-02 | Phase 27 | Complete |
+| PIP-03 | Phase 27 | Complete |
+| PIP-04 | Phase 27 | Complete |
 | OBS-01 | Phase 28 | Pending |
-| OBS-02 | Phase 27 | Pending |
+| OBS-02 | Phase 27 | Complete |
 | DEP-01 | Phase 29 | Pending |
 | DEP-02 | Phase 29 | Pending |
 
@@ -77,4 +77,4 @@ Requirements for the stateful data layer that organizes SNMP metrics into priori
 
 ---
 *Requirements defined: 2026-03-10*
-*Last updated: 2026-03-10 after Phase 26 completion*
+*Last updated: 2026-03-10 after Phase 27 completion*
