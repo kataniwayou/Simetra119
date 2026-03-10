@@ -72,6 +72,12 @@ public sealed class PipelineIntegrationTests : IDisposable
                 sp.GetRequiredService<ILogger<OidMapService>>()));
         services.AddSingleton<IOidMapService>(sp => sp.GetRequiredService<OidMapService>());
 
+        // Phase 27: TenantVectorFanOutBehavior requires ITenantVectorRegistry.
+        // Register empty registry (no tenants configured) — fan-out is a no-op in these tests.
+        services.AddSingleton<TenantVectorRegistry>(sp =>
+            new TenantVectorRegistry(sp.GetRequiredService<ILogger<TenantVectorRegistry>>()));
+        services.AddSingleton<ITenantVectorRegistry>(sp => sp.GetRequiredService<TenantVectorRegistry>());
+
         // Phase 3 MediatR pipeline (registers SnmpMetricFactory by default)
         services.AddSnmpPipeline();
 
@@ -177,6 +183,10 @@ public sealed class PipelineIntegrationTests : IDisposable
                 new Dictionary<string, string> { [KnownOid] = "hrProcessorLoad" },
                 sp.GetRequiredService<ILogger<OidMapService>>()));
         services.AddSingleton<IOidMapService>(sp => sp.GetRequiredService<OidMapService>());
+        // Phase 27: TenantVectorFanOutBehavior requires ITenantVectorRegistry.
+        services.AddSingleton<TenantVectorRegistry>(sp =>
+            new TenantVectorRegistry(sp.GetRequiredService<ILogger<TenantVectorRegistry>>()));
+        services.AddSingleton<ITenantVectorRegistry>(sp => sp.GetRequiredService<TenantVectorRegistry>());
         services.AddSnmpPipeline();
         // Override with a factory that throws to simulate downstream error
         services.AddSingleton<ISnmpMetricFactory>(new ThrowingSnmpMetricFactory());

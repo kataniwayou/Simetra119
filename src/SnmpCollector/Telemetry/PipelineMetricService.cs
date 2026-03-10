@@ -42,6 +42,9 @@ public sealed class PipelineMetricService : IDisposable
     // Phase 6: counts transitions from unreachable back to healthy (first success after unreachable)
     private readonly Counter<long> _pollRecovered;
 
+    // Phase 27: counts successful fan-out writes to tenant vector metric slots
+    private readonly Counter<long> _tenantVectorRouted;
+
     public PipelineMetricService(IMeterFactory meterFactory)
     {
         _meter = meterFactory.Create(TelemetryConstants.MeterName);
@@ -57,6 +60,8 @@ public sealed class PipelineMetricService : IDisposable
 
         _pollUnreachable = _meter.CreateCounter<long>("snmp.poll.unreachable");
         _pollRecovered   = _meter.CreateCounter<long>("snmp.poll.recovered");
+
+        _tenantVectorRouted = _meter.CreateCounter<long>("snmp.tenantvector.routed");
     }
 
     /// <summary>PMET-01: Increment the count of published pipeline notifications by 1.</summary>
@@ -112,6 +117,10 @@ public sealed class PipelineMetricService : IDisposable
     /// </summary>
     public void IncrementPollRecovered(string deviceName)
         => _pollRecovered.Add(1, new TagList { { "device_name", deviceName } });
+
+    /// <summary>OBS-02: Increment the count of tenant vector fan-out writes by 1.</summary>
+    public void IncrementTenantVectorRouted(string deviceName)
+        => _tenantVectorRouted.Add(1, new TagList { { "device_name", deviceName } });
 
     public void Dispose() => _meter.Dispose();
 }

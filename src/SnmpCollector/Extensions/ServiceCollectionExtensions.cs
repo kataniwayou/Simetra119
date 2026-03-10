@@ -332,10 +332,12 @@ public static class ServiceCollectionExtensions
     /// </para>
     /// <para>
     /// Behavior registration order (first registered = outermost = runs first):
-    /// 1. <see cref="LoggingBehavior{TRequest,TResponse}"/>     — outermost, logs entry/exit
-    /// 2. <see cref="ExceptionBehavior{TRequest,TResponse}"/>   — catches unhandled exceptions
-    /// 3. <see cref="ValidationBehavior{TRequest,TResponse}"/>  — validates message and device
-    /// 4. <see cref="OidResolutionBehavior{TRequest,TResponse}"/> — innermost, resolves OID to metric name
+    /// 1. <see cref="LoggingBehavior{TRequest,TResponse}"/>              — outermost, logs entry/exit
+    /// 2. <see cref="ExceptionBehavior{TRequest,TResponse}"/>            — catches unhandled exceptions
+    /// 3. <see cref="ValidationBehavior{TRequest,TResponse}"/>           — validates message and device
+    /// 4. <see cref="OidResolutionBehavior{TRequest,TResponse}"/>        — resolves OID to metric name
+    /// 5. <see cref="ValueExtractionBehavior{TRequest,TResponse}"/>      — extracts numeric/string value once
+    /// 6. <see cref="TenantVectorFanOutBehavior{TRequest,TResponse}"/>   — routes to tenant vector slots
     /// </para>
     /// </summary>
     public static IServiceCollection AddSnmpPipeline(
@@ -347,11 +349,12 @@ public static class ServiceCollectionExtensions
 
             // Behavior order: first registered = outermost = runs first in pipeline.
             // Behaviors fire because SnmpOidReceived : IRequest<Unit> dispatched via ISender.Send.
-            cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));           // 1st = outermost
-            cfg.AddOpenBehavior(typeof(ExceptionBehavior<,>));       // 2nd
-            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));      // 3rd
-            cfg.AddOpenBehavior(typeof(OidResolutionBehavior<,>));   // 4th
-            cfg.AddOpenBehavior(typeof(ValueExtractionBehavior<,>)); // 5th = innermost before handler
+            cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));              // 1st = outermost
+            cfg.AddOpenBehavior(typeof(ExceptionBehavior<,>));          // 2nd
+            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));         // 3rd
+            cfg.AddOpenBehavior(typeof(OidResolutionBehavior<,>));      // 4th
+            cfg.AddOpenBehavior(typeof(ValueExtractionBehavior<,>));    // 5th
+            cfg.AddOpenBehavior(typeof(TenantVectorFanOutBehavior<,>)); // 6th — Phase 27
         });
 
         // Pipeline telemetry: metrics for pipeline latency, handled/rejected counts.
