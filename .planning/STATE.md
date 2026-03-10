@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 ## Current Position
 
 Phase: 25 — first of 5 in v1.5 (Config Models and Validation)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-03-10 — Roadmap created for v1.5
+Plan: 01 of 5 in phase 25
+Status: In progress
+Last activity: 2026-03-10 — Completed 25-01-PLAN.md
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [_________] 0/9 v1.5
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [#________] 1/9 v1.5
 
 ## Milestone History
 
@@ -39,6 +39,7 @@ See `.planning/MILESTONES.md` for details.
 - FrozenDictionary atomic swap for registry + routing index
 - Immutable MetricSlot record with Volatile.Write for thread safety
 - Zero new NuGet packages needed
+- FrozenSet<string> for O(1) metric name containment in OidMapService (D25-01)
 
 ### Known Tech Debt
 
@@ -50,6 +51,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10
-Stopped at: Roadmap created for v1.5 Priority Vector Data Layer
+Last session: 2026-03-10T13:11Z
+Stopped at: Completed 25-01-PLAN.md (Config Models and Validation)
 Resume file: None
