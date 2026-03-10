@@ -51,8 +51,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 26-01-PLAN.md -- Core data types: MetricSlot, MetricSlotHolder, RoutingKey, Tenant, PriorityGroup with unit tests
-- [ ] 26-02-PLAN.md -- TenantVectorRegistry with FrozenDictionary routing index, atomic rebuild, DI registration, and unit tests
+- [x] 26-01: Core data types: MetricSlot, MetricSlotHolder, RoutingKey, Tenant, PriorityGroup with unit tests
+- [x] 26-02: TenantVectorRegistry with FrozenDictionary routing index, atomic rebuild, DI registration, and unit tests
 
 #### Phase 27: Pipeline Integration
 
@@ -110,11 +110,11 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 25. Config Models | v1.5 | 1/1 | Complete | 2026-03-10 |
-| 26. Core Data Types | v1.5 | 0/2 | Not started | - |
+| 26. Core Data Types | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 27. Pipeline Integration | v1.5 | 0/2 | Not started | - |
 | 28. ConfigMap Watcher | v1.5 | 0/2 | Not started | - |
 | 29. K8s Deployment | v1.5 | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-10 after Phase 26 planning*
+*Last updated: 2026-03-10 after Phase 26 execution*

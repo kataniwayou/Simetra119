@@ -15,10 +15,10 @@ Requirements for the stateful data layer that organizes SNMP metrics into priori
 
 ### Data Layer
 
-- [ ] **DAT-01**: TenantVectorRegistry singleton — ordered priority groups, each containing tenants with metric slots
-- [ ] **DAT-02**: MetricSlot value cell — immutable record (value + updated_at), atomic swap via Volatile.Write
-- [ ] **DAT-03**: Routing index — FrozenDictionary keyed by (ip, port, metric_name) → list of (tenant_id, slot reference)
-- [ ] **DAT-04**: Atomic rebuild on config change — full registry + routing index rebuilt, volatile swap
+- [x] **DAT-01**: TenantVectorRegistry singleton — ordered priority groups, each containing tenants with metric slots
+- [x] **DAT-02**: MetricSlot value cell — immutable record (value + updated_at), atomic swap via Volatile.Write
+- [x] **DAT-03**: Routing index — FrozenDictionary keyed by (ip, port, metric_name) → list of (tenant_id, slot reference)
+- [x] **DAT-04**: Atomic rebuild on config change — full registry + routing index rebuilt, volatile swap
 
 ### Pipeline Integration
 
@@ -57,10 +57,10 @@ Requirements for the stateful data layer that organizes SNMP metrics into priori
 | CFG-01 | Phase 25 | Complete |
 | CFG-02 | Phase 25 | Complete |
 | CFG-03 | Phase 28 | Pending |
-| DAT-01 | Phase 26 | Pending |
-| DAT-02 | Phase 26 | Pending |
-| DAT-03 | Phase 26 | Pending |
-| DAT-04 | Phase 26 | Pending |
+| DAT-01 | Phase 26 | Complete |
+| DAT-02 | Phase 26 | Complete |
+| DAT-03 | Phase 26 | Complete |
+| DAT-04 | Phase 26 | Complete |
 | PIP-01 | Phase 27 | Pending |
 | PIP-02 | Phase 27 | Pending |
 | PIP-03 | Phase 27 | Pending |
@@ -77,4 +77,4 @@ Requirements for the stateful data layer that organizes SNMP metrics into priori
 
 ---
 *Requirements defined: 2026-03-10*
-*Last updated: 2026-03-10 after roadmap creation*
+*Last updated: 2026-03-10 after Phase 26 completion*
