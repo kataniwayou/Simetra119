@@ -88,7 +88,11 @@ save_configmap() {
     local namespace="$2"
     local output_file="$3"
 
-    kubectl get configmap "$name" -n "$namespace" -o yaml > "$output_file"
+    kubectl get configmap "$name" -n "$namespace" -o yaml \
+        | sed '/resourceVersion:/d' \
+        | sed '/uid:/d' \
+        | sed '/creationTimestamp:/d' \
+        > "$output_file"
 }
 
 restore_configmap() {
@@ -107,6 +111,7 @@ snapshot_configmaps() {
     log_info "Snapshotting ConfigMaps for mutation testing..."
     save_configmap "simetra-devices" "simetra" "$FIXTURES_DIR/.original-devices-configmap.yaml"
     save_configmap "simetra-oidmaps" "simetra" "$FIXTURES_DIR/.original-oidmaps-configmap.yaml"
+    save_configmap "simetra-tenantvector" "simetra" "$FIXTURES_DIR/.original-tenantvector-configmap.yaml"
     log_info "ConfigMap snapshots saved"
 }
 
@@ -117,6 +122,9 @@ restore_configmaps() {
     fi
     if [ -f "$FIXTURES_DIR/.original-oidmaps-configmap.yaml" ]; then
         restore_configmap "$FIXTURES_DIR/.original-oidmaps-configmap.yaml"
+    fi
+    if [ -f "$FIXTURES_DIR/.original-tenantvector-configmap.yaml" ]; then
+        restore_configmap "$FIXTURES_DIR/.original-tenantvector-configmap.yaml"
     fi
     log_info "ConfigMaps restored"
 }

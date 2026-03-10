@@ -12,11 +12,12 @@ _REPORT_CATEGORIES=(
     "OID Mutations|23|25"
     "Device Lifecycle|26|28"
     "Watcher Resilience|29|32"
+    "Tenant Vector|33|36"
 )
 
 generate_report() {
     local output_file="$1"
-    local total=${#SCENARIO_RESULTS[@]:-0}
+    local total=${#SCENARIO_RESULTS[@]}
 
     {
         echo "# E2E System Verification Report"
