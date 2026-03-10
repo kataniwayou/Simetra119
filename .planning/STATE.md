@@ -45,6 +45,12 @@ See `.planning/milestones/` for archived roadmaps and requirements.
 
 None.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 037 | IP+Port as primary device identity | 2026-03-10 | af973c7 | [037-ip-port-primary-device-identity](./quick/037-ip-port-primary-device-identity/) |
+
 ### Blockers/Concerns
 
 None.
