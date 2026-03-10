@@ -50,6 +50,8 @@ public sealed class OidMapServiceTests
     [Fact]
     public void EntryCount_MatchesDictionarySize()
     {
+        // OidMapService always seeds the heartbeat OID at construction time,
+        // so EntryCount = supplied entries + 1 (heartbeat seed).
         var entries = new Dictionary<string, string>
         {
             ["1.3.6.1.2.1.1.1.0"] = "sysDescr",
@@ -58,7 +60,7 @@ public sealed class OidMapServiceTests
         };
         var sut = CreateService(entries);
 
-        Assert.Equal(3, sut.EntryCount);
+        Assert.Equal(4, sut.EntryCount); // 3 supplied + 1 heartbeat seed
     }
 
     [Fact]

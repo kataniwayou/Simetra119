@@ -347,10 +347,11 @@ public static class ServiceCollectionExtensions
 
             // Behavior order: first registered = outermost = runs first in pipeline.
             // Behaviors fire because SnmpOidReceived : IRequest<Unit> dispatched via ISender.Send.
-            cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));       // 1st = outermost
-            cfg.AddOpenBehavior(typeof(ExceptionBehavior<,>));     // 2nd
-            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));    // 3rd
-            cfg.AddOpenBehavior(typeof(OidResolutionBehavior<,>)); // 4th = innermost
+            cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));           // 1st = outermost
+            cfg.AddOpenBehavior(typeof(ExceptionBehavior<,>));       // 2nd
+            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));      // 3rd
+            cfg.AddOpenBehavior(typeof(OidResolutionBehavior<,>));   // 4th
+            cfg.AddOpenBehavior(typeof(ValueExtractionBehavior<,>)); // 5th = innermost before handler
         });
 
         // Pipeline telemetry: metrics for pipeline latency, handled/rejected counts.

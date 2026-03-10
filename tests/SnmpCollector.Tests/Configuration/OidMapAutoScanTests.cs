@@ -150,8 +150,9 @@ public class OidMapAutoScanTests
             .Where(kv => kv.Key.StartsWith("1.3.6.1.4.1.47477.10.21."))
             .ToDictionary(kv => kv.Key, kv => kv.Value);
 
-        // Assert: exactly 24 entries (4 links x 6 metrics)
-        Assert.Equal(24, obpEntries.Count);
+        // Assert: 27 entries — 24 channel metrics (4 links x 6 metrics) + 3 static info OIDs
+        // (obp_device_type, obp_sw_version, obp_serial added in quick-027)
+        Assert.Equal(27, obpEntries.Count);
 
         // Spot-check specific entries across different links and metric types
         Assert.Equal("obp_link_state_L1", obpEntries["1.3.6.1.4.1.47477.10.21.1.3.1.0"]);
@@ -168,8 +169,9 @@ public class OidMapAutoScanTests
             .Where(kv => kv.Key.StartsWith("1.3.6.1.4.1.47477.10.21."))
             .ToDictionary(kv => kv.Key, kv => kv.Value);
 
-        // Act & Assert: all OBP metric names match obp_{metric}_L{1-4} pattern
-        var pattern = new Regex(@"^obp_(link_state|channel|r[1-4]_power)_L[1-4]$");
+        // Act & Assert: all OBP metric names match expected naming conventions
+        // Channel metrics: obp_{metric}_L{1-4}; static info: obp_{info_name}
+        var pattern = new Regex(@"^obp_(link_state|channel|r[1-4]_power)_L[1-4]$|^obp_(device_type|sw_version|serial)$");
 
         foreach (var (oid, metricName) in obpEntries)
         {

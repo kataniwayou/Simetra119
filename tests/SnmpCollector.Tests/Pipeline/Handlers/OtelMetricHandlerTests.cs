@@ -42,7 +42,9 @@ public sealed class OtelMetricHandlerTests : IDisposable
         string oid = "1.3.6.1.2.1.25.3.3.1.2",
         string agentIp = "10.0.0.1",
         string deviceName = "test-device",
-        string? metricName = "hrProcessorLoad") =>
+        string? metricName = "hrProcessorLoad",
+        double extractedValue = 0.0,
+        string? extractedStringValue = null) =>
         new()
         {
             Oid = oid,
@@ -51,7 +53,9 @@ public sealed class OtelMetricHandlerTests : IDisposable
             Source = SnmpSource.Poll,
             TypeCode = typeCode,
             DeviceName = deviceName,
-            MetricName = metricName
+            MetricName = metricName,
+            ExtractedValue = extractedValue,
+            ExtractedStringValue = extractedStringValue
         };
 
     // --- Gauge dispatch tests ---
@@ -59,7 +63,7 @@ public sealed class OtelMetricHandlerTests : IDisposable
     [Fact]
     public async Task Integer32_RecordsGauge()
     {
-        var notification = MakeNotification(new Integer32(42), SnmpType.Integer32);
+        var notification = MakeNotification(new Integer32(42), SnmpType.Integer32, extractedValue: 42.0);
         await _handler.Handle(notification, CancellationToken.None);
 
         Assert.Single(_testFactory.GaugeRecords);
@@ -70,7 +74,7 @@ public sealed class OtelMetricHandlerTests : IDisposable
     [Fact]
     public async Task Gauge32_RecordsGauge()
     {
-        var notification = MakeNotification(new Gauge32(75), SnmpType.Gauge32);
+        var notification = MakeNotification(new Gauge32(75), SnmpType.Gauge32, extractedValue: 75.0);
         await _handler.Handle(notification, CancellationToken.None);
 
         Assert.Single(_testFactory.GaugeRecords);
@@ -80,7 +84,7 @@ public sealed class OtelMetricHandlerTests : IDisposable
     [Fact]
     public async Task TimeTicks_RecordsGauge()
     {
-        var notification = MakeNotification(new TimeTicks(123456), SnmpType.TimeTicks);
+        var notification = MakeNotification(new TimeTicks(123456), SnmpType.TimeTicks, extractedValue: 123456.0);
         await _handler.Handle(notification, CancellationToken.None);
 
         Assert.Single(_testFactory.GaugeRecords);
@@ -93,7 +97,8 @@ public sealed class OtelMetricHandlerTests : IDisposable
     [Fact]
     public async Task OctetString_RecordsInfo()
     {
-        var notification = MakeNotification(new OctetString("router-01"), SnmpType.OctetString);
+        var notification = MakeNotification(new OctetString("router-01"), SnmpType.OctetString,
+            extractedStringValue: "router-01");
         await _handler.Handle(notification, CancellationToken.None);
 
         Assert.Single(_testFactory.InfoRecords);
@@ -106,7 +111,7 @@ public sealed class OtelMetricHandlerTests : IDisposable
     [Fact]
     public async Task Counter32_RecordsGauge()
     {
-        var notification = MakeNotification(new Counter32(1000), SnmpType.Counter32);
+        var notification = MakeNotification(new Counter32(1000), SnmpType.Counter32, extractedValue: 1000.0);
         await _handler.Handle(notification, CancellationToken.None);
 
         Assert.Single(_testFactory.GaugeRecords);
@@ -116,7 +121,7 @@ public sealed class OtelMetricHandlerTests : IDisposable
     [Fact]
     public async Task Counter64_RecordsGauge()
     {
-        var notification = MakeNotification(new Counter64(5000), SnmpType.Counter64);
+        var notification = MakeNotification(new Counter64(5000), SnmpType.Counter64, extractedValue: 5000.0);
         await _handler.Handle(notification, CancellationToken.None);
 
         Assert.Single(_testFactory.GaugeRecords);
@@ -134,7 +139,8 @@ public sealed class OtelMetricHandlerTests : IDisposable
             oid: "1.3.6.1.2.1.25.3.3.1.2",
             agentIp: "10.0.0.1",
             deviceName: "core-router",
-            metricName: "hrProcessorLoad");
+            metricName: "hrProcessorLoad",
+            extractedValue: 99.0);
 
         await _handler.Handle(notification, CancellationToken.None);
 
