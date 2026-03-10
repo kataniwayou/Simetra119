@@ -18,7 +18,7 @@ public sealed class HeartbeatJobOptions
     /// Device name used by HeartbeatJob's loopback trap. Single source of truth for the
     /// "heartbeat" string — all comparisons reference this const.
     /// </summary>
-    public const string HeartbeatDeviceName = "heartbeat";
+    public const string HeartbeatDeviceName = "Simetra";
 
     /// <summary>
     /// Interval between heartbeat trap sends, in seconds.

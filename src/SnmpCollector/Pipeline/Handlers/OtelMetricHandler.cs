@@ -35,6 +35,7 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
     public Task<Unit> Handle(SnmpOidReceived notification, CancellationToken cancellationToken)
     {
         var deviceName = notification.DeviceName ?? "unknown";
+
         var metricName = notification.MetricName ?? OidMapService.Unknown;
         var ip = notification.AgentIp.ToString();
         var source = notification.Source.ToString().ToLowerInvariant();

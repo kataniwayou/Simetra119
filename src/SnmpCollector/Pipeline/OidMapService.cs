@@ -91,7 +91,7 @@ public sealed class OidMapService : IOidMapService
     private static Dictionary<string, string> MergeWithHeartbeatSeed(Dictionary<string, string> entries)
     {
         var merged = new Dictionary<string, string>(entries, StringComparer.OrdinalIgnoreCase);
-        merged[HeartbeatJobOptions.HeartbeatOid] = "heartbeat";
+        merged[HeartbeatJobOptions.HeartbeatOid] = "Heartbeat";
         return merged;
     }
 

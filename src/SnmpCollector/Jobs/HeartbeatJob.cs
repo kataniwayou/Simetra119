@@ -1,4 +1,5 @@
 using System.Net;
+using System.Threading;
 using Lextm.SharpSnmpLib;
 using Lextm.SharpSnmpLib.Messaging;
 using Microsoft.Extensions.Logging;
@@ -18,6 +19,8 @@ namespace SnmpCollector.Jobs;
 [DisallowConcurrentExecution]
 public sealed class HeartbeatJob : IJob
 {
+    private static long _counter;
+
     private readonly ICorrelationService _correlation;
     private readonly ILivenessVectorService _liveness;
     private readonly int _listenerPort;
@@ -46,7 +49,7 @@ public sealed class HeartbeatJob : IJob
         {
             var variables = new List<Variable>
             {
-                new(new ObjectIdentifier(HeartbeatJobOptions.HeartbeatOid), new Integer32(1))
+                new(new ObjectIdentifier(HeartbeatJobOptions.HeartbeatOid), new Counter32((uint)Interlocked.Increment(ref _counter)))
             };
 
             var receiver = new IPEndPoint(IPAddress.Loopback, _listenerPort);
