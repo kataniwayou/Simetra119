@@ -1,3 +1,4 @@
+using Lextm.SharpSnmpLib;
 using SnmpCollector.Pipeline;
 using Xunit;
 
@@ -25,7 +26,7 @@ public sealed class MetricSlotHolderTests
         var holder = CreateHolder();
         var before = DateTimeOffset.UtcNow;
 
-        holder.WriteValue(42.5, null);
+        holder.WriteValue(42.5, null, SnmpType.Integer32);
 
         var slot = holder.ReadSlot();
         Assert.NotNull(slot);
@@ -40,7 +41,7 @@ public sealed class MetricSlotHolderTests
     {
         var holder = CreateHolder();
 
-        holder.WriteValue(0, "linkUp");
+        holder.WriteValue(0, "linkUp", SnmpType.Integer32);
 
         var slot = holder.ReadSlot();
         Assert.NotNull(slot);
@@ -53,8 +54,8 @@ public sealed class MetricSlotHolderTests
     {
         var holder = CreateHolder();
 
-        holder.WriteValue(1.0, "first");
-        holder.WriteValue(2.0, "second");
+        holder.WriteValue(1.0, "first", SnmpType.Integer32);
+        holder.WriteValue(2.0, "second", SnmpType.Integer32);
 
         var slot = holder.ReadSlot();
         Assert.NotNull(slot);
@@ -66,13 +67,13 @@ public sealed class MetricSlotHolderTests
     public void ReadSlot_ReturnsConsistentSnapshot()
     {
         var holder = CreateHolder();
-        holder.WriteValue(99.9, "status");
+        holder.WriteValue(99.9, "status", SnmpType.Integer32);
 
         // Read the slot reference once — all fields come from the same immutable record
         var slot = holder.ReadSlot();
         Assert.NotNull(slot);
 
-        // Verify all three fields are internally consistent (no torn read possible on a reference type)
+        // Verify all fields are internally consistent (no torn read possible on a reference type)
         var value = slot.Value;
         var stringValue = slot.StringValue;
         var updatedAt = slot.UpdatedAt;
@@ -91,5 +92,17 @@ public sealed class MetricSlotHolderTests
         Assert.Equal(162, holder.Port);
         Assert.Equal("sysUpTime", holder.MetricName);
         Assert.Equal(60, holder.IntervalSeconds);
+    }
+
+    [Fact]
+    public void WriteValue_PreservesTypeCode()
+    {
+        var holder = CreateHolder();
+
+        holder.WriteValue(12345.0, null, SnmpType.Gauge32);
+
+        var slot = holder.ReadSlot();
+        Assert.NotNull(slot);
+        Assert.Equal(SnmpType.Gauge32, slot.TypeCode);
     }
 }

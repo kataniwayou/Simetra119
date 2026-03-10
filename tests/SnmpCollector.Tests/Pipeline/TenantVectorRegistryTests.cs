@@ -1,3 +1,4 @@
+using Lextm.SharpSnmpLib;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SnmpCollector.Configuration;
@@ -232,7 +233,7 @@ public sealed class TenantVectorRegistryTests
 
         // Write a value into the initial holder.
         registry.TryRoute("10.0.0.1", 161, "hrProcessorLoad", out var holders);
-        holders[0].WriteValue(42.0, "42");
+        holders[0].WriteValue(42.0, "42", SnmpType.Integer32);
 
         // Reload with the same config — value should carry over.
         registry.Reload(options);
@@ -243,6 +244,29 @@ public sealed class TenantVectorRegistryTests
         Assert.NotNull(slot);
         Assert.Equal(42.0, slot.Value);
         Assert.Equal("42", slot.StringValue);
+    }
+
+    [Fact]
+    public void Reload_CarriesOverTypeCode()
+    {
+        var registry = CreateRegistry();
+        var options = CreateOptions(
+            ("tenant-a", 1, "10.0.0.1", 161, "hrProcessorLoad", 30));
+
+        registry.Reload(options);
+
+        // Write with a specific TypeCode.
+        registry.TryRoute("10.0.0.1", 161, "hrProcessorLoad", out var holders);
+        holders[0].WriteValue(77.0, null, SnmpType.Gauge32);
+
+        // Reload with the same config — TypeCode should carry over.
+        registry.Reload(options);
+
+        registry.TryRoute("10.0.0.1", 161, "hrProcessorLoad", out var newHolders);
+        Assert.NotNull(newHolders);
+        var slot = newHolders[0].ReadSlot();
+        Assert.NotNull(slot);
+        Assert.Equal(SnmpType.Gauge32, slot.TypeCode);
     }
 
     [Fact]
@@ -279,7 +303,7 @@ public sealed class TenantVectorRegistryTests
 
         // Write a value to ifInOctets.
         registry.TryRoute("10.0.0.1", 161, "ifInOctets", out var holders);
-        holders[0].WriteValue(99.0, null);
+        holders[0].WriteValue(99.0, null, SnmpType.Integer32);
 
         // Reload without ifInOctets — it should be gone.
         var options2 = CreateOptions(

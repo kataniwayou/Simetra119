@@ -110,7 +110,7 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                     var existingSlot = oldHolder.ReadSlot();
                     if (existingSlot is not null)
                     {
-                        newHolder.WriteValue(existingSlot.Value, existingSlot.StringValue);
+                        newHolder.WriteValue(existingSlot.Value, existingSlot.StringValue, existingSlot.TypeCode);
                         carriedOver++;
                     }
                 }
