@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 ## Current Position
 
 Phase: 26 — second of 5 in v1.5 (Core Data Types and Registry)
-Plan: 1 of 2 complete
-Status: In progress
-Last activity: 2026-03-10 — Completed 26-01-PLAN.md (Core Data Types)
+Plan: 2 of 2 complete — Phase 26 COMPLETE
+Status: Phase complete
+Last activity: 2026-03-10 — Completed 26-02-PLAN.md (TenantVectorRegistry)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##_______] 2/9 v1.5
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [###______] 3/9 v1.5
 
 ## Milestone History
 
@@ -38,10 +38,12 @@ See `.planning/MILESTONES.md` for details.
 - Fan-out catches own exceptions, always calls next() — never kills OTel export
 - FrozenDictionary atomic swap for registry + routing index
 - MetricSlotHolder uses Volatile.Read/Write (NOT volatile keyword — CS0420 conflict); plain field is correct
+- TenantVectorRegistry._groups and ._routingIndex use volatile keyword (reference reads, not ref-passed — no CS0420)
 - Zero new NuGet packages needed
 - FrozenSet<string> for O(1) metric name containment in OidMapService (D25-01)
 - RoutingKeyComparer.Instance singleton — pass explicitly to FrozenDictionary constructor
 - PriorityGroup is not sealed (C# records cannot be declared sealed)
+- TenantVectorRegistry.Reload() value carry-over: copies MetricSlot value via ReadSlot()/WriteValue(), never copies holder object
 
 ### Known Tech Debt
 
@@ -53,6 +55,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10T17:23:00Z
-Stopped at: Completed 26-01-PLAN.md (Core Data Types and Registry)
+Last session: 2026-03-10T17:31:06Z
+Stopped at: Completed 26-02-PLAN.md (TenantVectorRegistry) — Phase 26 complete
 Resume file: None
