@@ -32,7 +32,7 @@ See `.planning/MILESTONES.md` and `.planning/milestones/` for archived details.
   2. Validation rejects duplicate tenant IDs, invalid IP/port ranges, metric_names not found in the OID map, and duplicate (ip, port, metric_name) within a tenant
   3. Validation passes for a well-formed config with multiple tenants containing overlapping metrics across tenants
   4. Unit tests cover all validation rules with both positive and negative cases
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
 - [x] 25-01: Config POCOs and IValidateOptions validator with unit tests
@@ -48,11 +48,11 @@ Plans:
   3. Routing index is a FrozenDictionary keyed by (ip, port, metric_name) returning the list of (tenant_id, slot reference) targets
   4. Calling Reload() with new config atomically rebuilds the entire registry and routing index via volatile swap -- concurrent readers see either old or new state, never partial
   5. Unit tests verify slot atomicity, routing lookups, priority ordering, and rebuild correctness
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 26-01: RoutingKey, MetricSlot, Tenant, TenantVector data types
-- [ ] 26-02: TenantVectorRegistry with FrozenDictionary routing index and atomic rebuild
+- [ ] 26-01-PLAN.md -- Core data types: MetricSlot, MetricSlotHolder, RoutingKey, Tenant, PriorityGroup with unit tests
+- [ ] 26-02-PLAN.md -- TenantVectorRegistry with FrozenDictionary routing index, atomic rebuild, DI registration, and unit tests
 
 #### Phase 27: Pipeline Integration
 
@@ -117,4 +117,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-10 after Phase 25 completion*
+*Last updated: 2026-03-10 after Phase 26 planning*
