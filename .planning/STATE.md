@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 Phase: 29 — fifth of 5 in v1.5 (K8s Deployment and E2E Validation) — COMPLETE
 Plan: All plans complete
 Status: Milestone v1.5 complete
-Last activity: 2026-03-10 — Completed quick task 041: Heartbeat as Counter32 with device_name=Simetra
+Last activity: 2026-03-11 — Completed quick task 042: Remove IntervalSeconds from tenant vector config
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5
 
@@ -70,6 +70,7 @@ None.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 041 | Heartbeat as Counter32 snmp_gauge with device_name=Simetra | 2026-03-10 | 1c3ad32 | [041-heartbeat-counter32-simetra-device](./quick/041-heartbeat-counter32-simetra-device/) |
+| 042 | Remove IntervalSeconds from tenant vector config, derive from DeviceRegistry | 2026-03-11 | bd4ad96 | [042-remove-intervalseconds-from-tenant-config](./quick/042-remove-intervalseconds-from-tenant-config/) |
 
 ### Blockers/Concerns
 
@@ -77,6 +78,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10
-Stopped at: Phase 29 complete, v1.5 milestone complete
+Last session: 2026-03-11
+Stopped at: Completed quick task 042
 Resume file: None
