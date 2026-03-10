@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 ## Current Position
 
 Phase: 28 — fourth of 5 in v1.5 (ConfigMap Watcher and Local Dev)
-Plan: 02 of 5 in phase 28
+Plan: 01 complete, 02 complete (2 of 2 in phase 28)
 Status: In progress
-Last activity: 2026-03-10 — Completed 28-02 (simetra-tenantvector ConfigMap added to production manifests)
+Last activity: 2026-03-10 — Completed 28-01-PLAN.md (TenantVectorWatcherService + DI + local dev)
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [######___] 6/9 v1.5
 
@@ -53,6 +53,9 @@ See `.planning/MILESTONES.md` for details.
 - snmp.tenantvector.routed counter increments once per slot write with device_name tag (D27-02)
 - PipelineIntegrationTests must register ITenantVectorRegistry when using AddSnmpPipeline() (D27-02)
 - simetra-tenantvector ConfigMap uses bare JSON { "Tenants": [] } — NOT { "TenantVector": { ... } }; section wrapper is IConfiguration-only (D28-02)
+- TenantVectorWatcherService injects TenantVectorRegistry (concrete), not ITenantVectorRegistry — Reload() is not on the interface (D28-01)
+- Concrete-first validator DI: AddSingleton<TenantVectorOptionsValidator>() + AddSingleton<IValidateOptions<T>>(sp => sp.GetRequiredService<TenantVectorOptionsValidator>()) ensures single instance (D28-01)
+- Local dev tenantvector.json uses IConfiguration section wrapper; JsonDocument.Parse + TryGetProperty("TenantVector") extracts inner object before deserialization (D28-01)
 
 ### Known Tech Debt
 
@@ -64,6 +67,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10T20:17:59Z
-Stopped at: Completed 28-02-PLAN.md
+Last session: 2026-03-10T20:19:43Z
+Stopped at: Completed 28-01-PLAN.md (TenantVectorWatcherService)
 Resume file: None
