@@ -1,25 +1,10 @@
 # Scenario 28: TenantVector routing — fan-out counter increments, watcher loads, hot-reload works
-# Deploys tenantvector ConfigMap with real ClusterIPs, verifies Prometheus routing counter
+# Deploys tenantvector ConfigMap with DNS names, verifies Prometheus routing counter
 # increments, confirms watcher load logs, and tests hot-reload with a 4th tenant.
 
 # ---------------------------------------------------------------------------
-# Step 0: Derive ClusterIPs and apply tenantvector ConfigMap with real IPs
+# Step 0: Apply tenantvector ConfigMap
 # ---------------------------------------------------------------------------
-
-log_info "Deriving ClusterIPs for npb-simulator and obp-simulator..."
-NPB_IP=$(kubectl get svc npb-simulator -n simetra -o jsonpath='{.spec.clusterIP}' 2>/dev/null) || true
-OBP_IP=$(kubectl get svc obp-simulator -n simetra -o jsonpath='{.spec.clusterIP}' 2>/dev/null) || true
-
-if [ -z "$NPB_IP" ] || [ -z "$OBP_IP" ]; then
-    log_error "Could not derive ClusterIPs: NPB_IP='${NPB_IP}' OBP_IP='${OBP_IP}'"
-    record_fail "TenantVector ConfigMap mounted in pod" "Failed to derive ClusterIPs from kubectl get svc"
-    record_fail "TenantVectorWatcher initial load detected" "Prerequisite: ClusterIP derivation failed"
-    record_fail "TenantVector routing counter increments" "Prerequisite: ClusterIP derivation failed"
-    record_fail "TenantVector hot-reload detects added tenant" "Prerequisite: ClusterIP derivation failed"
-    return 0
-fi
-
-log_info "NPB ClusterIP: ${NPB_IP}  OBP ClusterIP: ${OBP_IP}"
 
 # Snapshot current tenantvector ConfigMap BEFORE applying (for restore later)
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
@@ -27,12 +12,8 @@ save_configmap "simetra-tenantvector" "simetra" "$FIXTURES_DIR/.original-tenantv
 
 TENANTVECTOR_YAML="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/deploy/k8s/snmp-collector/simetra-tenantvector.yaml"
 
-log_info "Applying tenantvector ConfigMap with real ClusterIPs..."
-sed \
-    -e "s/PLACEHOLDER_NPB_IP/${NPB_IP}/g" \
-    -e "s/PLACEHOLDER_OBP_IP/${OBP_IP}/g" \
-    "$TENANTVECTOR_YAML" \
-    | kubectl apply -f - || true
+log_info "Applying tenantvector ConfigMap..."
+kubectl apply -f "$TENANTVECTOR_YAML" || true
 
 log_info "Restarting snmp-collector deployment..."
 kubectl rollout restart deployment/snmp-collector -n simetra || true
@@ -130,35 +111,35 @@ data:
         {
           "Priority": 1,
           "Metrics": [
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_status_P1" },
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_rx_octets_P1" },
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_tx_octets_P1" },
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_cpu_util" }
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_status_P1" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_rx_octets_P1" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_tx_octets_P1" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_cpu_util" }
           ]
         },
         {
           "Priority": 2,
           "Metrics": [
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_mem_util" },
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_sys_temp" },
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_rx_packets_P1" },
-            { "Ip": "${NPB_IP}", "Port": 161, "MetricName": "npb_port_tx_packets_P1" }
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_mem_util" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_sys_temp" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_rx_packets_P1" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_tx_packets_P1" }
           ]
         },
         {
           "Priority": 3,
           "Metrics": [
-            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_channel_L1" },
-            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_r1_power_L1" },
-            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_r2_power_L1" },
-            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_channel_L2" }
+            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L1" },
+            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r1_power_L1" },
+            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r2_power_L1" },
+            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L2" }
           ]
         },
         {
           "Priority": 4,
           "Metrics": [
-            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_r3_power_L1" },
-            { "Ip": "${OBP_IP}", "Port": 161, "MetricName": "obp_r4_power_L1" }
+            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r3_power_L1" },
+            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r4_power_L1" }
           ]
         }
       ]
@@ -194,12 +175,8 @@ fi
 log_info "Restoring original tenantvector ConfigMap..."
 if [ -f "$FIXTURES_DIR/.original-tenantvector-configmap.yaml" ]; then
     restore_configmap "$FIXTURES_DIR/.original-tenantvector-configmap.yaml" || \
-        log_warn "Failed to restore tenantvector ConfigMap from snapshot; re-applying dev file with placeholders substituted"
+        log_warn "Failed to restore tenantvector ConfigMap from snapshot; re-applying dev file"
 else
-    log_warn "Original tenantvector snapshot not found; re-applying dev file with placeholder IPs substituted"
-    sed \
-        -e "s/PLACEHOLDER_NPB_IP/${NPB_IP}/g" \
-        -e "s/PLACEHOLDER_OBP_IP/${OBP_IP}/g" \
-        "$TENANTVECTOR_YAML" \
-        | kubectl apply -f - || log_warn "Fallback tenantvector restore also failed"
+    log_warn "Original tenantvector snapshot not found; re-applying dev file"
+    kubectl apply -f "$TENANTVECTOR_YAML" || log_warn "Fallback tenantvector restore also failed"
 fi

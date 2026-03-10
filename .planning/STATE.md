@@ -58,8 +58,8 @@ See `.planning/MILESTONES.md` for details.
 - TenantVectorWatcherService injects TenantVectorRegistry (concrete), not ITenantVectorRegistry — Reload() is not on the interface (D28-01)
 - Concrete-first validator DI: AddSingleton<TenantVectorOptionsValidator>() + AddSingleton<IValidateOptions<T>>(sp => sp.GetRequiredService<TenantVectorOptionsValidator>()) ensures single instance (D28-01)
 - Local dev tenantvector.json uses IConfiguration section wrapper; JsonDocument.Parse + TryGetProperty("TenantVector") extracts inner object before deserialization (D28-01)
-- simetra-tenantvector ConfigMap committed with PLACEHOLDER_NPB_IP / PLACEHOLDER_OBP_IP — e2e script substitutes real ClusterIPs at deploy-time via kubectl get svc (D29-01)
-- E2E scenario 28 derives ClusterIPs via kubectl get svc, applies tenantvector before testing, hot-reload uses obp_r3_power_L1/obp_r4_power_L1 (valid oidmap metrics) for 4th tenant obp-poll-2 (D29-02)
+- simetra-tenantvector ConfigMap uses DNS names (same as simetra-devices); TenantVectorRegistry.ResolveIp() maps ConfigAddress to ResolvedIp via IDeviceRegistry at Reload() time (Q044)
+- E2E scenario 28 applies tenantvector ConfigMap directly (no ClusterIP derivation or sed substitution), hot-reload uses obp_r3_power_L1/obp_r4_power_L1 (valid oidmap metrics) for 4th tenant obp-poll-2 (Q044)
 - kubectl.sh snapshot/restore_configmaps now includes simetra-tenantvector; report.sh Tenant Vector category covers indices 33-36 (D29-02)
 - IntervalSeconds removed from tenant vector ConfigMap; TenantVectorRegistry.DeriveIntervalSeconds() resolves via IDeviceRegistry.TryGetByIpPort + IOidMapService.Resolve at Reload() time (Q042)
 
