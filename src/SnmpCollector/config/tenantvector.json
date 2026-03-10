@@ -1,0 +1,30 @@
+{
+  "TenantVector": {
+    "Tenants": [
+      {
+        "Id": "fiber-monitor",
+        "Priority": 1,
+        "Metrics": [
+          {
+            "Ip": "127.0.0.1",
+            "Port": 10161,
+            "MetricName": "obp_link_state_L1",
+            "IntervalSeconds": 10
+          }
+        ]
+      },
+      {
+        "Id": "traffic-baseline",
+        "Priority": 2,
+        "Metrics": [
+          {
+            "Ip": "127.0.0.1",
+            "Port": 10162,
+            "MetricName": "npb_cpu_util",
+            "IntervalSeconds": 30
+          }
+        ]
+      }
+    ]
+  }
+}

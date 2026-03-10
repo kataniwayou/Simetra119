@@ -27,6 +27,14 @@ if (Directory.Exists(configDir))
     {
         builder.Configuration.AddJsonFile(k8sConfig, optional: true, reloadOnChange: false);
     }
+
+    // Phase 25: Load tenant vector configuration if present.
+    // reloadOnChange: false -- tenant vector changes require restart for validation.
+    var tenantVectorConfig = Path.Combine(configDir, "tenantvector.json");
+    if (File.Exists(tenantVectorConfig))
+    {
+        builder.Configuration.AddJsonFile(tenantVectorConfig, optional: true, reloadOnChange: false);
+    }
 }
 
 // DI registration order:
