@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 ## Current Position
 
 Phase: 29 — fifth of 5 in v1.5 (K8s Deployment and E2E Validation)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-03-10 — Phase 28 complete (ConfigMap Watcher and Local Dev), verified 6/6 must-haves
+Plan: 01 of N complete
+Status: In progress
+Last activity: 2026-03-10 — Completed 29-01-PLAN.md (K8s manifest updates: tenantvector projected source + device/tenant data)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [#######__] 7/9 v1.5
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [########_] 8/9 v1.5
 
 ## Milestone History
 
@@ -56,6 +56,7 @@ See `.planning/MILESTONES.md` for details.
 - TenantVectorWatcherService injects TenantVectorRegistry (concrete), not ITenantVectorRegistry — Reload() is not on the interface (D28-01)
 - Concrete-first validator DI: AddSingleton<TenantVectorOptionsValidator>() + AddSingleton<IValidateOptions<T>>(sp => sp.GetRequiredService<TenantVectorOptionsValidator>()) ensures single instance (D28-01)
 - Local dev tenantvector.json uses IConfiguration section wrapper; JsonDocument.Parse + TryGetProperty("TenantVector") extracts inner object before deserialization (D28-01)
+- simetra-tenantvector ConfigMap committed with PLACEHOLDER_NPB_IP / PLACEHOLDER_OBP_IP — e2e script substitutes real ClusterIPs at deploy-time via kubectl get svc (D29-01)
 
 ### Known Tech Debt
 
@@ -68,5 +69,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-10
-Stopped at: Phase 28 complete, ready for Phase 29
+Stopped at: Completed 29-01-PLAN.md
 Resume file: None
