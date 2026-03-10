@@ -65,11 +65,11 @@ Plans:
   3. Heartbeat samples (IsHeartbeat) and unresolved OIDs (MetricName == "Unknown") are skipped and never routed to tenant slots
   4. If the fan-out behavior throws any exception, it catches internally and always calls next() -- OtelMetricHandler fires regardless
   5. Pipeline counter snmp_tenantvector_routed_total increments for each successful slot write
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 27-01: TenantVectorFanOutBehavior with port resolution, filtering, and exception safety
-- [ ] 27-02: Pipeline counter and DI registration with behavior ordering
+- [ ] 27-01-PLAN.md -- Heartbeat normalization, ValueExtractionBehavior, OtelMetricHandler refactor to pre-extracted values
+- [ ] 27-02-PLAN.md -- MetricSlot TypeCode, TenantVectorFanOutBehavior, pipeline counter, DI registration
 
 #### Phase 28: ConfigMap Watcher and Local Dev
 
@@ -117,4 +117,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-10 after Phase 26 execution*
+*Last updated: 2026-03-10 after Phase 27 planning*
