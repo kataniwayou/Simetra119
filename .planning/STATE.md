@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 Phase: 29 — fifth of 5 in v1.5 (K8s Deployment and E2E Validation) — COMPLETE
 Plan: All plans complete
 Status: Milestone v1.5 complete
-Last activity: 2026-03-11 — Completed quick task 045: Remove tenant vector validation
+Last activity: 2026-03-11 — Completed quick task 046: Add tenant vector metric to dashboard
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5
 
@@ -76,6 +76,7 @@ None.
 | 043 | Remove tenant Id from ConfigMap, auto-generate positional Ids in registry | 2026-03-11 | 21b4017 | [043-remove-tenant-id-from-configmap](./quick/043-remove-tenant-id-from-configmap/) |
 | 044 | Replace placeholder IPs with DNS names in tenant vector ConfigMaps | 2026-03-11 | 1883041 | [044-replace-placeholder-ips-with-dns](./quick/044-replace-placeholder-ips-with-dns/) |
 | 045 | Remove tenant vector validation (no-op validator) | 2026-03-11 | ac07691 | [045-remove-tenant-vector-validation](./quick/045-remove-tenant-vector-validation/) |
+| 046 | Add tenant vector routed metric to operations dashboard | 2026-03-11 | 03e8b98 | [046-add-tenantvector-metric-to-dashboard](./quick/046-add-tenantvector-metric-to-dashboard/) |
 
 ### Blockers/Concerns
 
@@ -84,5 +85,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Completed quick task 045
+Stopped at: Completed quick task 046
 Resume file: None
