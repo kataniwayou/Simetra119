@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 Phase: 29 — fifth of 5 in v1.5 (K8s Deployment and E2E Validation) — COMPLETE
 Plan: All plans complete
 Status: Milestone v1.5 complete
-Last activity: 2026-03-11 — Completed quick task 050: pipeline timing behavior
+Last activity: 2026-03-11 — Completed quick task 051: remove pipeline duration metric
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5
 
@@ -83,6 +83,7 @@ None.
 | 048 | SNMP pipeline duration histogram with P99 Grafana panel | 2026-03-11 | fb0d399 | [048-snmp-pipeline-duration-histogram](./quick/048-snmp-pipeline-duration-histogram/) |
 | 049 | Gauge/info duration histograms with P99 Grafana columns | 2026-03-11 | 9459222 | [049-gauge-info-duration-histograms](./quick/049-gauge-info-duration-histograms/) |
 | 050 | Pipeline timing behavior (TimingBehavior as outermost MediatR behavior) | 2026-03-11 | c337652 | [050-pipeline-timing-behavior](./quick/050-pipeline-timing-behavior/) |
+| 051 | Remove snmp.pipeline.duration histogram and Pipeline Duration P99 panel | 2026-03-11 | 53d5184 | [051-remove-pipeline-duration-metric](./quick/051-remove-pipeline-duration-metric/) |
 
 ### Blockers/Concerns
 
@@ -91,5 +92,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Completed quick task 050
+Stopped at: Completed quick task 051
 Resume file: None
