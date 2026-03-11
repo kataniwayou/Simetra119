@@ -46,7 +46,7 @@ See `.planning/MILESTONES.md` for details.
 - PriorityGroup is not sealed (C# records cannot be declared sealed)
 - TenantVectorRegistry.Reload() value carry-over: uses (ip, port, metricName) 3-tuple key via RoutingKey; copies MetricSlot value via ReadSlot()/WriteValue(), never copies holder object
 - TenantOptions has no Id property; TenantVectorRegistry auto-generates tenant-{index} Ids at Reload() time (Q043)
-- Heartbeat tenant hardcoded at int.MinValue priority in TenantVectorRegistry.Reload(); int.MinValue reserved, ConfigMap tenants bumped to int.MinValue+1 (Q047)
+- Heartbeat tenant hardcoded at int.MinValue priority in TenantVectorRegistry.Reload(); always present, operator responsible for not using int.MinValue (Q047)
 - TenantVectorFanOutBehavior bypasses DeviceRegistry for HeartbeatDeviceName, routes via (127.0.0.1, 0, metricName) directly (Q047)
 - Heartbeat exports as snmp_gauge{device_name="Simetra", metric_name="Heartbeat", snmp_type="counter32"} with incrementing Counter32 value (Q041)
 - ValueExtractionBehavior is 5th in pipeline chain; sets ExtractedValue + ExtractedStringValue once — consumers read pre-extracted (D27-01)

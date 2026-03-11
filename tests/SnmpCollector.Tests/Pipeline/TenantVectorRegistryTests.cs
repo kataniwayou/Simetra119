@@ -491,24 +491,6 @@ public sealed class TenantVectorRegistryTests
         Assert.Equal(SnmpType.Counter32, slot.TypeCode);
     }
 
-    [Fact]
-    public void Reload_ConfigTenantPriorityMinValue_BumpedUp()
-    {
-        var registry = CreateRegistry();
-        var options = CreateOptions(
-            (0, int.MinValue, "10.0.0.1", 161, "hrProcessorLoad"));
-
-        registry.Reload(options);
-
-        // Heartbeat owns int.MinValue; ConfigMap tenant bumped to int.MinValue + 1.
-        Assert.Equal(2, registry.Groups.Count);
-        Assert.Equal(int.MinValue, registry.Groups[0].Priority);
-        Assert.Equal("heartbeat", registry.Groups[0].Tenants[0].Id);
-
-        Assert.Equal(int.MinValue + 1, registry.Groups[1].Priority);
-        Assert.Equal("tenant-0", registry.Groups[1].Tenants[0].Id);
-    }
-
     // ──────────────────────────────────────────────────────
     // Test logger helper
     // ──────────────────────────────────────────────────────

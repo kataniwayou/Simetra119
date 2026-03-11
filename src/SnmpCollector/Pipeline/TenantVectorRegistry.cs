@@ -99,13 +99,6 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
             var tenantOpts = options.Tenants[i];
             var tenantId = $"tenant-{i}";
 
-            var priority = tenantOpts.Priority;
-            if (priority == int.MinValue)
-            {
-                _logger.LogWarning("Tenant {TenantIndex} uses reserved priority int.MinValue; bumping to {BumpedPriority}", i, int.MinValue + 1);
-                priority = int.MinValue + 1;
-            }
-
             var holders = new List<MetricSlotHolder>(tenantOpts.Metrics.Count);
 
             foreach (var metric in tenantOpts.Metrics)
@@ -134,12 +127,12 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                 totalSlots++;
             }
 
-            var tenant = new Tenant(tenantId, priority, holders);
+            var tenant = new Tenant(tenantId, tenantOpts.Priority, holders);
 
-            if (!priorityBuckets.TryGetValue(priority, out var bucket))
+            if (!priorityBuckets.TryGetValue(tenantOpts.Priority, out var bucket))
             {
                 bucket = new List<Tenant>();
-                priorityBuckets[priority] = bucket;
+                priorityBuckets[tenantOpts.Priority] = bucket;
             }
 
             bucket.Add(tenant);
