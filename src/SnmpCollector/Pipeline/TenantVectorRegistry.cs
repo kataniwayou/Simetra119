@@ -77,10 +77,35 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
         // SortedDictionary with ascending key order (lowest priority int = highest priority = first group).
         var priorityBuckets = new SortedDictionary<int, List<Tenant>>();
 
+        // Heartbeat tenant: hardcoded at int.MinValue priority (reserved, always present).
+        var heartbeatHolder = new MetricSlotHolder("127.0.0.1", 0, "Heartbeat", HeartbeatJobOptions.DefaultIntervalSeconds);
+        var heartbeatKey = new RoutingKey("127.0.0.1", 0, "Heartbeat");
+        if (oldSlotLookup.TryGetValue(heartbeatKey, out var oldHeartbeatHolder))
+        {
+            var existingSlot = oldHeartbeatHolder.ReadSlot();
+            if (existingSlot is not null)
+            {
+                heartbeatHolder.WriteValue(existingSlot.Value, existingSlot.StringValue, existingSlot.TypeCode);
+                carriedOver++;
+            }
+        }
+
+        var heartbeatTenant = new Tenant("heartbeat", int.MinValue, new[] { heartbeatHolder });
+        priorityBuckets[int.MinValue] = new List<Tenant> { heartbeatTenant };
+        totalSlots++;
+
         for (var i = 0; i < options.Tenants.Count; i++)
         {
             var tenantOpts = options.Tenants[i];
             var tenantId = $"tenant-{i}";
+
+            var priority = tenantOpts.Priority;
+            if (priority == int.MinValue)
+            {
+                _logger.LogWarning("Tenant {TenantIndex} uses reserved priority int.MinValue; bumping to {BumpedPriority}", i, int.MinValue + 1);
+                priority = int.MinValue + 1;
+            }
+
             var holders = new List<MetricSlotHolder>(tenantOpts.Metrics.Count);
 
             foreach (var metric in tenantOpts.Metrics)
@@ -109,12 +134,12 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                 totalSlots++;
             }
 
-            var tenant = new Tenant(tenantId, tenantOpts.Priority, holders);
+            var tenant = new Tenant(tenantId, priority, holders);
 
-            if (!priorityBuckets.TryGetValue(tenantOpts.Priority, out var bucket))
+            if (!priorityBuckets.TryGetValue(priority, out var bucket))
             {
                 bucket = new List<Tenant>();
-                priorityBuckets[tenantOpts.Priority] = bucket;
+                priorityBuckets[priority] = bucket;
             }
 
             bucket.Add(tenant);
@@ -152,7 +177,7 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                 RoutingKeyComparer.Instance);
 
         // Step 6: Update counts before volatile swap.
-        TenantCount = options.Tenants.Count;
+        TenantCount = options.Tenants.Count + 1;
         SlotCount = totalSlots;
 
         // Step 7: Volatile swap — readers see either old or new, never a partial mix.
