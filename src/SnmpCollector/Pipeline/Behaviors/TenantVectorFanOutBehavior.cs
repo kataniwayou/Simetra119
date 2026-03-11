@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
+using SnmpCollector.Configuration;
 using SnmpCollector.Telemetry;
 
 namespace SnmpCollector.Pipeline.Behaviors;
@@ -43,8 +44,21 @@ public sealed class TenantVectorFanOutBehavior<TNotification, TResponse>
             {
                 try
                 {
+                    // Heartbeat bypass: "Simetra" device is not in DeviceRegistry.
+                    // Route directly using known heartbeat coordinates.
+                    if (string.Equals(msg.DeviceName, HeartbeatJobOptions.HeartbeatDeviceName, StringComparison.Ordinal))
+                    {
+                        if (_registry.TryRoute("127.0.0.1", 0, metricName, out var heartbeatHolders))
+                        {
+                            foreach (var holder in heartbeatHolders)
+                            {
+                                holder.WriteValue(msg.ExtractedValue, msg.ExtractedStringValue, msg.TypeCode);
+                                _pipelineMetrics.IncrementTenantVectorRouted(msg.DeviceName!);
+                            }
+                        }
+                    }
                     // Resolve port from DeviceRegistry (PIP-02)
-                    if (_deviceRegistry.TryGetDeviceByName(msg.DeviceName!, out var device))
+                    else if (_deviceRegistry.TryGetDeviceByName(msg.DeviceName!, out var device))
                     {
                         var ip = msg.AgentIp.ToString();
                         if (_registry.TryRoute(ip, device.Port, metricName, out var holders))
