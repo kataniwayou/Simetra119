@@ -45,6 +45,9 @@ public sealed class PipelineMetricService : IDisposable
     // Phase 27: counts successful fan-out writes to tenant vector metric slots
     private readonly Counter<long> _tenantVectorRouted;
 
+    // Q048: measures SNMP poll network round-trip duration
+    private readonly Histogram<double> _pipelineDuration;
+
     public PipelineMetricService(IMeterFactory meterFactory)
     {
         _meter = meterFactory.Create(TelemetryConstants.MeterName);
@@ -62,6 +65,8 @@ public sealed class PipelineMetricService : IDisposable
         _pollRecovered   = _meter.CreateCounter<long>("snmp.poll.recovered");
 
         _tenantVectorRouted = _meter.CreateCounter<long>("snmp.tenantvector.routed");
+
+        _pipelineDuration = _meter.CreateHistogram<double>("snmp.pipeline.duration", unit: "ms", description: "SNMP poll network round-trip duration");
     }
 
     /// <summary>PMET-01: Increment the count of published pipeline notifications by 1.</summary>
@@ -121,6 +126,10 @@ public sealed class PipelineMetricService : IDisposable
     /// <summary>OBS-02: Increment the count of tenant vector fan-out writes by 1.</summary>
     public void IncrementTenantVectorRouted(string deviceName)
         => _tenantVectorRouted.Add(1, new TagList { { "device_name", deviceName } });
+
+    /// <summary>Q048: Record SNMP poll network round-trip duration in milliseconds.</summary>
+    public void RecordPipelineDuration(string deviceName, double milliseconds)
+        => _pipelineDuration.Record(milliseconds, new TagList { { "device_name", deviceName } });
 
     public void Dispose() => _meter.Dispose();
 }
