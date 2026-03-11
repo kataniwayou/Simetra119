@@ -6,4 +6,4 @@ namespace SnmpCollector.Pipeline;
 /// Immutable value cell for a single metric observation.
 /// Swapped atomically via Volatile.Write in MetricSlotHolder.
 /// </summary>
-public sealed record MetricSlot(double Value, string? StringValue, SnmpType TypeCode, DateTimeOffset UpdatedAt);
+public sealed record MetricSlot(double Value, string? StringValue, SnmpType TypeCode, DateTimeOffset UpdatedAt, SnmpSource Source);

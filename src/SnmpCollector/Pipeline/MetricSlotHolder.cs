@@ -28,9 +28,9 @@ public sealed class MetricSlotHolder
     /// Creates a new MetricSlot from the provided values (timestamped UtcNow)
     /// and publishes it atomically via Volatile.Write.
     /// </summary>
-    public void WriteValue(double value, string? stringValue, SnmpType typeCode)
+    public void WriteValue(double value, string? stringValue, SnmpType typeCode, SnmpSource source)
     {
-        var newSlot = new MetricSlot(value, stringValue, typeCode, DateTimeOffset.UtcNow);
+        var newSlot = new MetricSlot(value, stringValue, typeCode, DateTimeOffset.UtcNow, source);
         Volatile.Write(ref _slot, newSlot);
     }
 
