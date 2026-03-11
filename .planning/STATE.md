@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 Phase: 29 — fifth of 5 in v1.5 (K8s Deployment and E2E Validation) — COMPLETE
 Plan: All plans complete
 Status: Milestone v1.5 complete
-Last activity: 2026-03-11 — Completed quick task 046: Add tenant vector metric to dashboard
+Last activity: 2026-03-11 — Completed quick task 047: Hardcode heartbeat as highest priority tenant
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5
 
@@ -46,6 +46,8 @@ See `.planning/MILESTONES.md` for details.
 - PriorityGroup is not sealed (C# records cannot be declared sealed)
 - TenantVectorRegistry.Reload() value carry-over: uses (ip, port, metricName) 3-tuple key via RoutingKey; copies MetricSlot value via ReadSlot()/WriteValue(), never copies holder object
 - TenantOptions has no Id property; TenantVectorRegistry auto-generates tenant-{index} Ids at Reload() time (Q043)
+- Heartbeat tenant hardcoded at int.MinValue priority in TenantVectorRegistry.Reload(); int.MinValue reserved, ConfigMap tenants bumped to int.MinValue+1 (Q047)
+- TenantVectorFanOutBehavior bypasses DeviceRegistry for HeartbeatDeviceName, routes via (127.0.0.1, 0, metricName) directly (Q047)
 - Heartbeat exports as snmp_gauge{device_name="Simetra", metric_name="Heartbeat", snmp_type="counter32"} with incrementing Counter32 value (Q041)
 - ValueExtractionBehavior is 5th in pipeline chain; sets ExtractedValue + ExtractedStringValue once — consumers read pre-extracted (D27-01)
 - OidMapService.MergeWithHeartbeatSeed called in both constructor and UpdateMap — heartbeat seed survives every ConfigMap reload (D27-01)
@@ -77,6 +79,7 @@ None.
 | 044 | Replace placeholder IPs with DNS names in tenant vector ConfigMaps | 2026-03-11 | 1883041 | [044-replace-placeholder-ips-with-dns](./quick/044-replace-placeholder-ips-with-dns/) |
 | 045 | Remove tenant vector validation (no-op validator) | 2026-03-11 | ac07691 | [045-remove-tenant-vector-validation](./quick/045-remove-tenant-vector-validation/) |
 | 046 | Add tenant vector routed metric to operations dashboard | 2026-03-11 | 03e8b98 | [046-add-tenantvector-metric-to-dashboard](./quick/046-add-tenantvector-metric-to-dashboard/) |
+| 047 | Hardcode heartbeat as highest priority tenant (int.MinValue) | 2026-03-11 | 76b51d0 | [047-hardcode-heartbeat-highest-priority-tenant](./quick/047-hardcode-heartbeat-highest-priority-tenant/) |
 
 ### Blockers/Concerns
 
@@ -85,5 +88,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Completed quick task 046
+Stopped at: Completed quick task 047
 Resume file: None
