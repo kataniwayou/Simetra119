@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Quartz;
 using SnmpCollector.Pipeline;
 using SnmpCollector.Telemetry;
+using System.Diagnostics;
 using System.Net;
 
 namespace SnmpCollector.Jobs;
@@ -93,12 +94,16 @@ public sealed class MetricPollJob : IJob
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(intervalSeconds * pollGroup.TimeoutMultiplier));
 
+            var sw = Stopwatch.StartNew();
             var response = await _snmpClient.GetAsync(
                 VersionCode.V2,
                 endpoint,
                 community,
                 variables,
                 timeoutCts.Token);
+            sw.Stop();
+
+            _pipelineMetrics.RecordPipelineDuration(device.Name, sw.Elapsed.TotalMilliseconds);
 
             await DispatchResponseAsync(response, device, context.CancellationToken);
 
