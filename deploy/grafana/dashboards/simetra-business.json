@@ -423,6 +423,30 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Value #C"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "P99 (ms)"
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "__tmp"
             },
             "properties": [
@@ -486,6 +510,16 @@
           "format": "table",
           "instant": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le, metric_name, oid, device_name, ip, source, snmp_type) (rate(snmp_gauge_duration_milliseconds_bucket{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\", ip=~\"$ip\"}[$__rate_interval])))",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
         }
       ],
       "title": "Gauge Metrics",
@@ -508,7 +542,8 @@
               "snmp_type": 7,
               "Value #A": 8,
               "Value #B": 9,
-              "promql": 10
+              "Value #C": 10,
+              "promql": 11
             }
           }
         }
@@ -642,6 +677,30 @@
               {
                 "id": "custom.width",
                 "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #B"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "P99 (ms)"
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 90
               }
             ]
           },
@@ -845,28 +904,23 @@
           "format": "table",
           "instant": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le, metric_name, oid, device_name, ip, source, snmp_type, value) (rate(snmp_info_duration_milliseconds_bucket{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\", ip=~\"$ip\"}[$__rate_interval])))",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
         }
       ],
       "title": "Info Metrics",
       "transformations": [
         {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "names": [
-                "service_instance_id",
-                "k8s_pod_name",
-                "ip",
-                "device_name",
-                "source",
-                "metric_name",
-                "oid",
-                "snmp_type",
-                "value",
-                "promql"
-              ]
-            }
-          }
+          "id": "merge",
+          "options": {}
         },
         {
           "id": "organize",
@@ -881,7 +935,8 @@
               "oid": 6,
               "snmp_type": 7,
               "value": 8,
-              "promql": 9
+              "Value #B": 9,
+              "promql": 10
             }
           }
         }
