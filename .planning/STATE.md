@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 Phase: 29 — fifth of 5 in v1.5 (K8s Deployment and E2E Validation) — COMPLETE
 Plan: All plans complete
 Status: Milestone v1.5 complete
-Last activity: 2026-03-11 — Completed quick task 051: remove pipeline duration metric
+Last activity: 2026-03-11 — Completed quick task 052: add SnmpSource to MetricSlot
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5
 
@@ -39,6 +39,7 @@ See `.planning/MILESTONES.md` for details.
 - Fan-out catches own exceptions, always calls next() — never kills OTel export
 - FrozenDictionary atomic swap for registry + routing index
 - MetricSlotHolder uses Volatile.Read/Write (NOT volatile keyword — CS0420 conflict); plain field is correct
+- MetricSlot carries SnmpSource (Poll/Trap) as 5th positional parameter; WriteValue propagates source through all call sites (Q052)
 - TenantVectorRegistry._groups and ._routingIndex use volatile keyword (reference reads, not ref-passed — no CS0420)
 - Zero new NuGet packages needed
 - FrozenSet<string> for O(1) metric name containment in OidMapService (D25-01)
@@ -84,6 +85,7 @@ None.
 | 049 | Gauge/info duration histograms with P99 Grafana columns | 2026-03-11 | 9459222 | [049-gauge-info-duration-histograms](./quick/049-gauge-info-duration-histograms/) |
 | 050 | Pipeline timing behavior (TimingBehavior as outermost MediatR behavior) | 2026-03-11 | c337652 | [050-pipeline-timing-behavior](./quick/050-pipeline-timing-behavior/) |
 | 051 | Remove snmp.pipeline.duration histogram and Pipeline Duration P99 panel | 2026-03-11 | 53d5184 | [051-remove-pipeline-duration-metric](./quick/051-remove-pipeline-duration-metric/) |
+| 052 | Add SnmpSource to MetricSlot and MetricSlotHolder.WriteValue | 2026-03-11 | e371cfe | [052-add-source-to-metricslot](./quick/052-add-source-to-metricslot/) |
 
 ### Blockers/Concerns
 
@@ -92,5 +94,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Completed quick task 051
+Stopped at: Completed quick task 052
 Resume file: None
