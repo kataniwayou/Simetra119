@@ -85,7 +85,7 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
             var existingSlot = oldHeartbeatHolder.ReadSlot();
             if (existingSlot is not null)
             {
-                heartbeatHolder.WriteValue(existingSlot.Value, existingSlot.StringValue, existingSlot.TypeCode);
+                heartbeatHolder.WriteValue(existingSlot.Value, existingSlot.StringValue, existingSlot.TypeCode, existingSlot.Source);
                 carriedOver++;
             }
         }
@@ -118,7 +118,7 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                     var existingSlot = oldHolder.ReadSlot();
                     if (existingSlot is not null)
                     {
-                        newHolder.WriteValue(existingSlot.Value, existingSlot.StringValue, existingSlot.TypeCode);
+                        newHolder.WriteValue(existingSlot.Value, existingSlot.StringValue, existingSlot.TypeCode, existingSlot.Source);
                         carriedOver++;
                     }
                 }

@@ -2,6 +2,7 @@ using Lextm.SharpSnmpLib;
 using SnmpCollector.Pipeline;
 using Xunit;
 
+
 namespace SnmpCollector.Tests.Pipeline;
 
 public sealed class MetricSlotHolderTests
@@ -26,7 +27,7 @@ public sealed class MetricSlotHolderTests
         var holder = CreateHolder();
         var before = DateTimeOffset.UtcNow;
 
-        holder.WriteValue(42.5, null, SnmpType.Integer32);
+        holder.WriteValue(42.5, null, SnmpType.Integer32, SnmpSource.Poll);
 
         var slot = holder.ReadSlot();
         Assert.NotNull(slot);
@@ -41,7 +42,7 @@ public sealed class MetricSlotHolderTests
     {
         var holder = CreateHolder();
 
-        holder.WriteValue(0, "linkUp", SnmpType.Integer32);
+        holder.WriteValue(0, "linkUp", SnmpType.Integer32, SnmpSource.Poll);
 
         var slot = holder.ReadSlot();
         Assert.NotNull(slot);
@@ -54,8 +55,8 @@ public sealed class MetricSlotHolderTests
     {
         var holder = CreateHolder();
 
-        holder.WriteValue(1.0, "first", SnmpType.Integer32);
-        holder.WriteValue(2.0, "second", SnmpType.Integer32);
+        holder.WriteValue(1.0, "first", SnmpType.Integer32, SnmpSource.Poll);
+        holder.WriteValue(2.0, "second", SnmpType.Integer32, SnmpSource.Poll);
 
         var slot = holder.ReadSlot();
         Assert.NotNull(slot);
@@ -67,7 +68,7 @@ public sealed class MetricSlotHolderTests
     public void ReadSlot_ReturnsConsistentSnapshot()
     {
         var holder = CreateHolder();
-        holder.WriteValue(99.9, "status", SnmpType.Integer32);
+        holder.WriteValue(99.9, "status", SnmpType.Integer32, SnmpSource.Poll);
 
         // Read the slot reference once — all fields come from the same immutable record
         var slot = holder.ReadSlot();
@@ -99,7 +100,7 @@ public sealed class MetricSlotHolderTests
     {
         var holder = CreateHolder();
 
-        holder.WriteValue(12345.0, null, SnmpType.Gauge32);
+        holder.WriteValue(12345.0, null, SnmpType.Gauge32, SnmpSource.Poll);
 
         var slot = holder.ReadSlot();
         Assert.NotNull(slot);

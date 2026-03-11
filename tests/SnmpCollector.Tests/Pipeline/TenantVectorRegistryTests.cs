@@ -237,7 +237,7 @@ public sealed class TenantVectorRegistryTests
 
         // Write a value into the initial holder.
         registry.TryRoute("10.0.0.1", 161, "hrProcessorLoad", out var holders);
-        holders[0].WriteValue(42.0, "42", SnmpType.Integer32);
+        holders[0].WriteValue(42.0, "42", SnmpType.Integer32, SnmpSource.Poll);
 
         // Reload with the same config — value should carry over.
         registry.Reload(options);
@@ -261,7 +261,7 @@ public sealed class TenantVectorRegistryTests
 
         // Write with a specific TypeCode.
         registry.TryRoute("10.0.0.1", 161, "hrProcessorLoad", out var holders);
-        holders[0].WriteValue(77.0, null, SnmpType.Gauge32);
+        holders[0].WriteValue(77.0, null, SnmpType.Gauge32, SnmpSource.Poll);
 
         // Reload with the same config — TypeCode should carry over.
         registry.Reload(options);
@@ -307,7 +307,7 @@ public sealed class TenantVectorRegistryTests
 
         // Write a value to ifInOctets.
         registry.TryRoute("10.0.0.1", 161, "ifInOctets", out var holders);
-        holders[0].WriteValue(99.0, null, SnmpType.Integer32);
+        holders[0].WriteValue(99.0, null, SnmpType.Integer32, SnmpSource.Poll);
 
         // Reload without ifInOctets — it should be gone.
         var options2 = CreateOptions(
@@ -477,7 +477,7 @@ public sealed class TenantVectorRegistryTests
 
         // Write a value to the heartbeat holder.
         registry.TryRoute("127.0.0.1", 0, "Heartbeat", out var holders);
-        holders![0].WriteValue(123.0, "123", SnmpType.Counter32);
+        holders![0].WriteValue(123.0, "123", SnmpType.Counter32, SnmpSource.Poll);
 
         // Reload — value should carry over.
         registry.Reload(options);

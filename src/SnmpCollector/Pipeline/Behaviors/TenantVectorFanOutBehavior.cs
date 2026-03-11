@@ -52,7 +52,7 @@ public sealed class TenantVectorFanOutBehavior<TNotification, TResponse>
                         {
                             foreach (var holder in heartbeatHolders)
                             {
-                                holder.WriteValue(msg.ExtractedValue, msg.ExtractedStringValue, msg.TypeCode);
+                                holder.WriteValue(msg.ExtractedValue, msg.ExtractedStringValue, msg.TypeCode, msg.Source);
                                 _pipelineMetrics.IncrementTenantVectorRouted(msg.DeviceName!);
                             }
                         }
@@ -65,7 +65,7 @@ public sealed class TenantVectorFanOutBehavior<TNotification, TResponse>
                         {
                             foreach (var holder in holders)
                             {
-                                holder.WriteValue(msg.ExtractedValue, msg.ExtractedStringValue, msg.TypeCode);
+                                holder.WriteValue(msg.ExtractedValue, msg.ExtractedStringValue, msg.TypeCode, msg.Source);
                                 _pipelineMetrics.IncrementTenantVectorRouted(msg.DeviceName!);
                             }
                         }
