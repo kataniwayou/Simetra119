@@ -269,6 +269,12 @@ public sealed class PipelineIntegrationTests : IDisposable
 
         public void RecordInfo(string metricName, string oid, string deviceName, string ip, string source, string snmpType, string value)
             => throw new InvalidOperationException("Simulated downstream factory error");
+
+        public void RecordGaugeDuration(string metricName, string oid, string deviceName, string ip, string source, string snmpType, double durationMs)
+            => throw new InvalidOperationException("Simulated downstream factory error");
+
+        public void RecordInfoDuration(string metricName, string oid, string deviceName, string ip, string source, string snmpType, string value, double durationMs)
+            => throw new InvalidOperationException("Simulated downstream factory error");
     }
 
     private sealed class CapturingLoggerProvider : ILoggerProvider

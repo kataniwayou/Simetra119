@@ -89,6 +89,41 @@ public sealed class SnmpMetricFactoryTests : IDisposable
     }
 
     [Fact]
+    public void RecordGaugeDuration_IncludesAllSixLabels()
+    {
+        _factory.RecordGaugeDuration("hrProcessorLoad", "1.3.6.1.2.1.25.3.3.1.2", "core-router", "10.0.0.1", "poll", "integer32", 15.5);
+
+        Assert.Single(_recordedTags);
+        var tags = _recordedTags[0].ToDictionary(t => t.Key, t => t.Value);
+
+        Assert.Equal("hrProcessorLoad", tags["metric_name"]);
+        Assert.Equal("1.3.6.1.2.1.25.3.3.1.2", tags["oid"]);
+        Assert.Equal("core-router", tags["device_name"]);
+        Assert.Equal("10.0.0.1", tags["ip"]);
+        Assert.Equal("poll", tags["source"]);
+        Assert.Equal("integer32", tags["snmp_type"]);
+        Assert.Equal(6, tags.Count);
+    }
+
+    [Fact]
+    public void RecordInfoDuration_IncludesAllSevenLabels()
+    {
+        _factory.RecordInfoDuration("sysDescr", "1.3.6.1.2.1.1.1.0", "test-device", "10.0.0.2", "trap", "octetstring", "Linux router", 22.3);
+
+        Assert.Single(_recordedTags);
+        var tags = _recordedTags[0].ToDictionary(t => t.Key, t => t.Value);
+
+        Assert.Equal("sysDescr", tags["metric_name"]);
+        Assert.Equal("1.3.6.1.2.1.1.1.0", tags["oid"]);
+        Assert.Equal("test-device", tags["device_name"]);
+        Assert.Equal("10.0.0.2", tags["ip"]);
+        Assert.Equal("trap", tags["source"]);
+        Assert.Equal("octetstring", tags["snmp_type"]);
+        Assert.Equal("Linux router", tags["value"]);
+        Assert.Equal(7, tags.Count);
+    }
+
+    [Fact]
     public void RecordInfo_TruncatesLongValueAt128Chars()
     {
         var longValue = new string('x', 200);

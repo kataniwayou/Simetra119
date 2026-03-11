@@ -11,10 +11,18 @@ public sealed class TestSnmpMetricFactory : ISnmpMetricFactory
 {
     public List<(string MetricName, string Oid, string DeviceName, string Ip, string Source, string SnmpType, double Value)> GaugeRecords { get; } = new();
     public List<(string MetricName, string Oid, string DeviceName, string Ip, string Source, string SnmpType, string Value)> InfoRecords { get; } = new();
+    public List<(string MetricName, string Oid, string DeviceName, string Ip, string Source, string SnmpType, double DurationMs)> GaugeDurationRecords { get; } = new();
+    public List<(string MetricName, string Oid, string DeviceName, string Ip, string Source, string SnmpType, string Value, double DurationMs)> InfoDurationRecords { get; } = new();
 
     public void RecordGauge(string metricName, string oid, string deviceName, string ip, string source, string snmpType, double value)
         => GaugeRecords.Add((metricName, oid, deviceName, ip, source, snmpType, value));
 
     public void RecordInfo(string metricName, string oid, string deviceName, string ip, string source, string snmpType, string value)
         => InfoRecords.Add((metricName, oid, deviceName, ip, source, snmpType, value));
+
+    public void RecordGaugeDuration(string metricName, string oid, string deviceName, string ip, string source, string snmpType, double durationMs)
+        => GaugeDurationRecords.Add((metricName, oid, deviceName, ip, source, snmpType, durationMs));
+
+    public void RecordInfoDuration(string metricName, string oid, string deviceName, string ip, string source, string snmpType, string value, double durationMs)
+        => InfoDurationRecords.Add((metricName, oid, deviceName, ip, source, snmpType, value, durationMs));
 }

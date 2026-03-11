@@ -44,18 +44,21 @@ public sealed class OtelMetricHandlerTests : IDisposable
         string deviceName = "test-device",
         string? metricName = "hrProcessorLoad",
         double extractedValue = 0.0,
-        string? extractedStringValue = null) =>
+        string? extractedStringValue = null,
+        double? pollDurationMs = null,
+        SnmpSource source = SnmpSource.Poll) =>
         new()
         {
             Oid = oid,
             AgentIp = IPAddress.Parse(agentIp),
             Value = value,
-            Source = SnmpSource.Poll,
+            Source = source,
             TypeCode = typeCode,
             DeviceName = deviceName,
             MetricName = metricName,
             ExtractedValue = extractedValue,
-            ExtractedStringValue = extractedStringValue
+            ExtractedStringValue = extractedStringValue,
+            PollDurationMs = pollDurationMs
         };
 
     // --- Gauge dispatch tests ---
@@ -257,6 +260,57 @@ public sealed class OtelMetricHandlerTests : IDisposable
         Assert.Null(exception);
     }
 
+    // --- Duration recording tests ---
+
+    [Fact]
+    public async Task Integer32_WithPollDuration_RecordsGaugeDuration()
+    {
+        var notification = MakeNotification(new Integer32(42), SnmpType.Integer32,
+            extractedValue: 42.0, pollDurationMs: 15.5);
+        await _handler.Handle(notification, CancellationToken.None);
+
+        Assert.Single(_testFactory.GaugeDurationRecords);
+        var record = _testFactory.GaugeDurationRecords[0];
+        Assert.Equal(15.5, record.DurationMs);
+        Assert.Equal("hrProcessorLoad", record.MetricName);
+        Assert.Equal("test-device", record.DeviceName);
+        Assert.Equal("integer32", record.SnmpType);
+    }
+
+    [Fact]
+    public async Task OctetString_WithPollDuration_RecordsInfoDuration()
+    {
+        var notification = MakeNotification(new OctetString("router-01"), SnmpType.OctetString,
+            extractedStringValue: "router-01", pollDurationMs: 22.3);
+        await _handler.Handle(notification, CancellationToken.None);
+
+        Assert.Single(_testFactory.InfoDurationRecords);
+        var record = _testFactory.InfoDurationRecords[0];
+        Assert.Equal(22.3, record.DurationMs);
+        Assert.Equal("router-01", record.Value);
+    }
+
+    [Fact]
+    public async Task Integer32_WithoutPollDuration_SkipsDurationRecording()
+    {
+        var notification = MakeNotification(new Integer32(42), SnmpType.Integer32, extractedValue: 42.0);
+        await _handler.Handle(notification, CancellationToken.None);
+
+        Assert.Single(_testFactory.GaugeRecords);
+        Assert.Empty(_testFactory.GaugeDurationRecords);
+    }
+
+    [Fact]
+    public async Task TrapSource_NoPollDuration_SkipsDurationRecording()
+    {
+        var notification = MakeNotification(new Integer32(10), SnmpType.Integer32,
+            extractedValue: 10.0, source: SnmpSource.Trap);
+        await _handler.Handle(notification, CancellationToken.None);
+
+        Assert.Single(_testFactory.GaugeRecords);
+        Assert.Empty(_testFactory.GaugeDurationRecords);
+    }
+
     // --- CapturingSnmpMetricFactory helper ---
 
     private sealed class CapturingSnmpMetricFactory : ISnmpMetricFactory, IDisposable
@@ -277,6 +331,12 @@ public sealed class OtelMetricHandlerTests : IDisposable
                 : value;
             CapturedInfoValues.Add(truncated);
         }
+
+        public void RecordGaugeDuration(string metricName, string oid, string deviceName, string ip, string source, string snmpType, double durationMs)
+            => _inner.RecordGaugeDuration(metricName, oid, deviceName, ip, source, snmpType, durationMs);
+
+        public void RecordInfoDuration(string metricName, string oid, string deviceName, string ip, string source, string snmpType, string value, double durationMs)
+            => _inner.RecordInfoDuration(metricName, oid, deviceName, ip, source, snmpType, value, durationMs);
 
         public void Dispose() => _inner.Dispose();
     }
