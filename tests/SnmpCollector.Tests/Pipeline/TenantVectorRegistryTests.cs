@@ -98,8 +98,10 @@ public sealed class TenantVectorRegistryTests
 
         registry.Reload(options);
 
-        Assert.Single(registry.Groups);
-        var group = registry.Groups[0];
+        Assert.Equal(2, registry.Groups.Count); // heartbeat + 1 ConfigMap group
+        Assert.Equal(int.MinValue, registry.Groups[0].Priority); // heartbeat always first
+
+        var group = registry.Groups[1];
         Assert.Equal(1, group.Priority);
         Assert.Single(group.Tenants);
 
@@ -145,8 +147,8 @@ public sealed class TenantVectorRegistryTests
 
         registry.Reload(options);
 
-        Assert.Equal(1, registry.TenantCount);
-        Assert.Equal(2, registry.SlotCount);
+        Assert.Equal(2, registry.TenantCount);  // 1 ConfigMap + 1 heartbeat
+        Assert.Equal(3, registry.SlotCount);   // 2 ConfigMap + 1 heartbeat
     }
 
     [Fact]
@@ -178,10 +180,11 @@ public sealed class TenantVectorRegistryTests
 
         registry.Reload(options);
 
-        Assert.Equal(3, registry.Groups.Count);
-        Assert.Equal(1,  registry.Groups[0].Priority);
-        Assert.Equal(5,  registry.Groups[1].Priority);
-        Assert.Equal(10, registry.Groups[2].Priority);
+        Assert.Equal(4, registry.Groups.Count); // heartbeat + 3 ConfigMap groups
+        Assert.Equal(int.MinValue, registry.Groups[0].Priority);
+        Assert.Equal(1,  registry.Groups[1].Priority);
+        Assert.Equal(5,  registry.Groups[2].Priority);
+        Assert.Equal(10, registry.Groups[3].Priority);
     }
 
     [Fact]
@@ -194,9 +197,10 @@ public sealed class TenantVectorRegistryTests
 
         registry.Reload(options);
 
-        Assert.Single(registry.Groups);
-        Assert.Equal(5, registry.Groups[0].Priority);
-        Assert.Equal(2, registry.Groups[0].Tenants.Count);
+        Assert.Equal(2, registry.Groups.Count); // heartbeat + 1 ConfigMap group
+        Assert.Equal(int.MinValue, registry.Groups[0].Priority);
+        Assert.Equal(5, registry.Groups[1].Priority);
+        Assert.Equal(2, registry.Groups[1].Tenants.Count);
     }
 
     // ──────────────────────────────────────────────────────
@@ -406,6 +410,103 @@ public sealed class TenantVectorRegistryTests
         Assert.All(logger.LogMessages, msg => Assert.Contains("tenants=", msg, StringComparison.OrdinalIgnoreCase));
         Assert.All(logger.LogMessages, msg => Assert.Contains("slots=", msg, StringComparison.OrdinalIgnoreCase));
         Assert.All(logger.LogMessages, msg => Assert.Contains("carried_over=", msg, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // ──────────────────────────────────────────────────────
+    // 9. Heartbeat tenant (5 tests)
+    // ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Reload_EmptyConfig_HeartbeatTenantExists()
+    {
+        var registry = CreateRegistry();
+        var options = new TenantVectorOptions { Tenants = new List<TenantOptions>() };
+
+        registry.Reload(options);
+
+        Assert.Single(registry.Groups);
+        var group = registry.Groups[0];
+        Assert.Equal(int.MinValue, group.Priority);
+        Assert.Single(group.Tenants);
+
+        var tenant = group.Tenants[0];
+        Assert.Equal("heartbeat", tenant.Id);
+        Assert.Single(tenant.Holders);
+
+        var holder = tenant.Holders[0];
+        Assert.Equal("127.0.0.1", holder.Ip);
+        Assert.Equal(0, holder.Port);
+        Assert.Equal("Heartbeat", holder.MetricName);
+    }
+
+    [Fact]
+    public void Reload_WithConfigTenants_HeartbeatIsFirstGroup()
+    {
+        var registry = CreateRegistry();
+        var options = CreateOptions(
+            (0, 1, "10.0.0.1", 161, "hrProcessorLoad"));
+
+        registry.Reload(options);
+
+        Assert.Equal(2, registry.Groups.Count);
+        Assert.Equal(int.MinValue, registry.Groups[0].Priority);
+        Assert.Equal(1, registry.Groups[1].Priority);
+        Assert.Equal(2, registry.TenantCount); // 1 ConfigMap + 1 heartbeat
+    }
+
+    [Fact]
+    public void Reload_HeartbeatRouting_TryRouteFindsHeartbeat()
+    {
+        var registry = CreateRegistry();
+        var options = new TenantVectorOptions { Tenants = new List<TenantOptions>() };
+
+        registry.Reload(options);
+
+        Assert.True(registry.TryRoute("127.0.0.1", 0, "Heartbeat", out var holders));
+        Assert.NotNull(holders);
+        Assert.Single(holders);
+    }
+
+    [Fact]
+    public void Reload_HeartbeatValueCarriedOver()
+    {
+        var registry = CreateRegistry();
+        var options = new TenantVectorOptions { Tenants = new List<TenantOptions>() };
+
+        registry.Reload(options);
+
+        // Write a value to the heartbeat holder.
+        registry.TryRoute("127.0.0.1", 0, "Heartbeat", out var holders);
+        holders![0].WriteValue(123.0, "123", SnmpType.Counter32);
+
+        // Reload — value should carry over.
+        registry.Reload(options);
+
+        registry.TryRoute("127.0.0.1", 0, "Heartbeat", out var newHolders);
+        Assert.NotNull(newHolders);
+        var slot = newHolders[0].ReadSlot();
+        Assert.NotNull(slot);
+        Assert.Equal(123.0, slot.Value);
+        Assert.Equal("123", slot.StringValue);
+        Assert.Equal(SnmpType.Counter32, slot.TypeCode);
+    }
+
+    [Fact]
+    public void Reload_ConfigTenantPriorityMinValue_BumpedUp()
+    {
+        var registry = CreateRegistry();
+        var options = CreateOptions(
+            (0, int.MinValue, "10.0.0.1", 161, "hrProcessorLoad"));
+
+        registry.Reload(options);
+
+        // Heartbeat owns int.MinValue; ConfigMap tenant bumped to int.MinValue + 1.
+        Assert.Equal(2, registry.Groups.Count);
+        Assert.Equal(int.MinValue, registry.Groups[0].Priority);
+        Assert.Equal("heartbeat", registry.Groups[0].Tenants[0].Id);
+
+        Assert.Equal(int.MinValue + 1, registry.Groups[1].Priority);
+        Assert.Equal("tenant-0", registry.Groups[1].Tenants[0].Id);
     }
 
     // ──────────────────────────────────────────────────────
