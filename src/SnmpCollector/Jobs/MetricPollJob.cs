@@ -103,8 +103,6 @@ public sealed class MetricPollJob : IJob
                 timeoutCts.Token);
             sw.Stop();
 
-            _pipelineMetrics.RecordPipelineDuration(device.Name, sw.Elapsed.TotalMilliseconds);
-
             await DispatchResponseAsync(response, device, sw.Elapsed.TotalMilliseconds, context.CancellationToken);
 
             // Success: reset failure counter; log + counter only on recovered transition.
