@@ -55,6 +55,9 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     source,
                     notification.TypeCode.ToString().ToLowerInvariant(),
                     notification.ExtractedValue);
+                if (notification.PollDurationMs.HasValue)
+                    _metricFactory.RecordGaugeDuration(metricName, notification.Oid, deviceName, ip, source,
+                        notification.TypeCode.ToString().ToLowerInvariant(), notification.PollDurationMs.Value);
                 _pipelineMetrics.IncrementHandled(deviceName);
                 break;
 
@@ -70,6 +73,11 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     source,
                     notification.TypeCode.ToString().ToLowerInvariant(),
                     stringVal.Length > 128 ? stringVal[..128] : stringVal);
+                if (notification.PollDurationMs.HasValue)
+                    _metricFactory.RecordInfoDuration(metricName, notification.Oid, deviceName, ip, source,
+                        notification.TypeCode.ToString().ToLowerInvariant(),
+                        stringVal.Length > 128 ? stringVal[..128] : stringVal,
+                        notification.PollDurationMs.Value);
                 _pipelineMetrics.IncrementHandled(deviceName);
                 break;
 

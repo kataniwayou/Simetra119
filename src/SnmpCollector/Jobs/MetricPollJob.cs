@@ -105,7 +105,7 @@ public sealed class MetricPollJob : IJob
 
             _pipelineMetrics.RecordPipelineDuration(device.Name, sw.Elapsed.TotalMilliseconds);
 
-            await DispatchResponseAsync(response, device, context.CancellationToken);
+            await DispatchResponseAsync(response, device, sw.Elapsed.TotalMilliseconds, context.CancellationToken);
 
             // Success: reset failure counter; log + counter only on recovered transition.
             if (_unreachabilityTracker.RecordSuccess(device.Name))
@@ -156,6 +156,7 @@ public sealed class MetricPollJob : IJob
     private async Task DispatchResponseAsync(
         IList<Variable> response,
         DeviceInfo device,
+        double pollDurationMs,
         CancellationToken ct)
     {
         foreach (var variable in response)
@@ -178,7 +179,8 @@ public sealed class MetricPollJob : IJob
                 DeviceName = device.Name,
                 Value = variable.Data,
                 Source = SnmpSource.Poll,
-                TypeCode = variable.Data.TypeCode
+                TypeCode = variable.Data.TypeCode,
+                PollDurationMs = pollDurationMs
             };
 
             await _sender.Send(msg, ct);

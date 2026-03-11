@@ -67,8 +67,46 @@ public sealed class SnmpMetricFactory : ISnmpMetricFactory, IDisposable
         });
     }
 
+    /// <inheritdoc />
+    public void RecordGaugeDuration(string metricName, string oid, string deviceName, string ip, string source, string snmpType, double durationMs)
+    {
+        var histogram = GetOrCreateHistogram("snmp_gauge_duration");
+        histogram.Record(durationMs, new TagList
+        {
+            { "metric_name", metricName },
+            { "oid", oid },
+            { "device_name", deviceName },
+            { "ip", ip },
+            { "source", source },
+            { "snmp_type", snmpType }
+        });
+    }
+
+    /// <inheritdoc />
+    public void RecordInfoDuration(string metricName, string oid, string deviceName, string ip, string source, string snmpType, string value, double durationMs)
+    {
+        var truncated = value.Length > MaxInfoValueLength
+            ? string.Concat(value.AsSpan(0, 125), "...")
+            : value;
+
+        var histogram = GetOrCreateHistogram("snmp_info_duration");
+        histogram.Record(durationMs, new TagList
+        {
+            { "metric_name", metricName },
+            { "oid", oid },
+            { "device_name", deviceName },
+            { "ip", ip },
+            { "source", source },
+            { "snmp_type", snmpType },
+            { "value", truncated }
+        });
+    }
+
     private Gauge<double> GetOrCreateGauge(string name)
         => (Gauge<double>)_instruments.GetOrAdd(name, n => _meter.CreateGauge<double>(n));
+
+    private Histogram<double> GetOrCreateHistogram(string name)
+        => (Histogram<double>)_instruments.GetOrAdd(name, n => _meter.CreateHistogram<double>(n, unit: "ms"));
 
     public void Dispose() => _meter.Dispose();
 }

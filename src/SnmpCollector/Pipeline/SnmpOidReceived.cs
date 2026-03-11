@@ -56,4 +56,10 @@ public sealed class SnmpOidReceived : IRequest<Unit>
     /// Consumers apply their own truncation as needed.
     /// </summary>
     public string? ExtractedStringValue { get; set; }
+
+    /// <summary>
+    /// SNMP GET round-trip duration in milliseconds. Set by MetricPollJob for poll source;
+    /// null for trap source (traps have no poll round-trip).
+    /// </summary>
+    public double? PollDurationMs { get; set; }
 }
