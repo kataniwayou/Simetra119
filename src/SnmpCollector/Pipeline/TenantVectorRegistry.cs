@@ -182,6 +182,15 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
             TenantCount,
             SlotCount,
             carriedOver);
+
+        // Step 9: Debug log for time series holders with depth > 1.
+        foreach (var group in newGroups)
+            foreach (var tenant in group.Tenants)
+                foreach (var holder in tenant.Holders)
+                    if (holder.TimeSeriesSize > 1)
+                        _logger.LogDebug(
+                            "TimeSeries holder: tenant={TenantId} metric={MetricName} ip={Ip} size={TimeSeriesSize} samples={SampleCount}",
+                            tenant.Id, holder.MetricName, holder.Ip, holder.TimeSeriesSize, holder.ReadSeries().Length);
     }
 
     private string ResolveIp(string configIp)

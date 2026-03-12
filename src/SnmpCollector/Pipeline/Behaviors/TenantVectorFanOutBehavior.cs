@@ -67,6 +67,10 @@ public sealed class TenantVectorFanOutBehavior<TNotification, TResponse>
                             {
                                 holder.WriteValue(msg.ExtractedValue, msg.ExtractedStringValue, msg.TypeCode, msg.Source);
                                 _pipelineMetrics.IncrementTenantVectorRouted(msg.DeviceName!);
+                                if (holder.TimeSeriesSize > 1)
+                                    _logger.LogDebug(
+                                        "TimeSeries write: metric={MetricName} ip={Ip} samples={SampleCount}/{TimeSeriesSize}",
+                                        holder.MetricName, holder.Ip, holder.ReadSeries().Length, holder.TimeSeriesSize);
                             }
                         }
                     }
