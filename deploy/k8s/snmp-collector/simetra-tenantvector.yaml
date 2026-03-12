@@ -13,13 +13,13 @@ data:
             { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_status_P1" },
             { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_rx_octets_P1" },
             { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_tx_octets_P1" },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_cpu_util" }
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_cpu_util", "TimeSeriesSize": 10 }
           ]
         },
         {
           "Priority": 2,
           "Metrics": [
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_mem_util" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_mem_util", "TimeSeriesSize": 5 },
             { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_sys_temp" },
             { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_rx_packets_P1" },
             { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_tx_packets_P1" }
@@ -29,7 +29,7 @@ data:
           "Priority": 3,
           "Metrics": [
             { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L1" },
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r1_power_L1" },
+            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r1_power_L1", "TimeSeriesSize": 3 },
             { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r2_power_L1" },
             { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L2" }
           ]
