@@ -17,10 +17,4 @@ public sealed class TenantOptions
     /// An empty list is valid (tenant exists but has no poll targets).
     /// </summary>
     public List<MetricSlotOptions> Metrics { get; set; } = [];
-
-    /// <summary>
-    /// Number of time-series samples to retain per metric slot holder.
-    /// Default 1 (single latest value, backward compatible).
-    /// </summary>
-    public int TimeSeriesSize { get; set; } = 1;
 }

@@ -109,7 +109,7 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                     metric.Port,
                     metric.MetricName,
                     derivedInterval,
-                    tenantOpts.TimeSeriesSize);
+                    metric.TimeSeriesSize);
 
                 // Carry over existing slot value when the same (ip, port, metricName) exists.
                 var lookupKey = new RoutingKey(resolvedIp, metric.Port, metric.MetricName);

@@ -22,4 +22,10 @@ public sealed class MetricSlotOptions
     /// for fan-out after OID resolution.
     /// </summary>
     public string MetricName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Number of time-series samples to retain for this metric slot.
+    /// Default 1 (single latest value, backward compatible).
+    /// </summary>
+    public int TimeSeriesSize { get; set; } = 1;
 }
