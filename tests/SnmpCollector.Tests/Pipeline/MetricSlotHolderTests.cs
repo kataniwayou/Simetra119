@@ -33,8 +33,8 @@ public sealed class MetricSlotHolderTests
         Assert.NotNull(slot);
         Assert.Equal(42.5, slot.Value);
         Assert.Null(slot.StringValue);
-        Assert.True(slot.UpdatedAt >= before, "UpdatedAt should be >= time before write");
-        Assert.True(slot.UpdatedAt <= DateTimeOffset.UtcNow, "UpdatedAt should be <= now");
+        Assert.True(slot.Timestamp >= before, "Timestamp should be >= time before write");
+        Assert.True(slot.Timestamp <= DateTimeOffset.UtcNow, "Timestamp should be <= now");
     }
 
     [Fact]
@@ -77,11 +77,11 @@ public sealed class MetricSlotHolderTests
         // Verify all fields are internally consistent (no torn read possible on a reference type)
         var value = slot.Value;
         var stringValue = slot.StringValue;
-        var updatedAt = slot.UpdatedAt;
+        var timestamp = slot.Timestamp;
 
         Assert.Equal(99.9, value);
         Assert.Equal("status", stringValue);
-        Assert.True(updatedAt > DateTimeOffset.MinValue, "UpdatedAt should be a real timestamp");
+        Assert.True(timestamp > DateTimeOffset.MinValue, "Timestamp should be a real timestamp");
     }
 
     [Fact]
@@ -102,8 +102,87 @@ public sealed class MetricSlotHolderTests
 
         holder.WriteValue(12345.0, null, SnmpType.Gauge32, SnmpSource.Poll);
 
-        var slot = holder.ReadSlot();
-        Assert.NotNull(slot);
-        Assert.Equal(SnmpType.Gauge32, slot.TypeCode);
+        Assert.Equal(SnmpType.Gauge32, holder.TypeCode);
+    }
+
+    [Fact]
+    public void ReadSeries_BeforeAnyWrite_ReturnsEmpty()
+    {
+        var holder = CreateHolder();
+        Assert.True(holder.ReadSeries().IsEmpty);
+    }
+
+    [Fact]
+    public void WriteValue_TimeSeriesSize3_AccumulatesSamples()
+    {
+        var holder = new MetricSlotHolder("10.0.0.1", 161, "hrProcessorLoad", 30, timeSeriesSize: 3);
+        holder.WriteValue(1.0, null, SnmpType.Integer32, SnmpSource.Poll);
+        holder.WriteValue(2.0, null, SnmpType.Integer32, SnmpSource.Poll);
+        holder.WriteValue(3.0, null, SnmpType.Integer32, SnmpSource.Poll);
+        var series = holder.ReadSeries();
+        Assert.Equal(3, series.Length);
+        Assert.Equal(1.0, series[0].Value);
+        Assert.Equal(3.0, series[2].Value);
+    }
+
+    [Fact]
+    public void WriteValue_ExceedsTimeSeriesSize_EvictsOldest()
+    {
+        var holder = new MetricSlotHolder("10.0.0.1", 161, "hrProcessorLoad", 30, timeSeriesSize: 2);
+        holder.WriteValue(1.0, null, SnmpType.Integer32, SnmpSource.Poll);
+        holder.WriteValue(2.0, null, SnmpType.Integer32, SnmpSource.Poll);
+        holder.WriteValue(3.0, null, SnmpType.Integer32, SnmpSource.Poll);
+        var series = holder.ReadSeries();
+        Assert.Equal(2, series.Length);
+        Assert.Equal(2.0, series[0].Value);
+        Assert.Equal(3.0, series[1].Value);
+        // ReadSlot returns latest
+        Assert.Equal(3.0, holder.ReadSlot()!.Value);
+    }
+
+    [Fact]
+    public void WriteValue_PromotesTypeCodeAndSourceToHolder()
+    {
+        var holder = CreateHolder();
+        holder.WriteValue(1.0, null, SnmpType.Gauge32, SnmpSource.Poll);
+        Assert.Equal(SnmpType.Gauge32, holder.TypeCode);
+        Assert.Equal(SnmpSource.Poll, holder.Source);
+        // Overwrite with different type
+        holder.WriteValue(2.0, null, SnmpType.Counter32, SnmpSource.Trap);
+        Assert.Equal(SnmpType.Counter32, holder.TypeCode);
+        Assert.Equal(SnmpSource.Trap, holder.Source);
+    }
+
+    [Fact]
+    public void CopyFrom_CopiesSeriesAndMetadata()
+    {
+        var old = new MetricSlotHolder("10.0.0.1", 161, "test", 30, timeSeriesSize: 3);
+        old.WriteValue(1.0, "a", SnmpType.Gauge32, SnmpSource.Poll);
+        old.WriteValue(2.0, "b", SnmpType.Gauge32, SnmpSource.Poll);
+
+        var fresh = new MetricSlotHolder("10.0.0.1", 161, "test", 30, timeSeriesSize: 3);
+        fresh.CopyFrom(old);
+
+        Assert.Equal(2, fresh.ReadSeries().Length);
+        Assert.Equal(2.0, fresh.ReadSlot()!.Value);
+        Assert.Equal(SnmpType.Gauge32, fresh.TypeCode);
+        Assert.Equal(SnmpSource.Poll, fresh.Source);
+    }
+
+    [Fact]
+    public void CopyFrom_TruncatesWhenNewHolderHasSmallerSize()
+    {
+        var old = new MetricSlotHolder("10.0.0.1", 161, "test", 30, timeSeriesSize: 5);
+        old.WriteValue(1.0, null, SnmpType.Integer32, SnmpSource.Poll);
+        old.WriteValue(2.0, null, SnmpType.Integer32, SnmpSource.Poll);
+        old.WriteValue(3.0, null, SnmpType.Integer32, SnmpSource.Poll);
+
+        var fresh = new MetricSlotHolder("10.0.0.1", 161, "test", 30, timeSeriesSize: 2);
+        fresh.CopyFrom(old);
+
+        var series = fresh.ReadSeries();
+        Assert.Equal(2, series.Length);
+        Assert.Equal(2.0, series[0].Value);  // keeps latest 2
+        Assert.Equal(3.0, series[1].Value);
     }
 }

@@ -82,10 +82,9 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
         var heartbeatKey = new RoutingKey("127.0.0.1", 0, "Heartbeat");
         if (oldSlotLookup.TryGetValue(heartbeatKey, out var oldHeartbeatHolder))
         {
-            var existingSlot = oldHeartbeatHolder.ReadSlot();
-            if (existingSlot is not null)
+            if (oldHeartbeatHolder.ReadSlot() is not null)
             {
-                heartbeatHolder.WriteValue(existingSlot.Value, existingSlot.StringValue, existingSlot.TypeCode, existingSlot.Source);
+                heartbeatHolder.CopyFrom(oldHeartbeatHolder);
                 carriedOver++;
             }
         }
@@ -109,16 +108,16 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                     resolvedIp,
                     metric.Port,
                     metric.MetricName,
-                    derivedInterval);
+                    derivedInterval,
+                    tenantOpts.TimeSeriesSize);
 
                 // Carry over existing slot value when the same (ip, port, metricName) exists.
                 var lookupKey = new RoutingKey(resolvedIp, metric.Port, metric.MetricName);
                 if (oldSlotLookup.TryGetValue(lookupKey, out var oldHolder))
                 {
-                    var existingSlot = oldHolder.ReadSlot();
-                    if (existingSlot is not null)
+                    if (oldHolder.ReadSlot() is not null)
                     {
-                        newHolder.WriteValue(existingSlot.Value, existingSlot.StringValue, existingSlot.TypeCode, existingSlot.Source);
+                        newHolder.CopyFrom(oldHolder);
                         carriedOver++;
                     }
                 }

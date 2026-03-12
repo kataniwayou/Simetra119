@@ -115,7 +115,7 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
         var slot = holders[0].ReadSlot();
         Assert.NotNull(slot);
         Assert.Equal(75.0, slot.Value);
-        Assert.Equal(SnmpType.Gauge32, slot.TypeCode);
+        Assert.Equal(SnmpType.Gauge32, holders[0].TypeCode);
         Assert.True(nextCalled);
     }
 
@@ -294,7 +294,7 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
             var slot = h.ReadSlot();
             Assert.NotNull(slot);
             Assert.Equal(123456.0, slot.Value);
-            Assert.Equal(SnmpType.TimeTicks, slot.TypeCode);
+            Assert.Equal(SnmpType.TimeTicks, h.TypeCode);
         });
     }
 

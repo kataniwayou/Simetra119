@@ -270,7 +270,7 @@ public sealed class TenantVectorRegistryTests
         Assert.NotNull(newHolders);
         var slot = newHolders[0].ReadSlot();
         Assert.NotNull(slot);
-        Assert.Equal(SnmpType.Gauge32, slot.TypeCode);
+        Assert.Equal(SnmpType.Gauge32, newHolders[0].TypeCode);
     }
 
     [Fact]
@@ -488,7 +488,7 @@ public sealed class TenantVectorRegistryTests
         Assert.NotNull(slot);
         Assert.Equal(123.0, slot.Value);
         Assert.Equal("123", slot.StringValue);
-        Assert.Equal(SnmpType.Counter32, slot.TypeCode);
+        Assert.Equal(SnmpType.Counter32, newHolders[0].TypeCode);
     }
 
     // ──────────────────────────────────────────────────────
