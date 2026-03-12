@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 Phase: 29 — fifth of 5 in v1.5 (K8s Deployment and E2E Validation) — COMPLETE
 Plan: All plans complete
 Status: Milestone v1.5 complete
-Last activity: 2026-03-12 — Completed quick task 053: MetricSlot time series refactor
+Last activity: 2026-03-12 — Completed quick task 054: Move TimeSeriesSize to MetricSlotOptions
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5
 
@@ -42,7 +42,7 @@ See `.planning/MILESTONES.md` for details.
 - MetricSlot is a slim 3-field sample record: (Value, StringValue, Timestamp); TypeCode and Source promoted to MetricSlotHolder properties (Q053)
 - MetricSlotHolder stores ImmutableArray cyclic time series capped at TimeSeriesSize (default 1); SeriesBox reference wrapper enables Volatile semantics (Q053)
 - MetricSlotHolder.CopyFrom() bulk-loads series + TypeCode + Source during TenantVectorRegistry reload carry-over (Q053)
-- TenantOptions.TimeSeriesSize configures per-tenant series depth; passed to MetricSlotHolder constructor (Q053)
+- MetricSlotOptions.TimeSeriesSize configures per-metric series depth; passed to MetricSlotHolder constructor (Q053, moved Q054)
 - TenantVectorRegistry._groups and ._routingIndex use volatile keyword (reference reads, not ref-passed — no CS0420)
 - Zero new NuGet packages needed
 - FrozenSet<string> for O(1) metric name containment in OidMapService (D25-01)
@@ -90,6 +90,7 @@ None.
 | 051 | Remove snmp.pipeline.duration histogram and Pipeline Duration P99 panel | 2026-03-11 | 53d5184 | [051-remove-pipeline-duration-metric](./quick/051-remove-pipeline-duration-metric/) |
 | 052 | Add SnmpSource to MetricSlot and MetricSlotHolder.WriteValue | 2026-03-11 | e371cfe | [052-add-source-to-metricslot](./quick/052-add-source-to-metricslot/) |
 | 053 | MetricSlot time series refactor (ImmutableArray cyclic series, CopyFrom) | 2026-03-12 | 78c3c19 | [053-metricslot-time-series-refactor](./quick/053-metricslot-time-series-refactor/) |
+| 054 | Move TimeSeriesSize from TenantOptions to MetricSlotOptions (per-metric) | 2026-03-12 | 1d7386e | [054-move-timeseriessize-to-metric-slot](./quick/054-move-timeseriessize-to-metric-slot/) |
 
 ### Blockers/Concerns
 
@@ -98,5 +99,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-12
-Stopped at: Completed quick task 053
+Stopped at: Completed quick task 054
 Resume file: None
