@@ -60,16 +60,16 @@ Plans:
 **Depends on**: Phase 30 (`IOidMapService.ResolveToOid` must exist before DeviceWatcherService can call it)
 **Requirements**: DEV-01, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06, DEV-07
 **Success Criteria** (what must be TRUE):
-  1. A devices.json poll entry with `Names: ["obp_channel_L1", "obp_r1_power_L1"]` starts polling both OIDs after device config load — MetricPollJob never receives metric name strings as OID arguments
-  2. A Names[] entry that has no match in the current OID map logs a structured warning with device name and metric name, and that entry is silently skipped — the device's other poll entries still register normally
+  1. A devices.json poll entry with `MetricNames: ["obp_channel_L1", "obp_r1_power_L1"]` starts polling both OIDs after device config load — MetricPollJob never receives metric name strings as OID arguments
+  2. A MetricNames[] entry that has no match in the current OID map logs a structured warning with device name and metric name, and that entry is silently skipped — the device's other poll entries still register normally
   3. When device config reloads, names are resolved against the current OID map state at that moment (point-in-time resolution)
   4. Reload diff logging includes per-name resolution detail (resolved count, unresolved names listed)
 
 **Plans:** 3 plans
 
 Plans:
-- [ ] 31-01-PLAN.md — K8s oidmap sync + C# model rename (PollOptions, PollInfo, Polls, Names)
-- [ ] 31-02-PLAN.md — Name resolution logic in DeviceWatcherService and DeviceRegistry + unit tests
+- [ ] 31-01-PLAN.md — OidMap array restructure + C# model rename (PollOptions, Polls, MetricNames)
+- [ ] 31-02-PLAN.md — Name resolution in DeviceRegistry via IOidMapService + unit tests
 - [ ] 31-03-PLAN.md — Config file rewrite (devices.json, K8s ConfigMaps, E2E fixtures, E2E scenarios)
 
 ---
