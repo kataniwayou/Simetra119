@@ -5,7 +5,7 @@ namespace SnmpCollector.Configuration.Validators;
 
 /// <summary>
 /// Validates <see cref="DevicesOptions"/> at startup.
-/// Manually walks the entire nested object graph (Devices -> MetricPolls -> Oids)
+/// Manually walks the entire nested object graph (Devices -> Polls -> MetricNames)
 /// because ValidateDataAnnotations does not validate nested objects.
 /// </summary>
 public sealed class DevicesOptionsValidator : IValidateOptions<DevicesOptions>
@@ -50,10 +50,10 @@ public sealed class DevicesOptionsValidator : IValidateOptions<DevicesOptions>
             failures.Add($"Devices[{index}].Port must be between 1 and 65535");
         }
 
-        for (var j = 0; j < device.MetricPolls.Count; j++)
+        for (var j = 0; j < device.Polls.Count; j++)
         {
-            var poll = device.MetricPolls[j];
-            ValidateMetricPoll(poll, index, j, failures);
+            var poll = device.Polls[j];
+            ValidatePoll(poll, index, j, failures);
         }
     }
 
@@ -76,18 +76,18 @@ public sealed class DevicesOptionsValidator : IValidateOptions<DevicesOptions>
         }
     }
 
-    private static void ValidateMetricPoll(MetricPollOptions poll, int deviceIndex, int pollIndex, List<string> failures)
+    private static void ValidatePoll(PollOptions poll, int deviceIndex, int pollIndex, List<string> failures)
     {
-        var prefix = $"Devices[{deviceIndex}].MetricPolls[{pollIndex}]";
+        var prefix = $"Devices[{deviceIndex}].Polls[{pollIndex}]";
 
         if (poll.IntervalSeconds <= 0)
         {
             failures.Add($"{prefix}.IntervalSeconds must be greater than 0");
         }
 
-        if (poll.Oids.Count == 0)
+        if (poll.MetricNames.Count == 0)
         {
-            failures.Add($"{prefix}.Oids must contain at least one entry");
+            failures.Add($"{prefix}.MetricNames must contain at least one entry");
         }
 
         if (poll.TimeoutMultiplier is < 0.1 or > 0.9)

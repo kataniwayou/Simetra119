@@ -50,10 +50,10 @@ public sealed class DeviceRegistry : IDeviceRegistry
                 ip = addresses.First(a => a.AddressFamily == AddressFamily.InterNetwork);
             }
 
-            var pollGroups = d.MetricPolls
+            var pollGroups = d.Polls
                 .Select((poll, index) => new MetricPollInfo(
                     PollIndex: index,
-                    Oids: poll.Oids.AsReadOnly(),
+                    Oids: poll.MetricNames.AsReadOnly(),
                     IntervalSeconds: poll.IntervalSeconds,
                     TimeoutMultiplier: poll.TimeoutMultiplier))
                 .ToList()
@@ -113,10 +113,10 @@ public sealed class DeviceRegistry : IDeviceRegistry
                 ip = addresses.First(a => a.AddressFamily == AddressFamily.InterNetwork);
             }
 
-            var pollGroups = d.MetricPolls
+            var pollGroups = d.Polls
                 .Select((poll, index) => new MetricPollInfo(
                     PollIndex: index,
-                    Oids: poll.Oids.AsReadOnly(),
+                    Oids: poll.MetricNames.AsReadOnly(),
                     IntervalSeconds: poll.IntervalSeconds,
                     TimeoutMultiplier: poll.TimeoutMultiplier))
                 .ToList()

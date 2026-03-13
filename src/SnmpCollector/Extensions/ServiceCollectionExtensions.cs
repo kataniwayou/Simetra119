@@ -435,7 +435,7 @@ public static class ServiceCollectionExtensions
         // Static jobs (CorrelationJob + HeartbeatJob) = 2, plus headroom for poll jobs.
         var initialJobCount = 2; // CorrelationJob + HeartbeatJob
         foreach (var device in devicesOptions.Devices)
-            initialJobCount += device.MetricPolls.Count;
+            initialJobCount += device.Polls.Count;
         var threadPoolSize = Math.Max(initialJobCount, 50);
 
         services.AddQuartz(q =>
@@ -482,9 +482,9 @@ public static class ServiceCollectionExtensions
             for (var di = 0; di < devicesOptions.Devices.Count; di++)
             {
                 var device = devicesOptions.Devices[di];
-                for (var pi = 0; pi < device.MetricPolls.Count; pi++)
+                for (var pi = 0; pi < device.Polls.Count; pi++)
                 {
-                    var poll = device.MetricPolls[pi];
+                    var poll = device.Polls[pi];
                     var jobKey = new JobKey($"metric-poll-{device.IpAddress}_{device.Port}-{pi}");
                     q.AddJob<MetricPollJob>(j => j
                         .WithIdentity(jobKey)

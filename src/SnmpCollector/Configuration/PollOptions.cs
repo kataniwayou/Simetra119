@@ -2,15 +2,16 @@ namespace SnmpCollector.Configuration;
 
 /// <summary>
 /// One poll group for a device. Quartz job identity: metric-poll-{deviceName}-{pollIndex}.
-/// All OIDs in a poll group are fetched together on the same interval.
+/// All metric names in a poll group are resolved to OIDs and fetched together on the same interval.
 /// </summary>
-public sealed class MetricPollOptions
+public sealed class PollOptions
 {
     /// <summary>
-    /// OID strings to poll in this group (e.g., "1.3.6.1.2.1.25.3.3.1.2.1").
+    /// Metric names to poll in this group. Resolved to OIDs at device config load time
+    /// via IOidMapService.ResolveToOid.
     /// Must contain at least one entry.
     /// </summary>
-    public List<string> Oids { get; set; } = [];
+    public List<string> MetricNames { get; set; } = [];
 
     /// <summary>
     /// Polling interval in seconds. Must be greater than zero.

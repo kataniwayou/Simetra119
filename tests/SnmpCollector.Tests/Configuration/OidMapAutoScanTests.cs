@@ -25,20 +25,31 @@ public class OidMapAutoScanTests
     }
 
     /// <summary>
-    /// Parses oidmaps.json (JSONC) and returns the OID map dictionary.
-    /// Matches the production parsing pattern in Program.cs and OidMapWatcherService.
+    /// Parses oidmaps.json (JSONC array-of-objects format) and returns the OID map dictionary.
+    /// Matches the production parsing pattern in OidMapWatcherService.ValidateAndParseOidMap.
     /// </summary>
     private static Dictionary<string, string> LoadOidMap()
     {
         var path = GetOidMapsPath();
         var json = File.ReadAllText(path);
-        var options = new JsonSerializerOptions
+        var doc = JsonDocument.Parse(json, new JsonDocumentOptions
         {
-            ReadCommentHandling = JsonCommentHandling.Skip,
-            AllowTrailingCommas = true,
-            PropertyNameCaseInsensitive = true
-        };
-        return JsonSerializer.Deserialize<Dictionary<string, string>>(json, options)!;
+            CommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true
+        });
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var element in doc.RootElement.EnumerateArray())
+        {
+            if (element.TryGetProperty("Oid", out var oidProp) &&
+                element.TryGetProperty("MetricName", out var nameProp))
+            {
+                var oid = oidProp.GetString();
+                var name = nameProp.ValueKind == JsonValueKind.Null ? null : nameProp.GetString();
+                if (!string.IsNullOrEmpty(oid) && !string.IsNullOrEmpty(name))
+                    result[oid] = name;
+            }
+        }
+        return result;
     }
 
     /// <summary>

@@ -59,7 +59,7 @@ public sealed class PipelineIntegrationTests : IDisposable
                 {
                     Name = KnownDevice,
                     IpAddress = KnownDeviceIp,
-                    MetricPolls = []
+                    Polls = []
                 }
             ]
         }));

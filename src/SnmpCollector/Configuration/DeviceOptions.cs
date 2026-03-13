@@ -31,8 +31,8 @@ public sealed class DeviceOptions
     public string? CommunityString { get; set; }
 
     /// <summary>
-    /// Metric polling configurations for this device.
+    /// Poll configurations for this device.
     /// Each entry is a separate Quartz job: metric-poll-{deviceName}-{pollIndex}.
     /// </summary>
-    public List<MetricPollOptions> MetricPolls { get; set; } = [];
+    public List<PollOptions> Polls { get; set; } = [];
 }

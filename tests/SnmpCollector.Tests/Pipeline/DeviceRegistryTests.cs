@@ -22,11 +22,11 @@ public sealed class DeviceRegistryTests
             {
                 Name = "npb-core-01",
                 IpAddress = "10.0.10.1",
-                MetricPolls =
+                Polls =
                 [
-                    new MetricPollOptions
+                    new PollOptions
                     {
-                        Oids = ["1.3.6.1.2.1.25.3.3.1.2"],
+                        MetricNames = ["1.3.6.1.2.1.25.3.3.1.2"],
                         IntervalSeconds = 30
                     }
                 ]
@@ -35,7 +35,7 @@ public sealed class DeviceRegistryTests
             {
                 Name = "obp-edge-01",
                 IpAddress = "10.0.10.2",
-                MetricPolls = []
+                Polls = []
             }
         ]
     };
@@ -131,14 +131,14 @@ public sealed class DeviceRegistryTests
                     Name = "device-a",
                     IpAddress = "10.0.10.1",
                     Port = 161,
-                    MetricPolls = []
+                    Polls = []
                 },
                 new DeviceOptions
                 {
                     Name = "device-b",
                     IpAddress = "10.0.10.1",
                     Port = 161,
-                    MetricPolls = []
+                    Polls = []
                 }
             ]
         };
@@ -161,14 +161,14 @@ public sealed class DeviceRegistryTests
                     Name = "same-name",
                     IpAddress = "10.0.10.1",
                     Port = 161,
-                    MetricPolls = []
+                    Polls = []
                 },
                 new DeviceOptions
                 {
                     Name = "same-name",
                     IpAddress = "10.0.10.2",
                     Port = 161,
-                    MetricPolls = []
+                    Polls = []
                 }
             ]
         };
@@ -206,7 +206,7 @@ public sealed class DeviceRegistryTests
                 {
                     Name = "dns-device",
                     IpAddress = "localhost",
-                    MetricPolls = []
+                    Polls = []
                 }
             ]
         };
@@ -235,7 +235,7 @@ public sealed class DeviceRegistryTests
                     Name = "community-device",
                     IpAddress = "10.0.10.5",
                     CommunityString = "my-custom-community",
-                    MetricPolls = []
+                    Polls = []
                 }
             ]
         };
@@ -286,9 +286,9 @@ public sealed class DeviceRegistryTests
         // Reload with the original two plus a new device
         var newDevices = new List<DeviceOptions>
         {
-            new() { Name = "npb-core-01", IpAddress = "10.0.10.1", MetricPolls = [] },
-            new() { Name = "obp-edge-01", IpAddress = "10.0.10.2", MetricPolls = [] },
-            new() { Name = "new-device", IpAddress = "10.0.10.3", MetricPolls = [] }
+            new() { Name = "npb-core-01", IpAddress = "10.0.10.1", Polls = [] },
+            new() { Name = "obp-edge-01", IpAddress = "10.0.10.2", Polls = [] },
+            new() { Name = "new-device", IpAddress = "10.0.10.3", Polls = [] }
         };
 
         var (added, removed) = await sut.ReloadAsync(newDevices);
@@ -315,7 +315,7 @@ public sealed class DeviceRegistryTests
         // Reload with only one of the original two devices
         var newDevices = new List<DeviceOptions>
         {
-            new() { Name = "npb-core-01", IpAddress = "10.0.10.1", MetricPolls = [] }
+            new() { Name = "npb-core-01", IpAddress = "10.0.10.1", Polls = [] }
         };
 
         var (added, removed) = await sut.ReloadAsync(newDevices);
