@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
 using Xunit;
 
@@ -105,5 +106,79 @@ public sealed class OidMapServiceTests
         var result = sut.Resolve("1.3.6.1.2.1.25.3.3.1.2");
 
         Assert.Equal(OidMapService.Unknown, result);
+    }
+
+    [Fact]
+    public void ResolveToOid_KnownName_ReturnsOid()
+    {
+        var sut = CreateService(new Dictionary<string, string>
+        {
+            ["1.3.6.1.2.1.25.3.3.1.2"] = "hrProcessorLoad"
+        });
+
+        var result = sut.ResolveToOid("hrProcessorLoad");
+
+        Assert.Equal("1.3.6.1.2.1.25.3.3.1.2", result);
+    }
+
+    [Fact]
+    public void ResolveToOid_UnknownName_ReturnsNull()
+    {
+        var sut = CreateService(new Dictionary<string, string>
+        {
+            ["1.3.6.1.2.1.25.3.3.1.2"] = "hrProcessorLoad"
+        });
+
+        var result = sut.ResolveToOid("no_such_metric");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ResolveToOid_Heartbeat_ReturnsHeartbeatOid()
+    {
+        var sut = CreateService(new Dictionary<string, string>());
+
+        var result = sut.ResolveToOid("Heartbeat");
+
+        Assert.Equal(HeartbeatJobOptions.HeartbeatOid, result);
+    }
+
+    [Fact]
+    public void ResolveToOid_AfterReload_NewNameResolves()
+    {
+        var sut = CreateService(new Dictionary<string, string>
+        {
+            ["1.3.6.1.2.1.1.1.0"] = "sysDescr"
+        });
+
+        sut.UpdateMap(new Dictionary<string, string>
+        {
+            ["1.3.6.1.2.1.1.1.0"] = "sysDescr",
+            ["1.3.6.1.2.1.25.3.3.1.2"] = "hrProcessorLoad"
+        });
+
+        var result = sut.ResolveToOid("hrProcessorLoad");
+
+        Assert.Equal("1.3.6.1.2.1.25.3.3.1.2", result);
+    }
+
+    [Fact]
+    public void ResolveToOid_AfterReload_RemovedNameReturnsNull()
+    {
+        var sut = CreateService(new Dictionary<string, string>
+        {
+            ["1.3.6.1.2.1.1.1.0"] = "sysDescr",
+            ["1.3.6.1.2.1.25.3.3.1.2"] = "hrProcessorLoad"
+        });
+
+        sut.UpdateMap(new Dictionary<string, string>
+        {
+            ["1.3.6.1.2.1.1.1.0"] = "sysDescr"
+        });
+
+        var result = sut.ResolveToOid("hrProcessorLoad");
+
+        Assert.Null(result);
     }
 }

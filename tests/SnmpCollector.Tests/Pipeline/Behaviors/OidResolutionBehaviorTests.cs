@@ -137,5 +137,7 @@ public sealed class OidResolutionBehaviorTests
             metricName == _metricName;
 
         public void UpdateMap(Dictionary<string, string> entries) { }
+
+        public string? ResolveToOid(string metricName) => null;
     }
 }
