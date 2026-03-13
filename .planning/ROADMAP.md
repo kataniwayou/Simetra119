@@ -46,7 +46,11 @@ See `.planning/MILESTONES.md` for details.
   4. The reverse index is rebuilt atomically alongside the forward map on every hot-reload — a caller reading immediately after reload sees the new reverse map, never a partial state
   5. Validation runs before `OidMapService.UpdateMap` is called so that duplicate-warning log entries are never followed by contradictory "added" diff entries for the same load event
 
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 30-01-PLAN.md — Reverse index and ResolveToOid (OidMapService + IOidMapService + tests)
+- [ ] 30-02-PLAN.md — Duplicate OID/name validation in OidMapWatcherService + tests
 
 ---
 
@@ -94,10 +98,10 @@ See `.planning/MILESTONES.md` for details.
 | 27. Pipeline Integration | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 28. ConfigMap Watcher | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 29. K8s Deployment | v1.5 | 2/2 | Complete | 2026-03-10 |
-| 30. OID Map Integrity | v1.6 | 0/? | Not started | — |
+| 30. OID Map Integrity | v1.6 | 0/2 | Not started | — |
 | 31. Human-Name Device Config | v1.6 | 0/? | Not started | — |
 | 32. Command Map Infrastructure | v1.6 | 0/? | Not started | — |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-13 after v1.6 roadmap creation*
+*Last updated: 2026-03-13 after Phase 30 planning*
