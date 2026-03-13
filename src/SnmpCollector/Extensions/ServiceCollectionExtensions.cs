@@ -245,6 +245,10 @@ public static class ServiceCollectionExtensions
             // Phase 28: Tenant vector ConfigMap watcher
             services.AddSingleton<TenantVectorWatcherService>();
             services.AddHostedService(sp => sp.GetRequiredService<TenantVectorWatcherService>());
+
+            // Phase 32: Command map ConfigMap watcher
+            services.AddSingleton<CommandMapWatcherService>();
+            services.AddHostedService(sp => sp.GetRequiredService<CommandMapWatcherService>());
         }
         else
         {
@@ -319,6 +323,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<OidMapService>(sp =>
             new OidMapService(new Dictionary<string, string>(), sp.GetRequiredService<ILogger<OidMapService>>()));
         services.AddSingleton<IOidMapService>(sp => sp.GetRequiredService<OidMapService>());
+
+        // CommandMapService: initial empty map. In K8s mode, CommandMapWatcherService populates it.
+        // In local dev mode, populated after DI build from commandmaps.json.
+        services.AddSingleton<CommandMapService>(sp =>
+            new CommandMapService(new Dictionary<string, string>(), sp.GetRequiredService<ILogger<CommandMapService>>()));
+        services.AddSingleton<ICommandMapService>(sp => sp.GetRequiredService<CommandMapService>());
 
         // Phase 15: DynamicPollScheduler available in both K8s and local dev modes.
         // K8s: called by DeviceWatcherService. Local dev: called by Program.cs after build.

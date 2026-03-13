@@ -128,6 +128,20 @@ if (!k8s.KubernetesClientConfiguration.IsInCluster())
             }
         }
     }
+
+    // Load command map from commandmaps.json (array-of-objects format)
+    var commandmapsPath = Path.Combine(configDir, "commandmaps.json");
+    if (File.Exists(commandmapsPath))
+    {
+        var cmdJson = File.ReadAllText(commandmapsPath);
+        var cmdMapLogger = app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SnmpCollector.Services.CommandMapWatcherService>>();
+        var cmdMap = SnmpCollector.Services.CommandMapWatcherService.ValidateAndParseCommandMap(cmdJson, cmdMapLogger);
+        if (cmdMap != null)
+        {
+            var commandMapService = app.Services.GetRequiredService<SnmpCollector.Pipeline.CommandMapService>();
+            commandMapService.UpdateMap(cmdMap);
+        }
+    }
 }
 
 // Phase 8: Health probe endpoints with tag-filtered checks and explicit status codes.
