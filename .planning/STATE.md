@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 ## Current Position
 
 Phase: 30 — OID Map Integrity
-Plan: —
-Status: Roadmap created, ready for phase planning
-Last activity: 2026-03-13 — v1.6 roadmap created (Phases 30-32)
+Plan: 01 of 2
+Status: In progress
+Last activity: 2026-03-13 — Completed 30-01-PLAN.md (Reverse Index & ResolveToOid)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [..........] 0/3 phases v1.6
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [#.........] 1/? plans v1.6
 
 ## Milestone History
 
@@ -47,6 +47,7 @@ See `.planning/MILESTONES.md` for details.
 - TenantVectorRegistry._groups and ._routingIndex use volatile keyword (reference reads, not ref-passed — no CS0420)
 - Zero new NuGet packages needed
 - FrozenSet<string> for O(1) metric name containment in OidMapService (D25-01)
+- OidMapService._reverseMap volatile FrozenDictionary for metric-name-to-OID reverse lookup; built from post-heartbeat-seed map in constructor and UpdateMap (D30-01)
 - RoutingKeyComparer.Instance singleton — pass explicitly to FrozenDictionary constructor
 - PriorityGroup is not sealed (C# records cannot be declared sealed)
 - TenantVectorRegistry.Reload() value carry-over: uses (ip, port, metricName) 3-tuple key via RoutingKey; copies MetricSlot value via ReadSlot()/WriteValue(), never copies holder object
@@ -109,5 +110,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: v1.6 roadmap created
+Stopped at: Completed 30-01-PLAN.md (Reverse Index & ResolveToOid)
 Resume file: None
