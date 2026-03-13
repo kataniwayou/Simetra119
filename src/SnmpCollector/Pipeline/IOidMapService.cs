@@ -28,6 +28,14 @@ public interface IOidMapService
     bool ContainsMetricName(string metricName);
 
     /// <summary>
+    /// Reverse-resolves a metric name to its OID.
+    /// Returns null if the metric name is not in the current map.
+    /// </summary>
+    /// <param name="metricName">The metric name to reverse-resolve (e.g., "hrProcessorLoad").</param>
+    /// <returns>The OID string, or null if the metric name is not found.</returns>
+    string? ResolveToOid(string metricName);
+
+    /// <summary>
     /// Atomically replaces the OID map with the provided entries.
     /// Computes and logs the diff (added, removed, changed) for observability.
     /// Called by the ConfigMap watcher when configuration changes are detected.

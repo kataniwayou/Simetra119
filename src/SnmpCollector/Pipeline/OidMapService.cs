@@ -20,6 +20,7 @@ public sealed class OidMapService : IOidMapService
     private readonly ILogger<OidMapService> _logger;
     private volatile FrozenDictionary<string, string> _map;
     private volatile FrozenSet<string> _metricNames = FrozenSet<string>.Empty;
+    private volatile FrozenDictionary<string, string> _reverseMap = FrozenDictionary<string, string>.Empty;
 
     /// <summary>
     /// Initializes the service with the provided initial OID map entries.
@@ -34,6 +35,7 @@ public sealed class OidMapService : IOidMapService
         var seeded = MergeWithHeartbeatSeed(initialEntries);
         _map = BuildFrozenMap(seeded);
         _metricNames = _map.Values.ToFrozenSet();
+        _reverseMap = BuildReverseMap(_map);
 
         _logger.LogInformation(
             "OidMapService initialized with {EntryCount} entries",
@@ -53,6 +55,12 @@ public sealed class OidMapService : IOidMapService
     public bool ContainsMetricName(string metricName) => _metricNames.Contains(metricName);
 
     /// <inheritdoc />
+    public string? ResolveToOid(string metricName)
+    {
+        return _reverseMap.TryGetValue(metricName, out var oid) ? oid : null;
+    }
+
+    /// <inheritdoc />
     public void UpdateMap(Dictionary<string, string> entries)
     {
         var oldMap = _map;
@@ -70,6 +78,7 @@ public sealed class OidMapService : IOidMapService
         // Atomic swap -- volatile write ensures all readers see the new map immediately
         _map = newMap;
         _metricNames = newMap.Values.ToFrozenSet();
+        _reverseMap = BuildReverseMap(newMap);
 
         _logger.LogInformation(
             "OidMap hot-reloaded: {EntryCount} entries total, +{Added} added, -{Removed} removed, ~{Changed} changed",
@@ -93,6 +102,13 @@ public sealed class OidMapService : IOidMapService
         var merged = new Dictionary<string, string>(entries, StringComparer.OrdinalIgnoreCase);
         merged[HeartbeatJobOptions.HeartbeatOid] = "Heartbeat";
         return merged;
+    }
+
+    private static FrozenDictionary<string, string> BuildReverseMap(FrozenDictionary<string, string> forwardMap)
+    {
+        return forwardMap
+            .Select(kv => new KeyValuePair<string, string>(kv.Value, kv.Key))
+            .ToFrozenDictionary(StringComparer.Ordinal);
     }
 
     private static FrozenDictionary<string, string> BuildFrozenMap(Dictionary<string, string> entries)
