@@ -16,13 +16,13 @@ Requirements for OID map integrity validation, human-name device configuration, 
 
 ### Device Config Human Names
 
-- [ ] **DEV-01**: MetricPollOptions has a Metrics property accepting human-readable metric names alongside existing Oids
-- [ ] **DEV-02**: At device config load, each Metrics[] entry is resolved to its OID via IOidMapService.ResolveToOid; resolved OIDs populate the runtime poll list
-- [ ] **DEV-03**: Unresolvable metric names log a structured warning (device name, metric name) and are skipped — no poll job registered for that entry
-- [ ] **DEV-04**: Oids[] and Metrics[] coexist in the same poll group; both contribute to the runtime OID list
-- [ ] **DEV-05**: Entries in Metrics[] that look like raw OIDs (digits and dots only) log a warning suggesting the Oids field instead
-- [ ] **DEV-06**: When OID map changes, device config is re-resolved against the new map — previously-unresolvable names that now resolve trigger poll job registration
-- [ ] **DEV-07**: Reload diff logging includes metric name translation changes (newly resolved, newly unresolvable)
+- [x] **DEV-01**: PollOptions has a MetricNames property accepting human-readable metric names (full replacement — Oids field removed)
+- [x] **DEV-02**: At device config load, each MetricNames[] entry is resolved to its OID via IOidMapService.ResolveToOid; resolved OIDs populate the runtime poll list
+- [x] **DEV-03**: Unresolvable metric names log a structured warning (device name, metric name, poll index) and are skipped — device still registered for traps
+- [x] **DEV-04**: Full replacement — MetricNames[] is the only field; no coexistence with Oids[] (CONTEXT override: simpler, future-proof)
+- [x] **DEV-05**: No raw OID detection — treated as metric name, fails resolution with standard warning (CONTEXT override: keep it simple)
+- [x] **DEV-06**: Point-in-time resolution — no cross-watcher triggering; operator triggers device reload after OID map change (CONTEXT override: independent watchers)
+- [x] **DEV-07**: Reload diff logging includes per-name resolution detail (resolved count/total, unresolved names listed)
 
 ### Command Map Infrastructure
 
@@ -40,7 +40,7 @@ Requirements for OID map integrity validation, human-name device configuration, 
 | SNMP SET execution | Command map is lookup-only this milestone; execution is a future milestone |
 | Command authorization / access control | No commands executed, nothing to authorize |
 | Command parameter schemas / typed parameters | Type metadata is MIB-level knowledge, out of scope for lookup table |
-| Mandatory migration of devices.json to human names | Oids[] and Metrics[] coexist; operators migrate at their own pace |
+| Mandatory migration of devices.json to human names | Full replacement shipped — all configs migrated to MetricNames |
 | Separate per-device-type command maps | Single simetra-commandmaps ConfigMap mirrors oidmaps pattern |
 | Command map HTTP API or Prometheus export | In-process lookup only; not telemetry |
 | Hard startup failure on unresolvable metric names | Soft warning + skip is correct; hard failure too severe |
@@ -53,13 +53,13 @@ Requirements for OID map integrity validation, human-name device configuration, 
 | MAP-02 | Phase 30 | Complete |
 | MAP-03 | Phase 30 | Complete |
 | MAP-04 | Phase 30 | Complete |
-| DEV-01 | Phase 31 | Pending |
-| DEV-02 | Phase 31 | Pending |
-| DEV-03 | Phase 31 | Pending |
-| DEV-04 | Phase 31 | Pending |
-| DEV-05 | Phase 31 | Pending |
-| DEV-06 | Phase 31 | Pending |
-| DEV-07 | Phase 31 | Pending |
+| DEV-01 | Phase 31 | Complete |
+| DEV-02 | Phase 31 | Complete |
+| DEV-03 | Phase 31 | Complete |
+| DEV-04 | Phase 31 | Complete |
+| DEV-05 | Phase 31 | Complete |
+| DEV-06 | Phase 31 | Complete |
+| DEV-07 | Phase 31 | Complete |
 | CMD-01 | Phase 32 | Pending |
 | CMD-02 | Phase 32 | Pending |
 | CMD-03 | Phase 32 | Pending |
@@ -74,4 +74,4 @@ Requirements for OID map integrity validation, human-name device configuration, 
 
 ---
 *Requirements defined: 2026-03-13*
-*Last updated: 2026-03-13 after Phase 30 execution — MAP-01 through MAP-04 complete*
+*Last updated: 2026-03-13 after Phase 31 execution — DEV-01 through DEV-07 complete*

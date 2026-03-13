@@ -56,8 +56,8 @@ Plans:
 
 #### Phase 31: Human-Name Device Config
 
-**Goal**: Operators can reference metric names like "obp_channel_L1" instead of raw OID strings in devices.json poll entries, with full replacement of the Oids field by Names and graceful handling of unresolvable names
-**Depends on**: Phase 30 (`IOidMapService.ResolveToOid` must exist before DeviceWatcherService can call it)
+**Goal**: Operators can reference metric names like "obp_channel_L1" instead of raw OID strings in devices.json poll entries, with full replacement of the Oids field by MetricNames and graceful handling of unresolvable names. Restructure oidmaps.json from flat dictionary to array of objects with explicit Oid/MetricName fields.
+**Depends on**: Phase 30 (`IOidMapService.ResolveToOid` must exist before DeviceRegistry can call it)
 **Requirements**: DEV-01, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06, DEV-07
 **Success Criteria** (what must be TRUE):
   1. A devices.json poll entry with `MetricNames: ["obp_channel_L1", "obp_r1_power_L1"]` starts polling both OIDs after device config load — MetricPollJob never receives metric name strings as OID arguments
@@ -68,9 +68,9 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 31-01-PLAN.md — OidMap array restructure + C# model rename (PollOptions, Polls, MetricNames)
-- [ ] 31-02-PLAN.md — Name resolution in DeviceRegistry via IOidMapService + unit tests
-- [ ] 31-03-PLAN.md — Config file rewrite (devices.json, K8s ConfigMaps, E2E fixtures, E2E scenarios)
+- [x] 31-01-PLAN.md — OidMap array restructure + C# model rename (PollOptions, Polls, MetricNames)
+- [x] 31-02-PLAN.md — Name resolution in DeviceRegistry via IOidMapService + unit tests
+- [x] 31-03-PLAN.md — Config file rewrite (devices.json, K8s ConfigMaps, E2E fixtures, E2E scenarios)
 
 ---
 
@@ -102,9 +102,9 @@ Plans:
 | 28. ConfigMap Watcher | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 29. K8s Deployment | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 30. OID Map Integrity | v1.6 | 2/2 | Complete | 2026-03-13 |
-| 31. Human-Name Device Config | v1.6 | 0/3 | Not started | — |
+| 31. Human-Name Device Config | v1.6 | 3/3 | Complete | 2026-03-13 |
 | 32. Command Map Infrastructure | v1.6 | 0/? | Not started | — |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-13 after Phase 31 planning*
+*Last updated: 2026-03-13 after Phase 31 execution*
