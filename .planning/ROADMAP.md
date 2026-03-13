@@ -56,18 +56,21 @@ Plans:
 
 #### Phase 31: Human-Name Device Config
 
-**Goal**: Operators can reference metric names like `"obp_channel_L1"` instead of raw OID strings in devices.json poll entries, with graceful handling of unresolvable names and safe coexistence of both formats
+**Goal**: Operators can reference metric names like "obp_channel_L1" instead of raw OID strings in devices.json poll entries, with full replacement of the Oids field by Names and graceful handling of unresolvable names
 **Depends on**: Phase 30 (`IOidMapService.ResolveToOid` must exist before DeviceWatcherService can call it)
 **Requirements**: DEV-01, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06, DEV-07
 **Success Criteria** (what must be TRUE):
-  1. A devices.json poll entry with `Metrics: ["obp_channel_L1", "obp_r1_power_L1"]` starts polling both OIDs after device config load — `MetricPollJob` never receives metric name strings as OID arguments
-  2. A `Metrics[]` entry that has no match in the current OID map logs a structured warning with device name and metric name, and that entry is silently skipped — the device's other poll entries still register normally
-  3. A `Metrics[]` entry that looks like a raw OID (digits-and-dots format) logs a warning suggesting the `Oids[]` field instead, and is otherwise handled as an unresolvable name
-  4. `Oids[]` and `Metrics[]` coexist in the same poll group — both contribute OIDs to the runtime poll list, allowing incremental migration of devices.json without requiring a flag day
-  5. When the OID map hot-reloads, device config is re-resolved against the new map — a name that was previously unresolvable and is now defined in the updated OID map begins polling on the next device-config reload
-  6. Reload diff logging includes metric name translation changes: entries that became newly resolved or newly unresolvable due to OID map changes appear in the diff
+  1. A devices.json poll entry with `Names: ["obp_channel_L1", "obp_r1_power_L1"]` starts polling both OIDs after device config load — MetricPollJob never receives metric name strings as OID arguments
+  2. A Names[] entry that has no match in the current OID map logs a structured warning with device name and metric name, and that entry is silently skipped — the device's other poll entries still register normally
+  3. When device config reloads, names are resolved against the current OID map state at that moment (point-in-time resolution)
+  4. Reload diff logging includes per-name resolution detail (resolved count, unresolved names listed)
 
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 31-01-PLAN.md — K8s oidmap sync + C# model rename (PollOptions, PollInfo, Polls, Names)
+- [ ] 31-02-PLAN.md — Name resolution logic in DeviceWatcherService and DeviceRegistry + unit tests
+- [ ] 31-03-PLAN.md — Config file rewrite (devices.json, K8s ConfigMaps, E2E fixtures, E2E scenarios)
 
 ---
 
@@ -99,9 +102,9 @@ Plans:
 | 28. ConfigMap Watcher | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 29. K8s Deployment | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 30. OID Map Integrity | v1.6 | 2/2 | Complete | 2026-03-13 |
-| 31. Human-Name Device Config | v1.6 | 0/? | Not started | — |
+| 31. Human-Name Device Config | v1.6 | 0/3 | Not started | — |
 | 32. Command Map Infrastructure | v1.6 | 0/? | Not started | — |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-13 after Phase 30 execution*
+*Last updated: 2026-03-13 after Phase 31 planning*
