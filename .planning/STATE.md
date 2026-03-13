@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 ## Current Position
 
-Phase: 32 — Command Map Infrastructure (next)
-Plan: —
-Status: Phase 31 complete and verified, ready for Phase 32
-Last activity: 2026-03-13 — Phase 31 executed and verified (3 plans, 4/4 must-haves, DEV-01 through DEV-07 complete)
+Phase: 32 — Command Map Infrastructure (in progress)
+Plan: 01 of 3
+Status: In progress — Plan 01 complete
+Last activity: 2026-03-13 — Completed 32-01-PLAN.md (ICommandMapService + CommandMapService + commandmaps.json + 12 unit tests)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [######....] 2/3 phases v1.6
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [#######...] 2/3 phases v1.6 (32 plan 1/3)
 
 ## Milestone History
 
@@ -80,6 +80,9 @@ See `.planning/MILESTONES.md` for details.
 - Validation comparer: StringComparer.OrdinalIgnoreCase in all duplicate detection passes — matches runtime FrozenDictionary semantics (Pitfall 10)
 - Validation runs against merged dictionary (after MergeWithHeartbeatSeed); "Heartbeat" rejected as user-supplied metric name value (Pitfall 13)
 - OidMap format: array-of-objects [{Oid, MetricName}] replaces flat {OID: name} dict; ValidateAndParseOidMap uses EnumerateArray (D31-01)
+- CommandMapService null-return contract: ResolveCommandName/ResolveCommandOid return null for unknown entries (no sentinel); empty map is valid (D32-01)
+- CommandMapService reverse map uses StringComparer.Ordinal (command names case-sensitive); forward map uses OrdinalIgnoreCase (OIDs) (D32-01)
+- commandmaps.json: 12 seed entries, array-of-objects [{Oid, CommandName}] format; ConfigMap name "simetra-commandmaps" (D32-01)
 - C# model rename complete: MetricPollOptions->PollOptions, MetricPolls->Polls, Oids->MetricNames; MetricPollInfo.Oids retained (holds resolved OIDs at runtime) (D31-01)
 - simetra-oidmaps.yaml now has 105 entries (6 previously-missing entries added: obp_device_type/sw_version/serial + npb_model/serial/sw_version) (D31-01)
 - DeviceRegistry.BuildPollGroups() resolves MetricNames to OIDs via IOidMapService.ResolveToOid at load time; null return = skip + LogWarning; device registered even with zero resolved OIDs (D31-02)
@@ -118,5 +121,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Phase 31 complete, ready for Phase 32
+Stopped at: Completed 32-01-PLAN.md (ICommandMapService + CommandMapService + commandmaps.json + 12 unit tests)
 Resume file: None
