@@ -33,13 +33,6 @@ public sealed class OidMapWatcherService : BackgroundService
     /// </summary>
     internal const string ConfigKey = "oidmaps.json";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true,
-        PropertyNameCaseInsensitive = true
-    };
-
     private readonly IKubernetes _kubeClient;
     private readonly IOidMapService _oidMapService;
     private readonly ILogger<OidMapWatcherService> _logger;
@@ -166,26 +159,9 @@ public sealed class OidMapWatcherService : BackgroundService
             return;
         }
 
-        Dictionary<string, string>? oidMap;
-        try
-        {
-            oidMap = JsonSerializer.Deserialize<Dictionary<string, string>>(jsonContent, JsonOptions);
-        }
-        catch (JsonException ex)
-        {
-            _logger.LogError(ex,
-                "Failed to parse {ConfigKey} from ConfigMap {ConfigMap} -- skipping reload",
-                ConfigKey, ConfigMapName);
-            return;
-        }
-
+        var oidMap = ValidateAndParseOidMap(jsonContent, _logger);
         if (oidMap is null)
-        {
-            _logger.LogWarning(
-                "Deserialized {ConfigKey} is null -- skipping reload",
-                ConfigKey);
             return;
-        }
 
         await _reloadLock.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -203,6 +179,130 @@ public sealed class OidMapWatcherService : BackgroundService
         finally
         {
             _reloadLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Parses OID map JSON using <see cref="JsonDocument"/> to detect duplicate OID keys
+    /// and duplicate metric name values. Both occurrences of any duplicate are skipped
+    /// (neither enters the returned dictionary). Returns <c>null</c> only on JSON parse failure.
+    /// </summary>
+    /// <param name="jsonContent">Raw JSON string from the ConfigMap.</param>
+    /// <param name="logger">Logger for structured warnings/errors.</param>
+    /// <returns>
+    /// Clean dictionary of OID-to-metric-name entries with all duplicates removed,
+    /// or <c>null</c> if the JSON is malformed.
+    /// </returns>
+    internal static Dictionary<string, string>? ValidateAndParseOidMap(string jsonContent, ILogger logger)
+    {
+        JsonDocument doc;
+        try
+        {
+            doc = JsonDocument.Parse(jsonContent, new JsonDocumentOptions
+            {
+                CommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            });
+        }
+        catch (JsonException ex)
+        {
+            logger.LogError(ex,
+                "Failed to parse {ConfigKey} from ConfigMap {ConfigMap} -- skipping reload",
+                ConfigKey, ConfigMapName);
+            return null;
+        }
+
+        using (doc)
+        {
+            // Pass 1: Enumerate all properties, detect duplicate OID keys
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var duplicateOids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var rawEntries = new List<(string oid, string name)>();
+
+            foreach (var property in doc.RootElement.EnumerateObject())
+            {
+                var oid = property.Name;
+                var name = property.Value.ValueKind == JsonValueKind.Null
+                    ? null
+                    : property.Value.GetString();
+
+                if (string.IsNullOrEmpty(name))
+                {
+                    logger.LogWarning(
+                        "OidMap entry skipped: {Oid} has null or empty metric name",
+                        oid);
+                    continue;
+                }
+
+                if (!seen.Add(oid))
+                {
+                    duplicateOids.Add(oid);
+                }
+                else
+                {
+                    rawEntries.Add((oid, name));
+                }
+            }
+
+            foreach (var oid in duplicateOids)
+            {
+                logger.LogWarning(
+                    "OidMap duplicate OID key detected: {Oid} appears multiple times -- all entries for this OID will be skipped",
+                    oid);
+            }
+
+            // Pass 2: Detect duplicate metric name values
+            var nameCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var (_, name) in rawEntries)
+            {
+                nameCounts.TryGetValue(name, out var count);
+                nameCounts[name] = count + 1;
+            }
+
+            var duplicateNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var (name, count) in nameCounts)
+            {
+                if (count > 1)
+                    duplicateNames.Add(name);
+            }
+
+            foreach (var name in duplicateNames)
+            {
+                logger.LogWarning(
+                    "OidMap duplicate metric name detected: {MetricName} maps to multiple OIDs -- all entries for this name will be skipped",
+                    name);
+            }
+
+            // Pass 3: Build clean dictionary, filtering out both categories
+            var cleanEntries = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (oid, name) in rawEntries)
+            {
+                if (duplicateOids.Contains(oid))
+                {
+                    logger.LogWarning(
+                        "OidMap duplicate OID key skipped: {Oid} -> {MetricName}",
+                        oid, name);
+                    continue;
+                }
+
+                if (duplicateNames.Contains(name))
+                {
+                    logger.LogWarning(
+                        "OidMap duplicate metric name skipped: {Oid} -> {MetricName}",
+                        oid, name);
+                    continue;
+                }
+
+                cleanEntries[oid] = name;
+            }
+
+            if (cleanEntries.Count == 0)
+            {
+                logger.LogError(
+                    "OidMap validation produced empty map -- all entries were duplicates or invalid");
+            }
+
+            return cleanEntries;
         }
     }
 
