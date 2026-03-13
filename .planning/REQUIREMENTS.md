@@ -1,80 +1,77 @@
 # Requirements: SNMP Monitoring System
 
-**Defined:** 2026-03-10
+**Defined:** 2026-03-13
 **Core Value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
 
-## v1.5 Requirements — Priority Vector Data Layer
+## v1.6 Requirements — Organization & Command Map Foundation
 
-Requirements for the stateful data layer that organizes SNMP metrics into prioritized tenants with independent value cells and fan-out routing from the existing pipeline.
+Requirements for OID map integrity validation, human-name device configuration, and SNMP command map lookup infrastructure.
 
-### Configuration
+### OID Map Integrity
 
-- [ ] **CFG-01**: tenantvector.json config model with tenants (id, priority, metrics[]) where each metric has ip, port, metric_name, source, intervalSeconds
-- [ ] **CFG-02**: IValidateOptions validator — unique tenant IDs, valid IP/port ranges, metric_name exists in OID map, no duplicate (ip, port, metric_name) within a tenant
-- [x] **CFG-03**: simetra-tenantvector ConfigMap with TenantVectorWatcherService (K8s API watch, hot-reload, local dev file fallback)
+- [ ] **MAP-01**: OidMapService detects duplicate OID keys at load time and logs structured warning per duplicate (OID, conflicting names, retained name)
+- [ ] **MAP-02**: OidMapService detects duplicate metric name values at load time and logs structured warning per duplicate (name, conflicting OIDs)
+- [ ] **MAP-03**: OidMapService maintains a reverse index (FrozenDictionary name → OID), rebuilt atomically alongside forward map on every UpdateMap call
+- [ ] **MAP-04**: IOidMapService exposes ResolveToOid(string metricName) returning OID string or null
 
-### Data Layer
+### Device Config Human Names
 
-- [x] **DAT-01**: TenantVectorRegistry singleton — ordered priority groups, each containing tenants with metric slots
-- [x] **DAT-02**: MetricSlot value cell — immutable record (value + updated_at), atomic swap via Volatile.Write
-- [x] **DAT-03**: Routing index — FrozenDictionary keyed by (ip, port, metric_name) → list of (tenant_id, slot reference)
-- [x] **DAT-04**: Atomic rebuild on config change — full registry + routing index rebuilt, volatile swap
+- [ ] **DEV-01**: MetricPollOptions has a Metrics property accepting human-readable metric names alongside existing Oids
+- [ ] **DEV-02**: At device config load, each Metrics[] entry is resolved to its OID via IOidMapService.ResolveToOid; resolved OIDs populate the runtime poll list
+- [ ] **DEV-03**: Unresolvable metric names log a structured warning (device name, metric name) and are skipped — no poll job registered for that entry
+- [ ] **DEV-04**: Oids[] and Metrics[] coexist in the same poll group; both contribute to the runtime OID list
+- [ ] **DEV-05**: Entries in Metrics[] that look like raw OIDs (digits and dots only) log a warning suggesting the Oids field instead
+- [ ] **DEV-06**: When OID map changes, device config is re-resolved against the new map — previously-unresolvable names that now resolve trigger poll job registration
+- [ ] **DEV-07**: Reload diff logging includes metric name translation changes (newly resolved, newly unresolvable)
 
-### Pipeline Integration
+### Command Map Infrastructure
 
-- [ ] **PIP-01**: TenantVectorFanOutBehavior in MediatR chain after OidResolution — looks up routing index, writes to matching slots
-- [ ] **PIP-02**: Port resolved via DeviceRegistry.TryGetDeviceByName(DeviceName) — zero changes to SnmpOidReceived
-- [ ] **PIP-03**: Skip heartbeat (IsHeartbeat) and Unknown (MetricName) samples — never routed to tenant slots
-- [ ] **PIP-04**: Fan-out behavior catches own exceptions and always calls next() — never kills OTel export
-
-### Observability
-
-- [x] **OBS-01**: Structured diff logging on reload — tenants added/removed/changed
-- [ ] **OBS-02**: Pipeline counter snmp_tenantvector_routed_total — increments on successful fan-out
-
-### Deployment
-
-- [ ] **DEP-01**: K8s ConfigMap manifest for simetra-tenantvector
-- [ ] **DEP-02**: Deployment.yaml updated with ConfigMap volume mount
+- [ ] **CMD-01**: commandmaps.json uses OID → command name format (mirrors oidmaps.json)
+- [ ] **CMD-02**: CommandMapService singleton with forward (OID → name) and reverse (name → OID) FrozenDictionary indexes, atomic volatile swap on reload
+- [ ] **CMD-03**: CommandMapWatcherService watches simetra-commandmaps ConfigMap via K8s API with hot-reload
+- [ ] **CMD-04**: CommandMapWatcherService falls back to local filesystem loading in non-K8s dev mode
+- [ ] **CMD-05**: CommandMapService detects duplicate OID keys and duplicate command names at load time with structured warnings
+- [ ] **CMD-06**: CommandMapService logs structured diff on reload (added/removed/changed entries) and entry count
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Decision/evaluation logic | Future milestone — data layer only |
-| GraceMultiplier staleness detection | Evaluation engine concern, not data layer |
-| External API (REST/gRPC) | Spec says internal only |
-| Prometheus export of slot values | Would cause cardinality explosion (tenants x metrics) |
-| Tenant-specific polling | Consumes existing pipeline data only |
-| History/time-series buffer | Spec: "no per-metric history buffer" |
-| Cross-tenant slot deduplication | Spec: "each tenant maintains its own independent slot" |
-| Durable persistence | Ephemeral in-memory structure, rebuilt from config on startup |
+| SNMP SET execution | Command map is lookup-only this milestone; execution is a future milestone |
+| Command authorization / access control | No commands executed, nothing to authorize |
+| Command parameter schemas / typed parameters | Type metadata is MIB-level knowledge, out of scope for lookup table |
+| Mandatory migration of devices.json to human names | Oids[] and Metrics[] coexist; operators migrate at their own pace |
+| Separate per-device-type command maps | Single simetra-commandmaps ConfigMap mirrors oidmaps pattern |
+| Command map HTTP API or Prometheus export | In-process lookup only; not telemetry |
+| Hard startup failure on unresolvable metric names | Soft warning + skip is correct; hard failure too severe |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CFG-01 | Phase 25 | Complete |
-| CFG-02 | Phase 25 | Complete |
-| CFG-03 | Phase 28 | Complete |
-| DAT-01 | Phase 26 | Complete |
-| DAT-02 | Phase 26 | Complete |
-| DAT-03 | Phase 26 | Complete |
-| DAT-04 | Phase 26 | Complete |
-| PIP-01 | Phase 27 | Complete |
-| PIP-02 | Phase 27 | Complete |
-| PIP-03 | Phase 27 | Complete |
-| PIP-04 | Phase 27 | Complete |
-| OBS-01 | Phase 28 | Complete |
-| OBS-02 | Phase 27 | Complete |
-| DEP-01 | Phase 29 | Complete |
-| DEP-02 | Phase 29 | Complete |
+| MAP-01 | TBD | Pending |
+| MAP-02 | TBD | Pending |
+| MAP-03 | TBD | Pending |
+| MAP-04 | TBD | Pending |
+| DEV-01 | TBD | Pending |
+| DEV-02 | TBD | Pending |
+| DEV-03 | TBD | Pending |
+| DEV-04 | TBD | Pending |
+| DEV-05 | TBD | Pending |
+| DEV-06 | TBD | Pending |
+| DEV-07 | TBD | Pending |
+| CMD-01 | TBD | Pending |
+| CMD-02 | TBD | Pending |
+| CMD-03 | TBD | Pending |
+| CMD-04 | TBD | Pending |
+| CMD-05 | TBD | Pending |
+| CMD-06 | TBD | Pending |
 
 **Coverage:**
-- v1.5 requirements: 15 total
-- Mapped to phases: 15
-- Unmapped: 0
+- v1.6 requirements: 17 total
+- Mapped to phases: 0
+- Unmapped: 17
 
 ---
-*Requirements defined: 2026-03-10*
-*Last updated: 2026-03-10 after Phase 29 completion*
+*Requirements defined: 2026-03-13*
+*Last updated: 2026-03-13 after initial definition*
