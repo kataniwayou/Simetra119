@@ -49,8 +49,8 @@ See `.planning/MILESTONES.md` for details.
 **Plans:** 2 plans
 
 Plans:
-- [ ] 30-01-PLAN.md — Reverse index and ResolveToOid (OidMapService + IOidMapService + tests)
-- [ ] 30-02-PLAN.md — Duplicate OID/name validation in OidMapWatcherService + tests
+- [x] 30-01-PLAN.md — Reverse index and ResolveToOid (OidMapService + IOidMapService + tests)
+- [x] 30-02-PLAN.md — Duplicate OID/name validation in OidMapWatcherService + tests
 
 ---
 
@@ -98,10 +98,10 @@ Plans:
 | 27. Pipeline Integration | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 28. ConfigMap Watcher | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 29. K8s Deployment | v1.5 | 2/2 | Complete | 2026-03-10 |
-| 30. OID Map Integrity | v1.6 | 0/2 | Not started | — |
+| 30. OID Map Integrity | v1.6 | 2/2 | Complete | 2026-03-13 |
 | 31. Human-Name Device Config | v1.6 | 0/? | Not started | — |
 | 32. Command Map Infrastructure | v1.6 | 0/? | Not started | — |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-13 after Phase 30 planning*
+*Last updated: 2026-03-13 after Phase 30 execution*

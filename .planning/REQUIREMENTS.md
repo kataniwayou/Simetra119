@@ -9,10 +9,10 @@ Requirements for OID map integrity validation, human-name device configuration, 
 
 ### OID Map Integrity
 
-- [ ] **MAP-01**: OidMapService detects duplicate OID keys at load time and logs structured warning per duplicate (OID, conflicting names, retained name)
-- [ ] **MAP-02**: OidMapService detects duplicate metric name values at load time and logs structured warning per duplicate (name, conflicting OIDs)
-- [ ] **MAP-03**: OidMapService maintains a reverse index (FrozenDictionary name → OID), rebuilt atomically alongside forward map on every UpdateMap call
-- [ ] **MAP-04**: IOidMapService exposes ResolveToOid(string metricName) returning OID string or null
+- [x] **MAP-01**: OidMapService detects duplicate OID keys at load time and logs structured warning per duplicate (OID, conflicting names, both skipped)
+- [x] **MAP-02**: OidMapService detects duplicate metric name values at load time and logs structured warning per duplicate (name, conflicting OIDs, both skipped)
+- [x] **MAP-03**: OidMapService maintains a reverse index (FrozenDictionary name → OID), rebuilt atomically alongside forward map on every UpdateMap call
+- [x] **MAP-04**: IOidMapService exposes ResolveToOid(string metricName) returning OID string or null
 
 ### Device Config Human Names
 
@@ -49,10 +49,10 @@ Requirements for OID map integrity validation, human-name device configuration, 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MAP-01 | Phase 30 | Pending |
-| MAP-02 | Phase 30 | Pending |
-| MAP-03 | Phase 30 | Pending |
-| MAP-04 | Phase 30 | Pending |
+| MAP-01 | Phase 30 | Complete |
+| MAP-02 | Phase 30 | Complete |
+| MAP-03 | Phase 30 | Complete |
+| MAP-04 | Phase 30 | Complete |
 | DEV-01 | Phase 31 | Pending |
 | DEV-02 | Phase 31 | Pending |
 | DEV-03 | Phase 31 | Pending |
@@ -74,4 +74,4 @@ Requirements for OID map integrity validation, human-name device configuration, 
 
 ---
 *Requirements defined: 2026-03-13*
-*Last updated: 2026-03-13 after roadmap creation — all 17 requirements mapped to phases 30-32*
+*Last updated: 2026-03-13 after Phase 30 execution — MAP-01 through MAP-04 complete*
