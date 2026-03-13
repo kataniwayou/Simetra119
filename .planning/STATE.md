@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 ## Current Position
 
-Phase: 31 — Human-Name Device Config (next)
-Plan: —
-Status: Phase 30 complete and verified, ready for Phase 31
-Last activity: 2026-03-13 — Phase 30 executed and verified (2 plans, 5/5 must-haves, MAP-01 through MAP-04 complete)
+Phase: 31 — Human-Name Device Config (in progress)
+Plan: 01 of 3 complete
+Status: In progress
+Last activity: 2026-03-13 — Completed 31-01-PLAN.md (oidmap array format + model rename)
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [###.......] 1/3 phases v1.6
 
@@ -80,6 +80,9 @@ See `.planning/MILESTONES.md` for details.
 - Validation comparer: StringComparer.OrdinalIgnoreCase in all duplicate detection passes — matches runtime FrozenDictionary semantics (Pitfall 10)
 - Validation runs against merged dictionary (after MergeWithHeartbeatSeed); "Heartbeat" rejected as user-supplied metric name value (Pitfall 13)
 - D-03 decision pending: whether OID map change auto-triggers device re-resolution is required by DEV-06 and is in scope for Phase 31
+- OidMap format: array-of-objects [{Oid, MetricName}] replaces flat {OID: name} dict; ValidateAndParseOidMap uses EnumerateArray (D31-01)
+- C# model rename complete: MetricPollOptions->PollOptions, MetricPolls->Polls, Oids->MetricNames; MetricPollInfo.Oids retained (holds resolved OIDs at runtime) (D31-01)
+- simetra-oidmaps.yaml now has 105 entries (6 previously-missing entries added: obp_device_type/sw_version/serial + npb_model/serial/sw_version) (D31-01)
 
 ### Known Tech Debt
 
@@ -111,5 +114,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Phase 30 complete, ready for Phase 31
+Stopped at: Completed 31-01-PLAN.md (oidmap array format + model rename, 225/225 tests pass)
 Resume file: None
