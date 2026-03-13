@@ -1,143 +1,131 @@
-# Technology Stack: Priority Vector Data Layer
+# Technology Stack: OID Map Validation, Human-Name Device Config, and Command Map Foundation
 
-**Project:** SnmpCollector -- Priority Vector Data Layer
-**Researched:** 2026-03-10
-**Overall confidence:** HIGH (all recommendations use BCL types already proven in this codebase)
+**Project:** SnmpCollector -- v1.6 Organization and Command Map Foundation
+**Researched:** 2026-03-13
+**Overall confidence:** HIGH (all recommendations use BCL types and patterns already proven in this codebase)
 
 ---
 
 ## Executive Decision
 
-**Zero new NuGet packages.** Every data structure needed ships in the .NET 9 BCL. The codebase already demonstrates the exact patterns required (volatile FrozenDictionary swap, ConcurrentDictionary for mutable state, reference-class wrappers for atomic field updates). This milestone extends existing patterns to a new domain -- it does not introduce new technology.
+**Zero new NuGet packages.** The four features in scope -- OID map duplicate detection, reverse-lookup index (human name to OID), command map service, and CommandMapWatcherService -- are pure pattern-replication work. Every data structure, service shape, and validation technique needed is already present in the codebase and ships in the .NET 9 BCL or existing dependencies.
 
 ---
 
-## Recommended Stack Additions
+## Feature-by-Feature Stack Decisions
 
-### 1. Tenant Metric Slot Storage
+### 1. OID Map Duplicate Detection
 
-| Decision | Type | Namespace | Why |
-|----------|------|-----------|-----|
-| Slot container | `ConcurrentDictionary<string, MetricSlot>` | `System.Collections.Concurrent` | Same pattern as `LivenessVectorService` and `DeviceUnreachabilityTracker`. Pipeline thread writes value + timestamp; future consumers read. Lock-free for single-writer-per-key. |
-| Slot value type | `sealed class MetricSlot` with `volatile` fields | BCL primitives | Reference type allows atomic swap of the dictionary entry. Volatile fields ensure cross-thread visibility without locks, matching `DeviceState` in `DeviceUnreachabilityTracker`. |
-| Timestamp | `DateTimeOffset` via `volatile` field | `System` | Matches `LivenessVectorService` pattern. UTC only. |
+**What it needs:** At `UpdateMap` time inside `OidMapService`, detect and report duplicate OID keys and duplicate metric-name values before building the `FrozenDictionary`.
 
-**Concrete type design:**
+| Decision | Type / API | Why |
+|----------|-----------|-----|
+| Duplicate OID key detection | `HashSet<string>` populated while iterating the incoming `Dictionary<string, string>` | Keys in a raw `Dictionary<string,string>` deserialized from JSON with `PropertyNameCaseInsensitive = true` can silently clobber earlier entries. A `HashSet` pass before `ToFrozenDictionary()` catches this. O(n), zero allocation beyond the set itself. |
+| Duplicate metric-name detection | `HashSet<string>` over `values` of the incoming dictionary | Two OIDs mapping to the same metric name produce silent data loss (one value overwrites the other at the metric layer). Detecting this at `UpdateMap` time surfaces the error as an `ILogger.LogWarning` call. Not a fatal error -- the map loads anyway, but the operator sees the duplicate pair in logs. |
+| Validation severity | Warning (not startup failure) | OID map is hot-reloaded from a ConfigMap; a fatal exception on every reload would drop the entire map. Log the duplicates and load anyway so monitoring continues. |
+| Implementation location | Inside `OidMapService.UpdateMap()` before `BuildFrozenMap()` | Keeps the detection co-located with the single place maps are built. No new class needed. |
 
+**No new types. No new packages.** Uses `HashSet<string>` from `System.Collections.Generic` already in BCL.
+
+---
+
+### 2. Reverse-Lookup Index (Human Name to OID)
+
+**What it needs:** Given a human name (metric name string from the OID map), resolve back to the OID string. Required so `devices.json` and the command map can reference metrics by name rather than raw OID.
+
+| Decision | Type | Why |
+|----------|------|-----|
+| Index structure | `volatile FrozenDictionary<string, string>` (name -> OID) | Exact mirror of the existing forward `_map` field on `OidMapService`. Built from the same data in `UpdateMap`, swapped atomically. Zero-cost reads: volatile read + `FrozenDictionary.TryGetValue()`. |
+| Key comparer | `StringComparer.OrdinalIgnoreCase` | Metric names are case-insensitive in practice. Matches the existing forward map comparer convention. |
+| Duplicate name handling | First-wins with a warning log | If two OIDs map to the same name, only the first is entered in the reverse index. The duplicate detection pass (feature 1 above) already logs the conflict. First-wins is deterministic and simple. |
+| New interface member | `bool TryResolveOid(string metricName, out string oid)` on `IOidMapService` | Symmetric with the existing `Resolve(string oid)` method. Same interface, same service, no new class. |
+| Swap timing | Same `volatile` write as `_map`, inside the same `UpdateMap()` call | One operation under the `SemaphoreSlim` gate: build both forward and reverse FrozenDictionaries, then write both volatile fields. Readers always see a consistent pair. |
+
+**Implementation sketch:**
 ```csharp
-/// <summary>
-/// Single metric value slot for a tenant. Written by pipeline thread,
-/// potentially read by future consumers (API, export).
-/// Reference type: ConcurrentDictionary stores reference, so reads always
-/// get a consistent snapshot of (Value, UpdatedAt).
-/// </summary>
-public sealed class MetricSlot
+// New field on OidMapService
+private volatile FrozenDictionary<string, string> _reverseMap;
+
+// Built alongside _map in UpdateMap() and constructor
+private static FrozenDictionary<string, string> BuildReverseMap(
+    Dictionary<string, string> entries)
 {
-    private volatile double _value;
-    private volatile DateTimeOffset _updatedAt;
-
-    public double Value => _value;
-    public DateTimeOffset UpdatedAt => _updatedAt;
-
-    public void Update(double value, DateTimeOffset timestamp)
+    var reverse = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var (oid, name) in entries)
     {
-        _value = value;
-        _updatedAt = timestamp;
+        // First-wins: only add if name not already present
+        reverse.TryAdd(name, oid);
+    }
+    return reverse.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+}
+```
+
+**No new packages.** `FrozenDictionary` is `System.Collections.Frozen` in BCL since .NET 8.
+
+---
+
+### 3. Human-Name OIDs in `devices.json`
+
+**What it needs:** `MetricPollOptions.Oids` should accept human names (e.g., `"npb_cpu_util"`) in addition to raw OID strings (e.g., `"1.3.6.1.4.1.47477.100.1.1.0"`). At poll time, human names are resolved to OIDs via the reverse-lookup index.
+
+| Decision | Type / Location | Why |
+|----------|----------------|-----|
+| Config model change | None -- `Oids` stays `List<string>` | The field already holds strings. The interpretation (name vs OID) is resolved at dispatch time, not in the model. Adding a new type would require a migration and complicates deserialization. |
+| Resolution point | Inside `MetricPollJob` or the service that issues the SNMP GET, immediately before building the OID list for `SharpSnmpLib` | Resolving at dispatch time means the resolution uses the current hot-loaded reverse map, handling the case where a name's OID changes after a ConfigMap update. |
+| Resolution logic | `IOidMapService.TryResolveOid(entry, out var oid)` returning `oid` if found, else treating `entry` as a literal OID string | Allows gradual migration: existing raw-OID entries in `devices.json` continue to work. No flag or mode switch needed. |
+| Validation addition to `DevicesOptionsValidator` | Log a warning (not fail startup) if a name-style entry appears to not be in the OID map at startup | At startup, the OID map may not yet be loaded (watcher loads it asynchronously). A hard validation failure here would cause a startup race condition. The existing pattern is to accept config values and let them fail silently at runtime if not resolvable. |
+
+**No new packages. No new types.** Resolution via `IOidMapService` (existing interface with new member added in feature 2).
+
+---
+
+### 4. Command Map Service
+
+**What it needs:** A new `ICommandMapService` / `CommandMapService` pair that holds a `FrozenDictionary<string, string>` mapping human name to SNMP command OID (e.g., `"obp_bypass_enable"` -> `"1.3.6.1.4.1.47477.10.21.60.5.0"`). Loaded from `commandmap.json` in the `simetra-commandmap` ConfigMap.
+
+| Decision | Type | Why |
+|----------|------|-----|
+| Internal structure | `volatile FrozenDictionary<string, string>` | Identical to `OidMapService._map`. Same volatile-swap pattern. O(1) reads. |
+| Interface shape | `IOidMapService` is the template: `string Resolve(string name)` + `void UpdateMap(Dictionary<string, string>)` + `int EntryCount` | Symmetry is intentional. Both services map strings to strings. Same consumers, same watcher pattern. A reader familiar with `IOidMapService` understands `ICommandMapService` immediately. |
+| Singleton registration | `services.AddSingleton<ICommandMapService, CommandMapService>()` | Same as `IOidMapService`. Single instance, hot-reload via watcher. |
+| Fallback value | `CommandMapService.Unknown = "Unknown"` constant, same as `OidMapService.Unknown` | Consistent sentinel. Callers check for `Unknown` before issuing SNMP SET. |
+| Config JSON format | Same flat `{ "name": "oid" }` object format as `oidmaps.json` | Reuses the same `JsonSerializer.Deserialize<Dictionary<string,string>>()` call. Operators learn one format. |
+
+**Implementation shape (mirrors `OidMapService` exactly):**
+```csharp
+public sealed class CommandMapService : ICommandMapService
+{
+    private volatile FrozenDictionary<string, string> _map;
+
+    public string Resolve(string commandName) =>
+        _map.TryGetValue(commandName, out var oid) ? oid : Unknown;
+
+    public void UpdateMap(Dictionary<string, string> entries)
+    {
+        _map = entries.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        // diff logging same as OidMapService
     }
 }
 ```
 
-**Why NOT a struct:** ConcurrentDictionary with value-type entries requires `AddOrUpdate` with closures for atomic update. A reference-type entry lets us mutate in-place after `GetOrAdd`, which is lock-free for the common path. This is the exact pattern `DeviceUnreachabilityTracker.DeviceState` uses.
+**No new packages.**
 
-**Why NOT `Interlocked` for double:** `Interlocked.Exchange(ref double, ...)` exists in .NET but adds complexity. The pipeline has `[DisallowConcurrentExecution]` per device, so a given slot is written by at most one thread at a time. Volatile is sufficient for visibility, and torn reads on `double` are not possible on x64 (64-bit aligned). Defensive `Interlocked` could be added later if multi-writer becomes a concern.
+---
 
-### 2. Routing Index (Lookup Structure)
+### 5. CommandMapWatcherService
 
-| Decision | Type | Namespace | Why |
-|----------|------|-----------|-----|
-| Routing index | `volatile FrozenDictionary<string, IReadOnlyList<TenantMetricRoute>>` | `System.Collections.Frozen` | Exact same pattern as `OidMapService._map` and `DeviceRegistry._byIpPort`. Built once on config load, atomically swapped on reload. O(1) lookup per sample. |
-| Composite key | `string` formatted as `"{ip}:{port}:{metricName}"` | N/A | Matches `DeviceRegistry.IpPortKey()` pattern. String key avoids tuple allocation per lookup. Case-insensitive via `StringComparer.OrdinalIgnoreCase`. |
-| Route target | `record TenantMetricRoute(string TenantId, int Priority, string SlotKey)` | N/A | Immutable record. SlotKey is the ConcurrentDictionary key for the MetricSlot. Priority is stored for future consumer ordering. |
+**What it needs:** A `BackgroundService` that watches `simetra-commandmap` ConfigMap key `commandmap.json` and calls `ICommandMapService.UpdateMap()` on change.
 
-**Atomic swap pattern (already proven in codebase):**
+| Decision | Type | Why |
+|----------|------|-----|
+| Base class | `BackgroundService` | Same as `OidMapWatcherService`, `DeviceWatcherService`, `TenantVectorWatcherService`. |
+| Watch loop | K8s `WatchAsync` over `simetra-commandmap`, `fieldSelector: metadata.name=simetra-commandmap` | Line-for-line copy of `OidMapWatcherService`. Same watch API, same reconnect logic, same 5s backoff on disconnect. |
+| Reload serialization | `SemaphoreSlim(1, 1)` `_reloadLock` | Same as all other watchers. Prevents race if two ConfigMap events arrive rapidly. |
+| JSON options | `JsonSerializerOptions` with `ReadCommentHandling.Skip` and `AllowTrailingCommas = true` | Copy from `OidMapWatcherService`. Operators can add comments to JSON. |
+| Namespace detection | `ReadNamespace()` static method (reads `/var/run/secrets/kubernetes.io/serviceaccount/namespace`, falls back to `"simetra"`) | Copy from existing watchers. Local dev works without K8s. |
+| ConfigMap name constant | `internal const string ConfigMapName = "simetra-commandmap"` | Follows the `OidMapWatcherService.ConfigMapName = "simetra-oidmaps"` convention. |
 
-```csharp
-// Field declaration
-private volatile FrozenDictionary<string, IReadOnlyList<TenantMetricRoute>> _routingIndex;
-
-// Rebuild on config reload (called from watcher service under SemaphoreSlim)
-public void Rebuild(TenantVectorConfig config)
-{
-    var builder = new Dictionary<string, List<TenantMetricRoute>>(StringComparer.OrdinalIgnoreCase);
-    // ... populate from config ...
-
-    // Freeze lists, then freeze dictionary
-    var frozen = builder.ToDictionary(
-            kv => kv.Key,
-            kv => (IReadOnlyList<TenantMetricRoute>)kv.Value.AsReadOnly(),
-            StringComparer.OrdinalIgnoreCase)
-        .ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-
-    _routingIndex = frozen; // volatile write = atomic swap
-}
-```
-
-**Why FrozenDictionary and NOT ImmutableDictionary:**
-- FrozenDictionary reads are ~43-69% faster than standard Dictionary (per benchmarks). ImmutableDictionary reads are *slower* than standard Dictionary.
-- We never mutate the index -- we rebuild and swap. FrozenDictionary is purpose-built for this "build once, read many" pattern.
-- Already proven in this codebase with 3 separate services.
-
-**Why NOT `ImmutableInterlocked.Update()`:**
-- `ImmutableInterlocked` is designed for CAS-loop updates to `ImmutableDictionary` fields. We don't need CAS because rebuilds are serialized by the watcher's `SemaphoreSlim` (see `OidMapWatcherService._reloadLock`).
-- Volatile write is sufficient when writes are serialized. This is the exact pattern used by `OidMapService.UpdateMap()` and `DeviceRegistry.ReloadAsync()`.
-
-### 3. Configuration Model
-
-| Decision | Type | Namespace | Why |
-|----------|------|-----------|-----|
-| Config deserialization | `System.Text.Json` with `JsonSerializerOptions` | `System.Text.Json` | Same as `OidMapWatcherService` and `DeviceWatcherService`. Already in BCL, already the project standard. |
-| Config binding | POCO classes with `required` properties and `[Required]` validation | `System.ComponentModel.DataAnnotations` | Matches existing `DevicesOptions` / `DeviceOptions` pattern with `Microsoft.Extensions.Options.DataAnnotations`. |
-| Config source | Separate ConfigMap key, deserialized directly in watcher | N/A | Matches `OidMapWatcherService` pattern (reads JSON from ConfigMap data key, deserializes, calls service update method). Keeps tenant config independent of main appsettings. |
-
-**Config shape (`tenantvector.json`):**
-
-```json
-{
-  "tenants": [
-    {
-      "id": "tenant-alpha",
-      "priority": 1,
-      "metrics": [
-        { "device": "switch-01", "metricName": "ifInOctets" },
-        { "device": "switch-01", "metricName": "ifOutOctets" }
-      ]
-    }
-  ]
-}
-```
-
-### 4. MediatR Fan-Out Behavior
-
-| Decision | Type | Namespace | Why |
-|----------|------|-----------|-----|
-| Behavior type | `IPipelineBehavior<TNotification, TResponse>` | `MediatR` | Same open generic pattern as `OidResolutionBehavior`. Registered via `cfg.AddOpenBehavior()` in `ServiceCollectionExtensions`. |
-| Pipeline position | After `OidResolutionBehavior` (5th behavior, innermost before handler) | N/A | Needs resolved `MetricName` to perform routing lookup. Must NOT short-circuit -- always calls `next()`. |
-| Registration | `cfg.AddOpenBehavior(typeof(TenantFanOutBehavior<,>));` after OidResolution line | N/A | Single line addition to existing `AddMediatR` block. |
-
-**Pipeline order after addition:**
-
-```
-Logging -> Exception -> Validation -> OidResolution -> TenantFanOut -> OtelMetricHandler
-```
-
-The fan-out behavior reads the routing index (volatile FrozenDictionary read), writes to matching MetricSlots (ConcurrentDictionary update), then calls `next()`. Zero allocation in the hot path if no tenants match (just a dictionary lookup returning false).
-
-### 5. Watcher Service for Config Reload
-
-| Decision | Type | Namespace | Why |
-|----------|------|-----------|-----|
-| Watcher | `BackgroundService` watching K8s ConfigMap | `Microsoft.Extensions.Hosting` | Clone of `OidMapWatcherService` pattern. Same watch loop, same `SemaphoreSlim` serialization, same error handling. |
-| Reload target | Routing index service (rebuild + volatile swap) + slot cleanup | N/A | On reload: rebuild FrozenDictionary, swap, prune orphaned slots from ConcurrentDictionary. |
+**No new packages.**
 
 ---
 
@@ -145,29 +133,26 @@ The fan-out behavior reads the routing index (volatile FrozenDictionary read), w
 
 | Rejected Option | Why Not |
 |-----------------|---------|
-| **Redis / external cache** | In-memory is correct. Slots are per-pod, written and read locally. No cross-pod sharing needed. If multi-pod query is needed later, that is an API concern, not a data structure concern. |
-| **`System.Collections.Immutable`** | `ImmutableDictionary` is slower for reads than `FrozenDictionary`. `ImmutableInterlocked` adds CAS-loop complexity we don't need (writes are serialized). |
-| **`ReaderWriterLockSlim`** | Volatile + FrozenDictionary swap is lock-free for readers. RWLS would add contention where none exists. |
-| **`Channel<T>` for fan-out** | Fan-out is synchronous (write a value to a slot). No queuing needed. Channel is for producer-consumer decoupling (like trap ingestion), not for value updates. |
-| **`System.Reactive` / Rx.NET** | Massive dependency for a problem solved by a dictionary write. |
-| **Any new NuGet package** | All types needed are in BCL or existing dependencies. Adding a package for this would be over-engineering. |
-| **`lock` statement** | Volatile swap + ConcurrentDictionary gives lock-free reads on the hot path. `lock` would serialize pipeline throughput. |
-| **Persistent storage / SQLite** | This is a hot-path data structure. Values are ephemeral (overwritten every poll cycle). Persistence adds latency for zero benefit. |
+| **FluentValidation** | `IValidateOptions<T>` + manual `List<string>` failures is the established project pattern (`DevicesOptionsValidator`, `LeaseOptionsValidator`, etc.). Adding FluentValidation would create two validation styles in the same codebase. |
+| **Any regex library for OID string validation** | OID format validation is a single `Regex` or character-scan in BCL. No library needed. And OID validation is not in scope for this milestone -- the existing codebase accepts OID strings as opaque keys. |
+| **A new OID-name format (struct/record)** | Keeping `Oids` as `List<string>` and resolving at dispatch time is simpler and backward-compatible. A new discriminated union type would require JSON converter changes, breaking existing `devices.json` files. |
+| **Abstract base class for watcher services** | The three existing watcher services share 70-80% structure but differ in their target service type (different interfaces) and config shape (different deserialization types). An abstract base with generics would add complexity for marginal gain. The copy-then-customize pattern is established and readable. |
+| **MessagePipe or similar pub/sub for command dispatch** | Command lookup is a synchronous dictionary read. No event bus needed until there is a consumer that dispatches commands in response to events -- which is not in scope for this milestone. |
+| **IMemoryCache or IDistributedCache** | The command map is a small, rarely-changed lookup table. Volatile FrozenDictionary is faster, simpler, and has no TTL expiry to manage. |
+| **Any package upgrade** | All existing package versions satisfy the new features. Upgrades require regression testing with no functional benefit for this milestone. |
 
 ---
 
-## Existing Dependencies (No Changes)
+## Existing Dependencies (Unchanged)
 
-All existing packages remain at current versions. No upgrades needed.
+| Package | Version | Role in This Milestone |
+|---------|---------|----------------------|
+| `KubernetesClient` | 18.0.13 | `CommandMapWatcherService` uses same K8s watch API as `OidMapWatcherService` |
+| `Microsoft.Extensions.Hosting` | 9.0.0 | `BackgroundService` base for `CommandMapWatcherService` |
+| `Microsoft.Extensions.Options.DataAnnotations` | 9.0.0 | `IValidateOptions<T>` for any new config options class |
+| `Lextm.SharpSnmpLib` | 12.5.7 | Command map OIDs passed to `ISnmpClient` for SNMP SET (future) -- no change to this lib |
 
-| Package | Version | Role in This Feature |
-|---------|---------|---------------------|
-| `MediatR` | 12.5.0 | `IPipelineBehavior` for fan-out behavior |
-| `KubernetesClient` | 18.0.13 | ConfigMap watch for `tenantvector.json` |
-| `Microsoft.Extensions.Options.DataAnnotations` | 9.0.0 | Config validation |
-| `Microsoft.Extensions.Hosting` | 9.0.0 | `BackgroundService` for watcher |
-
-No new `PackageReference` entries in `.csproj`.
+**No changes to `.csproj`.** No new `<PackageReference>` entries.
 
 ---
 
@@ -175,14 +160,33 @@ No new `PackageReference` entries in `.csproj`.
 
 | Pattern | Existing Example | New Application |
 |---------|-----------------|-----------------|
-| Volatile FrozenDictionary swap | `OidMapService._map`, `DeviceRegistry._byIpPort` | Routing index `_routingIndex` |
-| ConcurrentDictionary with reference-type value | `DeviceUnreachabilityTracker._state` | `TenantMetricSlotStore._slots` |
-| Volatile fields on inner class | `DeviceState._count`, `DeviceState._isUnreachable` | `MetricSlot._value`, `MetricSlot._updatedAt` |
-| K8s ConfigMap watcher + SemaphoreSlim | `OidMapWatcherService` | `TenantVectorWatcherService` |
-| Open generic pipeline behavior | `OidResolutionBehavior<,>` | `TenantFanOutBehavior<,>` |
-| Composite string key for dictionary | `DeviceRegistry.IpPortKey("{ip}:{port}")` | `"{ip}:{port}:{metricName}"` routing key |
+| Volatile FrozenDictionary atomic swap | `OidMapService._map` | `CommandMapService._map`, `OidMapService._reverseMap` (new field) |
+| `IOidMapService` interface shape | `IOidMapService` | `ICommandMapService` (identical shape, different domain) |
+| K8s ConfigMap watcher + SemaphoreSlim | `OidMapWatcherService` | `CommandMapWatcherService` (structural copy) |
+| `List<string>` failure collector in validator | `DevicesOptionsValidator` | `OidMapOptionsValidator` (if OID map validator added to startup) |
+| Duplicate key detection with `HashSet<T>` | `DeviceWatcherService` IP+Port uniqueness | `OidMapService.UpdateMap()` OID key uniqueness check |
+| Warning-not-fatal for hot-reload issues | `OidMapWatcherService` `LogWarning` on delete event | Duplicate OID/name detection in `UpdateMap()` |
 
-**This is not a technology decision -- it is a pattern replication decision.** Every building block already exists in the codebase. The milestone creates new service classes using established patterns.
+---
+
+## Integration Points with Existing Stack
+
+**`OidMapService` changes (additive, no breaking changes):**
+- New `volatile FrozenDictionary<string, string> _reverseMap` field
+- New `TryResolveOid(string name, out string oid)` method on `IOidMapService`
+- Duplicate detection logic inserted at the top of `UpdateMap()` before `BuildFrozenMap()`
+- All existing callers of `Resolve(string oid)` and `UpdateMap()` are unaffected
+
+**`MetricPollJob` changes (additive):**
+- Before building the OID list for the SNMP GET, resolve each entry in `poll.Oids` via `IOidMapService.TryResolveOid()`, falling back to treating the entry as a literal OID string if resolution fails
+- Requires injecting `IOidMapService` into `MetricPollJob` (or wherever SNMP GETs are assembled)
+
+**New files (following existing structure):**
+- `src/SnmpCollector/Pipeline/ICommandMapService.cs`
+- `src/SnmpCollector/Pipeline/CommandMapService.cs`
+- `src/SnmpCollector/Services/CommandMapWatcherService.cs`
+
+No new directories. Follows existing placement: pipeline abstractions in `Pipeline/`, watcher services in `Services/`.
 
 ---
 
@@ -190,28 +194,25 @@ No new `PackageReference` entries in `.csproj`.
 
 | Area | Confidence | Reason |
 |------|------------|--------|
-| ConcurrentDictionary for slots | HIGH | Proven in `LivenessVectorService`, `DeviceUnreachabilityTracker`, `SnmpMetricFactory` |
-| FrozenDictionary for routing index | HIGH | Proven in `OidMapService`, `DeviceRegistry`. BCL type since .NET 8, unchanged in .NET 9 |
-| Volatile swap pattern | HIGH | Used in 5+ locations in codebase. Well-understood .NET memory model behavior on x64 |
-| MediatR open behavior | HIGH | 4 existing behaviors demonstrate the pattern |
-| K8s ConfigMap watcher | HIGH | 2 existing watchers demonstrate the pattern |
-| No new packages needed | HIGH | All types in BCL or existing dependencies |
+| FrozenDictionary for reverse index | HIGH | Used in 3+ locations. BCL since .NET 8. Exact same swap pattern in `OidMapService`. |
+| Duplicate detection with HashSet | HIGH | Standard BCL pattern. No library risk. |
+| CommandMapService shape | HIGH | Structural mirror of `OidMapService`, which is already proven and tested. |
+| CommandMapWatcherService | HIGH | Structural copy of `OidMapWatcherService`. Same K8s API calls, same error handling. |
+| Name-resolution in poll job | MEDIUM | The resolution fallback logic (name-or-literal) is simple, but the exact injection point in `MetricPollJob` needs to be confirmed against the current job implementation to ensure `IOidMapService` is accessible. |
+| No new packages needed | HIGH | All types in BCL or existing dependencies. Verified against `.csproj`. |
 
 ---
 
 ## Sources
 
-- Codebase: `DeviceRegistry.cs` -- volatile FrozenDictionary swap pattern (lines 19-20, 141-143)
-- Codebase: `OidMapService.cs` -- volatile FrozenDictionary swap with diff logging (lines 20, 62-63)
-- Codebase: `DeviceUnreachabilityTracker.cs` -- ConcurrentDictionary with reference-type inner class + volatile fields (lines 17, 42-74)
-- Codebase: `LivenessVectorService.cs` -- ConcurrentDictionary for timestamp slots (lines 11, 15-17)
-- Codebase: `OidResolutionBehavior.cs` -- open generic pipeline behavior pattern
-- Codebase: `OidMapWatcherService.cs` -- K8s ConfigMap watch + SemaphoreSlim reload serialization
-- Codebase: `ServiceCollectionExtensions.cs` -- behavior registration order (lines 336-341)
-- [FrozenDictionary benchmarks](https://dotnetbenchmarks.com/benchmark/1005) -- 43-69% faster reads vs Dictionary
-- [Volatile vs Interlocked vs Lock](https://code-maze.com/csharp-volatile-interlocked-lock/) -- memory model semantics
-- [High-Performance Dictionary Strategies in .NET](https://medium.com/@rserit/high-performance-dictionary-strategies-in-net-immutable-and-frozen-dictionary-c54ffb05f8ce) -- FrozenDictionary read perf for concurrent scenarios
+- Codebase: `src/SnmpCollector/Pipeline/OidMapService.cs` -- volatile FrozenDictionary swap + `UpdateMap()` pattern
+- Codebase: `src/SnmpCollector/Pipeline/IOidMapService.cs` -- interface shape to mirror for `ICommandMapService`
+- Codebase: `src/SnmpCollector/Services/OidMapWatcherService.cs` -- watcher structural template
+- Codebase: `src/SnmpCollector/Services/DeviceWatcherService.cs` -- watcher structural template (devices variant)
+- Codebase: `src/SnmpCollector/Configuration/Validators/DevicesOptionsValidator.cs` -- IValidateOptions pattern with List<string> failure collector
+- Codebase: `src/SnmpCollector/SnmpCollector.csproj` -- confirmed current package versions, no new packages needed
+- .NET 9 BCL: `System.Collections.Frozen.FrozenDictionary` -- available since .NET 8, unchanged in .NET 9
 
 ---
-*Stack research for: Priority Vector Data Layer*
-*Researched: 2026-03-10*
+*Stack research for: v1.6 Organization and Command Map Foundation*
+*Researched: 2026-03-13*

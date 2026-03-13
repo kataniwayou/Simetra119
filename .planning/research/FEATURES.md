@@ -1,165 +1,294 @@
-# Feature Landscape: Priority Vector Data Layer
+# Feature Landscape: v1.6 Organization & Command Map Foundation
 
-**Domain:** Stateful in-memory data layer for SNMP metric prioritization
-**Researched:** 2026-03-10
-**Confidence:** HIGH -- derived from tenantvector.txt spec and codebase analysis of existing pipeline
+**Domain:** SNMP monitoring agent — OID map hygiene, human-name device config, command map infrastructure
+**Researched:** 2026-03-13
+**Confidence:** HIGH — derived from codebase analysis of existing watchers, config models, validators, and device analysis documents
+
+---
+
+## Context: What Already Exists
+
+Understanding the baseline is required to avoid restating what is already built.
+
+| Existing Capability | Implementation |
+|---------------------|---------------|
+| OID map load + hot-reload | `OidMapWatcherService` + `OidMapService` (FrozenDictionary volatile swap) |
+| OID → metric name resolution | `IOidMapService.Resolve()`, returns `"Unknown"` for unmapped OIDs |
+| Reverse lookup (name → exists?) | `IOidMapService.ContainsMetricName()` |
+| Device config load + hot-reload | `DeviceWatcherService` + `DeviceRegistry` (FrozenDictionary volatile swap) |
+| Device config format | Raw OID strings in `MetricPollOptions.Oids[]` |
+| Startup validation | `DevicesOptionsValidator` — catches missing Name, bad IP, port range, empty Oids[] |
+| Duplicate detection | `DeviceRegistry` throws on duplicate `IP:Port` at load time |
+| Diff logging on reload | `OidMapService.UpdateMap()` logs added/removed/changed entries |
+| K8s ConfigMap watcher pattern | Three watchers: `simetra-oidmaps`, `simetra-devices`, `simetra-tenantvector` |
+
+**The gap this milestone fills:**
+
+1. **OID map has no integrity validation** — duplicates (same OID or same name appearing twice) are silently tolerated. The map is loaded as a `Dictionary<string, string>` which silently last-writes on duplicate keys.
+2. **Device config exposes raw OIDs to operators** — with 744 OBP command instances and 390+ NPB metrics, writing and maintaining raw OID strings is error-prone and unreadable.
+3. **No command map exists** — there is no infrastructure for mapping SET command OIDs to human names, which is prerequisite for any future command execution.
 
 ---
 
 ## Table Stakes
 
-Features the data layer MUST have for downstream consumers (future decision logic) to be viable.
+Features that MUST exist for this milestone to be coherent. Missing any of these produces an incomplete or broken state.
 
-### TS-01: Tenant Vector Configuration Model
+### TS-01: OID Map Duplicate OID Detection
 
-**What:** Strongly-typed C# model for tenantvector.json: `TenantVectorConfig` containing a list of `TenantConfig` objects, each with `id`, `priority`, `graceMultiplier`, and a list of `MetricSlotConfig` objects with `ip`, `port`, `oid`, `source` (poll/trap), `intervalSeconds`.
-**Why Expected:** Without a deserialization target, the config cannot be loaded. This is the foundation everything else depends on.
+**What:** When `OidMapService.UpdateMap()` processes a new map, detect any case where the same OID string key appears more than once. Because JSON parsing via `Dictionary<string, string>` silently drops duplicates (last writer wins), duplicate detection must happen before or during load — not by inspecting the final dictionary.
+
+**Detection point:** In `OidMapWatcherService.HandleConfigMapChangedAsync()` before calling `_oidMapService.UpdateMap()`, parse the JSON into a list of key-value pairs (rather than directly into a Dictionary) and scan for duplicate keys. Alternatively, parse with `JsonDocument` and walk the properties.
+
+**Behavior on detection:** Log a structured warning for each duplicate OID key found: which OID, which names it maps to, and which name was retained. Do NOT reject the entire map — log the conflict and retain last-occurrence semantics to match existing behavior. A warning is sufficient; operators will see it in logs.
+
+**Why Expected:** The OID map is the translation layer for all metric names in the system. A duplicate OID entry means one mapping silently wins and the other is discarded — an operator who adds a line and sees no effect has no indication why. With OBP's 32-link structure (32 × 32 unique OIDs per link type) and NPB's 8 MIB files, the map will grow to hundreds of entries, making typos and copy-paste errors likely.
+
 **Complexity:** Low
-**Depends On:** Nothing -- pure model classes
+**Depends On:** Existing `OidMapWatcherService` (injection point for validation), existing `OidMapService` (UpdateMap is the sink)
 
-### TS-02: TenantVectorWatcherService (ConfigMap Hot-Reload)
+---
 
-**What:** BackgroundService that watches the `simetra-tenantvector` ConfigMap via K8s API and triggers a full rebuild of the in-memory data structures on change. Must follow the exact same pattern as OidMapWatcherService: initial load, then watch loop with 5s reconnect on error, SemaphoreSlim serialization, graceful handling of malformed JSON / missing keys / null deserialization.
-**Why Expected:** The existing system uses ConfigMap watchers for all dynamic configuration (OidMap, Devices). A third watcher for the tenant vector is the established pattern. Without hot-reload, any config change requires a pod restart.
-**Complexity:** Medium
-**Depends On:** TS-01 (config model), existing K8s client infrastructure (IKubernetes injection)
+### TS-02: OID Map Duplicate Name Detection
 
-### TS-03: Tenant Registry with Priority Groups
+**What:** Detect when the same metric name value appears more than once in the OID map. This is a separate and equally important defect: two different OIDs mapping to the same name (e.g., both `...1.3.4.0` and `...2.3.4.0` → `"obp_channel_L1"`) means the same metric name would be emitted from two different SNMP OIDs, creating Prometheus cardinality ambiguity.
 
-**What:** Singleton service that holds the fully materialized tenant vector in memory. Internal structure: an ordered list of priority groups, where each group contains one or more tenants at the same priority level. Tenants within a group are ordered by their position in the config array. Each tenant contains its metric slots as value cells.
-**Why Expected:** This is the core data structure the spec defines. Without it, there is nothing for decision logic to evaluate.
-**Complexity:** Medium
-**Depends On:** TS-01 (config model), TS-02 (watcher feeds it)
+**Detection point:** After parsing the full map (post-TS-01 duplicate OID check), scan values for duplicates. Build a `Dictionary<string, List<string>>` of name → OIDs and flag any name with more than one OID.
 
-### TS-04: Metric Slot Value Cell
+**Behavior on detection:** Log a structured warning for each duplicate name: which metric name is duplicated, and which OIDs both claim it. Do NOT reject the map. This is a warning, not a fatal error — but operators need visibility.
 
-**What:** Per-tenant, per-metric mutable cell holding: `value` (object -- int, long, uint, ulong, string depending on SNMP type), `updated_at` (DateTimeOffset), and the slot's address key `(ip, port, oid)`. The cell is overwritten in-place on each sample arrival. No history buffer.
-**Why Expected:** The spec explicitly defines single-cell semantics: "When a new sample arrives, the value and updated_at are overwritten in place. The previous value is discarded."
+**Why Expected:** The OBP device has 32 links with identically named per-link metrics differentiated by suffix (`_L1`, `_L2`, ...). A copy-paste error where `_L1` is reused for another link's OID would silently cause two physical signals to share a Prometheus metric name, making them indistinguishable except by the `agent` label. This is a data correctness issue, not just aesthetic.
+
 **Complexity:** Low
-**Depends On:** TS-03 (cells live inside tenants in the registry)
+**Depends On:** TS-01 (both validations run at the same load point)
 
-### TS-05: Routing Index -- (ip, port, metric_name) Fan-Out
+---
 
-**What:** A dictionary mapping `(ip, port, metric_name)` to a list of `(tenant_id, metric_slot_ref)` pairs. Built at load time from all metric slots across all tenants. When a sample arrives matching a key, every slot in the list gets its value cell updated. This is the fan-out mechanism.
-**Why Expected:** Without routing, incoming samples cannot reach tenant metric slots. This is the bridge between the existing pipeline and the tenant vector.
-**Complexity:** Medium
-**Depends On:** TS-03 (registry provides the tenants to index), TS-06 (pipeline integration feeds samples)
+### TS-03: Device Config — Human Name Field (`Metrics`)
 
-**Key design note on the routing key:** The spec uses `(ip, port, oid)` but the milestone context says `(ip, port, metric_name)`. The spec also says "only OID-map-resolved metrics allowed (Unknown filtered out)." Using `metric_name` (the OID-resolved name) as the routing key rather than raw OID is the correct choice because:
-1. It naturally filters out Unknown OIDs -- if an OID does not resolve, it has no metric_name to match.
-2. Config authors think in metric names ("obp_r1_power_L1"), not raw OIDs ("1.3.6.1.4.1.47477.10.21.1.3.4.0").
-3. It decouples the tenant vector from OID map changes -- if an OID is remapped to a new name, the tenant vector config uses the new name.
+**What:** Add a `Metrics` property to `MetricPollOptions` (alongside the existing `Oids` property) that accepts a list of metric name strings. Device config authors write metric names (e.g., `"obp_channel_L1"`) instead of raw OIDs.
 
-### TS-06: Pipeline Integration -- TenantVectorBehavior or Post-Handler Hook
+**Config format before:**
+```json
+{ "IntervalSeconds": 10, "Oids": ["1.3.6.1.4.1.47477.10.21.1.3.4.0"] }
+```
 
-**What:** A mechanism to feed resolved SNMP samples into the routing index. Two options:
+**Config format after:**
+```json
+{ "IntervalSeconds": 10, "Metrics": ["obp_channel_L1"] }
+```
 
-- **Option A (MediatR behavior):** A new `IPipelineBehavior` that runs after OidResolutionBehavior, reads `MetricName`, `AgentIp`, and the device's port (from DeviceRegistry lookup), and writes to matching routing index slots. Always calls `next()` -- never short-circuits.
-- **Option B (Post-handler notification):** OtelMetricHandler publishes a lightweight notification after processing; a separate handler writes to routing index.
+**Why Expected:** With 26+ OBP OIDs and 71+ NPB OIDs currently in `devices.json`, the file is already difficult to maintain. Expanding to the full 1,040 OBP metric instances and 390+ NPB metrics without human names makes operator-level config changes nearly impossible. Human names are the names operators already know from Grafana dashboards.
 
-**Recommendation: Option A (pipeline behavior)** because:
-- It follows the existing pattern (behaviors are the pipeline's extension point).
-- It can access `SnmpOidReceived` properties directly (no new message type needed).
-- It runs before the terminal handler, so the value cell is updated even if OtelMetricHandler has issues.
-- The behavior order becomes: Logging -> Exception -> Validation -> OidResolution -> **TenantVectorRouting** -> OtelMetricHandler.
+**Complexity:** Low — adding a new property to an existing model
+**Depends On:** `MetricPollOptions` (existing model), `OidMapService` (reverse lookup at load time)
 
-**Why Expected:** Without pipeline integration, the tenant vector is an empty data structure that never receives data.
-**Complexity:** Medium
-**Depends On:** TS-05 (routing index to write into), existing MediatR pipeline, DeviceRegistry (for port lookup)
+---
 
-### TS-07: Port Resolution for Routing Key
+### TS-04: Human Name Resolution at Device Load Time
 
-**What:** The `SnmpOidReceived` message currently carries `AgentIp` (IPAddress) but NOT `Port`. The routing key requires `(ip, port, metric_name)`. Port must be resolved from DeviceRegistry via `TryGetByIpPort` or derived from the device name.
+**What:** In `DeviceWatcherService.HandleConfigMapChangedAsync()`, after parsing `devices.json`, resolve each entry in `MetricPollOptions.Metrics[]` to its corresponding OID using the reverse OID map (`IOidMapService`). The runtime `MetricPollInfo.Oids` list (used by Quartz jobs for SNMP GET) is populated with the resolved OIDs.
 
-**Problem:** DeviceRegistry.TryGetByIpPort requires both IP and port -- but we only have IP from the message. The lookup is backwards: we need the port, but the lookup requires the port.
+**Resolution mechanism:** The existing `IOidMapService.ContainsMetricName()` confirms a name exists. A new method `IOidMapService.ResolveToOid(metricName)` (or equivalent) performs the reverse lookup: name → OID. This requires adding a reverse index to `OidMapService` (built at `UpdateMap` time alongside the forward map).
 
-**Resolution approaches:**
-1. **Use DeviceName as lookup key:** `SnmpOidReceived.DeviceName` is always set (validated by ValidationBehavior). Use `DeviceRegistry.TryGetDeviceByName(deviceName)` to get `DeviceInfo.Port`. This is reliable because DeviceName is set by both the poll path (from JobDataMap) and the trap path (from community string).
-2. **Add Port to SnmpOidReceived:** Enrich the message with port at creation time (MetricPollJob already knows the port; ChannelConsumerService can resolve it).
+**Dependency ordering:** OID map must be loaded before device config resolves names. The existing startup sequence already loads OidMap before devices (OidMapWatcherService and DeviceWatcherService both do initial loads at startup, but DeviceWatcher must wait for OidMap to be available). This requires `DeviceWatcherService` to depend on `IOidMapService` being initialized — which it already is, since both are registered as singletons and initial load happens in `ExecuteAsync` (not the constructor).
 
-**Recommendation: Option 1 (DeviceName lookup)** because it requires zero changes to existing code. The behavior does `_deviceRegistry.TryGetDeviceByName(msg.DeviceName)` and reads `.Port` from the result.
+**Why Expected:** Without resolution at load time, the Quartz jobs have no OIDs to poll. The resolution must happen before `DynamicPollScheduler.ReconcileAsync()` is called, because ReconcileAsync uses `MetricPollInfo.Oids` to build jobs.
 
-**Why Expected:** Without port, the routing key is incomplete and cannot match config entries that specify port.
+**Complexity:** Medium — requires reverse index in OidMapService, dependency on load ordering
+**Depends On:** TS-03 (Metrics field exists), TS-06 (reverse index on OidMapService), existing `DeviceWatcherService`
+
+---
+
+### TS-05: Device Config Validation — Unknown Metric Name
+
+**What:** During device config load (in `DeviceWatcherService` or a validator called from it), when resolving `Metrics[]` entries, detect any metric name that does not exist in the current OID map. Log a structured warning with the device name, poll group index, and the unresolvable metric name. Skip that entry (do not include an unknown OID placeholder). If ALL metrics in a poll group fail to resolve, log an error for that poll group.
+
+**Behavior:** Warning, not rejection. The device config as a whole is still applied. Individual unresolvable metrics are skipped. Operators must see the warning to know their config has a typo.
+
+**Why Expected:** With 390+ NPB metrics and 1,040 OBP metric instances, a single typo in a metric name will silently drop that metric from polling. Without a warning, the operator has no feedback that polling is incomplete. This is the human-name equivalent of the existing "Unknown" fallback for raw OIDs.
+
 **Complexity:** Low
-**Depends On:** Existing DeviceRegistry, TS-06 (the behavior that needs the port)
+**Depends On:** TS-04 (resolution step where unknown names are detected)
 
-### TS-08: Unknown Metric Filtering
+---
 
-**What:** Samples where `MetricName == OidMapService.Unknown` must NOT be routed to the tenant vector. The spec says "only OID-map-resolved metrics allowed."
-**Why Expected:** Routing unknown metrics would pollute tenant value cells with unidentifiable data. The routing index naturally handles this if keyed by metric_name -- no Unknown entries will exist in the index. But the behavior must explicitly check and skip before attempting a routing lookup.
+### TS-06: OidMapService Reverse Index
+
+**What:** Add a reverse lookup to `OidMapService`: metric name → OID. This is a second `FrozenDictionary<string, string>` (name → OID) built alongside the existing forward map (OID → name) in `UpdateMap()`. Expose via a new interface method: `string? ResolveToOid(string metricName)` — returns null if the name is not in the map.
+
+**Why Expected:** Without a reverse index, `DeviceWatcherService` cannot translate metric names in `Metrics[]` to OID strings needed for SNMP GET. Building it at map load time (O(n)) is cheap; doing it at query time (O(n) scan) would be expensive across hundreds of metrics.
+
+**Complexity:** Low — mirrors the existing forward dictionary pattern
+**Depends On:** Existing `OidMapService` and `IOidMapService` interface
+
+---
+
+### TS-07: Backward Compatibility — `Oids` and `Metrics` Coexistence
+
+**What:** A device config entry may use `Oids` (raw OIDs, existing format), `Metrics` (human names, new format), or both. The runtime `MetricPollInfo.Oids` is populated by:
+1. All entries from `Oids[]` (used as-is, no resolution needed)
+2. All entries from `Metrics[]` that resolve to a known OID
+
+A single poll group may mix both (e.g., a device that has some OIDs not yet in the OID map and some that are).
+
+**Why Expected:** `devices.json` currently uses raw OIDs. Migrating to human names is a one-time operator action, but the migration cannot be atomic — during the transition, some poll groups will have been updated and some not. Coexistence is necessary to allow incremental migration.
+
 **Complexity:** Low
-**Depends On:** TS-06 (the behavior checks MetricName before routing)
+**Depends On:** TS-03 (Metrics field), TS-04 (resolution), existing `Oids` field in `MetricPollOptions`
 
-### TS-09: Heartbeat Filtering
+---
 
-**What:** Heartbeat messages (`IsHeartbeat == true`) must NOT be routed to the tenant vector. Heartbeats are internal liveness signals, not real SNMP data.
-**Why Expected:** The existing pipeline already skips heartbeats in OtelMetricHandler. The tenant vector behavior must do the same.
+### TS-08: Command Map File Format
+
+**What:** Define `commandmaps.json` as an OID-to-command-name mapping file with the same format as `oidmaps.json`: a flat JSON object where each key is an OID string and each value is a command name string.
+
+```json
+{
+  "1.3.6.1.4.1.47477.10.21.1.3.3.0": "obp_set_work_mode_L1",
+  "1.3.6.1.4.1.47477.10.21.1.3.4.0": "obp_set_channel_L1",
+  ...
+}
+```
+
+**Scope:** OBP has 8 NMU + 23 per-link × 32 links = 744 command instances. NPB has ~250+ command objects. Both are documented in `Docs/OBP-Device-Analysis.md` and `Docs/NPB-Device-Analysis.md`.
+
+**Why Expected:** Command maps are the prerequisite for any future SET command execution. Without a lookup table, the agent cannot translate a human command name ("set link 1 to primary channel") to the OID it must SET. The format mirrors oidmaps so the same parsing infrastructure applies.
+
+**Complexity:** Low — format definition only, no implementation required beyond specifying the schema
+**Depends On:** Nothing — pure schema definition
+
+---
+
+### TS-09: CommandMapService
+
+**What:** A new singleton service `ICommandMapService` / `CommandMapService` analogous to `OidMapService`. Maintains:
+- Forward map: OID → command name (`FrozenDictionary<string, string>`)
+- Reverse map: command name → OID (`FrozenDictionary<string, string>`)
+
+Interface:
+```csharp
+public interface ICommandMapService
+{
+    string ResolveCommandName(string oid);      // OID → name, returns "Unknown" if absent
+    string? ResolveToOid(string commandName);   // name → OID, returns null if absent
+    int EntryCount { get; }
+    void UpdateMap(Dictionary<string, string> entries);
+}
+```
+
+Atomic swap via volatile `FrozenDictionary` write on `UpdateMap()`, identical to `OidMapService`.
+
+**Why Expected:** The lookup table must be in-process and O(1) for both directions. The pattern is proven by `OidMapService` — no reason to diverge.
+
+**Complexity:** Low — direct structural copy of `OidMapService`
+**Depends On:** TS-08 (format definition), existing `OidMapService` as structural template
+
+---
+
+### TS-10: CommandMapWatcherService — K8s ConfigMap Watch
+
+**What:** A new `BackgroundService` `CommandMapWatcherService` that watches the `simetra-commandmaps` ConfigMap via the K8s API and calls `ICommandMapService.UpdateMap()` on change. Follows the identical pattern as `OidMapWatcherService`:
+- Initial load on `ExecuteAsync` start
+- Watch loop with automatic 5s reconnect on disconnect
+- `SemaphoreSlim` serialization of concurrent reload requests
+- Graceful handling of: missing ConfigMap key, null deserialization, JSON parse failure
+- `WatchEventType.Deleted` → log warning, retain current map
+
+ConfigMap name: `simetra-commandmaps`
+ConfigMap key: `commandmaps.json`
+
+**Why Expected:** Every live config in this system uses a ConfigMap watcher. Without one, command map updates require a pod restart. The pattern is established — deviating from it would be surprising and inconsistent.
+
+**Complexity:** Low — structural copy of `OidMapWatcherService`
+**Depends On:** TS-09 (CommandMapService to call UpdateMap on), existing K8s client infrastructure
+
+---
+
+### TS-11: CommandMapWatcherService — Local Dev Fallback
+
+**What:** When running outside Kubernetes (local dev), the `CommandMapWatcherService` must fall back to loading `commandmaps.json` from the local filesystem at the same path used by `oidmaps.json` (e.g., `src/SnmpCollector/config/commandmaps.json`). The fallback mechanism must match the pattern used by `OidMapWatcherService` and `DeviceWatcherService`.
+
+**Why Expected:** Developers cannot run K8s locally. The existing watchers all have local fallback via the `appsettings.Development.json` file path or direct filesystem read. `CommandMapWatcherService` must be usable in both contexts without environment-specific code paths visible to the developer.
+
 **Complexity:** Low
-**Depends On:** TS-06 (the behavior checks IsHeartbeat before routing)
+**Depends On:** TS-10 (watcher shell), existing local dev config pattern
 
-### TS-10: Atomic Rebuild on Config Change
+---
 
-**What:** When tenantvector.json changes (via ConfigMap watcher), the entire tenant registry, all value cells, and the routing index must be rebuilt atomically using the FrozenDictionary volatile-swap pattern. The old structure continues serving reads until the new one is fully built, then a single volatile write swaps in the new structure.
-**Why Expected:** This is the established concurrency pattern in the codebase (OidMapService, DeviceRegistry both use it). Without atomic swap, concurrent reads during a rebuild could see partially constructed state.
-**Complexity:** Medium
-**Depends On:** TS-02 (watcher triggers rebuild), TS-03 (registry is what gets rebuilt), TS-05 (routing index is rebuilt alongside)
+### TS-12: Command Map Duplicate Validation
+
+**What:** Apply the same duplicate OID and duplicate name detection from TS-01 and TS-02 to `commandmaps.json`. Warn on duplicate OID keys (two entries for the same OID). Warn on duplicate command name values (two OIDs mapped to the same command name). Log and continue — do not reject the map.
+
+**Why Expected:** The command map will contain 744+ OBP entries and 250+ NPB entries — a large file with real copy-paste risk. The same integrity problem that exists for oidmaps applies equally here.
+
+**Complexity:** Low
+**Depends On:** TS-09 / TS-10 (CommandMapService and watcher), same pattern as TS-01/TS-02
 
 ---
 
 ## Differentiators
 
-Features that make the data layer robust and production-ready. Not strictly required for basic functionality, but strongly recommended.
+Features that add robustness and operational visibility. Not strictly required for basic function, but correct systems include them.
 
-### D-01: Config Validation at Load Time
+### D-01: OID Map Validation Structured Log Format
 
-**What:** When tenantvector.json is loaded, validate:
-- All tenant IDs are unique within the vector
-- All metric slot OIDs resolve to a known metric_name in the current OID map (warn if not)
-- No duplicate `(ip, port, oid)` within a single tenant (error -- pointless)
-- Priority values are valid integers
-- Source is either "poll" or "trap"
-- IntervalSeconds > 0
-- IP addresses are parseable
-- Port is in valid range (1-65535)
-- Referenced devices exist in DeviceRegistry (warn if not -- device may be added later)
+**What:** When duplicate OIDs or duplicate names are detected (TS-01, TS-02), emit a structured log entry with a consistent event type tag (e.g., `OidMapDuplicateOid`, `OidMapDuplicateName`) so operators can write log-based alerts in Grafana/Loki. Include: duplicate key/value, conflicting entries, source ConfigMap and key.
 
-**Value Proposition:** Catches misconfiguration at load time with structured log output instead of silent misbehavior at runtime. Follows the pattern set by DeviceRegistry (throws on duplicate IP+Port).
-**Complexity:** Medium
-**Depends On:** TS-01 (model to validate), OidMapService (to verify OID resolution), DeviceRegistry (to verify device existence)
-
-### D-02: Structured Diff Logging on Reload
-
-**What:** When the tenant vector config is reloaded, log a structured diff: tenants added, tenants removed, tenants with changed metric slots. Follow the pattern established by OidMapService.UpdateMap which logs added/removed/changed entries.
-**Value Proposition:** Operators can see exactly what changed without comparing config files. Critical for troubleshooting in production.
+**Value Proposition:** Without a consistent log structure, operators cannot alert on config errors. A raw `LogWarning` message is sufficient for human reading but cannot be queried systematically.
 **Complexity:** Low
-**Depends On:** TS-10 (rebuild path where diff is computed)
+**Depends On:** TS-01, TS-02
 
-### D-03: Diagnostic Snapshot Accessor
+---
 
-**What:** A read-only accessor on the tenant registry that returns the current state: number of tenants, number of groups, total metric slots, routing index size, per-tenant slot count with latest `updated_at` values. NOT an HTTP API -- just a method that health checks or diagnostic logging can call.
-**Value Proposition:** Makes the data layer inspectable without an external API. Future health checks can verify "are metric slots receiving updates?" without adding an HTTP endpoint.
+### D-02: Device Config Reload Diff Includes Metric Name Translation Changes
+
+**What:** The existing `DeviceRegistry.ReloadAsync()` logs a diff of added/removed devices. Extend the diff to include cases where a device's OID list changed due to metric name resolution (e.g., a metric name was added to oidmaps, causing a previously-unresolvable Metrics[] entry to now resolve). This makes hot-reload behavior observable.
+
+**Value Proposition:** Operators who add a new OID map entry to fix an unresolvable metric name need confirmation that the device config picked it up. Without this log, the fix is silent.
+**Complexity:** Medium — requires cross-watcher awareness (OID map change triggers device re-resolution)
+**Depends On:** TS-04 (resolution), TS-06 (reverse index), existing DeviceRegistry reload path
+
+---
+
+### D-03: OID Map Change Triggers Device Config Re-Resolution
+
+**What:** When the OID map changes (via `OidMapWatcherService`), any device that has unresolved `Metrics[]` entries (logged as warnings by TS-05) should be re-resolved against the new OID map. This requires `OidMapWatcherService` to notify `DeviceWatcherService` or `DeviceRegistry` of the change, or for the device registry to hold the original `Metrics[]` config and re-resolve on OID map reload.
+
+**Value Proposition:** Without this, adding a new OID-to-name mapping in oidmaps doesn't automatically fix device configs that reference that name. The operator would need to touch devices.json (even with no changes) to trigger a device reload that re-resolves names. This is surprising behavior.
+
+**Complexity:** Medium — cross-watcher dependency requires careful design to avoid circular references
+**Depends On:** TS-04, TS-06, existing `OidMapWatcherService` + `DeviceWatcherService`
+
+---
+
+### D-04: CommandMapService Diff Logging on Reload
+
+**What:** When `CommandMapService.UpdateMap()` is called, log a structured diff of added/removed/changed command entries — identical to the pattern in `OidMapService.UpdateMap()`. Log counts and individual changes.
+
+**Value Proposition:** Makes the command map observable during hot-reload. Operators know exactly what changed when they push a new ConfigMap.
+**Complexity:** Low — direct copy of existing OidMapService diff logging
+**Depends On:** TS-09 (CommandMapService)
+
+---
+
+### D-05: `Metrics[]` Validation at Config Load — Regex or Name Convention Check
+
+**What:** Before attempting OID resolution, validate that each metric name string in `Metrics[]` matches the project's naming convention (snake_case, alphanumeric + underscores). Reject entries that contain OID-like strings (contain only digits and dots) — this catches the mistake of accidentally putting a raw OID in the `Metrics[]` field instead of the `Oids[]` field.
+
+**Value Proposition:** The most likely operator error when migrating from `Oids` to `Metrics` is putting an OID string in the wrong field. A quick format check gives immediate feedback.
 **Complexity:** Low
-**Depends On:** TS-03 (registry to inspect)
+**Depends On:** TS-03 (Metrics field exists), TS-05 (validation runs at the same point)
 
-### D-04: Tenant Vector Pipeline Counter
+---
 
-**What:** An OTel counter `snmp_tenantvector_routed_total` that increments each time a sample is successfully routed to at least one tenant metric slot. Optionally with a `tenant_count` attribute showing how many slots were updated (fan-out degree). Follows the existing PipelineMetricService pattern.
-**Value Proposition:** Provides observability into whether the tenant vector is receiving data. A zero-increment counter means either no matching samples or a routing bug.
+### D-06: Entry Count Metrics for Both Maps
+
+**What:** Expose `ICommandMapService.EntryCount` (mirrors `IOidMapService.EntryCount`). Log the count at startup and on every reload. This confirms the CommandMap is loaded and sized as expected.
+
+**Value Proposition:** A zero-entry command map (ConfigMap not found, parse error) would silently accept all commands as "Unknown". Logging the count makes this visible without requiring a health-check query.
 **Complexity:** Low
-**Depends On:** TS-06 (the behavior that does the routing increments the counter)
-
-### D-05: Thread-Safe Value Cell Updates
-
-**What:** Ensure that concurrent sample arrivals for the same `(ip, port, metric_name)` do not corrupt value cells. Since poll jobs and trap processing run concurrently on different threads, two samples for the same metric could arrive simultaneously. The value cell write (value + updated_at) must be atomic from the reader's perspective.
-
-Options:
-- **Lock per cell:** Fine-grained but many locks for many cells.
-- **Interlocked + immutable cell record:** Replace the entire cell record atomically via `Volatile.Write` or `Interlocked.Exchange`. Since cells are small (value + timestamp), creating a new immutable cell and swapping it in is cheap.
-- **Accept last-writer-wins without atomicity:** Value and updated_at are two separate writes; a reader might see new value with old timestamp. In practice, this is unlikely to matter since both are written in the same method call and the reader (future decision logic) is not time-critical.
-
-**Recommendation: Immutable cell record with Volatile.Write.** Create a `readonly record struct MetricCell(object Value, DateTimeOffset UpdatedAt)` and swap it atomically. Clean, zero-lock, matches the project's FrozenDictionary philosophy.
-**Complexity:** Low
-**Depends On:** TS-04 (cell design)
+**Depends On:** TS-09, TS-10
 
 ---
 
@@ -167,151 +296,173 @@ Options:
 
 Things to deliberately NOT build in this milestone.
 
-### AF-01: Decision Logic / Evaluation Engine
+### AF-01: SET Command Execution
 
-**What:** Do NOT implement the priority-group evaluation cascade ("Group 1 before Group 2 before Group 3"). Do NOT implement any decision-making based on metric values. Do NOT implement "is this tenant clear?" logic.
-**Why Avoid:** The spec describes evaluation as a separate concern. This milestone builds the DATA LAYER only -- the stateful substrate that holds metric values. Decision logic is a future milestone.
-**What to Do Instead:** Build the data layer so decision logic can trivially iterate groups in priority order and read value cells. The data structure enables the logic without containing it.
+**What:** Do NOT implement SNMP SET operations, command dispatching, command queuing, or any mechanism that writes values to devices.
+**Why Avoid:** This milestone builds the lookup TABLE only — the infrastructure that knows OID → command name. Executing commands is a separate milestone with different concerns (authorization, retry logic, audit logging, value type validation). Building execution now would be premature.
+**What to Do Instead:** `ICommandMapService` provides lookup only. The only consumers in this milestone are unit tests verifying the map contains the right entries.
 
-### AF-02: GraceMultiplier / Staleness Detection
+---
 
-**What:** Do NOT implement grace period logic (metric slot is "stale" if `now - updated_at > intervalSeconds * graceMultiplier`). Do NOT implement any timeout or expiry behavior on metric slots.
-**Why Avoid:** GraceMultiplier is referenced in the spec but its semantics belong to the evaluation engine, not the data layer. The data layer stores `updated_at` and `intervalSeconds` -- the decision logic computes staleness.
-**What to Do Instead:** Store `intervalSeconds` and `graceMultiplier` as config values on the metric slot so the future evaluation engine can use them. Do not act on them.
+### AF-02: Command Authorization or Access Control
 
-### AF-03: External API / HTTP Endpoints
+**What:** Do NOT add any authorization model, role-based access, or permission checking for commands.
+**Why Avoid:** No commands are executed in this milestone. Authorization only makes sense when there is something to authorize.
+**What to Do Instead:** Design `ICommandMapService` with a clean interface boundary that a future authorization layer can sit in front of.
 
-**What:** Do NOT expose the tenant vector via REST API, gRPC, or any external interface.
-**Why Avoid:** The spec says "Internal only -- no external API, no Prometheus export." The tenant vector is consumed by in-process decision logic, not external systems.
-**What to Do Instead:** Provide internal C# interfaces (ITenantVectorRegistry) for in-process consumers. D-03 (diagnostic snapshot) is the furthest extent of accessibility.
+---
 
-### AF-04: Prometheus Metric Export of Tenant Data
+### AF-03: Command Schemas or Typed Command Parameters
 
-**What:** Do NOT create OTel instruments that export per-tenant or per-slot metric values to Prometheus.
-**Why Avoid:** The spec says "no Prometheus export." Tenant metric values are internal state. The existing `snmp_gauge` / `snmp_info` instruments already export raw SNMP data to Prometheus. Duplicating that data through the tenant lens would create cardinality explosion (tenants x metrics x labels).
-**What to Do Instead:** D-04 (pipeline counter for routing) is acceptable because it counts routing events, not metric values. It does not expose tenant-level data.
+**What:** Do NOT define command parameter schemas (e.g., "this command takes an INTEGER 0-7" or "this command takes an IpAddress"). Do NOT create typed command request objects.
+**Why Avoid:** The command map is OID → name, exactly like oidmaps. Type information for command parameters is MIB-level knowledge that would require a separate schema definition file. It is out of scope for this milestone.
+**What to Do Instead:** Store command name strings only. Type metadata belongs in a future "command schema" milestone when SET execution is being designed.
 
-### AF-05: Tenant-Specific Polling
+---
 
-**What:** Do NOT create new Quartz poll jobs for tenant metric slots. Do NOT modify the existing MetricPollJob or DynamicPollScheduler.
-**Why Avoid:** The spec says metric slots declare `source` (poll/trap) and `intervalSeconds`, but the existing poll infrastructure already handles all SNMP polling. The tenant vector consumes data from the pipeline -- it does not generate new SNMP traffic. The spec's `intervalSeconds` on a metric slot is metadata for staleness calculation, not a polling directive.
-**What to Do Instead:** The tenant vector behavior (TS-06) passively observes samples flowing through the existing pipeline. Tenants that reference a metric will receive updates whenever the existing poll/trap system produces a matching sample.
+### AF-04: Mandatory Migration of `devices.json` to Human Names
 
-### AF-06: History / Time-Series Buffer
+**What:** Do NOT require that all existing `devices.json` entries migrate to `Metrics[]` format in this milestone. Do NOT deprecate or remove the `Oids[]` field.
+**Why Avoid:** The existing `devices.json` uses raw OIDs. Forcing migration as part of this milestone mixes infrastructure work (adding the capability) with operational work (updating all device configs). TS-07 (coexistence) is the correct scope boundary.
+**What to Do Instead:** Support both formats. Document the migration path. Let operators migrate at their own pace.
 
-**What:** Do NOT implement any per-metric-slot history buffer, ring buffer, or time-series storage.
-**Why Avoid:** The spec is explicit: "There is no per-metric history buffer -- history is the job of the decision_series." Each slot holds exactly one value cell (latest sample only).
-**What to Do Instead:** Store `value` and `updated_at` only. If decision logic needs history, it will be a separate data structure in a future milestone.
+---
 
-### AF-07: Cross-Tenant Deduplication of Polling
+### AF-05: Separate Command ConfigMap per Device Type
 
-**What:** Do NOT deduplicate or optimize when multiple tenants reference the same `(ip, port, oid)`. Do NOT merge polling requests or share value cells across tenants.
-**Why Avoid:** The spec is explicit: "Each tenant maintains its own independent slot for that address -- its own value cell, its own updated_at." Independence is by design. Shared cells would create coupling between tenants that the spec explicitly forbids.
-**What to Do Instead:** When a sample arrives, iterate all matching slots in the routing index and update each independently. The fan-out cost is a dictionary lookup + N cell writes, which is trivially fast for realistic tenant counts.
+**What:** Do NOT create separate ConfigMaps for OBP commands (`simetra-commandmaps-obp`) and NPB commands (`simetra-commandmaps-npb`). Do NOT namespace command names by device type in the map keys.
+**Why Avoid:** The `oidmaps` ConfigMap contains entries for all device types in a single flat dictionary, and it works. Splitting by device type adds operational complexity (two watchers, two file paths, two Kubernetes objects) with no benefit. Command names are already namespaced by convention (`obp_*`, `npb_*`).
+**What to Do Instead:** A single `simetra-commandmaps` ConfigMap with all command entries for all device types, exactly mirroring the oidmaps pattern.
 
-### AF-08: Persistence / Durable Storage
+---
 
-**What:** Do NOT persist tenant vector state to disk, database, or any durable storage.
-**Why Avoid:** The tenant vector is an ephemeral in-memory structure rebuilt from config on startup. Metric values are transient snapshots, not historical data. Persistence adds complexity with no value -- the next poll cycle will repopulate all cells.
-**What to Do Instead:** Accept that on pod restart, all value cells start empty (null value, no updated_at). The first poll/trap cycle repopulates them.
+### AF-06: Command Map HTTP API or Prometheus Export
+
+**What:** Do NOT expose the command map via REST API or export command names as Prometheus metrics.
+**Why Avoid:** The command map is operational configuration, not telemetry. Exposing it externally creates a maintenance surface for no benefit. Prometheus labels are for metric data, not config dictionaries.
+**What to Do Instead:** In-process access only via `ICommandMapService`. Log the entry count and diff on reload.
+
+---
+
+### AF-07: Validate That OID Map Names Match Device Config Names at Load Time
+
+**What:** Do NOT cross-validate that every metric name referenced in `devices.json` `Metrics[]` exists in oidmaps at startup as a hard validation failure (blocking startup).
+**Why Avoid:** Soft warning (TS-05) is correct. Hard failure would mean a single unresolvable metric name in any device's poll group blocks the entire agent from starting, which is too severe. The agent should degrade gracefully (skip the unresolvable entries, log warnings, continue polling everything else).
+**What to Do Instead:** TS-05 (log warning, skip entry) is the correct behavior.
 
 ---
 
 ## Feature Dependencies
 
 ```
-TS-01 (Config Model)
+TS-01 (Duplicate OID Detection)
     |
-    +--> TS-02 (ConfigMap Watcher) --> TS-10 (Atomic Rebuild)
-    |                                      |
-    +--> TS-03 (Tenant Registry) ----------+
-    |         |
-    |         +--> TS-04 (Value Cells) --> D-05 (Thread Safety)
-    |         |
-    |         +--> D-03 (Diagnostic Snapshot)
-    |
-    +--> TS-05 (Routing Index)
-              |
-              +--> TS-06 (Pipeline Behavior) --> TS-07 (Port Resolution)
-              |         |                    --> TS-08 (Unknown Filter)
-              |         |                    --> TS-09 (Heartbeat Filter)
-              |         |
-              |         +--> D-04 (Pipeline Counter)
-              |
-              +--> D-01 (Config Validation)
+    +--> D-01 (Structured Log Format)
 
-D-02 (Diff Logging) depends on TS-10 (Atomic Rebuild)
+TS-02 (Duplicate Name Detection)
+    |
+    +--> D-01 (Structured Log Format)
+
+TS-06 (OidMapService Reverse Index)
+    |
+    +--> TS-04 (Human Name Resolution at Device Load)
+              |
+              +--> TS-03 (Metrics Field)
+              |
+              +--> TS-05 (Unknown Metric Warning)
+              |
+              +--> TS-07 (Backward Compat — Oids + Metrics)
+              |
+              +--> D-02 (Reload Diff — name translation changes)
+              |
+              +--> D-03 (OID Map Change triggers re-resolution)
+              |
+              +--> D-05 (Name convention validation)
+
+TS-08 (Command Map File Format)
+    |
+    +--> TS-09 (CommandMapService)
+              |
+              +--> TS-10 (CommandMapWatcherService K8s)
+              |         |
+              |         +--> TS-11 (Local Dev Fallback)
+              |         |
+              |         +--> TS-12 (Command Map Duplicate Validation)
+              |
+              +--> D-04 (CommandMap Diff Logging)
+              |
+              +--> D-06 (Entry Count Metrics)
 ```
 
 ### Critical Path
 
-The minimum viable path is: TS-01 -> TS-03 + TS-04 -> TS-05 -> TS-06 + TS-07 + TS-08 + TS-09 -> TS-02 + TS-10
+Minimum viable path for the milestone:
 
-Explanation: You can build and test the data structures (registry, cells, routing index) and pipeline integration first using hardcoded test config. Then add the ConfigMap watcher and atomic rebuild last. This allows unit testing the core logic before introducing K8s dependencies.
+```
+TS-06 → TS-03 + TS-04 + TS-05 + TS-07   (human-name device config)
+TS-01 + TS-02                              (OID map validation)
+TS-08 → TS-09 → TS-10 + TS-11 + TS-12   (command map infrastructure)
+```
+
+TS-01/TS-02 are independent of the device config changes — they can be built first as isolated improvements to the existing OID map watcher. TS-06 is the prerequisite for all device-config human-name work. Command map infrastructure (TS-08 through TS-12) is entirely independent of the OID map and device config changes.
 
 ---
 
 ## MVP Recommendation
 
-For the priority vector data layer milestone, prioritize in this order:
+**Must build (12 features — all table stakes):**
 
-**Must build (10 features -- all table stakes):**
-1. TS-01: Config model (foundation)
-2. TS-03: Tenant registry with priority groups (core structure)
-3. TS-04: Metric slot value cells (data storage)
-4. TS-05: Routing index (fan-out mechanism)
-5. TS-06: Pipeline behavior (data flow)
-6. TS-07: Port resolution (routing key completion)
-7. TS-08: Unknown metric filtering (data quality)
-8. TS-09: Heartbeat filtering (data quality)
-9. TS-02: ConfigMap watcher (operational necessity)
-10. TS-10: Atomic rebuild (concurrency safety)
+1. **TS-06** OidMapService reverse index (foundation for device config resolution)
+2. **TS-01** Duplicate OID detection in OID map load
+3. **TS-02** Duplicate name detection in OID map load
+4. **TS-03** `Metrics[]` field on `MetricPollOptions`
+5. **TS-04** Human name resolution at device load time
+6. **TS-05** Unknown metric name warning during resolution
+7. **TS-07** Backward compat — `Oids` and `Metrics` coexistence
+8. **TS-08** Command map file format definition
+9. **TS-09** `CommandMapService` (lookup table, forward + reverse)
+10. **TS-10** `CommandMapWatcherService` (K8s ConfigMap watch)
+11. **TS-11** Local dev fallback for CommandMapWatcher
+12. **TS-12** Command map duplicate validation
 
-**Should build (4 differentiators):**
-1. D-01: Config validation (catches mistakes early)
-2. D-02: Diff logging (operational visibility)
-3. D-04: Pipeline counter (observability)
-4. D-05: Thread-safe value cells (correctness)
+**Should build (4 differentiators — high operational value, low cost):**
 
-**Defer (1 differentiator):**
-- D-03: Diagnostic snapshot -- useful but not needed until decision logic exists to consume it. Can be added when there is a consumer.
+1. **D-01** Structured log format for OID map warnings (enables Loki alerts)
+2. **D-04** CommandMapService diff logging on reload (matches existing OidMapService pattern)
+3. **D-05** `Metrics[]` name convention validation (catches OID-in-wrong-field mistakes)
+4. **D-06** Entry count logging for CommandMapService
 
-**Explicitly do NOT build (8 anti-features):**
-- AF-01 through AF-08 as documented above.
+**Evaluate before committing (2 differentiators — medium complexity):**
 
----
+- **D-02** Reload diff including name translation changes — useful but requires careful diff logic across two data sources
+- **D-03** OID map change triggers device re-resolution — significant cross-watcher coupling; evaluate whether the simpler alternative (document that re-resolution requires touching devices.json) is acceptable for the milestone
 
-## Spec Ambiguity Notes
+**Explicitly do NOT build (7 anti-features):**
 
-### OID vs metric_name as routing key
-
-The spec (tenantvector.txt) uses `oid` in the metric slot definition and `(ip, port, oid)` as the routing key. The milestone context uses `(ip, port, metric_name)`. These are reconcilable:
-
-- **Config file (tenantvector.json):** Metric slots specify `oid` (the raw OID string). This is what the config author writes.
-- **Runtime routing index:** Keyed by `(ip, port, metric_name)` where `metric_name` is the OID-map-resolved name. This is what the pipeline behavior uses to match incoming samples.
-- **At load time:** The watcher resolves each configured OID to its metric_name via OidMapService. If an OID does not resolve (Unknown), the slot is logged as a warning (D-01) and excluded from the routing index.
-
-This means the routing index is rebuilt not only when tenantvector.json changes, but also when the OID map changes (since metric_name mappings may change). This cross-dependency should be handled by having the TenantVectorWatcherService listen for OID map reloads as well, or by having OidMapService notify the tenant registry of changes.
-
-### Port in SnmpOidReceived
-
-The current `SnmpOidReceived` message does not carry a port. The recommended approach (TS-07) uses DeviceName-based lookup via DeviceRegistry. This works for all current data paths but assumes every sample has a known DeviceName with a registered device. This is guaranteed by ValidationBehavior (rejects null DeviceName) and the device registration requirement.
+- AF-01: SET command execution
+- AF-02: Command authorization
+- AF-03: Command schemas / typed parameters
+- AF-04: Mandatory migration to human names
+- AF-05: Separate per-device-type CommandMaps
+- AF-06: Command map HTTP API or Prometheus export
+- AF-07: Hard startup failure on unresolvable metric names
 
 ---
 
 ## Sources
 
-- Spec analysis: `Docs/tenantvector.txt` -- Priority vector design specification (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Pipeline/SnmpOidReceived.cs` -- message model, no Port field (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Pipeline/OidMapService.cs` -- FrozenDictionary pattern, Unknown constant (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Pipeline/DeviceRegistry.cs` -- TryGetDeviceByName, FrozenDictionary atomic swap (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Services/OidMapWatcherService.cs` -- ConfigMap watcher pattern, SemaphoreSlim, reconnect (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Pipeline/Handlers/OtelMetricHandler.cs` -- terminal handler, heartbeat skip, type dispatch (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Pipeline/Behaviors/OidResolutionBehavior.cs` -- MetricName enrichment (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Pipeline/Behaviors/ValidationBehavior.cs` -- DeviceName null rejection (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Jobs/MetricPollJob.cs` -- port from JobDataMap, DeviceName from device (HIGH confidence)
-- Codebase analysis: `src/SnmpCollector/Services/SnmpTrapListenerService.cs` -- trap path, no port in VarbindEnvelope (HIGH confidence)
+- Codebase: `src/SnmpCollector/Pipeline/OidMapService.cs` — FrozenDictionary volatile swap, UpdateMap diff logging, ContainsMetricName (HIGH confidence)
+- Codebase: `src/SnmpCollector/Pipeline/IOidMapService.cs` — current interface surface, missing ResolveToOid (HIGH confidence)
+- Codebase: `src/SnmpCollector/Services/OidMapWatcherService.cs` — ConfigMap watch pattern, SemaphoreSlim, reconnect, graceful error handling (HIGH confidence)
+- Codebase: `src/SnmpCollector/Services/DeviceWatcherService.cs` — device reload pattern, dependency on DeviceRegistry + DynamicPollScheduler (HIGH confidence)
+- Codebase: `src/SnmpCollector/Configuration/MetricPollOptions.cs` — current `Oids[]` field, no Metrics field (HIGH confidence)
+- Codebase: `src/SnmpCollector/Configuration/Validators/DevicesOptionsValidator.cs` — existing validation pattern, duplicate IP+Port detection (HIGH confidence)
+- Codebase: `src/SnmpCollector/config/oidmaps.json` — 27 OBP entries + 71 NPB entries, confirms real map size (HIGH confidence)
+- Codebase: `src/SnmpCollector/config/devices.json` — confirms raw OID format in current MetricPolls (HIGH confidence)
+- Device analysis: `Docs/OBP-Device-Analysis.md` — 8 NMU + 23 per-link × 32 links = 744 command instances, 16 NMU + 32 per-link × 32 links = 1,040 metric instances (HIGH confidence)
+- Milestone context: NPB ~250+ command objects across 8 MIB files, ~390+ metrics (MEDIUM confidence — counts from milestone description, not independently verified against NPB-Device-Analysis.md full text)
 
 ---
-*Feature research for: Priority Vector Data Layer*
-*Researched: 2026-03-10*
+
+*Feature research for: v1.6 Organization & Command Map Foundation*
+*Researched: 2026-03-13*
