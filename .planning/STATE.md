@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 ## Current Position
 
 Phase: 31 — Human-Name Device Config (in progress)
-Plan: 01 of 3 complete
+Plan: 02 of 3 complete
 Status: In progress
-Last activity: 2026-03-13 — Completed 31-01-PLAN.md (oidmap array format + model rename)
+Last activity: 2026-03-13 — Completed 31-02-PLAN.md (IOidMapService injection + MetricName resolution in DeviceRegistry)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [###.......] 1/3 phases v1.6
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [######....] 2/3 phases v1.6
 
 ## Milestone History
 
@@ -83,6 +83,8 @@ See `.planning/MILESTONES.md` for details.
 - OidMap format: array-of-objects [{Oid, MetricName}] replaces flat {OID: name} dict; ValidateAndParseOidMap uses EnumerateArray (D31-01)
 - C# model rename complete: MetricPollOptions->PollOptions, MetricPolls->Polls, Oids->MetricNames; MetricPollInfo.Oids retained (holds resolved OIDs at runtime) (D31-01)
 - simetra-oidmaps.yaml now has 105 entries (6 previously-missing entries added: obp_device_type/sw_version/serial + npb_model/serial/sw_version) (D31-01)
+- DeviceRegistry.BuildPollGroups() resolves MetricNames to OIDs via IOidMapService.ResolveToOid at load time; null return = skip + LogWarning; device registered even with zero resolved OIDs (D31-02)
+- IOidMapService injected as 2nd constructor param in DeviceRegistry; DI resolves automatically -- ServiceCollectionExtensions unchanged (D31-02)
 
 ### Known Tech Debt
 
@@ -114,5 +116,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Completed 31-01-PLAN.md (oidmap array format + model rename, 225/225 tests pass)
+Stopped at: Completed 31-02-PLAN.md (IOidMapService injection + MetricName resolution in DeviceRegistry, 230/230 tests pass)
 Resume file: None
