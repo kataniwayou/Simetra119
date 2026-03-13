@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Sockets;
@@ -16,6 +17,7 @@ namespace SnmpCollector.Pipeline;
 public sealed class DeviceRegistry : IDeviceRegistry
 {
     private readonly ILogger<DeviceRegistry> _logger;
+    private readonly IOidMapService _oidMapService;
     private volatile FrozenDictionary<string, DeviceInfo> _byIpPort;
     private volatile FrozenDictionary<string, DeviceInfo> _byName;
 
@@ -23,14 +25,18 @@ public sealed class DeviceRegistry : IDeviceRegistry
     /// Initializes the registry by building FrozenDictionary lookups from configuration.
     /// For each device:
     /// - IP is normalized to IPv4 via <see cref="IPAddress.MapToIPv4"/>.
-    /// - Poll groups are converted to <see cref="MetricPollInfo"/> with their zero-based index.
+    /// - Poll groups resolve MetricNames to OIDs via <see cref="IOidMapService.ResolveToOid"/>.
+    /// - Unresolvable metric names are logged as warnings and excluded from the poll group.
+    /// - Devices with zero resolved OIDs are still registered (needed for traps).
     /// Throws <see cref="InvalidOperationException"/> if duplicate IP+Port is detected.
     /// </summary>
     /// <param name="devicesOptions">The configured devices to register.</param>
+    /// <param name="oidMapService">Service for resolving metric names to OID strings.</param>
     /// <param name="logger">Logger for structured reload output.</param>
-    public DeviceRegistry(IOptions<DevicesOptions> devicesOptions, ILogger<DeviceRegistry> logger)
+    public DeviceRegistry(IOptions<DevicesOptions> devicesOptions, IOidMapService oidMapService, ILogger<DeviceRegistry> logger)
     {
         _logger = logger;
+        _oidMapService = oidMapService ?? throw new ArgumentNullException(nameof(oidMapService));
         var devices = devicesOptions.Value.Devices;
 
         var byIpPortBuilder = new Dictionary<string, DeviceInfo>(devices.Count, StringComparer.OrdinalIgnoreCase);
@@ -50,14 +56,7 @@ public sealed class DeviceRegistry : IDeviceRegistry
                 ip = addresses.First(a => a.AddressFamily == AddressFamily.InterNetwork);
             }
 
-            var pollGroups = d.Polls
-                .Select((poll, index) => new MetricPollInfo(
-                    PollIndex: index,
-                    Oids: poll.MetricNames.AsReadOnly(),
-                    IntervalSeconds: poll.IntervalSeconds,
-                    TimeoutMultiplier: poll.TimeoutMultiplier))
-                .ToList()
-                .AsReadOnly();
+            var pollGroups = BuildPollGroups(d.Polls, d.Name);
 
             var info = new DeviceInfo(d.Name, d.IpAddress, ip.ToString(), d.Port, pollGroups, d.CommunityString);
 
@@ -113,14 +112,7 @@ public sealed class DeviceRegistry : IDeviceRegistry
                 ip = addresses.First(a => a.AddressFamily == AddressFamily.InterNetwork);
             }
 
-            var pollGroups = d.Polls
-                .Select((poll, index) => new MetricPollInfo(
-                    PollIndex: index,
-                    Oids: poll.MetricNames.AsReadOnly(),
-                    IntervalSeconds: poll.IntervalSeconds,
-                    TimeoutMultiplier: poll.TimeoutMultiplier))
-                .ToList()
-                .AsReadOnly();
+            var pollGroups = BuildPollGroups(d.Polls, d.Name);
 
             var info = new DeviceInfo(d.Name, d.IpAddress, ip.ToString(), d.Port, pollGroups, d.CommunityString);
 
@@ -153,6 +145,52 @@ public sealed class DeviceRegistry : IDeviceRegistry
             removed.Count);
 
         return (added, removed);
+    }
+
+    /// <summary>
+    /// Resolves MetricNames in each poll group to OIDs via <see cref="IOidMapService.ResolveToOid"/>.
+    /// Unresolvable names are logged as warnings and excluded. Resolution summary is always logged
+    /// per poll group for reload diff visibility. Devices with zero resolved OIDs are still valid
+    /// (they can still receive traps).
+    /// </summary>
+    private ReadOnlyCollection<MetricPollInfo> BuildPollGroups(List<PollOptions> polls, string deviceName)
+    {
+        return polls
+            .Select((poll, index) =>
+            {
+                var resolvedOids = new List<string>();
+                var unresolvedNames = new List<string>();
+
+                foreach (var name in poll.MetricNames)
+                {
+                    var oid = _oidMapService.ResolveToOid(name);
+                    if (oid is not null)
+                    {
+                        resolvedOids.Add(oid);
+                    }
+                    else
+                    {
+                        unresolvedNames.Add(name);
+                        _logger.LogWarning(
+                            "MetricName '{MetricName}' on device '{DeviceName}' poll {PollIndex} not found in OID map -- skipping",
+                            name, deviceName, index);
+                    }
+                }
+
+                // Always log resolution summary for reload diff visibility
+                _logger.LogInformation(
+                    "Device '{DeviceName}' poll {PollIndex}: resolved {ResolvedCount}/{TotalCount} metric names{UnresolvedDetail}",
+                    deviceName, index, resolvedOids.Count, poll.MetricNames.Count,
+                    unresolvedNames.Count > 0 ? $"; unresolved: [{string.Join(", ", unresolvedNames)}]" : "");
+
+                return new MetricPollInfo(
+                    PollIndex: index,
+                    Oids: resolvedOids.AsReadOnly(),
+                    IntervalSeconds: poll.IntervalSeconds,
+                    TimeoutMultiplier: poll.TimeoutMultiplier);
+            })
+            .ToList()
+            .AsReadOnly();
     }
 
     private static string IpPortKey(string ip, int port) => $"{ip}:{port}";
