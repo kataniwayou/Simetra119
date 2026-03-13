@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 ## Current Position
 
-Phase: 32 — Command Map Infrastructure (in progress)
-Plan: 02 of 3
-Status: In progress — Plan 02 complete
-Last activity: 2026-03-13 — Completed 32-02-PLAN.md (simetra-commandmaps K8s ConfigMap manifests, 12 seed entries, standalone + production)
+Phase: 32 — Command Map Infrastructure (complete)
+Plan: 03 of 3
+Status: Phase complete — all 3 plans delivered
+Last activity: 2026-03-13 — Completed 32-03-PLAN.md (CommandMapWatcherService, DI wiring, local dev fallback, 10 unit tests)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [#######...] 2/3 phases v1.6 (32 plan 2/3)
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 3/3 phases v1.6 (32 plan 3/3)
 
 ## Milestone History
 
@@ -83,6 +83,8 @@ See `.planning/MILESTONES.md` for details.
 - CommandMapService null-return contract: ResolveCommandName/ResolveCommandOid return null for unknown entries (no sentinel); empty map is valid (D32-01)
 - CommandMapService reverse map uses StringComparer.Ordinal (command names case-sensitive); forward map uses OrdinalIgnoreCase (OIDs) (D32-01)
 - commandmaps.json: 12 seed entries, array-of-objects [{Oid, CommandName}] format; ConfigMap name "simetra-commandmaps" (D32-01)
+- ValidateAndParseCommandMap logs WARNING on empty result only if rawEntries.Count > 0; empty JSON array [] is silent and valid (D32-03)
+- CommandMapWatcherService injected with ICommandMapService (interface) -- decoupled from concrete type (D32-03)
 - C# model rename complete: MetricPollOptions->PollOptions, MetricPolls->Polls, Oids->MetricNames; MetricPollInfo.Oids retained (holds resolved OIDs at runtime) (D31-01)
 - simetra-oidmaps.yaml now has 105 entries (6 previously-missing entries added: obp_device_type/sw_version/serial + npb_model/serial/sw_version) (D31-01)
 - DeviceRegistry.BuildPollGroups() resolves MetricNames to OIDs via IOidMapService.ResolveToOid at load time; null return = skip + LogWarning; device registered even with zero resolved OIDs (D31-02)
@@ -121,5 +123,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Completed 32-02-PLAN.md (simetra-commandmaps K8s ConfigMap manifests, 12 seed entries)
+Stopped at: Completed 32-03-PLAN.md (CommandMapWatcherService, DI wiring, 10 unit tests) -- Phase 32 complete
 Resume file: None
