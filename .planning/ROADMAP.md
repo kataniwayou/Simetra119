@@ -8,6 +8,7 @@
 - ✅ **v1.3 Grafana Dashboards** - Phases 18-19 (shipped 2026-03-09)
 - ✅ **v1.4 E2E System Verification** - Phases 20-24 (shipped 2026-03-09)
 - ✅ **v1.5 Priority Vector Data Layer** - Phases 25-29 (shipped 2026-03-10)
+- 🔄 **v1.6 Organization & Command Map Foundation** - Phases 30-32 (in progress)
 
 ## Phases
 
@@ -18,94 +19,73 @@ See `.planning/MILESTONES.md` and `.planning/milestones/` for archived details.
 
 </details>
 
-### ✅ v1.5 Priority Vector Data Layer (Shipped 2026-03-10)
+<details>
+<summary>✅ v1.5 Priority Vector Data Layer (Phases 25-29) - SHIPPED 2026-03-10</summary>
 
-**Milestone Goal:** Stateful in-memory data layer that organizes SNMP metrics into prioritized tenants with independent value cells and fan-out routing from the existing pipeline.
+See `.planning/MILESTONES.md` for details.
 
-#### Phase 25: Config Models and Validation
+</details>
 
-**Goal**: Operator can define tenants with prioritized metric slots in a validated JSON configuration
-**Depends on**: Nothing (foundation for v1.5)
-**Requirements**: CFG-01, CFG-02
+---
+
+### 🔄 v1.6 Organization & Command Map Foundation
+
+**Milestone Goal:** OID maps self-validate for integrity, devices.json accepts human-readable metric names, and a command map lookup table (prerequisite for future SNMP SET) is operational with hot-reload.
+
+---
+
+#### Phase 30: OID Map Integrity
+
+**Goal**: Operators can detect configuration errors in oidmaps.json at load time, and any code that needs to reverse-resolve a metric name to its OID can do so via a stable interface method
+**Depends on**: Nothing (foundation for Phase 31)
+**Requirements**: MAP-01, MAP-02, MAP-03, MAP-04
 **Success Criteria** (what must be TRUE):
-  1. tenantvector.json deserializes into a typed POCO hierarchy (TenantVectorOptions with tenants, priorities, and metric definitions)
-  2. Validation rejects duplicate tenant IDs, invalid IP/port ranges, metric_names not found in the OID map, and duplicate (ip, port, metric_name) within a tenant
-  3. Validation passes for a well-formed config with multiple tenants containing overlapping metrics across tenants
-  4. Unit tests cover all validation rules with both positive and negative cases
-**Plans**: 1 plan
+  1. Loading an oidmaps.json with a duplicate OID key produces a structured log warning per duplicate that names the OID, both conflicting metric names, and which name was retained — no silent last-write-wins clobber
+  2. Loading an oidmaps.json with a duplicate metric name value produces a structured log warning per duplicate that names the conflicting OIDs — both map entries remain visible in logs
+  3. `IOidMapService.ResolveToOid("obp_channel_L1")` returns the correct OID string; `ResolveToOid("no-such-name")` returns null
+  4. The reverse index is rebuilt atomically alongside the forward map on every hot-reload — a caller reading immediately after reload sees the new reverse map, never a partial state
+  5. Validation runs before `OidMapService.UpdateMap` is called so that duplicate-warning log entries are never followed by contradictory "added" diff entries for the same load event
 
-Plans:
-- [x] 25-01: Config POCOs and IValidateOptions validator with unit tests
+**Plans**: TBD
 
-#### Phase 26: Core Data Types and Registry
+---
 
-**Goal**: Tenant metric slots exist in memory as an ordered priority structure with a lock-free routing index
-**Depends on**: Phase 25
-**Requirements**: DAT-01, DAT-02, DAT-03, DAT-04
+#### Phase 31: Human-Name Device Config
+
+**Goal**: Operators can reference metric names like `"obp_channel_L1"` instead of raw OID strings in devices.json poll entries, with graceful handling of unresolvable names and safe coexistence of both formats
+**Depends on**: Phase 30 (`IOidMapService.ResolveToOid` must exist before DeviceWatcherService can call it)
+**Requirements**: DEV-01, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06, DEV-07
 **Success Criteria** (what must be TRUE):
-  1. TenantVectorRegistry holds tenants grouped by priority order, each tenant containing its configured metric slots
-  2. MetricSlot stores value (double + optional string) and updated_at as an immutable record swapped atomically via Volatile.Write -- no torn reads
-  3. Routing index is a FrozenDictionary keyed by (ip, port, metric_name) returning the list of (tenant_id, slot reference) targets
-  4. Calling Reload() with new config atomically rebuilds the entire registry and routing index via volatile swap -- concurrent readers see either old or new state, never partial
-  5. Unit tests verify slot atomicity, routing lookups, priority ordering, and rebuild correctness
-**Plans**: 2 plans
+  1. A devices.json poll entry with `Metrics: ["obp_channel_L1", "obp_r1_power_L1"]` starts polling both OIDs after device config load — `MetricPollJob` never receives metric name strings as OID arguments
+  2. A `Metrics[]` entry that has no match in the current OID map logs a structured warning with device name and metric name, and that entry is silently skipped — the device's other poll entries still register normally
+  3. A `Metrics[]` entry that looks like a raw OID (digits-and-dots format) logs a warning suggesting the `Oids[]` field instead, and is otherwise handled as an unresolvable name
+  4. `Oids[]` and `Metrics[]` coexist in the same poll group — both contribute OIDs to the runtime poll list, allowing incremental migration of devices.json without requiring a flag day
+  5. When the OID map hot-reloads, device config is re-resolved against the new map — a name that was previously unresolvable and is now defined in the updated OID map begins polling on the next device-config reload
+  6. Reload diff logging includes metric name translation changes: entries that became newly resolved or newly unresolvable due to OID map changes appear in the diff
 
-Plans:
-- [x] 26-01: Core data types: MetricSlot, MetricSlotHolder, RoutingKey, Tenant, PriorityGroup with unit tests
-- [x] 26-02: TenantVectorRegistry with FrozenDictionary routing index, atomic rebuild, DI registration, and unit tests
+**Plans**: TBD
 
-#### Phase 27: Pipeline Integration
+---
 
-**Goal**: Every resolved SNMP sample that matches a tenant metric route is written to the correct slot(s) without disrupting existing OTel export
-**Depends on**: Phase 26
-**Requirements**: PIP-01, PIP-02, PIP-03, PIP-04, OBS-02
+#### Phase 32: Command Map Infrastructure
+
+**Goal**: A command map lookup table is operational — operators can load commandmaps.json via ConfigMap hot-reload or local file, and any in-process code can resolve a command name to its SET OID or vice versa
+**Depends on**: Nothing (fully independent of Phases 30 and 31)
+**Requirements**: CMD-01, CMD-02, CMD-03, CMD-04, CMD-05, CMD-06
 **Success Criteria** (what must be TRUE):
-  1. TenantVectorFanOutBehavior runs after OidResolution in the MediatR chain -- it looks up the routing index by (ip, port, metric_name) and writes values to all matching tenant slots
-  2. Port is resolved via DeviceRegistry.TryGetDeviceByName(DeviceName) -- no changes to the SnmpOidReceived message contract
-  3. Heartbeat samples (IsHeartbeat) and unresolved OIDs (MetricName == "Unknown") are skipped and never routed to tenant slots
-  4. If the fan-out behavior throws any exception, it catches internally and always calls next() -- OtelMetricHandler fires regardless
-  5. Pipeline counter snmp_tenantvector_routed_total increments for each successful slot write
-**Plans**: 2 plans
+  1. `CommandMapService.ResolveCommandOid("set-power-threshold")` returns the correct OID string; an unknown name returns null — both forward (OID → name) and reverse (name → OID) lookups work without throwing
+  2. Updating the simetra-commandmaps ConfigMap in K8s triggers a hot-reload within seconds — structured diff log entries appear in pod logs showing added, removed, and changed command entries, plus total entry count
+  3. In local dev mode (no K8s cluster), `CommandMapService` is populated from `config/commandmaps.json` on startup — no empty-map silent failure
+  4. Loading a commandmaps.json with a duplicate OID key or a duplicate command name produces a structured warning per duplicate — same validation behavior as OID map integrity (Phase 30)
+  5. The simetra-commandmaps ConfigMap manifest exists in the deploy directory and is ready to apply to the cluster
 
-Plans:
-- [x] 27-01: Heartbeat normalization, ValueExtractionBehavior, OtelMetricHandler refactor to pre-extracted values
-- [x] 27-02: MetricSlot TypeCode, TenantVectorFanOutBehavior, pipeline counter, DI registration
+**Plans**: TBD
 
-#### Phase 28: ConfigMap Watcher and Local Dev
-
-**Goal**: Tenant vector configuration hot-reloads from a K8s ConfigMap in production and from a local file in development
-**Depends on**: Phase 27
-**Requirements**: CFG-03, OBS-01
-**Success Criteria** (what must be TRUE):
-  1. TenantVectorWatcherService watches the simetra-tenantvector ConfigMap via K8s API and triggers registry rebuild on change
-  2. In local-dev mode (no K8s), the service loads tenantvector.json from the file system
-  3. On reload, structured diff logging reports tenants added, removed, and changed (metric count delta)
-  4. OID map changes trigger a routing index rebuild so metric_name renames do not cause silent routing misses
-**Plans**: 2 plans
-
-Plans:
-- [x] 28-01: TenantVectorWatcherService (K8s watch + local dev fallback)
-- [x] 28-02: simetra-tenantvector ConfigMap manifest
-
-#### Phase 29: K8s Deployment and E2E Validation
-
-**Goal**: Tenant vector is deployed to the K8s cluster and verified end-to-end with real SNMP data flowing through the fan-out pipeline
-**Depends on**: Phase 28
-**Requirements**: DEP-01, DEP-02
-**Success Criteria** (what must be TRUE):
-  1. simetra-tenantvector ConfigMap manifest exists and is applied to the cluster
-  2. Deployment.yaml mounts the ConfigMap so TenantVectorWatcherService can read it
-  3. After deployment, snmp_tenantvector_routed_total counter is incrementing in Prometheus (proving samples are routing to tenant slots)
-  4. ConfigMap update triggers watcher reload and diff log entries appear in pod logs
-**Plans**: 2 plans
-
-Plans:
-- [x] 29-01: ConfigMap manifest and deployment.yaml updates
-- [x] 29-02: E2E validation of fan-out routing and hot-reload
+---
 
 ## Progress
 
-**Execution Order:** 25 → 26 → 27 → 28 → 29
+**Execution Order:** 30 → 31 → 32 (32 can run in parallel with 30 and 31)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -114,7 +94,10 @@ Plans:
 | 27. Pipeline Integration | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 28. ConfigMap Watcher | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 29. K8s Deployment | v1.5 | 2/2 | Complete | 2026-03-10 |
+| 30. OID Map Integrity | v1.6 | 0/? | Not started | — |
+| 31. Human-Name Device Config | v1.6 | 0/? | Not started | — |
+| 32. Command Map Infrastructure | v1.6 | 0/? | Not started | — |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-10 after Phase 29 completion*
+*Last updated: 2026-03-13 after v1.6 roadmap creation*

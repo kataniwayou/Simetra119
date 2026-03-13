@@ -49,29 +49,29 @@ Requirements for OID map integrity validation, human-name device configuration, 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MAP-01 | TBD | Pending |
-| MAP-02 | TBD | Pending |
-| MAP-03 | TBD | Pending |
-| MAP-04 | TBD | Pending |
-| DEV-01 | TBD | Pending |
-| DEV-02 | TBD | Pending |
-| DEV-03 | TBD | Pending |
-| DEV-04 | TBD | Pending |
-| DEV-05 | TBD | Pending |
-| DEV-06 | TBD | Pending |
-| DEV-07 | TBD | Pending |
-| CMD-01 | TBD | Pending |
-| CMD-02 | TBD | Pending |
-| CMD-03 | TBD | Pending |
-| CMD-04 | TBD | Pending |
-| CMD-05 | TBD | Pending |
-| CMD-06 | TBD | Pending |
+| MAP-01 | Phase 30 | Pending |
+| MAP-02 | Phase 30 | Pending |
+| MAP-03 | Phase 30 | Pending |
+| MAP-04 | Phase 30 | Pending |
+| DEV-01 | Phase 31 | Pending |
+| DEV-02 | Phase 31 | Pending |
+| DEV-03 | Phase 31 | Pending |
+| DEV-04 | Phase 31 | Pending |
+| DEV-05 | Phase 31 | Pending |
+| DEV-06 | Phase 31 | Pending |
+| DEV-07 | Phase 31 | Pending |
+| CMD-01 | Phase 32 | Pending |
+| CMD-02 | Phase 32 | Pending |
+| CMD-03 | Phase 32 | Pending |
+| CMD-04 | Phase 32 | Pending |
+| CMD-05 | Phase 32 | Pending |
+| CMD-06 | Phase 32 | Pending |
 
 **Coverage:**
 - v1.6 requirements: 17 total
-- Mapped to phases: 0
-- Unmapped: 17
+- Mapped to phases: 17
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-13*
-*Last updated: 2026-03-13 after initial definition*
+*Last updated: 2026-03-13 after roadmap creation — all 17 requirements mapped to phases 30-32*

@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 30 — OID Map Integrity
 Plan: —
-Status: Defining requirements
-Last activity: 2026-03-13 — Milestone v1.6 started
+Status: Roadmap created, ready for phase planning
+Last activity: 2026-03-13 — v1.6 roadmap created (Phases 30-32)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [..........] 0/? v1.6
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [..........] 0/3 phases v1.6
 
 ## Milestone History
 
@@ -26,7 +26,7 @@ Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/
 | v1.3 Grafana Dashboards | 18-19 | 2 | 2026-03-09 |
 | v1.4 E2E System Verification | 20-24 | 11 | 2026-03-09 |
 | v1.5 Priority Vector Data Layer | 25-29 | 9 | 2026-03-10 |
-| v1.6 Organization & Command Map Foundation | 30+ | TBD | In progress |
+| v1.6 Organization & Command Map Foundation | 30-32 | TBD | In progress |
 
 See `.planning/MILESTONES.md` for details.
 
@@ -70,6 +70,15 @@ See `.planning/MILESTONES.md` for details.
 - kubectl.sh snapshot/restore_configmaps now includes simetra-tenantvector; report.sh Tenant Vector category covers indices 33-36 (D29-02)
 - IntervalSeconds removed from tenant vector ConfigMap; TenantVectorRegistry.DeriveIntervalSeconds() resolves via IDeviceRegistry.TryGetByIpPort + IOidMapService.Resolve at Reload() time (Q042)
 
+### v1.6 Architectural Decisions (pending confirmation in phase plans)
+
+- Duplicate validation runs in OidMapWatcherService BEFORE calling OidMapService.UpdateMap — prevents phantom diff log entries (Pitfall 1)
+- Strategy A for human-name resolution: resolve at device-load time in DeviceWatcherService, not at poll time in MetricPollJob — avoids stale OIDs after OID map hot-reload (Pitfall 4)
+- ConfigMap name for command map: "simetra-commandmaps" — mirrors "simetra-oidmaps" naming convention; must be locked as a constant before Phase 32 coding starts (Pitfall 12)
+- Validation comparer: StringComparer.OrdinalIgnoreCase in all duplicate detection passes — matches runtime FrozenDictionary semantics (Pitfall 10)
+- Validation runs against merged dictionary (after MergeWithHeartbeatSeed); "Heartbeat" rejected as user-supplied metric name value (Pitfall 13)
+- D-03 decision pending: whether OID map change auto-triggers device re-resolution is required by DEV-06 and is in scope for Phase 31
+
 ### Known Tech Debt
 
 None.
@@ -99,6 +108,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-12
-Stopped at: Completed quick task 054
+Last session: 2026-03-13
+Stopped at: v1.6 roadmap created
 Resume file: None
