@@ -5,4 +5,4 @@ metadata:
   namespace: simetra
 data:
   oidmaps.json: |
-    ["this", "is", "valid", "json", "but", "wrong", "schema"]
+    { "not": "an array" }

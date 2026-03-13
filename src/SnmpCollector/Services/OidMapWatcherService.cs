@@ -214,17 +214,39 @@ public sealed class OidMapWatcherService : BackgroundService
 
         using (doc)
         {
-            // Pass 1: Enumerate all properties, detect duplicate OID keys
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                logger.LogError(
+                    "OidMap JSON must be an array of objects -- skipping reload");
+                return null;
+            }
+
+            // Pass 1: Enumerate all array elements, detect duplicate OID keys
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var duplicateOids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var rawEntries = new List<(string oid, string name)>();
 
-            foreach (var property in doc.RootElement.EnumerateObject())
+            foreach (var element in doc.RootElement.EnumerateArray())
             {
-                var oid = property.Name;
-                var name = property.Value.ValueKind == JsonValueKind.Null
+                if (!element.TryGetProperty("Oid", out var oidProp) ||
+                    !element.TryGetProperty("MetricName", out var nameProp))
+                {
+                    logger.LogWarning(
+                        "OidMap array element missing Oid or MetricName -- skipping entry");
+                    continue;
+                }
+
+                var oid = oidProp.GetString();
+                var name = nameProp.ValueKind == JsonValueKind.Null
                     ? null
-                    : property.Value.GetString();
+                    : nameProp.GetString();
+
+                if (string.IsNullOrEmpty(oid))
+                {
+                    logger.LogWarning(
+                        "OidMap array element has null or empty Oid -- skipping entry");
+                    continue;
+                }
 
                 if (string.IsNullOrEmpty(name))
                 {

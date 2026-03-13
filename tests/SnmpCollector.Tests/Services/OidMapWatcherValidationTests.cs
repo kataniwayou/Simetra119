@@ -13,11 +13,11 @@ public class OidMapWatcherValidationTests
     public void ValidOidMap_NoDuplicates_ReturnsAllEntries()
     {
         var json = """
-            {
-                "1.3.6.1.2.1.1.1.0": "sysDescr",
-                "1.3.6.1.2.1.1.3.0": "sysUpTime",
-                "1.3.6.1.2.1.1.5.0": "sysName"
-            }
+            [
+                { "Oid": "1.3.6.1.2.1.1.1.0", "MetricName": "sysDescr" },
+                { "Oid": "1.3.6.1.2.1.1.3.0", "MetricName": "sysUpTime" },
+                { "Oid": "1.3.6.1.2.1.1.5.0", "MetricName": "sysName" }
+            ]
             """;
 
         var result = OidMapWatcherService.ValidateAndParseOidMap(json, Logger);
@@ -32,12 +32,12 @@ public class OidMapWatcherValidationTests
     [Fact]
     public void DuplicateOidKey_BothEntriesSkipped()
     {
-        // Same OID key appears twice with different metric names
+        // Same OID appears twice with different metric names
         var json = """
-            {
-                "1.3.6.1.2.1.1.1.0": "sysDescr",
-                "1.3.6.1.2.1.1.1.0": "sysDescrAlt"
-            }
+            [
+                { "Oid": "1.3.6.1.2.1.1.1.0", "MetricName": "sysDescr" },
+                { "Oid": "1.3.6.1.2.1.1.1.0", "MetricName": "sysDescrAlt" }
+            ]
             """;
 
         var result = OidMapWatcherService.ValidateAndParseOidMap(json, Logger);
@@ -51,10 +51,10 @@ public class OidMapWatcherValidationTests
     {
         // Two different OIDs map to the same metric name
         var json = """
-            {
-                "1.3.6.1.2.1.1.1.0": "sysDescr",
-                "1.3.6.1.2.1.1.5.0": "sysDescr"
-            }
+            [
+                { "Oid": "1.3.6.1.2.1.1.1.0", "MetricName": "sysDescr" },
+                { "Oid": "1.3.6.1.2.1.1.5.0", "MetricName": "sysDescr" }
+            ]
             """;
 
         var result = OidMapWatcherService.ValidateAndParseOidMap(json, Logger);
@@ -67,11 +67,11 @@ public class OidMapWatcherValidationTests
     public void DuplicateOid_OtherEntriesSurvive()
     {
         var json = """
-            {
-                "1.3.6.1.2.1.1.1.0": "sysDescr",
-                "1.3.6.1.2.1.1.1.0": "sysDescrAlt",
-                "1.3.6.1.2.1.1.5.0": "sysName"
-            }
+            [
+                { "Oid": "1.3.6.1.2.1.1.1.0", "MetricName": "sysDescr" },
+                { "Oid": "1.3.6.1.2.1.1.1.0", "MetricName": "sysDescrAlt" },
+                { "Oid": "1.3.6.1.2.1.1.5.0", "MetricName": "sysName" }
+            ]
             """;
 
         var result = OidMapWatcherService.ValidateAndParseOidMap(json, Logger);
@@ -85,11 +85,11 @@ public class OidMapWatcherValidationTests
     public void DuplicateMetricName_OtherEntriesSurvive()
     {
         var json = """
-            {
-                "1.3.6.1.2.1.1.1.0": "sysDescr",
-                "1.3.6.1.2.1.1.3.0": "sysDescr",
-                "1.3.6.1.2.1.1.5.0": "sysName"
-            }
+            [
+                { "Oid": "1.3.6.1.2.1.1.1.0", "MetricName": "sysDescr" },
+                { "Oid": "1.3.6.1.2.1.1.3.0", "MetricName": "sysDescr" },
+                { "Oid": "1.3.6.1.2.1.1.5.0", "MetricName": "sysName" }
+            ]
             """;
 
         var result = OidMapWatcherService.ValidateAndParseOidMap(json, Logger);
@@ -104,12 +104,12 @@ public class OidMapWatcherValidationTests
     {
         // Both OID duplicates and name duplicates -- everything conflicts
         var json = """
-            {
-                "1.3.6.1.2.1.1.1.0": "sysDescr",
-                "1.3.6.1.2.1.1.1.0": "sysDescrAlt",
-                "1.3.6.1.2.1.1.3.0": "sysUpTime",
-                "1.3.6.1.2.1.1.5.0": "sysUpTime"
-            }
+            [
+                { "Oid": "1.3.6.1.2.1.1.1.0", "MetricName": "sysDescr" },
+                { "Oid": "1.3.6.1.2.1.1.1.0", "MetricName": "sysDescrAlt" },
+                { "Oid": "1.3.6.1.2.1.1.3.0", "MetricName": "sysUpTime" },
+                { "Oid": "1.3.6.1.2.1.1.5.0", "MetricName": "sysUpTime" }
+            ]
             """;
 
         var result = OidMapWatcherService.ValidateAndParseOidMap(json, Logger);
@@ -119,9 +119,9 @@ public class OidMapWatcherValidationTests
     }
 
     [Fact]
-    public void EmptyJsonObject_ReturnsEmptyDictionary()
+    public void EmptyJsonArray_ReturnsEmptyDictionary()
     {
-        var json = "{}";
+        var json = "[]";
 
         var result = OidMapWatcherService.ValidateAndParseOidMap(json, Logger);
 
@@ -133,11 +133,11 @@ public class OidMapWatcherValidationTests
     public void NullOrEmptyMetricName_EntrySkipped()
     {
         var json = """
-            {
-                "1.3.6.1.2.1.1.1.0": "",
-                "1.3.6.1.2.1.1.3.0": null,
-                "1.3.6.1.2.1.1.5.0": "sysName"
-            }
+            [
+                { "Oid": "1.3.6.1.2.1.1.1.0", "MetricName": "" },
+                { "Oid": "1.3.6.1.2.1.1.3.0", "MetricName": null },
+                { "Oid": "1.3.6.1.2.1.1.5.0", "MetricName": "sysName" }
+            ]
             """;
 
         var result = OidMapWatcherService.ValidateAndParseOidMap(json, Logger);
@@ -151,12 +151,12 @@ public class OidMapWatcherValidationTests
     public void JsonWithComments_ParsesSuccessfully()
     {
         var json = """
-            {
+            [
                 // System description OID
-                "1.3.6.1.2.1.1.1.0": "sysDescr",
+                { "Oid": "1.3.6.1.2.1.1.1.0", "MetricName": "sysDescr" },
                 // System uptime OID
-                "1.3.6.1.2.1.1.3.0": "sysUpTime"
-            }
+                { "Oid": "1.3.6.1.2.1.1.3.0", "MetricName": "sysUpTime" }
+            ]
             """;
 
         var result = OidMapWatcherService.ValidateAndParseOidMap(json, Logger);
@@ -165,5 +165,16 @@ public class OidMapWatcherValidationTests
         Assert.Equal(2, result.Count);
         Assert.Equal("sysDescr", result["1.3.6.1.2.1.1.1.0"]);
         Assert.Equal("sysUpTime", result["1.3.6.1.2.1.1.3.0"]);
+    }
+
+    [Fact]
+    public void NonArrayJson_ReturnsNull()
+    {
+        // Not an array -- should hit the ValueKind.Array check and return null
+        var json = """{ "not": "an array" }""";
+
+        var result = OidMapWatcherService.ValidateAndParseOidMap(json, Logger);
+
+        Assert.Null(result);
     }
 }
