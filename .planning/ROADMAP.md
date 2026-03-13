@@ -8,7 +8,7 @@
 - ✅ **v1.3 Grafana Dashboards** - Phases 18-19 (shipped 2026-03-09)
 - ✅ **v1.4 E2E System Verification** - Phases 20-24 (shipped 2026-03-09)
 - ✅ **v1.5 Priority Vector Data Layer** - Phases 25-29 (shipped 2026-03-10)
-- 🔄 **v1.6 Organization & Command Map Foundation** - Phases 30-32 (in progress)
+- ✅ **v1.6 Organization & Command Map Foundation** - Phases 30-32 (shipped 2026-03-13)
 
 ## Phases
 
@@ -86,7 +86,12 @@ Plans:
   4. Loading a commandmaps.json with a duplicate OID key or a duplicate command name produces a structured warning per duplicate — same validation behavior as OID map integrity (Phase 30)
   5. The simetra-commandmaps ConfigMap manifest exists in the deploy directory and is ready to apply to the cluster
 
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [x] 32-01-PLAN.md — ICommandMapService + CommandMapService + commandmaps.json + 12 unit tests
+- [x] 32-02-PLAN.md — simetra-commandmaps K8s ConfigMap manifests (standalone + production)
+- [x] 32-03-PLAN.md — CommandMapWatcherService + DI wiring + local dev fallback + 10 validation tests
 
 ---
 
@@ -103,8 +108,8 @@ Plans:
 | 29. K8s Deployment | v1.5 | 2/2 | Complete | 2026-03-10 |
 | 30. OID Map Integrity | v1.6 | 2/2 | Complete | 2026-03-13 |
 | 31. Human-Name Device Config | v1.6 | 3/3 | Complete | 2026-03-13 |
-| 32. Command Map Infrastructure | v1.6 | 0/? | Not started | — |
+| 32. Command Map Infrastructure | v1.6 | 3/3 | Complete | 2026-03-13 |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-13 after Phase 31 execution*
+*Last updated: 2026-03-13 after Phase 32 execution — v1.6 milestone complete*

@@ -26,12 +26,12 @@ Requirements for OID map integrity validation, human-name device configuration, 
 
 ### Command Map Infrastructure
 
-- [ ] **CMD-01**: commandmaps.json uses OID → command name format (mirrors oidmaps.json)
-- [ ] **CMD-02**: CommandMapService singleton with forward (OID → name) and reverse (name → OID) FrozenDictionary indexes, atomic volatile swap on reload
-- [ ] **CMD-03**: CommandMapWatcherService watches simetra-commandmaps ConfigMap via K8s API with hot-reload
-- [ ] **CMD-04**: CommandMapWatcherService falls back to local filesystem loading in non-K8s dev mode
-- [ ] **CMD-05**: CommandMapService detects duplicate OID keys and duplicate command names at load time with structured warnings
-- [ ] **CMD-06**: CommandMapService logs structured diff on reload (added/removed/changed entries) and entry count
+- [x] **CMD-01**: commandmaps.json uses OID → command name format (mirrors oidmaps.json)
+- [x] **CMD-02**: CommandMapService singleton with forward (OID → name) and reverse (name → OID) FrozenDictionary indexes, atomic volatile swap on reload
+- [x] **CMD-03**: CommandMapWatcherService watches simetra-commandmaps ConfigMap via K8s API with hot-reload
+- [x] **CMD-04**: CommandMapWatcherService falls back to local filesystem loading in non-K8s dev mode
+- [x] **CMD-05**: CommandMapService detects duplicate OID keys and duplicate command names at load time with structured warnings
+- [x] **CMD-06**: CommandMapService logs structured diff on reload (added/removed/changed entries) and entry count
 
 ## Out of Scope
 
@@ -60,12 +60,12 @@ Requirements for OID map integrity validation, human-name device configuration, 
 | DEV-05 | Phase 31 | Complete |
 | DEV-06 | Phase 31 | Complete |
 | DEV-07 | Phase 31 | Complete |
-| CMD-01 | Phase 32 | Pending |
-| CMD-02 | Phase 32 | Pending |
-| CMD-03 | Phase 32 | Pending |
-| CMD-04 | Phase 32 | Pending |
-| CMD-05 | Phase 32 | Pending |
-| CMD-06 | Phase 32 | Pending |
+| CMD-01 | Phase 32 | Complete |
+| CMD-02 | Phase 32 | Complete |
+| CMD-03 | Phase 32 | Complete |
+| CMD-04 | Phase 32 | Complete |
+| CMD-05 | Phase 32 | Complete |
+| CMD-06 | Phase 32 | Complete |
 
 **Coverage:**
 - v1.6 requirements: 17 total
@@ -74,4 +74,4 @@ Requirements for OID map integrity validation, human-name device configuration, 
 
 ---
 *Requirements defined: 2026-03-13*
-*Last updated: 2026-03-13 after Phase 31 execution — DEV-01 through DEV-07 complete*
+*Last updated: 2026-03-13 after Phase 32 execution — CMD-01 through CMD-06 complete, v1.6 milestone complete*
