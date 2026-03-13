@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-10)
+See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.5 Priority Vector Data Layer — Complete
+**Current focus:** v1.6 Organization & Command Map Foundation
 
 ## Current Position
 
-Phase: 29 — fifth of 5 in v1.5 (K8s Deployment and E2E Validation) — COMPLETE
-Plan: All plans complete
-Status: Milestone v1.5 complete
-Last activity: 2026-03-12 — Completed quick task 054: Move TimeSeriesSize to MetricSlotOptions
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-13 — Milestone v1.6 started
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [..........] 0/? v1.6
 
 ## Milestone History
 
@@ -26,6 +26,7 @@ Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/
 | v1.3 Grafana Dashboards | 18-19 | 2 | 2026-03-09 |
 | v1.4 E2E System Verification | 20-24 | 11 | 2026-03-09 |
 | v1.5 Priority Vector Data Layer | 25-29 | 9 | 2026-03-10 |
+| v1.6 Organization & Command Map Foundation | 30+ | TBD | In progress |
 
 See `.planning/MILESTONES.md` for details.
 

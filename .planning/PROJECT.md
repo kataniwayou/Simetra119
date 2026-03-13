@@ -72,20 +72,18 @@ See `.planning/milestones/v1.4-REQUIREMENTS.md` for full requirement details.
 
 ### Active
 
-**v1.5 Priority Vector Data Layer**
+**v1.6 Organization & Command Map Foundation**
 
-- Priority Vector configuration (tenantvector.json) with tenants, priorities, and metric slots
-- Tenant metric key: (ip, port, metric_name) — only OID-map-resolved metrics allowed
-- simetra-tenantvector ConfigMap with TenantVectorWatcherService (K8s API watch, hot-reload)
-- In-memory tenant registry with routing index: (ip, port, metric_name) → list of (tenant_id, metric_slot)
-- Metric slots: value cell (int/float/string) + updated_at timestamp, overwritten in place
-- TenantVectorFanOutBehavior in MediatR pipeline after OidResolution, before OtelMetricHandler
-- Fan-out from existing pipeline only — no new poll jobs, consume trap/poll data already flowing
-- Internal only — no external API or Prometheus export for tenant vector state
+- OID map duplicate validation — reject entries with duplicate OIDs or duplicate names, log warnings
+- Device config human names — devices.json uses metric names instead of raw OIDs, reverse-lookup at poll registration, unknown names → warning + no poll job
+- Command map lookup table — commandmaps.json in same OID → name format as oidmaps, for writable (SET) OIDs
+- CommandMapService + CommandMapWatcherService — simetra-commandmaps ConfigMap with K8s API watch, hot-reload, local dev fallback
+- Command map duplicate validation — same rules as oidmaps (no duplicate OIDs, no duplicate names)
+- Keep snmp_gauge / snmp_info instruments unchanged — source label ready for future "command" value
 
 ### Out of Scope
 
-- Device management / configuration writes — monitor only, no SNMP SET
+- SNMP SET execution path — command map is lookup-only this milestone, no SET sending
 - Custom middleware pipeline — using MediatR
 - Device modules (`IDeviceModule`) — device-agnostic, flat OID map only
 - Traces / distributed tracing — no TracerProvider, no ActivitySource
