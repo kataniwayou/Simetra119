@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-14)
 ## Current Position
 
 Phase: 33 of 36 (Config Model Additions)
-Plan: —
-Status: Ready to plan
-Last activity: 2026-03-14 — v1.7 roadmap created (Phases 33-36, 28 requirements mapped)
+Plan: 01 of 2
+Status: In progress
+Last activity: 2026-03-14 — Completed 33-01 (DeviceOptions.Name → CommunityString rename)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 8/8 v1.6 | [          ] 0/? v1.7
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 8/8 v1.6 | [#         ] 1/? v1.7
 
 ## Milestone History
 
@@ -46,6 +46,9 @@ See `.planning/MILESTONES.md` for details.
 - commandmaps.json: array-of-objects [{Oid, CommandName}] format; ConfigMap name "simetra-commandmaps"
 - oidmaps.json: array-of-objects [{Oid, MetricName}] format; all config files use MetricNames (human-readable)
 - C# model: MetricPollOptions→PollOptions, MetricPolls→Polls, Oids→MetricNames; MetricPollInfo.Oids retained
+- DeviceOptions.CommunityString (not Name) is primary device identifier; DeviceInfo.Name derived at load time via TryExtractDeviceName
+- DeviceRegistry: invalid CommunityString logs error and skips device (no throw); consistent for constructor + ReloadAsync
+- All config JSON/YAML: "CommunityString": "Simetra.XXX" format; "Name" field eliminated from device entries
 
 ### v1.7 Pre-Phase Decisions (to resolve in plans)
 
@@ -63,6 +66,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-14
-Stopped at: v1.7 roadmap written — Phase 33 ready to plan
+Last session: 2026-03-14T19:48Z
+Stopped at: Completed 33-01-PLAN.md (DeviceOptions.Name → CommunityString)
 Resume file: None
