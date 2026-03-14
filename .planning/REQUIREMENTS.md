@@ -1,77 +1,108 @@
 # Requirements: SNMP Monitoring System
 
-**Defined:** 2026-03-13
+**Defined:** 2026-03-14
 **Core Value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
 
-## v1.6 Requirements — Organization & Command Map Foundation
+## v1.7 Requirements — Configuration Consistency & Tenant Commands
 
-Requirements for OID map integrity validation, human-name device configuration, and SNMP command map lookup infrastructure.
+Requirements for CommunityString validation, self-describing tenant entries, tenant command data model, config rename, and code cleanup.
 
-### OID Map Integrity
+**Operator config ordering (documented, not enforced):** oidmaps/commandmaps → devices → tenants. Each file has its own independent watcher. No cross-watcher cascading reloads.
 
-- [x] **MAP-01**: OidMapService detects duplicate OID keys at load time and logs structured warning per duplicate (OID, conflicting names, both skipped)
-- [x] **MAP-02**: OidMapService detects duplicate metric name values at load time and logs structured warning per duplicate (name, conflicting OIDs, both skipped)
-- [x] **MAP-03**: OidMapService maintains a reverse index (FrozenDictionary name → OID), rebuilt atomically alongside forward map on every UpdateMap call
-- [x] **MAP-04**: IOidMapService exposes ResolveToOid(string metricName) returning OID string or null
+### CommunityString Foundation
 
-### Device Config Human Names
+- [ ] **CS-01**: `DeviceOptions.Name` renamed to `DeviceOptions.CommunityString`, holding the full community string value (e.g. `"Simetra.NPB-01"`) — no implicit derivation
+- [ ] **CS-02**: `DeviceInfo.Name` derived from `CommunityString` via `CommunityStringHelper.TryExtractDeviceName()` at device load time — all downstream consumers (Prometheus labels, Quartz job keys, logs, trap routing) continue using the extracted short name
+- [ ] **CS-03**: CommunityString validated at load time on all config entries (devices and tenants) — must be non-null/non-empty, start with `Simetra.` (case-sensitive Ordinal), have a non-empty non-whitespace suffix
+- [ ] **CS-04**: Invalid CommunityString on device entry = skip entire device with Error-level structured log; invalid on tenant metric/command entry = skip that entry with Error-level structured log; other entries in same file unaffected
+- [ ] **CS-05**: MetricPollJob uses the explicit `DeviceInfo.CommunityString` directly — the `?? CommunityStringHelper.DeriveFromDeviceName()` fallback is removed
+- [ ] **CS-06**: Trap listener `Simetra.*` pattern extraction verified consistent with new CommunityString approach — `SnmpTrapListenerService` continues extracting device name from community string and routing via `DeviceRegistry.TryGetDeviceByName()`
+- [ ] **CS-07**: Operator config ordering documented: oidmaps/commandmaps → devices → tenants; each file has independent watcher; operator responsible for alignment across files
 
-- [x] **DEV-01**: PollOptions has a MetricNames property accepting human-readable metric names (full replacement — Oids field removed)
-- [x] **DEV-02**: At device config load, each MetricNames[] entry is resolved to its OID via IOidMapService.ResolveToOid; resolved OIDs populate the runtime poll list
-- [x] **DEV-03**: Unresolvable metric names log a structured warning (device name, metric name, poll index) and are skipped — device still registered for traps
-- [x] **DEV-04**: Full replacement — MetricNames[] is the only field; no coexistence with Oids[] (CONTEXT override: simpler, future-proof)
-- [x] **DEV-05**: No raw OID detection — treated as metric name, fails resolution with standard warning (CONTEXT override: keep it simple)
-- [x] **DEV-06**: Point-in-time resolution — no cross-watcher triggering; operator triggers device reload after OID map change (CONTEXT override: independent watchers)
-- [x] **DEV-07**: Reload diff logging includes per-name resolution detail (resolved count/total, unresolved names listed)
+### Tenant Structure
 
-### Command Map Infrastructure
+- [ ] **TEN-01**: `MetricSlotOptions` gains `Device` (string) and `CommunityString` (string) fields — each tenant metric entry is fully self-describing with Device, Ip, Port, CommunityString, MetricName, TimeSeriesSize
+- [ ] **TEN-02**: New `Commands` list on `TenantOptions` — each `CommandSlotOptions` entry has Device, Ip, Port, CommunityString, CommandName, Value (string), ValueType (string)
+- [ ] **TEN-03**: `ValueType` validated against allowed set `{ "Integer32", "IpAddress", "OctetString" }` at load time — invalid ValueType = skip command entry with Error log
+- [ ] **TEN-04**: `TenantVectorRegistry` constructor no longer requires `IDeviceRegistry` or `IOidMapService` — all data comes from self-describing config entries
+- [ ] **TEN-05**: Unresolvable MetricName in tenant config (not in current OID map) = skip entry with Error-level structured log; other entries in same tenant unaffected
+- [ ] **TEN-06**: Unresolvable CommandName in tenant config (not in current command map) = store entry as-is with Debug log — resolution deferred to execution time
+- [ ] **TEN-07**: CommunityString on tenant metric and command entries validated with same rules as CS-03; invalid = skip entry with Error log
+- [ ] **TEN-08**: `TenantVectorOptionsValidator` activated with real structural validation — non-null/non-empty Ip, MetricName/CommandName; Port 1–65535; TimeSeriesSize >= 1; non-empty Value on commands
+- [ ] **TEN-09**: Optional `IntervalSeconds` field on `MetricSlotOptions` — stored in `MetricSlotHolder` for observability; defaults to 0 if absent
+- [ ] **TEN-10**: Optional `Name` field on `TenantOptions` — used in log context instead of synthetic `tenant-{index}` ID; falls back to auto-generated ID if absent
+- [ ] **TEN-11**: Structured log fields on CommunityString skip events include EntryType, EntryIndex, InvalidValue, ValidationRule, ConfigMap source — suitable for Loki alerting
 
-- [x] **CMD-01**: commandmaps.json uses OID → command name format (mirrors oidmaps.json)
-- [x] **CMD-02**: CommandMapService singleton with forward (OID → name) and reverse (name → OID) FrozenDictionary indexes, atomic volatile swap on reload
-- [x] **CMD-03**: CommandMapWatcherService watches simetra-commandmaps ConfigMap via K8s API with hot-reload
-- [x] **CMD-04**: CommandMapWatcherService falls back to local filesystem loading in non-K8s dev mode
-- [x] **CMD-05**: CommandMapService detects duplicate OID keys and duplicate command names at load time with structured warnings
-- [x] **CMD-06**: CommandMapService logs structured diff on reload (added/removed/changed entries) and entry count
+### Device Registry Consistency
+
+- [ ] **DEV-08**: Poll group where ALL MetricNames are unresolvable = skip job registration entirely (no Quartz job created for zero-OID groups)
+- [ ] **DEV-09**: CommunityString validation on `DeviceOptions` at load time — invalid CommunityString = skip device entirely (not registered in DeviceRegistry, no poll jobs, no trap routing)
+- [ ] **DEV-10**: Duplicate CommunityString (duplicate extracted device name) across devices = validation error with structured log — prevents silent `_byName` dictionary overwrite
+
+### Config Rename
+
+- [ ] **REN-01**: `tenantvector.json` → `tenants.json`: local dev file, ConfigMap name (`simetra-tenants`), ConfigMap key (`tenants.json`), C# constants (`ConfigMapName`, `ConfigKey`), `TenantVectorOptions.SectionName` → `"Tenants"`
+- [ ] **REN-02**: All rename references updated atomically — K8s manifests (standalone + production), local dev config path, E2E test scripts, inline kubectl heredocs, deployment.yaml volume references
+- [ ] **REN-03**: `oidmaps.json` → `oid_metric_map.json`: local dev file, ConfigMap name (`simetra-oid-metric-map`), ConfigMap key (`oid_metric_map.json`), C# constants in `OidMapWatcherService` (`ConfigMapName`, `ConfigKey`), all K8s manifests and E2E references
+- [ ] **REN-04**: `commandmaps.json` → `oid_command_map.json`: local dev file, ConfigMap name (`simetra-oid-command-map`), ConfigMap key (`oid_command_map.json`), C# constants in `CommandMapWatcherService` (`ConfigMapName`, `ConfigKey`), all K8s manifests and E2E references
+
+### Code Cleanup
+
+- [ ] **CLN-01**: `TenantVectorRegistry.ResolveIp()` and `DeriveIntervalSeconds()` methods removed
+- [ ] **CLN-02**: `IDeviceRegistry` and `IOidMapService` constructor parameters removed from `TenantVectorRegistry`
+- [ ] **CLN-03**: CommunityString derivation fallback removed from `MetricPollJob` — no more `?? DeriveFromDeviceName(device.Name)` path
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| SNMP SET execution | Command map is lookup-only this milestone; execution is a future milestone |
-| Command authorization / access control | No commands executed, nothing to authorize |
-| Command parameter schemas / typed parameters | Type metadata is MIB-level knowledge, out of scope for lookup table |
-| Mandatory migration of devices.json to human names | Full replacement shipped — all configs migrated to MetricNames |
-| Separate per-device-type command maps | Single simetra-commandmaps ConfigMap mirrors oidmaps pattern |
-| Command map HTTP API or Prometheus export | In-process lookup only; not telemetry |
-| Hard startup failure on unresolvable metric names | Soft warning + skip is correct; hard failure too severe |
+| SNMP SET command execution | Command entries are loaded and validated only; execution is a future milestone |
+| Cross-validation between config files | Independent watchers; operator responsible for alignment; no cross-watcher coupling |
+| Reverse CommunityString lookup in DeviceRegistry | Trap listener already extracts name and looks up by name — no new index needed |
+| Validate tenant Device field matches DeviceRegistry | Device field is a label, not a foreign key; cross-validation recreates coupling |
+| Dual ConfigMap watch for backward compat during rename | Clean break; atomic rename is simpler than dual-watch |
+| CommandName validation against CommandMap at tenant load time | CommandMap hot-reloads independently; validation belongs at execution time |
+| Community string auto-discovery | Static credentials configured by operator; probing would be a security violation |
+| Enforced config ordering | Operator responsibility; watchers are independent by design |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MAP-01 | Phase 30 | Complete |
-| MAP-02 | Phase 30 | Complete |
-| MAP-03 | Phase 30 | Complete |
-| MAP-04 | Phase 30 | Complete |
-| DEV-01 | Phase 31 | Complete |
-| DEV-02 | Phase 31 | Complete |
-| DEV-03 | Phase 31 | Complete |
-| DEV-04 | Phase 31 | Complete |
-| DEV-05 | Phase 31 | Complete |
-| DEV-06 | Phase 31 | Complete |
-| DEV-07 | Phase 31 | Complete |
-| CMD-01 | Phase 32 | Complete |
-| CMD-02 | Phase 32 | Complete |
-| CMD-03 | Phase 32 | Complete |
-| CMD-04 | Phase 32 | Complete |
-| CMD-05 | Phase 32 | Complete |
-| CMD-06 | Phase 32 | Complete |
+| CS-01 | TBD | Pending |
+| CS-02 | TBD | Pending |
+| CS-03 | TBD | Pending |
+| CS-04 | TBD | Pending |
+| CS-05 | TBD | Pending |
+| CS-06 | TBD | Pending |
+| CS-07 | TBD | Pending |
+| TEN-01 | TBD | Pending |
+| TEN-02 | TBD | Pending |
+| TEN-03 | TBD | Pending |
+| TEN-04 | TBD | Pending |
+| TEN-05 | TBD | Pending |
+| TEN-06 | TBD | Pending |
+| TEN-07 | TBD | Pending |
+| TEN-08 | TBD | Pending |
+| TEN-09 | TBD | Pending |
+| TEN-10 | TBD | Pending |
+| TEN-11 | TBD | Pending |
+| DEV-08 | TBD | Pending |
+| DEV-09 | TBD | Pending |
+| DEV-10 | TBD | Pending |
+| REN-01 | TBD | Pending |
+| REN-02 | TBD | Pending |
+| REN-03 | TBD | Pending |
+| REN-04 | TBD | Pending |
+| CLN-01 | TBD | Pending |
+| CLN-02 | TBD | Pending |
+| CLN-03 | TBD | Pending |
 
 **Coverage:**
-- v1.6 requirements: 17 total
-- Mapped to phases: 17
-- Unmapped: 0
+- v1.7 requirements: 28 total
+- Mapped to phases: 0
+- Unmapped: 28 ⚠️
 
 ---
-*Requirements defined: 2026-03-13*
-*Last updated: 2026-03-13 after Phase 32 execution — CMD-01 through CMD-06 complete, v1.6 milestone complete*
+*Requirements defined: 2026-03-14*
+*Last updated: 2026-03-14 after scope clarification — fully independent watchers, operator-supplied CommunityString on tenants*
