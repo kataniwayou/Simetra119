@@ -39,7 +39,7 @@ Requirements for CommunityString validation, self-describing tenant entries, ten
 
 - [ ] **DEV-08**: Poll group where ALL MetricNames are unresolvable = skip job registration entirely (no Quartz job created for zero-OID groups)
 - [ ] **DEV-09**: CommunityString validation on `DeviceOptions` at load time — invalid CommunityString = skip device entirely (not registered in DeviceRegistry, no poll jobs, no trap routing)
-- [ ] **DEV-10**: Duplicate CommunityString (duplicate extracted device name) across devices = validation error with structured log — prevents silent `_byName` dictionary overwrite
+- [ ] **DEV-10**: Duplicate CommunityString across devices with different IP+Port = Warning log only (both load normally); IP+Port is the true device identity — existing IP+Port duplicate validation is the real conflict check
 
 ### Config Rename
 
