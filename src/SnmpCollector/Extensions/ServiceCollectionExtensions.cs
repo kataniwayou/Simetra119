@@ -313,10 +313,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITenantVectorRegistry>(sp => sp.GetRequiredService<TenantVectorRegistry>());
 
         // --- Phase 2 pipeline singletons ---
-        // DeviceRegistry depends on IOptions<DevicesOptions> for initial startup construction.
-        // In K8s mode, DeviceWatcherService calls ReloadAsync to overwrite with ConfigMap data.
-        // In local dev mode, Program.cs calls ReloadAsync after build with devices.json data.
-        services.AddSingleton<IDeviceRegistry, DeviceRegistry>();
+        // DeviceRegistry: starts empty. In K8s mode, DeviceWatcherService.ValidateAndBuildDevicesAsync
+        // resolves/validates and calls ReloadAsync. In local dev mode, Program.cs does the same.
+        services.AddSingleton<IDeviceRegistry>(sp =>
+            new DeviceRegistry(sp.GetRequiredService<ILogger<DeviceRegistry>>()));
 
         // OidMapService: initial empty map. In K8s mode, OidMapWatcherService populates it.
         // In local dev mode, populated after DI build from oidmaps.json.

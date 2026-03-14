@@ -92,11 +92,15 @@ if (!k8s.KubernetesClientConfiguration.IsInCluster())
     if (File.Exists(devicesPath))
     {
         var devicesJson = File.ReadAllText(devicesPath);
-        var devices = System.Text.Json.JsonSerializer.Deserialize<List<SnmpCollector.Configuration.DeviceOptions>>(devicesJson, jsonOptions);
-        if (devices != null)
+        var rawDevices = System.Text.Json.JsonSerializer.Deserialize<List<SnmpCollector.Configuration.DeviceOptions>>(devicesJson, jsonOptions);
+        if (rawDevices != null)
         {
+            var oidMapService = app.Services.GetRequiredService<SnmpCollector.Pipeline.IOidMapService>();
+            var deviceLogger = app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SnmpCollector.Services.DeviceWatcherService>>();
+            var deviceInfos = await SnmpCollector.Services.DeviceWatcherService.ValidateAndBuildDevicesAsync(
+                rawDevices, oidMapService, deviceLogger, CancellationToken.None);
             var deviceRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.IDeviceRegistry>();
-            await deviceRegistry.ReloadAsync(devices);
+            await deviceRegistry.ReloadAsync(deviceInfos);
 
             // Reconcile poll jobs using resolved devices (IPs from registry)
             var pollScheduler = app.Services.GetRequiredService<SnmpCollector.Services.DynamicPollScheduler>();

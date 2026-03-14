@@ -1,3 +1,6 @@
+using System.Collections.ObjectModel;
+using System.Net;
+using System.Net.Sockets;
 using System.Text.Json;
 using k8s;
 using k8s.Models;
@@ -44,6 +47,7 @@ public sealed class DeviceWatcherService : BackgroundService
     private readonly IKubernetes _kubeClient;
     private readonly IDeviceRegistry _deviceRegistry;
     private readonly DynamicPollScheduler _pollScheduler;
+    private readonly IOidMapService _oidMapService;
     private readonly ILogger<DeviceWatcherService> _logger;
     private readonly SemaphoreSlim _reloadLock = new(1, 1);
     private readonly string _namespace;
@@ -52,11 +56,13 @@ public sealed class DeviceWatcherService : BackgroundService
         IKubernetes kubeClient,
         IDeviceRegistry deviceRegistry,
         DynamicPollScheduler pollScheduler,
+        IOidMapService oidMapService,
         ILogger<DeviceWatcherService> logger)
     {
         _kubeClient = kubeClient ?? throw new ArgumentNullException(nameof(kubeClient));
         _deviceRegistry = deviceRegistry ?? throw new ArgumentNullException(nameof(deviceRegistry));
         _pollScheduler = pollScheduler ?? throw new ArgumentNullException(nameof(pollScheduler));
+        _oidMapService = oidMapService ?? throw new ArgumentNullException(nameof(oidMapService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _namespace = ReadNamespace();
@@ -157,8 +163,10 @@ public sealed class DeviceWatcherService : BackgroundService
     }
 
     /// <summary>
-    /// Parses the devices JSON array from the ConfigMap and applies the new device list
-    /// to <see cref="IDeviceRegistry"/> and <see cref="DynamicPollScheduler"/>.
+    /// Parses the devices JSON array from the ConfigMap, validates and builds
+    /// <see cref="DeviceInfo"/> objects via <see cref="ValidateAndBuildDevicesAsync"/>,
+    /// then applies the new device list to <see cref="IDeviceRegistry"/> and
+    /// <see cref="DynamicPollScheduler"/>.
     /// </summary>
     private async Task HandleConfigMapChangedAsync(V1ConfigMap configMap, CancellationToken ct)
     {
@@ -194,15 +202,18 @@ public sealed class DeviceWatcherService : BackgroundService
         await _reloadLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            // 1. Reload device registry (async DNS resolution)
-            await _deviceRegistry.ReloadAsync(devices).ConfigureAwait(false);
+            // 1. Validate and build DeviceInfo objects (DNS resolution, CS extraction, OID resolution)
+            var deviceInfos = await ValidateAndBuildDevicesAsync(devices, _oidMapService, _logger, ct).ConfigureAwait(false);
 
-            // 2. Reconcile Quartz poll jobs using resolved devices (IPs from registry)
+            // 2. Reload device registry (pure store operation)
+            await _deviceRegistry.ReloadAsync(deviceInfos).ConfigureAwait(false);
+
+            // 3. Reconcile Quartz poll jobs using resolved devices (IPs from registry)
             await _pollScheduler.ReconcileAsync(_deviceRegistry.AllDevices, ct).ConfigureAwait(false);
 
             _logger.LogInformation(
                 "Device reload complete: {DeviceCount} devices",
-                devices.Count);
+                deviceInfos.Count);
         }
         catch (Exception ex)
         {
@@ -212,6 +223,137 @@ public sealed class DeviceWatcherService : BackgroundService
         {
             _reloadLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Validates <paramref name="devices"/> and builds a list of <see cref="DeviceInfo"/> objects.
+    /// Performs CommunityString extraction, async DNS resolution, OID resolution via
+    /// <paramref name="oidMapService"/>, and duplicate IP+Port / CommunityString detection.
+    /// Invalid entries are logged and skipped; the returned list contains only valid devices.
+    /// </summary>
+    /// <param name="devices">Raw device options to validate and resolve.</param>
+    /// <param name="oidMapService">Service for resolving metric names to OID strings.</param>
+    /// <param name="logger">Logger for structured validation output.</param>
+    /// <param name="ct">Cancellation token for async DNS resolution.</param>
+    /// <returns>List of validated, DNS-resolved, poll-group-built <see cref="DeviceInfo"/> objects.</returns>
+    internal static async Task<List<DeviceInfo>> ValidateAndBuildDevicesAsync(
+        List<DeviceOptions> devices,
+        IOidMapService oidMapService,
+        ILogger logger,
+        CancellationToken ct)
+    {
+        var byIpPortSeen = new Dictionary<string, DeviceInfo>(StringComparer.OrdinalIgnoreCase);
+        var seenCommunityStrings = new Dictionary<string, string>(StringComparer.Ordinal);
+        var result = new List<DeviceInfo>(devices.Count);
+
+        foreach (var d in devices)
+        {
+            // 1. CommunityString extraction
+            if (!CommunityStringHelper.TryExtractDeviceName(d.CommunityString, out var deviceName))
+            {
+                logger.LogError(
+                    "Device at {IpAddress}:{Port} has invalid CommunityString '{CommunityString}' -- skipping",
+                    d.IpAddress, d.Port, d.CommunityString);
+                continue;
+            }
+
+            // 2. DNS resolution (async)
+            IPAddress ip;
+            if (IPAddress.TryParse(d.IpAddress, out var parsed))
+            {
+                ip = parsed.MapToIPv4();
+            }
+            else
+            {
+                // Async DNS resolution for K8s Service names
+                var addresses = await Dns.GetHostAddressesAsync(d.IpAddress, ct).ConfigureAwait(false);
+                ip = addresses.First(a => a.AddressFamily == AddressFamily.InterNetwork);
+            }
+
+            // 3. BuildPollGroups (OID resolution)
+            var pollGroups = BuildPollGroups(d.Polls, deviceName, oidMapService, logger);
+
+            // 4. Duplicate IP+Port check
+            var ipPortKey = $"{d.IpAddress}:{d.Port}";
+            if (byIpPortSeen.TryGetValue(ipPortKey, out var existing))
+            {
+                logger.LogError(
+                    "Device at {IpAddress}:{Port} (CommunityString '{CommunityString}') is a duplicate of existing device '{ExistingName}' -- skipping",
+                    d.IpAddress, d.Port, d.CommunityString, existing.Name);
+                continue;
+            }
+
+            // 5. Duplicate CommunityString warning (different IP+Port)
+            if (seenCommunityStrings.TryGetValue(d.CommunityString, out var priorName))
+            {
+                logger.LogWarning(
+                    "Device '{DeviceName}' at {IpAddress}:{Port} has CommunityString '{CommunityString}' also used by device '{PriorDevice}' -- both loaded (different IP+Port)",
+                    deviceName, d.IpAddress, d.Port, d.CommunityString, priorName);
+            }
+            seenCommunityStrings.TryAdd(d.CommunityString, deviceName);
+
+            var info = new DeviceInfo(deviceName, d.IpAddress, ip.ToString(), d.Port, pollGroups, d.CommunityString);
+            byIpPortSeen[ipPortKey] = info;
+            result.Add(info);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Resolves MetricNames in each poll group to OIDs via <see cref="IOidMapService.ResolveToOid"/>.
+    /// Unresolvable names are logged as warnings and excluded. Resolution summary is always logged
+    /// per poll group for reload diff visibility. Poll groups with zero resolved OIDs are excluded
+    /// entirely (logged as Warning); devices with all-zero-OID poll groups are still registered for
+    /// trap reception.
+    /// </summary>
+    private static ReadOnlyCollection<MetricPollInfo> BuildPollGroups(
+        List<PollOptions> polls,
+        string deviceName,
+        IOidMapService oidMapService,
+        ILogger logger)
+    {
+        var result = new List<MetricPollInfo>();
+        for (var index = 0; index < polls.Count; index++)
+        {
+            var poll = polls[index];
+            var resolvedOids = new List<string>();
+            var unresolvedNames = new List<string>();
+
+            foreach (var name in poll.MetricNames)
+            {
+                var oid = oidMapService.ResolveToOid(name);
+                if (oid is not null)
+                    resolvedOids.Add(oid);
+                else
+                {
+                    unresolvedNames.Add(name);
+                    logger.LogWarning(
+                        "MetricName '{MetricName}' on device '{DeviceName}' poll {PollIndex} not found in OID map -- skipping",
+                        name, deviceName, index);
+                }
+            }
+
+            logger.LogInformation(
+                "Device '{DeviceName}' poll {PollIndex}: resolved {ResolvedCount}/{TotalCount} metric names{UnresolvedDetail}",
+                deviceName, index, resolvedOids.Count, poll.MetricNames.Count,
+                unresolvedNames.Count > 0 ? $"; unresolved: [{string.Join(", ", unresolvedNames)}]" : "");
+
+            if (resolvedOids.Count == 0)
+            {
+                logger.LogWarning(
+                    "Device '{DeviceName}' poll {PollIndex} has zero resolved OIDs -- skipping job registration",
+                    deviceName, index);
+                continue;
+            }
+
+            result.Add(new MetricPollInfo(
+                PollIndex: index,
+                Oids: resolvedOids.AsReadOnly(),
+                IntervalSeconds: poll.IntervalSeconds,
+                TimeoutMultiplier: poll.TimeoutMultiplier));
+        }
+        return result.AsReadOnly();
     }
 
     /// <summary>
