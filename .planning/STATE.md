@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.7 Configuration Consistency & Tenant Commands — Phase 34 complete
+**Current focus:** v1.7 Configuration Consistency & Tenant Commands — Phase 35 in progress
 
 ## Current Position
 
-Phase: 34 of 36 (CommunityString Validation & MetricPollJob Cleanup)
-Plan: 02 of 2
-Status: Phase complete
-Last activity: 2026-03-14 — Completed 34-02 (TenantVectorRegistry per-entry validation, TEN-13 gate, IOidMapService re-added)
+Phase: 35 of 36 (TenantVectorRegistry Refactor & Validator Activation)
+Plan: 01 of 2
+Status: In progress
+Last activity: 2026-03-15 — Completed 35-01 (DeviceWatcher validates, DeviceRegistry pure store)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 8/8 v1.6 | [####      ] 5/? v1.7
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 8/8 v1.6 | [#####     ] 6/? v1.7
 
 ## Milestone History
 
@@ -60,6 +60,11 @@ See `.planning/MILESTONES.md` for details.
 - TenantVectorRegistry constructor: takes IDeviceRegistry + IOidMapService + ILogger (IOidMapService re-added in Phase 34-02 for TEN-05; Phase 35 will restructure)
 - TenantVectorRegistry.Reload: per-entry validation (structural, Role, TEN-05 MetricName resolution, TEN-07 IP+Port); TEN-13 completeness gate skips tenants missing Resolved/Evaluate/commands (Phase 34-02)
 - TenantCount = survivingTenants + 1 heartbeat (not options.Tenants.Count + 1); reflects post-TEN-13 count (Phase 34-02)
+- DeviceRegistry: pure store after Phase 35-01; constructor takes only ILogger, starts empty; ReloadAsync(List<DeviceInfo>)
+- DeviceWatcherService.ValidateAndBuildDevicesAsync: internal static async, all CS/DNS/OID/dup validation; mirrors CommandMapWatcher pattern
+- CommunityStringHelper: now public (class + methods); accessible from Services namespace
+- DevicesOptionsValidator: simplified to no-op (returns Success always); per-entry validation in watcher
+- IDeviceRegistry.ReloadAsync: signature is List<DeviceInfo> (not List<DeviceOptions>) after Phase 35-01
 
 ### v1.7 Pre-Phase Decisions (to resolve in plans)
 
@@ -77,6 +82,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-14T21:13Z
-Stopped at: Completed 34-02-PLAN.md (TenantVectorRegistry per-entry validation, IOidMapService re-added, TEN-13 gate, 12 new validation tests)
+Last session: 2026-03-15T22:31Z
+Stopped at: Completed 35-01-PLAN.md (DeviceWatcher validates, DeviceRegistry pure store, DeviceWatcherValidationTests)
 Resume file: None
