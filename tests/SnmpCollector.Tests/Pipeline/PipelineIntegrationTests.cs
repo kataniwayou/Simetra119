@@ -77,6 +77,7 @@ public sealed class PipelineIntegrationTests : IDisposable
         services.AddSingleton<TenantVectorRegistry>(sp =>
             new TenantVectorRegistry(
                 sp.GetRequiredService<IDeviceRegistry>(),
+                sp.GetRequiredService<IOidMapService>(),
                 sp.GetRequiredService<ILogger<TenantVectorRegistry>>()));
         services.AddSingleton<ITenantVectorRegistry>(sp => sp.GetRequiredService<TenantVectorRegistry>());
 
@@ -189,6 +190,7 @@ public sealed class PipelineIntegrationTests : IDisposable
         services.AddSingleton<TenantVectorRegistry>(sp =>
             new TenantVectorRegistry(
                 sp.GetRequiredService<IDeviceRegistry>(),
+                sp.GetRequiredService<IOidMapService>(),
                 sp.GetRequiredService<ILogger<TenantVectorRegistry>>()));
         services.AddSingleton<ITenantVectorRegistry>(sp => sp.GetRequiredService<TenantVectorRegistry>());
         services.AddSnmpPipeline();

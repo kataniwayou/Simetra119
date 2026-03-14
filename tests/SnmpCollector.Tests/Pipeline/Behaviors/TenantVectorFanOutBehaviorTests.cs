@@ -5,6 +5,7 @@ using Lextm.SharpSnmpLib;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
 using SnmpCollector.Pipeline.Behaviors;
@@ -201,7 +202,8 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
     {
         // Real registry with no tenants loaded — TryRoute returns false
         var registry = new TenantVectorRegistry(
-            NSubstitute.Substitute.For<IDeviceRegistry>(),
+            Substitute.For<IDeviceRegistry>(),
+            CreatePassthroughOidMapService(),
             NullLogger<TenantVectorRegistry>.Instance);
         var deviceRegistry = new StubDeviceRegistry("test-device", "10.0.0.1", 161);
         var behavior = CreateBehavior(registry, deviceRegistry);
@@ -301,23 +303,52 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
     // Registry / device registry factory helpers
     // -----------------------------------------------------------------------
 
+    private static IOidMapService CreatePassthroughOidMapService()
+    {
+        var svc = Substitute.For<IOidMapService>();
+        svc.ContainsMetricName(Arg.Any<string>()).Returns(true);
+        return svc;
+    }
+
+    private static IDeviceRegistry CreatePassthroughDeviceRegistry()
+    {
+        var reg = Substitute.For<IDeviceRegistry>();
+        reg.TryGetByIpPort(Arg.Any<string>(), Arg.Any<int>(), out Arg.Any<DeviceInfo?>())
+            .Returns(true);
+        reg.AllDevices.Returns(Array.Empty<DeviceInfo>());
+        return reg;
+    }
+
+    /// <summary>
+    /// Builds a TenantOptions with the specified Evaluate metric plus a Resolved sibling and one command,
+    /// so the tenant survives the TEN-13 post-validation completeness gate.
+    /// </summary>
+    private static TenantOptions MakeValidTenantOptions(int priority, string ip, int port, string metricName)
+        => new()
+        {
+            Priority = priority,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = ip, Port = port, MetricName = metricName, Role = "Evaluate" },
+                new() { Ip = ip, Port = port, MetricName = "auto_resolved", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = ip, Port = port, CommandName = "auto-cmd", Value = "1", ValueType = "Integer32" }
+            }
+        };
+
     private static TenantVectorRegistry CreateRegistryWithRoute(string ip, int port, string metricName)
     {
         var registry = new TenantVectorRegistry(
-            NSubstitute.Substitute.For<IDeviceRegistry>(),
+            CreatePassthroughDeviceRegistry(),
+            CreatePassthroughOidMapService(),
             NullLogger<TenantVectorRegistry>.Instance);
         registry.Reload(new TenantVectorOptions
         {
             Tenants = new List<TenantOptions>
             {
-                new()
-                {
-                    Priority = 1,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = ip, Port = port, MetricName = metricName }
-                    }
-                }
+                MakeValidTenantOptions(1, ip, port, metricName)
             }
         });
         return registry;
@@ -326,28 +357,15 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
     private static TenantVectorRegistry CreateRegistryWithTwoTenants(string ip, int port, string metricName)
     {
         var registry = new TenantVectorRegistry(
-            NSubstitute.Substitute.For<IDeviceRegistry>(),
+            CreatePassthroughDeviceRegistry(),
+            CreatePassthroughOidMapService(),
             NullLogger<TenantVectorRegistry>.Instance);
         registry.Reload(new TenantVectorOptions
         {
             Tenants = new List<TenantOptions>
             {
-                new()
-                {
-                    Priority = 1,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = ip, Port = port, MetricName = metricName }
-                    }
-                },
-                new()
-                {
-                    Priority = 2,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = ip, Port = port, MetricName = metricName }
-                    }
-                }
+                MakeValidTenantOptions(1, ip, port, metricName),
+                MakeValidTenantOptions(2, ip, port, metricName)
             }
         });
         return registry;
@@ -356,36 +374,16 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
     private static TenantVectorRegistry CreateRegistryWithThreeTenants(string ip, int port, string metricName)
     {
         var registry = new TenantVectorRegistry(
-            NSubstitute.Substitute.For<IDeviceRegistry>(),
+            CreatePassthroughDeviceRegistry(),
+            CreatePassthroughOidMapService(),
             NullLogger<TenantVectorRegistry>.Instance);
         registry.Reload(new TenantVectorOptions
         {
             Tenants = new List<TenantOptions>
             {
-                new()
-                {
-                    Priority = 1,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = ip, Port = port, MetricName = metricName }
-                    }
-                },
-                new()
-                {
-                    Priority = 2,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = ip, Port = port, MetricName = metricName }
-                    }
-                },
-                new()
-                {
-                    Priority = 3,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = ip, Port = port, MetricName = metricName }
-                    }
-                }
+                MakeValidTenantOptions(1, ip, port, metricName),
+                MakeValidTenantOptions(2, ip, port, metricName),
+                MakeValidTenantOptions(3, ip, port, metricName)
             }
         });
         return registry;
