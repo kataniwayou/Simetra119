@@ -308,6 +308,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<TenantVectorRegistry>(sp =>
             new TenantVectorRegistry(
                 sp.GetRequiredService<IDeviceRegistry>(),
+                sp.GetRequiredService<IOidMapService>(),
                 sp.GetRequiredService<ILogger<TenantVectorRegistry>>()));
         services.AddSingleton<ITenantVectorRegistry>(sp => sp.GetRequiredService<TenantVectorRegistry>());
 
