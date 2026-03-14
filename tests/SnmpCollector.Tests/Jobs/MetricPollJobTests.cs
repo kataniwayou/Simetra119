@@ -392,7 +392,7 @@ public sealed class MetricPollJobTests : IDisposable
             return device is not null;
         }
 
-        public Task<(IReadOnlySet<string> Added, IReadOnlySet<string> Removed)> ReloadAsync(List<DeviceOptions> devices)
+        public Task<(IReadOnlySet<string> Added, IReadOnlySet<string> Removed)> ReloadAsync(List<DeviceInfo> devices)
             => Task.FromResult<(IReadOnlySet<string>, IReadOnlySet<string>)>(
                 (new HashSet<string>(), new HashSet<string>()));
     }

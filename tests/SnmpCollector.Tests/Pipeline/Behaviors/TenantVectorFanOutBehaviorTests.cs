@@ -420,7 +420,7 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
             _device is not null ? new[] { _device } : Array.Empty<DeviceInfo>();
 
         public Task<(IReadOnlySet<string> Added, IReadOnlySet<string> Removed)> ReloadAsync(
-            List<DeviceOptions> devices)
+            List<DeviceInfo> devices)
             => throw new NotSupportedException("Not needed in tests");
     }
 

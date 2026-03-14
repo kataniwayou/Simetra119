@@ -1,9 +1,4 @@
-using System.Net;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using NSubstitute;
-using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
 using Xunit;
 
@@ -12,55 +7,48 @@ namespace SnmpCollector.Tests.Pipeline;
 public sealed class DeviceRegistryTests
 {
     /// <summary>
-    /// Creates a DevicesOptions with two devices:
-    ///   - Simetra.npb-core-01 at 10.0.10.1:161 (short name: npb-core-01)
-    ///   - Simetra.obp-edge-01 at 10.0.10.2:161 (short name: obp-edge-01)
+    /// Creates two pre-built DeviceInfo objects for use in registry tests.
+    /// - npb-core-01 at 10.0.10.1:161 with one poll group
+    /// - obp-edge-01 at 10.0.10.2:161 with no poll groups
     /// </summary>
-    private static DevicesOptions TwoDeviceOptions() => new()
+    private static List<DeviceInfo> TwoDeviceInfos() => new()
     {
-        Devices =
-        [
-            new DeviceOptions
+        new DeviceInfo("npb-core-01", "10.0.10.1", "10.0.10.1", 161,
+            new List<MetricPollInfo>
             {
-                CommunityString = "Simetra.npb-core-01",
-                IpAddress = "10.0.10.1",
-                Polls =
-                [
-                    new PollOptions
-                    {
-                        MetricNames = ["1.3.6.1.2.1.25.3.3.1.2"],
-                        IntervalSeconds = 30
-                    }
-                ]
-            },
-            new DeviceOptions
-            {
-                CommunityString = "Simetra.obp-edge-01",
-                IpAddress = "10.0.10.2",
-                Polls = []
-            }
-        ]
+                new(0, new List<string> { "1.3.6.1.2.1.25.3.3.1.2" }.AsReadOnly(), 30, 0.8)
+            }.AsReadOnly(),
+            "Simetra.npb-core-01"),
+        new DeviceInfo("obp-edge-01", "10.0.10.2", "10.0.10.2", 161,
+            Array.Empty<MetricPollInfo>().ToList().AsReadOnly(),
+            "Simetra.obp-edge-01")
     };
 
-    /// <summary>
-    /// Creates a passthrough IOidMapService mock that returns the metric name itself as the OID.
-    /// This preserves existing test behavior: tests that use OID strings as MetricNames
-    /// will see those strings "resolved" to themselves.
-    /// </summary>
-    private static IOidMapService CreatePassthroughOidMapService()
+    private static DeviceRegistry CreateRegistry()
     {
-        var svc = Substitute.For<IOidMapService>();
-        svc.ResolveToOid(Arg.Any<string>()).Returns(callInfo => callInfo.Arg<string>());
-        return svc;
+        return new DeviceRegistry(NullLogger<DeviceRegistry>.Instance);
     }
 
-    private static DeviceRegistry CreateRegistry(DevicesOptions? devicesOptions = null, IOidMapService? oidMapService = null)
+    // -------------------------------------------------------------------------
+    // Constructor starts empty (new behavior post-refactor)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void Constructor_StartsEmpty()
     {
-        var svc = oidMapService ?? CreatePassthroughOidMapService();
-        return new DeviceRegistry(
-            Options.Create(devicesOptions ?? TwoDeviceOptions()),
-            svc,
-            NullLogger<DeviceRegistry>.Instance);
+        var sut = CreateRegistry();
+
+        Assert.Empty(sut.AllDevices);
+    }
+
+    [Fact]
+    public void Constructor_TryGetByIpPort_ReturnsFalse()
+    {
+        var sut = CreateRegistry();
+
+        var found = sut.TryGetByIpPort("10.0.10.1", 161, out _);
+
+        Assert.False(found);
     }
 
     // -------------------------------------------------------------------------
@@ -68,9 +56,10 @@ public sealed class DeviceRegistryTests
     // -------------------------------------------------------------------------
 
     [Fact]
-    public void TryGetDeviceByName_ExactMatch_ReturnsDevice()
+    public async Task TryGetDeviceByName_ExactMatch_ReturnsDevice()
     {
         var sut = CreateRegistry();
+        await sut.ReloadAsync(TwoDeviceInfos());
 
         var found = sut.TryGetDeviceByName("npb-core-01", out var device);
 
@@ -80,9 +69,10 @@ public sealed class DeviceRegistryTests
     }
 
     [Fact]
-    public void TryGetDeviceByName_CaseInsensitive_ReturnsDevice()
+    public async Task TryGetDeviceByName_CaseInsensitive_ReturnsDevice()
     {
         var sut = CreateRegistry();
+        await sut.ReloadAsync(TwoDeviceInfos());
 
         var found = sut.TryGetDeviceByName("NPB-CORE-01", out var device);
 
@@ -92,9 +82,10 @@ public sealed class DeviceRegistryTests
     }
 
     [Fact]
-    public void TryGetDeviceByName_Unknown_ReturnsFalse()
+    public async Task TryGetDeviceByName_Unknown_ReturnsFalse()
     {
         var sut = CreateRegistry();
+        await sut.ReloadAsync(TwoDeviceInfos());
 
         var found = sut.TryGetDeviceByName("nonexistent", out var device);
 
@@ -107,9 +98,10 @@ public sealed class DeviceRegistryTests
     // -------------------------------------------------------------------------
 
     [Fact]
-    public void TryGetByIpPort_ExactMatch_ReturnsDevice()
+    public async Task TryGetByIpPort_ExactMatch_ReturnsDevice()
     {
         var sut = CreateRegistry();
+        await sut.ReloadAsync(TwoDeviceInfos());
 
         var found = sut.TryGetByIpPort("10.0.10.1", 161, out var device);
 
@@ -121,9 +113,10 @@ public sealed class DeviceRegistryTests
     }
 
     [Fact]
-    public void TryGetByIpPort_Unknown_ReturnsFalse()
+    public async Task TryGetByIpPort_Unknown_ReturnsFalse()
     {
         var sut = CreateRegistry();
+        await sut.ReloadAsync(TwoDeviceInfos());
 
         var found = sut.TryGetByIpPort("99.99.99.99", 9999, out var device);
 
@@ -132,206 +125,27 @@ public sealed class DeviceRegistryTests
     }
 
     // -------------------------------------------------------------------------
-    // Duplicate IP+Port detection -- skip+Error semantics (DEV-09/CS-04)
-    // -------------------------------------------------------------------------
-
-    [Fact]
-    public void Constructor_DuplicateIpPort_SkipsSecondDeviceWithErrorLog()
-    {
-        var opts = new DevicesOptions
-        {
-            Devices =
-            [
-                new DeviceOptions
-                {
-                    CommunityString = "Simetra.device-a",
-                    IpAddress = "10.0.10.1",
-                    Port = 161,
-                    Polls = []
-                },
-                new DeviceOptions
-                {
-                    CommunityString = "Simetra.device-b",
-                    IpAddress = "10.0.10.1",
-                    Port = 161,
-                    Polls = []
-                }
-            ]
-        };
-
-        var logger = Substitute.For<ILogger<DeviceRegistry>>();
-        var sut = new DeviceRegistry(Options.Create(opts), CreatePassthroughOidMapService(), logger);
-
-        // First device wins; second is skipped
-        Assert.Single(sut.AllDevices);
-        Assert.True(sut.TryGetDeviceByName("device-a", out _));
-        Assert.False(sut.TryGetDeviceByName("device-b", out _));
-
-        // Error log emitted for the skipped duplicate
-        logger.Received(1).Log(
-            LogLevel.Error,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("duplicate") || o.ToString()!.Contains("Duplicate")),
-            null,
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public async Task ReloadAsync_DuplicateIpPort_SkipsSecondDeviceWithErrorLog()
-    {
-        var logger = Substitute.For<ILogger<DeviceRegistry>>();
-        var initialOpts = new DevicesOptions { Devices = [] };
-        var sut = new DeviceRegistry(Options.Create(initialOpts), CreatePassthroughOidMapService(), logger);
-
-        var duplicateDevices = new List<DeviceOptions>
-        {
-            new() { CommunityString = "Simetra.device-a", IpAddress = "10.0.10.1", Port = 161, Polls = [] },
-            new() { CommunityString = "Simetra.device-b", IpAddress = "10.0.10.1", Port = 161, Polls = [] }
-        };
-
-        await sut.ReloadAsync(duplicateDevices);
-
-        // First device wins; second is skipped
-        Assert.Single(sut.AllDevices);
-        Assert.True(sut.TryGetDeviceByName("device-a", out _));
-        Assert.False(sut.TryGetDeviceByName("device-b", out _));
-
-        // Error log emitted for the skipped duplicate
-        logger.Received(1).Log(
-            LogLevel.Error,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("duplicate") || o.ToString()!.Contains("Duplicate")),
-            null,
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public void Constructor_DuplicateName_DifferentIpPort_Accepted()
-    {
-        var opts = new DevicesOptions
-        {
-            Devices =
-            [
-                new DeviceOptions
-                {
-                    CommunityString = "Simetra.same-name",
-                    IpAddress = "10.0.10.1",
-                    Port = 161,
-                    Polls = []
-                },
-                new DeviceOptions
-                {
-                    CommunityString = "Simetra.same-name",
-                    IpAddress = "10.0.10.2",
-                    Port = 161,
-                    Polls = []
-                }
-            ]
-        };
-
-        // Should not throw -- same name but different IP+Port is allowed
-        var sut = CreateRegistry(opts);
-        Assert.Equal(2, sut.AllDevices.Count);
-    }
-
-    // -------------------------------------------------------------------------
-    // Duplicate CommunityString Warning (DEV-10)
-    // -------------------------------------------------------------------------
-
-    [Fact]
-    public void Constructor_DuplicateCommunityString_DifferentIpPort_BothLoadWithWarning()
-    {
-        var opts = new DevicesOptions
-        {
-            Devices =
-            [
-                new DeviceOptions
-                {
-                    CommunityString = "Simetra.shared-cs",
-                    IpAddress = "10.0.10.1",
-                    Port = 161,
-                    Polls = []
-                },
-                new DeviceOptions
-                {
-                    CommunityString = "Simetra.shared-cs",
-                    IpAddress = "10.0.10.2",
-                    Port = 161,
-                    Polls = []
-                }
-            ]
-        };
-
-        var logger = Substitute.For<ILogger<DeviceRegistry>>();
-        var sut = new DeviceRegistry(Options.Create(opts), CreatePassthroughOidMapService(), logger);
-
-        // Both devices must load (DEV-10: Warning only, no skip)
-        Assert.Equal(2, sut.AllDevices.Count);
-        Assert.True(sut.TryGetByIpPort("10.0.10.1", 161, out _));
-        Assert.True(sut.TryGetByIpPort("10.0.10.2", 161, out _));
-
-        // Warning log emitted containing "both loaded" context
-        logger.Received(1).Log(
-            LogLevel.Warning,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("both loaded")),
-            null,
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    // -------------------------------------------------------------------------
     // AllDevices
     // -------------------------------------------------------------------------
 
     [Fact]
-    public void AllDevices_ReturnsAllRegistered()
+    public async Task AllDevices_ReturnsAllRegistered()
     {
         var sut = CreateRegistry();
+        await sut.ReloadAsync(TwoDeviceInfos());
 
         Assert.Equal(2, sut.AllDevices.Count);
     }
 
-    // -------------------------------------------------------------------------
-    // DNS resolution and CommunityString passthrough
-    // -------------------------------------------------------------------------
-
     [Fact]
-    public void Constructor_DnsHostname_ResolvesToIpAddress()
-    {
-        // "localhost" is universally resolvable to 127.0.0.1
-        var opts = new DevicesOptions
-        {
-            Devices =
-            [
-                new DeviceOptions
-                {
-                    CommunityString = "Simetra.dns-device",
-                    IpAddress = "localhost",
-                    Polls = []
-                }
-            ]
-        };
-
-        var sut = CreateRegistry(opts);
-
-        var found = sut.TryGetDeviceByName("dns-device", out var device);
-        Assert.True(found);
-        Assert.NotNull(device);
-        // ConfigAddress should be the raw DNS name from config
-        Assert.Equal("localhost", device.ConfigAddress);
-        // ResolvedIp should be the resolved IP
-        Assert.True(IPAddress.TryParse(device.ResolvedIp, out _), "ResolvedIp should be a resolved IP");
-        Assert.Equal("127.0.0.1", device.ResolvedIp);
-    }
-
-    [Fact]
-    public void Constructor_CommunityString_StoredOnDeviceInfo()
+    public async Task AllDevices_AfterEmptyReload_ReturnsEmpty()
     {
         var sut = CreateRegistry();
+        await sut.ReloadAsync(TwoDeviceInfos());
 
-        var found = sut.TryGetDeviceByName("npb-core-01", out var device);
-        Assert.True(found);
-        Assert.Equal("Simetra.npb-core-01", device!.CommunityString);
+        await sut.ReloadAsync(new List<DeviceInfo>());
+
+        Assert.Empty(sut.AllDevices);
     }
 
     // -------------------------------------------------------------------------
@@ -352,23 +166,24 @@ public sealed class DeviceRegistryTests
     }
 
     // -------------------------------------------------------------------------
-    // ReloadAsync (added/removed sets now use IP:Port keys)
+    // ReloadAsync: atomic swap, added/removed sets
     // -------------------------------------------------------------------------
 
     [Fact]
     public async Task ReloadAsync_AddsNewDevice_FoundByName()
     {
         var sut = CreateRegistry();
+        await sut.ReloadAsync(TwoDeviceInfos());
 
-        // Reload with the original two plus a new device
-        var newDevices = new List<DeviceOptions>
+        // Reload with original two plus a new device
+        var newInfos = new List<DeviceInfo>(TwoDeviceInfos())
         {
-            new() { CommunityString = "Simetra.npb-core-01", IpAddress = "10.0.10.1", Polls = [] },
-            new() { CommunityString = "Simetra.obp-edge-01", IpAddress = "10.0.10.2", Polls = [] },
-            new() { CommunityString = "Simetra.new-device", IpAddress = "10.0.10.3", Polls = [] }
+            new("new-device", "10.0.10.3", "10.0.10.3", 161,
+                Array.Empty<MetricPollInfo>().ToList().AsReadOnly(),
+                "Simetra.new-device")
         };
 
-        var (added, removed) = await sut.ReloadAsync(newDevices);
+        var (added, removed) = await sut.ReloadAsync(newInfos);
 
         Assert.Contains("10.0.10.3:161", added);
         Assert.Empty(removed);
@@ -378,7 +193,6 @@ public sealed class DeviceRegistryTests
         Assert.True(found);
         Assert.Equal("new-device", device!.Name);
 
-        // Also verify primary lookup works
         var foundByIp = sut.TryGetByIpPort("10.0.10.3", 161, out var deviceByIp);
         Assert.True(foundByIp);
         Assert.Equal("new-device", deviceByIp!.Name);
@@ -388,14 +202,17 @@ public sealed class DeviceRegistryTests
     public async Task ReloadAsync_RemovesDevice_NotFoundByName()
     {
         var sut = CreateRegistry();
+        await sut.ReloadAsync(TwoDeviceInfos());
 
         // Reload with only one of the original two devices
-        var newDevices = new List<DeviceOptions>
+        var newInfos = new List<DeviceInfo>
         {
-            new() { CommunityString = "Simetra.npb-core-01", IpAddress = "10.0.10.1", Polls = [] }
+            new("npb-core-01", "10.0.10.1", "10.0.10.1", 161,
+                Array.Empty<MetricPollInfo>().ToList().AsReadOnly(),
+                "Simetra.npb-core-01")
         };
 
-        var (added, removed) = await sut.ReloadAsync(newDevices);
+        var (added, removed) = await sut.ReloadAsync(newInfos);
 
         Assert.Empty(added);
         Assert.Contains("10.0.10.2:161", removed);
@@ -408,328 +225,66 @@ public sealed class DeviceRegistryTests
         Assert.False(foundByIp);
     }
 
-    // -------------------------------------------------------------------------
-    // Name resolution via IOidMapService (Phase 31-02)
-    // -------------------------------------------------------------------------
-
     [Fact]
-    public void ResolvedMetricNames_PopulateOids()
+    public async Task ReloadAsync_ReplacesExistingData()
     {
-        // Arrange
-        var oidMapService = Substitute.For<IOidMapService>();
-        oidMapService.ResolveToOid("obp_channel_L1").Returns("1.3.6.1.4.1.47477.10.21.1.3.4.0");
-        oidMapService.ResolveToOid("obp_r1_power_L1").Returns("1.3.6.1.4.1.47477.10.21.1.3.10.0");
+        var sut = CreateRegistry();
+        await sut.ReloadAsync(TwoDeviceInfos());
 
-        var opts = new DevicesOptions
+        // Reload with a completely different set
+        var newInfos = new List<DeviceInfo>
         {
-            Devices =
-            [
-                new DeviceOptions
-                {
-                    CommunityString = "Simetra.obp-edge-01",
-                    IpAddress = "10.0.10.2",
-                    Polls =
-                    [
-                        new PollOptions
-                        {
-                            MetricNames = ["obp_channel_L1", "obp_r1_power_L1"],
-                            IntervalSeconds = 10
-                        }
-                    ]
-                }
-            ]
+            new("new-device-a", "192.168.1.1", "192.168.1.1", 162,
+                Array.Empty<MetricPollInfo>().ToList().AsReadOnly(),
+                "Simetra.new-device-a")
         };
 
-        // Act
-        var sut = CreateRegistry(opts, oidMapService);
+        await sut.ReloadAsync(newInfos);
 
-        // Assert
-        var found = sut.TryGetByIpPort("10.0.10.2", 161, out var device);
+        // Old devices gone
+        Assert.False(sut.TryGetDeviceByName("npb-core-01", out _));
+        Assert.False(sut.TryGetDeviceByName("obp-edge-01", out _));
+
+        // New device present
+        Assert.True(sut.TryGetDeviceByName("new-device-a", out _));
+        Assert.Single(sut.AllDevices);
+    }
+
+    [Fact]
+    public async Task ReloadAsync_WithEmptyList_ClearsRegistry()
+    {
+        var sut = CreateRegistry();
+        await sut.ReloadAsync(TwoDeviceInfos());
+        Assert.Equal(2, sut.AllDevices.Count);
+
+        var (added, removed) = await sut.ReloadAsync(new List<DeviceInfo>());
+
+        Assert.Empty(added);
+        Assert.Equal(2, removed.Count);
+        Assert.Empty(sut.AllDevices);
+    }
+
+    [Fact]
+    public async Task ReloadAsync_CommunityString_StoredOnDeviceInfo()
+    {
+        var sut = CreateRegistry();
+        await sut.ReloadAsync(TwoDeviceInfos());
+
+        var found = sut.TryGetDeviceByName("npb-core-01", out var device);
+        Assert.True(found);
+        Assert.Equal("Simetra.npb-core-01", device!.CommunityString);
+    }
+
+    [Fact]
+    public async Task ReloadAsync_PollGroups_StoredOnDeviceInfo()
+    {
+        var sut = CreateRegistry();
+        await sut.ReloadAsync(TwoDeviceInfos());
+
+        var found = sut.TryGetByIpPort("10.0.10.1", 161, out var device);
         Assert.True(found);
         Assert.NotNull(device);
         Assert.Single(device.PollGroups);
-
-        var oids = device.PollGroups[0].Oids;
-        Assert.Equal(2, oids.Count);
-        Assert.Contains("1.3.6.1.4.1.47477.10.21.1.3.4.0", oids);
-        Assert.Contains("1.3.6.1.4.1.47477.10.21.1.3.10.0", oids);
-        // Metric names should NOT be present -- OIDs, not names
-        Assert.DoesNotContain("obp_channel_L1", oids);
-        Assert.DoesNotContain("obp_r1_power_L1", oids);
-    }
-
-    [Fact]
-    public void UnresolvableMetricName_LogsWarningAndSkipped()
-    {
-        // Arrange
-        var oidMapService = Substitute.For<IOidMapService>();
-        oidMapService.ResolveToOid("valid_name").Returns("1.3.6.1.4.1.47477.10.21.1.3.4.0");
-        oidMapService.ResolveToOid("bad_name").Returns((string?)null);
-
-        var logger = Substitute.For<ILogger<DeviceRegistry>>();
-
-        var opts = new DevicesOptions
-        {
-            Devices =
-            [
-                new DeviceOptions
-                {
-                    CommunityString = "Simetra.test-device",
-                    IpAddress = "10.0.10.5",
-                    Polls =
-                    [
-                        new PollOptions
-                        {
-                            MetricNames = ["valid_name", "bad_name"],
-                            IntervalSeconds = 10
-                        }
-                    ]
-                }
-            ]
-        };
-
-        // Act
-        var sut = new DeviceRegistry(Options.Create(opts), oidMapService, logger);
-
-        // Assert OID list contains only the resolved one
-        var found = sut.TryGetByIpPort("10.0.10.5", 161, out var device);
-        Assert.True(found);
-        Assert.NotNull(device);
-        Assert.Single(device.PollGroups[0].Oids);
-        Assert.Equal("1.3.6.1.4.1.47477.10.21.1.3.4.0", device.PollGroups[0].Oids[0]);
-
-        // Assert warning was logged containing the unresolvable name and expected message fragment
-        logger.Received(1).Log(
-            LogLevel.Warning,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("bad_name") && o.ToString()!.Contains("not found in OID map")),
-            null,
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public void AllNamesUnresolvable_DeviceStillRegistered_PollGroupsEmpty()
-    {
-        // Arrange
-        var oidMapService = Substitute.For<IOidMapService>();
-        oidMapService.ResolveToOid(Arg.Any<string>()).Returns((string?)null);
-
-        var opts = new DevicesOptions
-        {
-            Devices =
-            [
-                new DeviceOptions
-                {
-                    CommunityString = "Simetra.no-match-device",
-                    IpAddress = "10.0.10.9",
-                    Polls =
-                    [
-                        new PollOptions
-                        {
-                            MetricNames = ["no_match_1", "no_match_2"],
-                            IntervalSeconds = 30
-                        }
-                    ]
-                }
-            ]
-        };
-
-        // Act
-        var sut = CreateRegistry(opts, oidMapService);
-
-        // Assert device is still registered (needed for traps)
-        var found = sut.TryGetByIpPort("10.0.10.9", 161, out var device);
-        Assert.True(found);
-        Assert.NotNull(device);
-        // DEV-08: zero-OID poll group is filtered out entirely; PollGroups is empty
-        Assert.Empty(device.PollGroups);
-    }
-
-    // -------------------------------------------------------------------------
-    // Zero-OID poll group filtering (DEV-08)
-    // -------------------------------------------------------------------------
-
-    [Fact]
-    public void Constructor_ZeroResolvedOids_PollGroupSkipped_DeviceRegisteredForTraps()
-    {
-        // Arrange: OID map returns null for all metric names
-        var oidMapService = Substitute.For<IOidMapService>();
-        oidMapService.ResolveToOid(Arg.Any<string>()).Returns((string?)null);
-
-        var logger = Substitute.For<ILogger<DeviceRegistry>>();
-
-        var opts = new DevicesOptions
-        {
-            Devices =
-            [
-                new DeviceOptions
-                {
-                    CommunityString = "Simetra.zero-oid-device",
-                    IpAddress = "10.0.10.20",
-                    Polls =
-                    [
-                        new PollOptions
-                        {
-                            MetricNames = ["unresolvable_metric"],
-                            IntervalSeconds = 15
-                        }
-                    ]
-                }
-            ]
-        };
-
-        // Act
-        var sut = new DeviceRegistry(Options.Create(opts), oidMapService, logger);
-
-        // Assert device is registered (for traps)
-        Assert.True(sut.TryGetByIpPort("10.0.10.20", 161, out var device));
-        Assert.NotNull(device);
-
-        // Assert poll group was filtered out entirely
-        Assert.Empty(device!.PollGroups);
-
-        // Assert Warning logged for zero-OID group
-        logger.Received(1).Log(
-            LogLevel.Warning,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("zero resolved OIDs")),
-            null,
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public void Constructor_MixedPollGroups_OnlyZeroOidGroupSkipped()
-    {
-        // Arrange: first poll group resolves, second does not
-        var oidMapService = Substitute.For<IOidMapService>();
-        oidMapService.ResolveToOid("good_metric").Returns("1.3.6.1.4.1.99.1.1.0");
-        oidMapService.ResolveToOid("bad_metric").Returns((string?)null);
-
-        var opts = new DevicesOptions
-        {
-            Devices =
-            [
-                new DeviceOptions
-                {
-                    CommunityString = "Simetra.mixed-device",
-                    IpAddress = "10.0.10.21",
-                    Polls =
-                    [
-                        new PollOptions
-                        {
-                            MetricNames = ["good_metric"],
-                            IntervalSeconds = 10
-                        },
-                        new PollOptions
-                        {
-                            MetricNames = ["bad_metric"],
-                            IntervalSeconds = 30
-                        }
-                    ]
-                }
-            ]
-        };
-
-        // Act
-        var sut = CreateRegistry(opts, oidMapService);
-
-        // Assert device is registered
-        Assert.True(sut.TryGetByIpPort("10.0.10.21", 161, out var device));
-        Assert.NotNull(device);
-
-        // Only the resolvable poll group survives (index 0)
-        Assert.Single(device!.PollGroups);
-        Assert.Equal(0, device.PollGroups[0].PollIndex);
-        Assert.Contains("1.3.6.1.4.1.99.1.1.0", device.PollGroups[0].Oids);
-    }
-
-    [Fact]
-    public async Task ReloadAsync_ResolvesMetricNamesToOids()
-    {
-        // Arrange: start with an empty registry
-        var oidMapService = Substitute.For<IOidMapService>();
-        oidMapService.ResolveToOid("obp_channel_L1").Returns("1.3.6.1.4.1.47477.10.21.1.3.4.0");
-        oidMapService.ResolveToOid("obp_r1_power_L1").Returns("1.3.6.1.4.1.47477.10.21.1.3.10.0");
-
-        var initialOpts = new DevicesOptions { Devices = [] };
-        var sut = CreateRegistry(initialOpts, oidMapService);
-
-        // Act: reload with a device containing MetricNames
-        var reloadDevices = new List<DeviceOptions>
-        {
-            new()
-            {
-                CommunityString = "Simetra.obp-edge-01",
-                IpAddress = "10.0.10.2",
-                Polls =
-                [
-                    new PollOptions
-                    {
-                        MetricNames = ["obp_channel_L1", "obp_r1_power_L1"],
-                        IntervalSeconds = 10
-                    }
-                ]
-            }
-        };
-
-        await sut.ReloadAsync(reloadDevices);
-
-        // Assert: resolved OIDs appear in PollGroups, not metric names
-        var found = sut.TryGetByIpPort("10.0.10.2", 161, out var device);
-        Assert.True(found);
-        Assert.NotNull(device);
-
-        var oids = device.PollGroups[0].Oids;
-        Assert.Equal(2, oids.Count);
-        Assert.Contains("1.3.6.1.4.1.47477.10.21.1.3.4.0", oids);
-        Assert.Contains("1.3.6.1.4.1.47477.10.21.1.3.10.0", oids);
-    }
-
-    [Fact]
-    public async Task ReloadAsync_UnresolvableMetricName_LogsWarning()
-    {
-        // Arrange
-        var oidMapService = Substitute.For<IOidMapService>();
-        oidMapService.ResolveToOid("valid_name").Returns("1.3.6.1.4.1.47477.10.21.1.3.4.0");
-        oidMapService.ResolveToOid("bad_name").Returns((string?)null);
-
-        var logger = Substitute.For<ILogger<DeviceRegistry>>();
-
-        var initialOpts = new DevicesOptions { Devices = [] };
-        var sut = new DeviceRegistry(Options.Create(initialOpts), oidMapService, logger);
-
-        // Act: reload introduces a device with an unresolvable metric name
-        var reloadDevices = new List<DeviceOptions>
-        {
-            new()
-            {
-                CommunityString = "Simetra.test-device",
-                IpAddress = "10.0.10.5",
-                Polls =
-                [
-                    new PollOptions
-                    {
-                        MetricNames = ["valid_name", "bad_name"],
-                        IntervalSeconds = 10
-                    }
-                ]
-            }
-        };
-
-        await sut.ReloadAsync(reloadDevices);
-
-        // Assert: only valid OID is in poll group
-        var found = sut.TryGetByIpPort("10.0.10.5", 161, out var device);
-        Assert.True(found);
-        Assert.Single(device!.PollGroups[0].Oids);
-        Assert.Equal("1.3.6.1.4.1.47477.10.21.1.3.4.0", device.PollGroups[0].Oids[0]);
-
-        // Assert: warning was logged for the unresolvable name
-        logger.Received(1).Log(
-            LogLevel.Warning,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("bad_name") && o.ToString()!.Contains("not found in OID map")),
-            null,
-            Arg.Any<Func<object, Exception?, string>>());
+        Assert.Contains("1.3.6.1.2.1.25.3.3.1.2", device.PollGroups[0].Oids);
     }
 }
