@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.7 Configuration Consistency & Tenant Commands — Phase 33 ready to plan
+**Current focus:** v1.7 Configuration Consistency & Tenant Commands — Phase 33 complete, Phase 34 next
 
 ## Current Position
 
 Phase: 33 of 36 (Config Model Additions)
-Plan: 01 of 2
-Status: In progress
-Last activity: 2026-03-14 — Completed 33-01 (DeviceOptions.Name → CommunityString rename)
+Plan: 02 of 2
+Status: Phase complete
+Last activity: 2026-03-14 — Completed 33-02 (CommandSlotOptions + IOidMapService removal from TenantVectorRegistry)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 8/8 v1.6 | [#         ] 1/? v1.7
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 8/8 v1.6 | [##        ] 2/? v1.7
 
 ## Milestone History
 
@@ -49,6 +49,11 @@ See `.planning/MILESTONES.md` for details.
 - DeviceOptions.CommunityString (not Name) is primary device identifier; DeviceInfo.Name derived at load time via TryExtractDeviceName
 - DeviceRegistry: invalid CommunityString logs error and skips device (no throw); consistent for constructor + ReloadAsync
 - All config JSON/YAML: "CommunityString": "Simetra.XXX" format; "Name" field eliminated from device entries
+- CommandSlotOptions sealed class: Ip, Port, CommandName, Value, ValueType — for SNMP SET targets (execution out of scope until Phase 36+)
+- TenantOptions.Name (string?) overrides auto-generated tenant-{i} id; TenantOptions.Commands holds CommandSlotOptions list
+- MetricSlotOptions.IntervalSeconds (int): direct config field, replaces DeriveIntervalSeconds cross-service derivation
+- MetricSlotOptions.Role (string): "Evaluate" or "Resolved"; validated in Phase 34
+- TenantVectorRegistry constructor: takes only IDeviceRegistry + ILogger (IOidMapService removed); DeriveIntervalSeconds deleted
 
 ### v1.7 Pre-Phase Decisions (to resolve in plans)
 
@@ -66,6 +71,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-14T19:48Z
-Stopped at: Completed 33-01-PLAN.md (DeviceOptions.Name → CommunityString)
+Last session: 2026-03-14T19:55Z
+Stopped at: Completed 33-02-PLAN.md (CommandSlotOptions + IOidMapService removal from TenantVectorRegistry)
 Resume file: None
