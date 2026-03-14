@@ -28,9 +28,10 @@ public sealed class DeviceRegistry : IDeviceRegistry
     /// - IP is normalized to IPv4 via <see cref="IPAddress.MapToIPv4"/>.
     /// - Poll groups resolve MetricNames to OIDs via <see cref="IOidMapService.ResolveToOid"/>.
     /// - Unresolvable metric names are logged as warnings and excluded from the poll group.
-    /// - Devices with zero resolved OIDs are still registered (needed for traps).
+    /// - Poll groups with zero resolved OIDs are excluded from PollGroups (logged as Warning); device still registers for traps.
     /// - Devices with invalid CommunityString (not following Simetra.{DeviceName} convention) are skipped with an error log.
-    /// Throws <see cref="InvalidOperationException"/> if duplicate IP+Port is detected.
+    /// - Duplicate IP+Port devices are skipped with an error log (no throw).
+    /// - Duplicate CommunityString across devices with different IP+Port logs a Warning; both devices load normally.
     /// </summary>
     /// <param name="devicesOptions">The configured devices to register.</param>
     /// <param name="oidMapService">Service for resolving metric names to OID strings.</param>
@@ -43,6 +44,7 @@ public sealed class DeviceRegistry : IDeviceRegistry
 
         var byIpPortBuilder = new Dictionary<string, DeviceInfo>(devices.Count, StringComparer.OrdinalIgnoreCase);
         var byNameBuilder = new Dictionary<string, DeviceInfo>(devices.Count, StringComparer.OrdinalIgnoreCase);
+        var seenCommunityStrings = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var d in devices)
         {
@@ -73,9 +75,19 @@ public sealed class DeviceRegistry : IDeviceRegistry
             var ipPortKey = IpPortKey(info.ConfigAddress, info.Port);
             if (byIpPortBuilder.TryGetValue(ipPortKey, out var existing))
             {
-                throw new InvalidOperationException(
-                    $"Duplicate address+port {ipPortKey} in device configuration (devices: '{existing.Name}', '{info.Name}')");
+                _logger.LogError(
+                    "Device at {IpAddress}:{Port} (CommunityString '{CommunityString}') is a duplicate of existing device '{ExistingName}' -- skipping",
+                    d.IpAddress, d.Port, d.CommunityString, existing.Name);
+                continue;
             }
+
+            if (seenCommunityStrings.TryGetValue(d.CommunityString, out var priorName))
+            {
+                _logger.LogWarning(
+                    "Device '{DeviceName}' at {IpAddress}:{Port} has CommunityString '{CommunityString}' also used by device '{PriorDevice}' -- both loaded (different IP+Port)",
+                    deviceName, d.IpAddress, d.Port, d.CommunityString, priorName);
+            }
+            seenCommunityStrings.TryAdd(d.CommunityString, deviceName);
 
             byIpPortBuilder[ipPortKey] = info;
             byNameBuilder[info.Name] = info;
@@ -107,6 +119,7 @@ public sealed class DeviceRegistry : IDeviceRegistry
 
         var byIpPortBuilder = new Dictionary<string, DeviceInfo>(devices.Count, StringComparer.OrdinalIgnoreCase);
         var byNameBuilder = new Dictionary<string, DeviceInfo>(devices.Count, StringComparer.OrdinalIgnoreCase);
+        var seenCommunityStrings = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var d in devices)
         {
@@ -137,9 +150,19 @@ public sealed class DeviceRegistry : IDeviceRegistry
             var ipPortKey = IpPortKey(info.ConfigAddress, info.Port);
             if (byIpPortBuilder.TryGetValue(ipPortKey, out var existing))
             {
-                throw new InvalidOperationException(
-                    $"Duplicate address+port {ipPortKey} in device configuration (devices: '{existing.Name}', '{info.Name}')");
+                _logger.LogError(
+                    "Device at {IpAddress}:{Port} (CommunityString '{CommunityString}') is a duplicate of existing device '{ExistingName}' -- skipping",
+                    d.IpAddress, d.Port, d.CommunityString, existing.Name);
+                continue;
             }
+
+            if (seenCommunityStrings.TryGetValue(d.CommunityString, out var priorName))
+            {
+                _logger.LogWarning(
+                    "Device '{DeviceName}' at {IpAddress}:{Port} has CommunityString '{CommunityString}' also used by device '{PriorDevice}' -- both loaded (different IP+Port)",
+                    deviceName, d.IpAddress, d.Port, d.CommunityString, priorName);
+            }
+            seenCommunityStrings.TryAdd(d.CommunityString, deviceName);
 
             byIpPortBuilder[ipPortKey] = info;
             byNameBuilder[info.Name] = info;
@@ -168,47 +191,53 @@ public sealed class DeviceRegistry : IDeviceRegistry
     /// <summary>
     /// Resolves MetricNames in each poll group to OIDs via <see cref="IOidMapService.ResolveToOid"/>.
     /// Unresolvable names are logged as warnings and excluded. Resolution summary is always logged
-    /// per poll group for reload diff visibility. Devices with zero resolved OIDs are still valid
-    /// (they can still receive traps).
+    /// per poll group for reload diff visibility. Poll groups with zero resolved OIDs are excluded
+    /// entirely (logged as Warning); devices with all-zero-OID poll groups are still registered for
+    /// trap reception.
     /// </summary>
     private ReadOnlyCollection<MetricPollInfo> BuildPollGroups(List<PollOptions> polls, string deviceName)
     {
-        return polls
-            .Select((poll, index) =>
+        var result = new List<MetricPollInfo>();
+        for (var index = 0; index < polls.Count; index++)
+        {
+            var poll = polls[index];
+            var resolvedOids = new List<string>();
+            var unresolvedNames = new List<string>();
+
+            foreach (var name in poll.MetricNames)
             {
-                var resolvedOids = new List<string>();
-                var unresolvedNames = new List<string>();
-
-                foreach (var name in poll.MetricNames)
+                var oid = _oidMapService.ResolveToOid(name);
+                if (oid is not null)
+                    resolvedOids.Add(oid);
+                else
                 {
-                    var oid = _oidMapService.ResolveToOid(name);
-                    if (oid is not null)
-                    {
-                        resolvedOids.Add(oid);
-                    }
-                    else
-                    {
-                        unresolvedNames.Add(name);
-                        _logger.LogWarning(
-                            "MetricName '{MetricName}' on device '{DeviceName}' poll {PollIndex} not found in OID map -- skipping",
-                            name, deviceName, index);
-                    }
+                    unresolvedNames.Add(name);
+                    _logger.LogWarning(
+                        "MetricName '{MetricName}' on device '{DeviceName}' poll {PollIndex} not found in OID map -- skipping",
+                        name, deviceName, index);
                 }
+            }
 
-                // Always log resolution summary for reload diff visibility
-                _logger.LogInformation(
-                    "Device '{DeviceName}' poll {PollIndex}: resolved {ResolvedCount}/{TotalCount} metric names{UnresolvedDetail}",
-                    deviceName, index, resolvedOids.Count, poll.MetricNames.Count,
-                    unresolvedNames.Count > 0 ? $"; unresolved: [{string.Join(", ", unresolvedNames)}]" : "");
+            _logger.LogInformation(
+                "Device '{DeviceName}' poll {PollIndex}: resolved {ResolvedCount}/{TotalCount} metric names{UnresolvedDetail}",
+                deviceName, index, resolvedOids.Count, poll.MetricNames.Count,
+                unresolvedNames.Count > 0 ? $"; unresolved: [{string.Join(", ", unresolvedNames)}]" : "");
 
-                return new MetricPollInfo(
-                    PollIndex: index,
-                    Oids: resolvedOids.AsReadOnly(),
-                    IntervalSeconds: poll.IntervalSeconds,
-                    TimeoutMultiplier: poll.TimeoutMultiplier);
-            })
-            .ToList()
-            .AsReadOnly();
+            if (resolvedOids.Count == 0)
+            {
+                _logger.LogWarning(
+                    "Device '{DeviceName}' poll {PollIndex} has zero resolved OIDs -- skipping job registration",
+                    deviceName, index);
+                continue;
+            }
+
+            result.Add(new MetricPollInfo(
+                PollIndex: index,
+                Oids: resolvedOids.AsReadOnly(),
+                IntervalSeconds: poll.IntervalSeconds,
+                TimeoutMultiplier: poll.TimeoutMultiplier));
+        }
+        return result.AsReadOnly();
     }
 
     private static string IpPortKey(string ip, int port) => $"{ip}:{port}";
