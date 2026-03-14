@@ -21,17 +21,17 @@ Requirements for CommunityString validation, self-describing tenant entries, ten
 
 ### Tenant Structure
 
-- [ ] **TEN-01**: `MetricSlotOptions` gains `Device` (string) and `CommunityString` (string) fields — each tenant metric entry is fully self-describing with Device, Ip, Port, CommunityString, MetricName, TimeSeriesSize
-- [ ] **TEN-02**: New `Commands` list on `TenantOptions` — each `CommandSlotOptions` entry has Device, Ip, Port, CommunityString, CommandName, Value (string), ValueType (string)
+- [ ] **TEN-01**: `MetricSlotOptions` retains current shape (Ip, Port, MetricName, TimeSeriesSize) plus optional `IntervalSeconds` — CommunityString resolved from DeviceRegistry by IP+Port at load time, not stored in tenant config
+- [ ] **TEN-02**: New `Commands` list on `TenantOptions` — each `CommandSlotOptions` entry has Ip, Port, CommandName, Value (string, required non-empty), ValueType (string) — CommunityString resolved from DeviceRegistry by IP+Port at load time
 - [ ] **TEN-03**: `ValueType` validated against allowed set `{ "Integer32", "IpAddress", "OctetString" }` at load time — invalid ValueType = skip command entry with Error log
-- [ ] **TEN-04**: `TenantVectorRegistry` constructor no longer requires `IDeviceRegistry` or `IOidMapService` — all data comes from self-describing config entries
+- [ ] **TEN-04**: `TenantVectorRegistry` constructor removes `IOidMapService` dependency — keeps `IDeviceRegistry` for CommunityString resolution by IP+Port
 - [ ] **TEN-05**: Unresolvable MetricName in tenant config (not in current OID map) = skip entry with Error-level structured log; other entries in same tenant unaffected
 - [ ] **TEN-06**: Unresolvable CommandName in tenant config (not in current command map) = store entry as-is with Debug log — resolution deferred to execution time
-- [ ] **TEN-07**: CommunityString on tenant metric and command entries validated with same rules as CS-03; invalid = skip entry with Error log
+- [ ] **TEN-07**: Tenant metric/command entry whose IP+Port has no matching device in DeviceRegistry = skip entry with Error-level structured log
 - [ ] **TEN-08**: `TenantVectorOptionsValidator` activated with real structural validation — non-null/non-empty Ip, MetricName/CommandName; Port 1–65535; TimeSeriesSize >= 1; non-empty Value on commands
 - [ ] **TEN-09**: Optional `IntervalSeconds` field on `MetricSlotOptions` — stored in `MetricSlotHolder` for observability; defaults to 0 if absent
 - [ ] **TEN-10**: Optional `Name` field on `TenantOptions` — used in log context instead of synthetic `tenant-{index}` ID; falls back to auto-generated ID if absent
-- [ ] **TEN-11**: Structured log fields on CommunityString skip events include EntryType, EntryIndex, InvalidValue, ValidationRule, ConfigMap source — suitable for Loki alerting
+- [ ] **TEN-11**: Structured log fields on tenant entry skip events include EntryType, EntryIndex, Reason (unresolvable MetricName / device not found by IP+Port / invalid ValueType), ConfigMap source — suitable for Loki alerting
 
 ### Device Registry Consistency
 
@@ -48,8 +48,8 @@ Requirements for CommunityString validation, self-describing tenant entries, ten
 
 ### Code Cleanup
 
-- [ ] **CLN-01**: `TenantVectorRegistry.ResolveIp()` and `DeriveIntervalSeconds()` methods removed
-- [ ] **CLN-02**: `IDeviceRegistry` and `IOidMapService` constructor parameters removed from `TenantVectorRegistry`
+- [ ] **CLN-01**: `TenantVectorRegistry.DeriveIntervalSeconds()` method removed (IntervalSeconds comes from config); `ResolveIp()` stays (still needed for DNS→IP routing key translation)
+- [ ] **CLN-02**: `IOidMapService` constructor parameter removed from `TenantVectorRegistry`; `IDeviceRegistry` stays for CommunityString resolution
 - [ ] **CLN-03**: CommunityString derivation fallback removed from `MetricPollJob` — no more `?? DeriveFromDeviceName(device.Name)` path
 
 ## Out of Scope
