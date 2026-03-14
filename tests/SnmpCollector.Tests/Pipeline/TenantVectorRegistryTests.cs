@@ -1,7 +1,6 @@
 using Lextm.SharpSnmpLib;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using NSubstitute;
 using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
 using Xunit;
@@ -14,36 +13,9 @@ public sealed class TenantVectorRegistryTests
     // Helpers
     // ──────────────────────────────────────────────────────
 
-    private static TenantVectorRegistry CreateRegistry(
-        IDeviceRegistry? deviceRegistry = null,
-        IOidMapService? oidMapService = null)
+    private static TenantVectorRegistry CreateRegistry()
     {
-        var devReg = deviceRegistry ?? CreatePassthroughDeviceRegistry();
-        var oidMap = oidMapService ?? CreatePassthroughOidMapService();
-        return new TenantVectorRegistry(devReg, oidMap, NullLogger<TenantVectorRegistry>.Instance);
-    }
-
-    /// <summary>
-    /// Returns an IDeviceRegistry that accepts any IP+Port (TryGetByIpPort returns true)
-    /// and exposes an empty AllDevices list.
-    /// </summary>
-    private static IDeviceRegistry CreatePassthroughDeviceRegistry()
-    {
-        var reg = Substitute.For<IDeviceRegistry>();
-        reg.TryGetByIpPort(Arg.Any<string>(), Arg.Any<int>(), out Arg.Any<DeviceInfo?>())
-            .Returns(true);
-        reg.AllDevices.Returns(Array.Empty<DeviceInfo>());
-        return reg;
-    }
-
-    /// <summary>
-    /// Returns an IOidMapService that returns true for all ContainsMetricName calls.
-    /// </summary>
-    private static IOidMapService CreatePassthroughOidMapService()
-    {
-        var svc = Substitute.For<IOidMapService>();
-        svc.ContainsMetricName(Arg.Any<string>()).Returns(true);
-        return svc;
+        return new TenantVectorRegistry(NullLogger<TenantVectorRegistry>.Instance);
     }
 
     /// <summary>
@@ -52,6 +24,7 @@ public sealed class TenantVectorRegistryTests
     /// Metrics are grouped by tenantIndex; tenants are ordered by index ascending.
     /// Each tenant automatically gets a "Resolved" sibling metric and one command entry
     /// so that all tenants survive TEN-13 post-validation gate by default.
+    /// Since the registry now expects pre-validated data, all entries are treated as valid.
     /// </summary>
     private static TenantVectorOptions CreateOptions(
         params (int tenantIndex, int priority, string ip, int port, string metricName)[] metrics)
@@ -399,31 +372,15 @@ public sealed class TenantVectorRegistryTests
     }
 
     // ──────────────────────────────────────────────────────
-    // 7. DNS resolution (1 test)
+    // 7. Pre-resolved IP routing (1 test)
     // ──────────────────────────────────────────────────────
 
     [Fact]
-    public void Reload_DnsName_ResolvedViaDeviceRegistry()
+    public void Reload_PreResolvedIp_RoutedCorrectly()
     {
-        var deviceRegistry = Substitute.For<IDeviceRegistry>();
-        var device = new DeviceInfo(
-            Name: "test-device",
-            ConfigAddress: "dns.test.local",
-            ResolvedIp: "10.0.0.99",
-            Port: 161,
-            PollGroups: Array.Empty<MetricPollInfo>(),
-            CommunityString: "Simetra.test-device");
-
-        deviceRegistry.AllDevices.Returns(new[] { device });
-        // TryGetByIpPort returns true for the test device's IP+Port.
-        deviceRegistry.TryGetByIpPort(Arg.Any<string>(), Arg.Any<int>(), out Arg.Any<DeviceInfo?>())
-            .Returns(x => { x[2] = device; return true; });
-
-        var oidMap = CreatePassthroughOidMapService();
-        var registry = new TenantVectorRegistry(
-            deviceRegistry,
-            oidMap,
-            NullLogger<TenantVectorRegistry>.Instance);
+        // Registry receives pre-resolved IPs from the watcher.
+        // IP resolution is tested in TenantVectorWatcherValidationTests.
+        var registry = CreateRegistry();
 
         var options = new TenantVectorOptions
         {
@@ -434,12 +391,12 @@ public sealed class TenantVectorRegistryTests
                     Priority = 1,
                     Metrics = new List<MetricSlotOptions>
                     {
-                        new() { Ip = "dns.test.local", Port = 161, MetricName = "test_metric", Role = "Evaluate" },
-                        new() { Ip = "dns.test.local", Port = 161, MetricName = "test_resolved", Role = "Resolved" }
+                        new() { Ip = "10.0.0.99", Port = 161, MetricName = "test_metric", Role = "Evaluate" },
+                        new() { Ip = "10.0.0.99", Port = 161, MetricName = "test_resolved", Role = "Resolved" }
                     },
                     Commands = new List<CommandSlotOptions>
                     {
-                        new() { Ip = "dns.test.local", Port = 161, CommandName = "test-cmd", Value = "1", ValueType = "Integer32" }
+                        new() { Ip = "10.0.0.99", Port = 161, CommandName = "test-cmd", Value = "1", ValueType = "Integer32" }
                     }
                 }
             }
@@ -447,27 +404,21 @@ public sealed class TenantVectorRegistryTests
 
         registry.Reload(options);
 
-        // Resolved IP used for routing.
+        // Pre-resolved IP is used directly for routing.
         Assert.True(registry.TryRoute("10.0.0.99", 161, "test_metric", out var holders));
         Assert.NotNull(holders);
         Assert.Single(holders);
-
-        // Raw DNS name NOT in routing index.
-        Assert.False(registry.TryRoute("dns.test.local", 161, "test_metric", out _));
     }
 
     // ──────────────────────────────────────────────────────
-    // 8. Diff logging (1 test)
+    // 8. Reload log (1 test)
     // ──────────────────────────────────────────────────────
 
     [Fact]
     public void Reload_LogsDiffInformation()
     {
         var logger = new CapturingLogger();
-        var registry = new TenantVectorRegistry(
-            CreatePassthroughDeviceRegistry(),
-            CreatePassthroughOidMapService(),
-            logger);
+        var registry = new TenantVectorRegistry(logger);
 
         var options1 = CreateOptions(
             (0, 1, "10.0.0.1", 161, "hrProcessorLoad"));
@@ -670,537 +621,6 @@ public sealed class TenantVectorRegistryTests
         registry.TryRoute("10.0.0.1", 161, "hrProcessorLoad", out var holders);
         Assert.NotNull(holders);
         Assert.Equal(30, holders[0].IntervalSeconds);
-    }
-
-    // ──────────────────────────────────────────────────────
-    // 12. Validation (Phase 34) -- 12 tests
-    // ──────────────────────────────────────────────────────
-
-    [Fact]
-    public void Reload_MetricWithEmptyIp_SkipsEntry()
-    {
-        var logger = Substitute.For<ILogger<TenantVectorRegistry>>();
-        var registry = new TenantVectorRegistry(
-            CreatePassthroughDeviceRegistry(),
-            CreatePassthroughOidMapService(),
-            logger);
-
-        var options = new TenantVectorOptions
-        {
-            Tenants = new List<TenantOptions>
-            {
-                new()
-                {
-                    Priority = 1,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = "", Port = 161, MetricName = "hrProcessorLoad", Role = "Evaluate" },        // invalid
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "hrProcessorLoad", Role = "Evaluate" }, // valid Evaluate
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "auto_resolved", Role = "Resolved" }   // valid Resolved
-                    },
-                    Commands = new List<CommandSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd", Value = "1", ValueType = "Integer32" }
-                    }
-                }
-            }
-        };
-
-        registry.Reload(options);
-
-        // Tenant survives because valid siblings exist; invalid entry is skipped.
-        Assert.Equal(2, registry.Groups.Count);
-        var tenant = registry.Groups[1].Tenants[0];
-        Assert.Equal(2, tenant.Holders.Count); // only the 2 valid metrics
-
-        // Error was logged for the invalid entry.
-        logger.Received().Log(
-            LogLevel.Error,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("Ip is empty")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public void Reload_MetricWithInvalidPort_SkipsEntry()
-    {
-        var logger = Substitute.For<ILogger<TenantVectorRegistry>>();
-        var registry = new TenantVectorRegistry(
-            CreatePassthroughDeviceRegistry(),
-            CreatePassthroughOidMapService(),
-            logger);
-
-        var options = new TenantVectorOptions
-        {
-            Tenants = new List<TenantOptions>
-            {
-                new()
-                {
-                    Priority = 1,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 99999, MetricName = "badMetric", Role = "Evaluate" },    // invalid port
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "hrProcessorLoad", Role = "Evaluate" }, // valid
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "auto_resolved", Role = "Resolved" }   // valid Resolved
-                    },
-                    Commands = new List<CommandSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd", Value = "1", ValueType = "Integer32" }
-                    }
-                }
-            }
-        };
-
-        registry.Reload(options);
-
-        Assert.Equal(2, registry.Groups.Count);
-        var tenant = registry.Groups[1].Tenants[0];
-        Assert.Equal(2, tenant.Holders.Count); // only the 2 valid metrics
-
-        logger.Received().Log(
-            LogLevel.Error,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("out of range")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public void Reload_MetricWithEmptyMetricName_SkipsEntry()
-    {
-        var logger = Substitute.For<ILogger<TenantVectorRegistry>>();
-        var registry = new TenantVectorRegistry(
-            CreatePassthroughDeviceRegistry(),
-            CreatePassthroughOidMapService(),
-            logger);
-
-        var options = new TenantVectorOptions
-        {
-            Tenants = new List<TenantOptions>
-            {
-                new()
-                {
-                    Priority = 1,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "", Role = "Evaluate" },               // invalid
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "hrProcessorLoad", Role = "Evaluate" }, // valid
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "auto_resolved", Role = "Resolved" }
-                    },
-                    Commands = new List<CommandSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd", Value = "1", ValueType = "Integer32" }
-                    }
-                }
-            }
-        };
-
-        registry.Reload(options);
-
-        Assert.Equal(2, registry.Groups.Count);
-        Assert.Equal(2, registry.Groups[1].Tenants[0].Holders.Count);
-
-        logger.Received().Log(
-            LogLevel.Error,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("MetricName is empty")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public void Reload_MetricWithInvalidRole_SkipsEntry()
-    {
-        var logger = Substitute.For<ILogger<TenantVectorRegistry>>();
-        var registry = new TenantVectorRegistry(
-            CreatePassthroughDeviceRegistry(),
-            CreatePassthroughOidMapService(),
-            logger);
-
-        var options = new TenantVectorOptions
-        {
-            Tenants = new List<TenantOptions>
-            {
-                new()
-                {
-                    Priority = 1,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "badMetric", Role = "InvalidRole" },    // bad role
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "hrProcessorLoad", Role = "Evaluate" }, // valid
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "auto_resolved", Role = "Resolved" }
-                    },
-                    Commands = new List<CommandSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd", Value = "1", ValueType = "Integer32" }
-                    }
-                }
-            }
-        };
-
-        registry.Reload(options);
-
-        Assert.Equal(2, registry.Groups.Count);
-        Assert.Equal(2, registry.Groups[1].Tenants[0].Holders.Count);
-
-        logger.Received().Log(
-            LogLevel.Error,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("Role") && o.ToString()!.Contains("invalid")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public void Reload_MetricWithUnresolvableMetricName_SkipsEntry()
-    {
-        // TEN-05: MetricName not in OID map.
-        var logger = Substitute.For<ILogger<TenantVectorRegistry>>();
-        var oidMap = Substitute.For<IOidMapService>();
-        // Return false only for "unknownMetric", true for everything else.
-        oidMap.ContainsMetricName("unknownMetric").Returns(false);
-        oidMap.ContainsMetricName(Arg.Is<string>(s => s != "unknownMetric")).Returns(true);
-
-        var registry = new TenantVectorRegistry(
-            CreatePassthroughDeviceRegistry(),
-            oidMap,
-            logger);
-
-        var options = new TenantVectorOptions
-        {
-            Tenants = new List<TenantOptions>
-            {
-                new()
-                {
-                    Priority = 1,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "unknownMetric", Role = "Evaluate" },   // not in OID map
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "hrProcessorLoad", Role = "Evaluate" }, // valid
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "auto_resolved", Role = "Resolved" }
-                    },
-                    Commands = new List<CommandSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd", Value = "1", ValueType = "Integer32" }
-                    }
-                }
-            }
-        };
-
-        registry.Reload(options);
-
-        Assert.Equal(2, registry.Groups.Count);
-        Assert.Equal(2, registry.Groups[1].Tenants[0].Holders.Count);
-
-        logger.Received().Log(
-            LogLevel.Error,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("TEN-05")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public void Reload_MetricWithUnknownIpPort_SkipsEntry()
-    {
-        // TEN-07: IP+Port not in DeviceRegistry.
-        var logger = Substitute.For<ILogger<TenantVectorRegistry>>();
-        var devReg = Substitute.For<IDeviceRegistry>();
-        devReg.AllDevices.Returns(Array.Empty<DeviceInfo>());
-        // Return false for the bad IP, true for everything else.
-        devReg.TryGetByIpPort("10.0.0.99", 161, out Arg.Any<DeviceInfo?>()).Returns(false);
-        devReg.TryGetByIpPort(Arg.Is<string>(s => s != "10.0.0.99"), Arg.Any<int>(), out Arg.Any<DeviceInfo?>()).Returns(true);
-
-        var registry = new TenantVectorRegistry(
-            devReg,
-            CreatePassthroughOidMapService(),
-            logger);
-
-        var options = new TenantVectorOptions
-        {
-            Tenants = new List<TenantOptions>
-            {
-                new()
-                {
-                    Priority = 1,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.99", Port = 161, MetricName = "unknownDevice", Role = "Evaluate" },  // not in registry
-                        new() { Ip = "10.0.0.1",  Port = 161, MetricName = "hrProcessorLoad", Role = "Evaluate" },// valid
-                        new() { Ip = "10.0.0.1",  Port = 161, MetricName = "auto_resolved", Role = "Resolved" }
-                    },
-                    Commands = new List<CommandSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd", Value = "1", ValueType = "Integer32" }
-                    }
-                }
-            }
-        };
-
-        registry.Reload(options);
-
-        Assert.Equal(2, registry.Groups.Count);
-        Assert.Equal(2, registry.Groups[1].Tenants[0].Holders.Count);
-
-        logger.Received().Log(
-            LogLevel.Error,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("TEN-07")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public void Reload_CommandWithInvalidValueType_SkipsEntry()
-    {
-        // TEN-03: invalid ValueType.
-        var logger = Substitute.For<ILogger<TenantVectorRegistry>>();
-        var registry = new TenantVectorRegistry(
-            CreatePassthroughDeviceRegistry(),
-            CreatePassthroughOidMapService(),
-            logger);
-
-        var options = new TenantVectorOptions
-        {
-            Tenants = new List<TenantOptions>
-            {
-                new()
-                {
-                    Priority = 1,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "hrProcessorLoad", Role = "Evaluate" },
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "auto_resolved", Role = "Resolved" }
-                    },
-                    Commands = new List<CommandSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, CommandName = "bad-cmd", Value = "1", ValueType = "Boolean" }, // invalid ValueType
-                        new() { Ip = "10.0.0.1", Port = 161, CommandName = "good-cmd", Value = "1", ValueType = "Integer32" } // valid
-                    }
-                }
-            }
-        };
-
-        registry.Reload(options);
-
-        // Tenant survives (has 1 valid command).
-        Assert.Equal(2, registry.Groups.Count);
-
-        logger.Received().Log(
-            LogLevel.Error,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("TEN-03")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public void Reload_CommandWithEmptyValue_SkipsEntry()
-    {
-        var logger = Substitute.For<ILogger<TenantVectorRegistry>>();
-        var registry = new TenantVectorRegistry(
-            CreatePassthroughDeviceRegistry(),
-            CreatePassthroughOidMapService(),
-            logger);
-
-        var options = new TenantVectorOptions
-        {
-            Tenants = new List<TenantOptions>
-            {
-                new()
-                {
-                    Priority = 1,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "hrProcessorLoad", Role = "Evaluate" },
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "auto_resolved", Role = "Resolved" }
-                    },
-                    Commands = new List<CommandSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, CommandName = "empty-val-cmd", Value = "", ValueType = "Integer32" },  // empty value
-                        new() { Ip = "10.0.0.1", Port = 161, CommandName = "good-cmd", Value = "1", ValueType = "Integer32" }       // valid
-                    }
-                }
-            }
-        };
-
-        registry.Reload(options);
-
-        // Tenant survives (has 1 valid command).
-        Assert.Equal(2, registry.Groups.Count);
-
-        logger.Received().Log(
-            LogLevel.Error,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("Value is empty")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public void Reload_TEN13_NoResolvedMetrics_SkipsTenant()
-    {
-        var logger = Substitute.For<ILogger<TenantVectorRegistry>>();
-        var registry = new TenantVectorRegistry(
-            CreatePassthroughDeviceRegistry(),
-            CreatePassthroughOidMapService(),
-            logger);
-
-        var options = new TenantVectorOptions
-        {
-            Tenants = new List<TenantOptions>
-            {
-                new()
-                {
-                    Priority = 1,
-                    // Only Evaluate metrics — no Resolved metric.
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "hrProcessorLoad", Role = "Evaluate" },
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "ifInOctets", Role = "Evaluate" }
-                    },
-                    Commands = new List<CommandSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd", Value = "1", ValueType = "Integer32" }
-                    }
-                }
-            }
-        };
-
-        registry.Reload(options);
-
-        // Tenant is entirely skipped — only heartbeat group survives.
-        Assert.Single(registry.Groups);
-        Assert.Equal(1, registry.TenantCount); // heartbeat only
-
-        logger.Received().Log(
-            LogLevel.Error,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("no Resolved metrics")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public void Reload_TEN13_NoEvaluateMetrics_SkipsTenant()
-    {
-        var logger = Substitute.For<ILogger<TenantVectorRegistry>>();
-        var registry = new TenantVectorRegistry(
-            CreatePassthroughDeviceRegistry(),
-            CreatePassthroughOidMapService(),
-            logger);
-
-        var options = new TenantVectorOptions
-        {
-            Tenants = new List<TenantOptions>
-            {
-                new()
-                {
-                    Priority = 1,
-                    // Only Resolved metrics — no Evaluate metric.
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "hrProcessorLoad", Role = "Resolved" },
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "ifInOctets", Role = "Resolved" }
-                    },
-                    Commands = new List<CommandSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd", Value = "1", ValueType = "Integer32" }
-                    }
-                }
-            }
-        };
-
-        registry.Reload(options);
-
-        Assert.Single(registry.Groups);
-        Assert.Equal(1, registry.TenantCount);
-
-        logger.Received().Log(
-            LogLevel.Error,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("no Evaluate metrics")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public void Reload_TEN13_NoCommands_SkipsTenant()
-    {
-        var logger = Substitute.For<ILogger<TenantVectorRegistry>>();
-        var registry = new TenantVectorRegistry(
-            CreatePassthroughDeviceRegistry(),
-            CreatePassthroughOidMapService(),
-            logger);
-
-        var options = new TenantVectorOptions
-        {
-            Tenants = new List<TenantOptions>
-            {
-                new()
-                {
-                    Priority = 1,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "hrProcessorLoad", Role = "Evaluate" },
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "auto_resolved", Role = "Resolved" }
-                    },
-                    // No commands at all.
-                    Commands = new List<CommandSlotOptions>()
-                }
-            }
-        };
-
-        registry.Reload(options);
-
-        Assert.Single(registry.Groups);
-        Assert.Equal(1, registry.TenantCount);
-
-        logger.Received().Log(
-            LogLevel.Error,
-            Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("no commands remaining")),
-            Arg.Any<Exception?>(),
-            Arg.Any<Func<object, Exception?, string>>());
-    }
-
-    [Fact]
-    public void Reload_ValidEntries_InvalidSiblingsSkipped_TenantStillLoads()
-    {
-        // Per-entry skip semantics: one invalid entry does not affect siblings in the same tenant.
-        var registry = CreateRegistry();
-
-        var options = new TenantVectorOptions
-        {
-            Tenants = new List<TenantOptions>
-            {
-                new()
-                {
-                    Priority = 1,
-                    Metrics = new List<MetricSlotOptions>
-                    {
-                        new() { Ip = "", Port = 161, MetricName = "badIp", Role = "Evaluate" },                    // invalid (empty ip)
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "hrProcessorLoad", Role = "Evaluate" }, // valid Evaluate
-                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "auto_resolved", Role = "Resolved" }   // valid Resolved
-                    },
-                    Commands = new List<CommandSlotOptions>
-                    {
-                        new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd", Value = "1", ValueType = "Integer32" }
-                    }
-                }
-            }
-        };
-
-        registry.Reload(options);
-
-        // Tenant loads with 2 valid holders (invalid sibling skipped).
-        Assert.Equal(2, registry.Groups.Count);
-        Assert.Equal(2, registry.TenantCount);
-        var tenant = registry.Groups[1].Tenants[0];
-        Assert.Equal(2, tenant.Holders.Count);
-        Assert.True(registry.TryRoute("10.0.0.1", 161, "hrProcessorLoad", out _));
-        Assert.False(registry.TryRoute("10.0.0.1", 161, "badIp", out _));
     }
 
     // ──────────────────────────────────────────────────────

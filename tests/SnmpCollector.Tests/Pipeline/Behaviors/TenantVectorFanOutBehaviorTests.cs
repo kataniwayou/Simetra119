@@ -202,8 +202,6 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
     {
         // Real registry with no tenants loaded — TryRoute returns false
         var registry = new TenantVectorRegistry(
-            Substitute.For<IDeviceRegistry>(),
-            CreatePassthroughOidMapService(),
             NullLogger<TenantVectorRegistry>.Instance);
         var deviceRegistry = new StubDeviceRegistry("test-device", "10.0.0.1", 161);
         var behavior = CreateBehavior(registry, deviceRegistry);
@@ -341,8 +339,6 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
     private static TenantVectorRegistry CreateRegistryWithRoute(string ip, int port, string metricName)
     {
         var registry = new TenantVectorRegistry(
-            CreatePassthroughDeviceRegistry(),
-            CreatePassthroughOidMapService(),
             NullLogger<TenantVectorRegistry>.Instance);
         registry.Reload(new TenantVectorOptions
         {
@@ -357,8 +353,6 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
     private static TenantVectorRegistry CreateRegistryWithTwoTenants(string ip, int port, string metricName)
     {
         var registry = new TenantVectorRegistry(
-            CreatePassthroughDeviceRegistry(),
-            CreatePassthroughOidMapService(),
             NullLogger<TenantVectorRegistry>.Instance);
         registry.Reload(new TenantVectorOptions
         {
@@ -374,8 +368,6 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
     private static TenantVectorRegistry CreateRegistryWithThreeTenants(string ip, int port, string metricName)
     {
         var registry = new TenantVectorRegistry(
-            CreatePassthroughDeviceRegistry(),
-            CreatePassthroughOidMapService(),
             NullLogger<TenantVectorRegistry>.Instance);
         registry.Reload(new TenantVectorOptions
         {
