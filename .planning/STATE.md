@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-14)
 ## Current Position
 
 Phase: 35 of 36 (TenantVectorRegistry Refactor & Validator Activation)
-Plan: 01 of 2
-Status: In progress
-Last activity: 2026-03-15 — Completed 35-01 (DeviceWatcher validates, DeviceRegistry pure store)
+Plan: 02 of 2
+Status: Phase complete
+Last activity: 2026-03-15 — Completed 35-02 (TenantVectorWatcher validates, TenantVectorRegistry pure store)
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 8/8 v1.6 | [#####     ] 6/? v1.7
 
@@ -57,8 +57,9 @@ See `.planning/MILESTONES.md` for details.
 - TenantOptions.Name (string?) overrides auto-generated tenant-{i} id; TenantOptions.Commands holds CommandSlotOptions list
 - MetricSlotOptions.IntervalSeconds (int): direct config field, replaces DeriveIntervalSeconds cross-service derivation
 - MetricSlotOptions.Role (string): "Evaluate" or "Resolved"; validated in Phase 34
-- TenantVectorRegistry constructor: takes IDeviceRegistry + IOidMapService + ILogger (IOidMapService re-added in Phase 34-02 for TEN-05; Phase 35 will restructure)
-- TenantVectorRegistry.Reload: per-entry validation (structural, Role, TEN-05 MetricName resolution, TEN-07 IP+Port); TEN-13 completeness gate skips tenants missing Resolved/Evaluate/commands (Phase 34-02)
+- TenantVectorRegistry: pure store after Phase 35-02; constructor takes only ILogger, Reload() trusts pre-validated input; ResolveIp() removed (CLN-01, CLN-02, TEN-04)
+- TenantVectorWatcherService.ValidateAndBuildTenants: internal static, all validation (structural, Role, TEN-05, TEN-07), IP resolution, TEN-13 gate; IOidMapService + IDeviceRegistry injected into watcher constructor
+- TEN-06: CommandName stored as-is at load time (no command map check); resolution deferred to execution time
 - TenantCount = survivingTenants + 1 heartbeat (not options.Tenants.Count + 1); reflects post-TEN-13 count (Phase 34-02)
 - DeviceRegistry: pure store after Phase 35-01; constructor takes only ILogger, starts empty; ReloadAsync(List<DeviceInfo>)
 - DeviceWatcherService.ValidateAndBuildDevicesAsync: internal static async, all CS/DNS/OID/dup validation; mirrors CommandMapWatcher pattern
@@ -82,6 +83,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-15T22:31Z
-Stopped at: Completed 35-01-PLAN.md (DeviceWatcher validates, DeviceRegistry pure store, DeviceWatcherValidationTests)
+Last session: 2026-03-14T22:46Z
+Stopped at: Completed 35-02-PLAN.md (TenantVectorWatcher validates, TenantVectorRegistry pure store, TenantVectorWatcherValidationTests)
 Resume file: None
