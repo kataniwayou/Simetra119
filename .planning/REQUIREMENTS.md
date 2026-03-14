@@ -24,7 +24,7 @@ Requirements for CommunityString validation, self-describing tenant entries, ten
 - [ ] **TEN-01**: `MetricSlotOptions` retains current shape (Ip, Port, MetricName, TimeSeriesSize) plus optional `IntervalSeconds` — CommunityString resolved from DeviceRegistry by IP+Port at load time, not stored in tenant config
 - [ ] **TEN-02**: New `Commands` list on `TenantOptions` — each `CommandSlotOptions` entry has Ip, Port, CommandName, Value (string, required non-empty), ValueType (string) — CommunityString resolved from DeviceRegistry by IP+Port at load time
 - [ ] **TEN-03**: `ValueType` validated against allowed set `{ "Integer32", "IpAddress", "OctetString" }` at load time — invalid ValueType = skip command entry with Error log
-- [ ] **TEN-04**: `TenantVectorRegistry` constructor removes `IOidMapService` dependency — keeps `IDeviceRegistry` for CommunityString resolution by IP+Port
+- [ ] **TEN-04**: `TenantVectorRegistry` constructor removes both `IOidMapService` and `IDeviceRegistry` — all validation moves to watcher; registry becomes pure store with only `ILogger`
 - [ ] **TEN-05**: Unresolvable MetricName in tenant config (not in current OID map) = skip entry with Error-level structured log; other entries in same tenant unaffected
 - [ ] **TEN-06**: Unresolvable CommandName in tenant config (not in current command map) = store entry as-is with Debug log — resolution deferred to execution time
 - [ ] **TEN-07**: Tenant metric/command entry whose IP+Port has no matching device in DeviceRegistry = skip entry with Error-level structured log
@@ -50,8 +50,8 @@ Requirements for CommunityString validation, self-describing tenant entries, ten
 
 ### Code Cleanup
 
-- [ ] **CLN-01**: `TenantVectorRegistry.DeriveIntervalSeconds()` method removed (IntervalSeconds comes from config); `ResolveIp()` stays (still needed for DNS→IP routing key translation)
-- [ ] **CLN-02**: `IOidMapService` constructor parameter removed from `TenantVectorRegistry`; `IDeviceRegistry` stays for CommunityString resolution
+- [ ] **CLN-01**: `TenantVectorRegistry.ResolveIp()` and `DeriveIntervalSeconds()` both removed — DNS resolution moves to watcher
+- [ ] **CLN-02**: Both `IOidMapService` and `IDeviceRegistry` constructor parameters removed from `TenantVectorRegistry` — all validation and resolution in watcher
 - [ ] **CLN-03**: CommunityString derivation fallback removed from `MetricPollJob` — no more `?? DeriveFromDeviceName(device.Name)` path
 
 ## Out of Scope
