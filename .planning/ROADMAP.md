@@ -145,15 +145,22 @@ Plans:
 
 **Goal**: `TenantVectorRegistry` is fully self-contained — it reads Device, Ip, CommunityString, and IntervalSeconds from config entries directly without calling `IDeviceRegistry` or `IOidMapService`, builds the Commands list from `CommandSlotOptions`, and the `TenantVectorOptionsValidator` enforces structural correctness on load. Unresolvable MetricNames are skipped with Error logs. CommandName lookup is deferred to execution time.
 **Depends on**: Phase 33 (model fields must exist), Phase 34 (CommunityString validation pattern established)
-**Requirements**: TEN-04, TEN-05, TEN-06, TEN-08, CLN-01, CLN-02
+**Requirements**: TEN-04, TEN-06, TEN-08, CLN-01, CLN-02
 **Success Criteria** (what must be TRUE):
-  1. `TenantVectorRegistry` constructs and reloads without `IDeviceRegistry` or `IOidMapService` parameters — DI registration compiles and all existing tests pass with the updated constructor signature
-  2. A tenant metric entry whose MetricName is not present in the current OID map is skipped with an Error log naming the tenant, entry index, and unresolvable MetricName — other entries in the same tenant load normally and route correctly
-  3. A tenant command entry with an unrecognized CommandName is stored as-is with a Debug log — it does not block the tenant from loading or routing metric entries
-  4. `TenantVectorOptionsValidator` rejects configs with null/empty Ip, empty MetricName or CommandName, Port outside 1–65535, TimeSeriesSize less than 1, or empty Value on command entries — each violation produces a structured validation error before the registry ever attempts to load the config
-  5. `TenantVectorRegistry.ResolveIp()` and `DeriveIntervalSeconds()` methods no longer exist in the codebase — all code that previously called them now reads self-describing fields from the config entries directly
+  1. All four watchers follow "watcher validates, registry stores" — DeviceRegistry and TenantVectorRegistry are pure data stores
+  2. DeviceRegistry constructor takes only `ILogger` — no IOidMapService, no IOptions, no DNS
+  3. TenantVectorRegistry constructor takes only `ILogger` — no IDeviceRegistry, no IOidMapService
+  4. DeviceWatcherService.ValidateAndBuildDevicesAsync handles all device validation + DNS + OID resolution
+  5. TenantVectorWatcherService.ValidateAndBuildTenants handles structural, Role, MetricName, IP+Port, TEN-13 gate
+  6. TEN-06: CommandName stored as-is with Debug log — no command map lookup at load time
+  7. ResolveIp() and DeriveIntervalSeconds() deleted from TenantVectorRegistry
+  8. Both validators simplified to no-op (return Success)
 
-**Plans:** TBD
+**Plans:** 2 plans
+
+Plans:
+- [x] 35-01-PLAN.md — DeviceWatcher validates, DeviceRegistry pure store (9 files, 12 new watcher tests)
+- [x] 35-02-PLAN.md — TenantVectorWatcher validates, TenantVectorRegistry pure store (6 files, 19 new watcher tests)
 
 ---
 
@@ -188,7 +195,7 @@ Plans:
 | 32. Command Map Infrastructure | v1.6 | 3/3 | Complete | 2026-03-13 |
 | 33. Config Model Additions | v1.7 | 2/2 | Complete | 2026-03-14 |
 | 34. CommunityString Validation & MetricPollJob Cleanup | v1.7 | 2/2 | Complete | 2026-03-14 |
-| 35. TenantVectorRegistry Refactor & Validator Activation | v1.7 | 0/TBD | Not started | - |
+| 35. TenantVectorRegistry Refactor & Validator Activation | v1.7 | 2/2 | Complete | 2026-03-15 |
 | 36. Config File Renames | v1.7 | 0/TBD | Not started | - |
 
 ---

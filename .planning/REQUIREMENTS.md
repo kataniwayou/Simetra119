@@ -81,11 +81,11 @@ Requirements for CommunityString validation, self-describing tenant entries, ten
 | TEN-01 | Phase 33 | Complete |
 | TEN-02 | Phase 33 | Complete |
 | TEN-03 | Phase 34 | Complete |
-| TEN-04 | Phase 35 | Pending |
+| TEN-04 | Phase 35 | Complete |
 | TEN-05 | Phase 34 | Complete |
-| TEN-06 | Phase 35 | Pending |
+| TEN-06 | Phase 35 | Complete |
 | TEN-07 | Phase 34 | Complete |
-| TEN-08 | Phase 35 | Pending |
+| TEN-08 | Phase 35 | Complete |
 | TEN-09 | Phase 33 | Complete |
 | TEN-10 | Phase 33 | Complete |
 | TEN-11 | Phase 34 | Complete |
@@ -96,8 +96,8 @@ Requirements for CommunityString validation, self-describing tenant entries, ten
 | REN-02 | Phase 36 | Pending |
 | REN-03 | Phase 36 | Pending |
 | REN-04 | Phase 36 | Pending |
-| CLN-01 | Phase 35 | Pending |
-| CLN-02 | Phase 35 | Pending |
+| CLN-01 | Phase 35 | Complete |
+| CLN-02 | Phase 35 | Complete |
 | CLN-03 | Phase 33 | Complete |
 | TEN-12 | Phase 33 | Complete |
 | TEN-13 | Phase 34 | Complete |
