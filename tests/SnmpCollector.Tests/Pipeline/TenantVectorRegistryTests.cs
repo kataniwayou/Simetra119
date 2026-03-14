@@ -357,7 +357,8 @@ public sealed class TenantVectorRegistryTests
             ConfigAddress: "dns.test.local",
             ResolvedIp: "10.0.0.99",
             Port: 161,
-            PollGroups: Array.Empty<MetricPollInfo>());
+            PollGroups: Array.Empty<MetricPollInfo>(),
+            CommunityString: "Simetra.test-device");
 
         deviceRegistry.AllDevices.Returns(new[] { device });
         deviceRegistry.TryGetByIpPort("dns.test.local", 161, out Arg.Any<DeviceInfo?>())

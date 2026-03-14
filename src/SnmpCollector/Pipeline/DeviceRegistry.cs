@@ -24,10 +24,12 @@ public sealed class DeviceRegistry : IDeviceRegistry
     /// <summary>
     /// Initializes the registry by building FrozenDictionary lookups from configuration.
     /// For each device:
+    /// - CommunityString is parsed via <see cref="CommunityStringHelper.TryExtractDeviceName"/> to derive the short device name.
     /// - IP is normalized to IPv4 via <see cref="IPAddress.MapToIPv4"/>.
     /// - Poll groups resolve MetricNames to OIDs via <see cref="IOidMapService.ResolveToOid"/>.
     /// - Unresolvable metric names are logged as warnings and excluded from the poll group.
     /// - Devices with zero resolved OIDs are still registered (needed for traps).
+    /// - Devices with invalid CommunityString (not following Simetra.{DeviceName} convention) are skipped with an error log.
     /// Throws <see cref="InvalidOperationException"/> if duplicate IP+Port is detected.
     /// </summary>
     /// <param name="devicesOptions">The configured devices to register.</param>
@@ -44,6 +46,14 @@ public sealed class DeviceRegistry : IDeviceRegistry
 
         foreach (var d in devices)
         {
+            if (!CommunityStringHelper.TryExtractDeviceName(d.CommunityString, out var deviceName))
+            {
+                _logger.LogError(
+                    "Device at {IpAddress}:{Port} has invalid CommunityString '{CommunityString}' -- skipping",
+                    d.IpAddress, d.Port, d.CommunityString);
+                continue;
+            }
+
             IPAddress ip;
             if (IPAddress.TryParse(d.IpAddress, out var parsed))
             {
@@ -56,9 +66,9 @@ public sealed class DeviceRegistry : IDeviceRegistry
                 ip = addresses.First(a => a.AddressFamily == AddressFamily.InterNetwork);
             }
 
-            var pollGroups = BuildPollGroups(d.Polls, d.Name);
+            var pollGroups = BuildPollGroups(d.Polls, deviceName);
 
-            var info = new DeviceInfo(d.Name, d.IpAddress, ip.ToString(), d.Port, pollGroups, d.CommunityString);
+            var info = new DeviceInfo(deviceName, d.IpAddress, ip.ToString(), d.Port, pollGroups, d.CommunityString);
 
             var ipPortKey = IpPortKey(info.ConfigAddress, info.Port);
             if (byIpPortBuilder.TryGetValue(ipPortKey, out var existing))
@@ -100,6 +110,14 @@ public sealed class DeviceRegistry : IDeviceRegistry
 
         foreach (var d in devices)
         {
+            if (!CommunityStringHelper.TryExtractDeviceName(d.CommunityString, out var deviceName))
+            {
+                _logger.LogError(
+                    "Device at {IpAddress}:{Port} has invalid CommunityString '{CommunityString}' -- skipping",
+                    d.IpAddress, d.Port, d.CommunityString);
+                continue;
+            }
+
             IPAddress ip;
             if (IPAddress.TryParse(d.IpAddress, out var parsed))
             {
@@ -112,9 +130,9 @@ public sealed class DeviceRegistry : IDeviceRegistry
                 ip = addresses.First(a => a.AddressFamily == AddressFamily.InterNetwork);
             }
 
-            var pollGroups = BuildPollGroups(d.Polls, d.Name);
+            var pollGroups = BuildPollGroups(d.Polls, deviceName);
 
-            var info = new DeviceInfo(d.Name, d.IpAddress, ip.ToString(), d.Port, pollGroups, d.CommunityString);
+            var info = new DeviceInfo(deviceName, d.IpAddress, ip.ToString(), d.Port, pollGroups, d.CommunityString);
 
             var ipPortKey = IpPortKey(info.ConfigAddress, info.Port);
             if (byIpPortBuilder.TryGetValue(ipPortKey, out var existing))

@@ -407,7 +407,7 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
         public StubDeviceRegistry(string? name, string? ip, int port)
         {
             if (name is not null && ip is not null)
-                _device = new DeviceInfo(name, ip, ip, port, Array.Empty<MetricPollInfo>());
+                _device = new DeviceInfo(name, ip, ip, port, Array.Empty<MetricPollInfo>(), $"Simetra.{name}");
         }
 
         public bool TryGetByIpPort(string configAddress, int port, [NotNullWhen(true)] out DeviceInfo? device)

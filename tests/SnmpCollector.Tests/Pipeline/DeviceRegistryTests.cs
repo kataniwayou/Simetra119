@@ -13,8 +13,8 @@ public sealed class DeviceRegistryTests
 {
     /// <summary>
     /// Creates a DevicesOptions with two devices:
-    ///   - npb-core-01 at 10.0.10.1:161
-    ///   - obp-edge-01 at 10.0.10.2:161
+    ///   - Simetra.npb-core-01 at 10.0.10.1:161 (short name: npb-core-01)
+    ///   - Simetra.obp-edge-01 at 10.0.10.2:161 (short name: obp-edge-01)
     /// </summary>
     private static DevicesOptions TwoDeviceOptions() => new()
     {
@@ -22,7 +22,7 @@ public sealed class DeviceRegistryTests
         [
             new DeviceOptions
             {
-                Name = "npb-core-01",
+                CommunityString = "Simetra.npb-core-01",
                 IpAddress = "10.0.10.1",
                 Polls =
                 [
@@ -35,7 +35,7 @@ public sealed class DeviceRegistryTests
             },
             new DeviceOptions
             {
-                Name = "obp-edge-01",
+                CommunityString = "Simetra.obp-edge-01",
                 IpAddress = "10.0.10.2",
                 Polls = []
             }
@@ -144,14 +144,14 @@ public sealed class DeviceRegistryTests
             [
                 new DeviceOptions
                 {
-                    Name = "device-a",
+                    CommunityString = "Simetra.device-a",
                     IpAddress = "10.0.10.1",
                     Port = 161,
                     Polls = []
                 },
                 new DeviceOptions
                 {
-                    Name = "device-b",
+                    CommunityString = "Simetra.device-b",
                     IpAddress = "10.0.10.1",
                     Port = 161,
                     Polls = []
@@ -174,14 +174,14 @@ public sealed class DeviceRegistryTests
             [
                 new DeviceOptions
                 {
-                    Name = "same-name",
+                    CommunityString = "Simetra.same-name",
                     IpAddress = "10.0.10.1",
                     Port = 161,
                     Polls = []
                 },
                 new DeviceOptions
                 {
-                    Name = "same-name",
+                    CommunityString = "Simetra.same-name",
                     IpAddress = "10.0.10.2",
                     Port = 161,
                     Polls = []
@@ -220,7 +220,7 @@ public sealed class DeviceRegistryTests
             [
                 new DeviceOptions
                 {
-                    Name = "dns-device",
+                    CommunityString = "Simetra.dns-device",
                     IpAddress = "localhost",
                     Polls = []
                 }
@@ -240,37 +240,13 @@ public sealed class DeviceRegistryTests
     }
 
     [Fact]
-    public void Constructor_CommunityString_PassedThroughToDeviceInfo()
-    {
-        var opts = new DevicesOptions
-        {
-            Devices =
-            [
-                new DeviceOptions
-                {
-                    Name = "community-device",
-                    IpAddress = "10.0.10.5",
-                    CommunityString = "my-custom-community",
-                    Polls = []
-                }
-            ]
-        };
-
-        var sut = CreateRegistry(opts);
-
-        var found = sut.TryGetDeviceByName("community-device", out var device);
-        Assert.True(found);
-        Assert.Equal("my-custom-community", device!.CommunityString);
-    }
-
-    [Fact]
-    public void Constructor_NoCommunityString_DeviceInfoHasNull()
+    public void Constructor_CommunityString_StoredOnDeviceInfo()
     {
         var sut = CreateRegistry();
 
         var found = sut.TryGetDeviceByName("npb-core-01", out var device);
         Assert.True(found);
-        Assert.Null(device!.CommunityString);
+        Assert.Equal("Simetra.npb-core-01", device!.CommunityString);
     }
 
     // -------------------------------------------------------------------------
@@ -302,9 +278,9 @@ public sealed class DeviceRegistryTests
         // Reload with the original two plus a new device
         var newDevices = new List<DeviceOptions>
         {
-            new() { Name = "npb-core-01", IpAddress = "10.0.10.1", Polls = [] },
-            new() { Name = "obp-edge-01", IpAddress = "10.0.10.2", Polls = [] },
-            new() { Name = "new-device", IpAddress = "10.0.10.3", Polls = [] }
+            new() { CommunityString = "Simetra.npb-core-01", IpAddress = "10.0.10.1", Polls = [] },
+            new() { CommunityString = "Simetra.obp-edge-01", IpAddress = "10.0.10.2", Polls = [] },
+            new() { CommunityString = "Simetra.new-device", IpAddress = "10.0.10.3", Polls = [] }
         };
 
         var (added, removed) = await sut.ReloadAsync(newDevices);
@@ -331,7 +307,7 @@ public sealed class DeviceRegistryTests
         // Reload with only one of the original two devices
         var newDevices = new List<DeviceOptions>
         {
-            new() { Name = "npb-core-01", IpAddress = "10.0.10.1", Polls = [] }
+            new() { CommunityString = "Simetra.npb-core-01", IpAddress = "10.0.10.1", Polls = [] }
         };
 
         var (added, removed) = await sut.ReloadAsync(newDevices);
@@ -365,7 +341,7 @@ public sealed class DeviceRegistryTests
             [
                 new DeviceOptions
                 {
-                    Name = "obp-edge-01",
+                    CommunityString = "Simetra.obp-edge-01",
                     IpAddress = "10.0.10.2",
                     Polls =
                     [
@@ -413,7 +389,7 @@ public sealed class DeviceRegistryTests
             [
                 new DeviceOptions
                 {
-                    Name = "test-device",
+                    CommunityString = "Simetra.test-device",
                     IpAddress = "10.0.10.5",
                     Polls =
                     [
@@ -459,7 +435,7 @@ public sealed class DeviceRegistryTests
             [
                 new DeviceOptions
                 {
-                    Name = "no-match-device",
+                    CommunityString = "Simetra.no-match-device",
                     IpAddress = "10.0.10.9",
                     Polls =
                     [
@@ -500,7 +476,7 @@ public sealed class DeviceRegistryTests
         {
             new()
             {
-                Name = "obp-edge-01",
+                CommunityString = "Simetra.obp-edge-01",
                 IpAddress = "10.0.10.2",
                 Polls =
                 [
@@ -544,7 +520,7 @@ public sealed class DeviceRegistryTests
         {
             new()
             {
-                Name = "test-device",
+                CommunityString = "Simetra.test-device",
                 IpAddress = "10.0.10.5",
                 Polls =
                 [

@@ -82,7 +82,7 @@ public sealed class MetricPollJobTests : IDisposable
     private static DeviceInfo MakeDevice(params string[] pollOids)
     {
         var pollGroup = new MetricPollInfo(0, pollOids.ToList(), 30);
-        return new DeviceInfo(DeviceName, DeviceIp, DeviceIp, DevicePort, [pollGroup]);
+        return new DeviceInfo(DeviceName, DeviceIp, DeviceIp, DevicePort, [pollGroup], $"Simetra.{DeviceName}");
     }
 
     private MetricPollJob CreateJob(
@@ -177,15 +177,15 @@ public sealed class MetricPollJobTests : IDisposable
     }
 
     // -------------------------------------------------------------------------
-    // Test 3: Device Port used and CommunityString derived from device name
+    // Test 3: Device Port and CommunityString used directly
     // -------------------------------------------------------------------------
 
     [Fact]
-    public async Task Execute_UsesDevicePortAndDerivesCommunityString()
+    public async Task Execute_UsesDevicePortAndCommunityString()
     {
         // Arrange -- device with custom port
         var pollGroup = new MetricPollInfo(0, [IfInOctetsOid], 30);
-        var device = new DeviceInfo("custom-device", "10.0.0.99", "10.0.0.99", 1161, [pollGroup]);
+        var device = new DeviceInfo("custom-device", "10.0.0.99", "10.0.0.99", 1161, [pollGroup], "Simetra.custom-device");
 
         var snmpClient = new StubSnmpClient { Response = new List<Variable>() };
         var sender     = new CapturingSender();
@@ -311,13 +311,14 @@ public sealed class MetricPollJobTests : IDisposable
     }
 
     // -------------------------------------------------------------------------
-    // Test 8: Explicit CommunityString used instead of convention derivation
+    // Test 8: CommunityString used directly from DeviceInfo
     // -------------------------------------------------------------------------
 
     [Fact]
-    public async Task Execute_ExplicitCommunityString_UsedInsteadOfConvention()
+    public async Task Execute_CommunityString_UsedDirectly()
     {
-        // Arrange -- device with explicit community string
+        // Arrange -- device with a community string that doesn't follow Simetra.* convention
+        // (DeviceInfo is constructed directly in tests; DeviceRegistry would reject this at load time)
         var pollGroup = new MetricPollInfo(0, [IfInOctetsOid], 30);
         var device = new DeviceInfo("custom-device", "10.0.0.99", "10.0.0.99", 1161, [pollGroup], "my-explicit-community");
 
@@ -331,7 +332,7 @@ public sealed class MetricPollJobTests : IDisposable
         // Act
         await job.Execute(MakeContext(configAddress: "10.0.0.99", port: 1161));
 
-        // Assert -- community string should be the explicit one, not Simetra.custom-device
+        // Assert -- community string is used directly from DeviceInfo, no derivation
         Assert.Equal("my-explicit-community", snmpClient.LastCommunity!.ToString());
     }
 

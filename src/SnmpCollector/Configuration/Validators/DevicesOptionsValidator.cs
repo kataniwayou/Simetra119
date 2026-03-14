@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.Extensions.Options;
+using SnmpCollector.Pipeline;
 
 namespace SnmpCollector.Configuration.Validators;
 
@@ -31,9 +32,15 @@ public sealed class DevicesOptionsValidator : IValidateOptions<DevicesOptions>
 
     private static void ValidateDevice(DeviceOptions device, int index, List<string> failures)
     {
-        if (string.IsNullOrWhiteSpace(device.Name))
+        if (string.IsNullOrWhiteSpace(device.CommunityString))
         {
-            failures.Add($"Devices[{index}].Name is required");
+            failures.Add($"Devices[{index}].CommunityString is required");
+        }
+        else if (!CommunityStringHelper.TryExtractDeviceName(device.CommunityString, out _))
+        {
+            failures.Add(
+                $"Devices[{index}].CommunityString '{device.CommunityString}' " +
+                "does not follow Simetra.{DeviceName} convention");
         }
 
         if (string.IsNullOrWhiteSpace(device.IpAddress))

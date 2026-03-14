@@ -7,10 +7,11 @@ namespace SnmpCollector.Configuration;
 public sealed class DeviceOptions
 {
     /// <summary>
-    /// Human-readable device name used as 'agent' label and Quartz job identity component.
-    /// Must be unique across all devices.
+    /// Full SNMP community string (e.g. 'Simetra.NPB-01').
+    /// Device name is derived from this via CommunityStringHelper.TryExtractDeviceName().
+    /// Must be unique across all devices and follow the Simetra.{DeviceName} convention.
     /// </summary>
-    public string Name { get; set; } = string.Empty;
+    public string CommunityString { get; set; } = string.Empty;
 
     /// <summary>
     /// IP address for SNMP polling and trap source matching.
@@ -23,12 +24,6 @@ public sealed class DeviceOptions
     /// Must be 1-65535.
     /// </summary>
     public int Port { get; set; } = 161;
-
-    /// <summary>
-    /// Optional explicit SNMP community string. If null or empty, falls back to
-    /// the Simetra.{Name} convention via CommunityStringHelper.
-    /// </summary>
-    public string? CommunityString { get; set; }
 
     /// <summary>
     /// Poll configurations for this device.

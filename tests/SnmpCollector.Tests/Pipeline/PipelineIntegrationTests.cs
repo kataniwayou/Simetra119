@@ -57,7 +57,7 @@ public sealed class PipelineIntegrationTests : IDisposable
             [
                 new DeviceOptions
                 {
-                    Name = KnownDevice,
+                    CommunityString = $"Simetra.{KnownDevice}",
                     IpAddress = KnownDeviceIp,
                     Polls = []
                 }
