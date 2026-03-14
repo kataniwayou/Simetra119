@@ -78,7 +78,7 @@ Requirements for CommunityString validation, self-describing tenant entries, ten
 | CS-07 | Phase 34 | Pending |
 | TEN-01 | Phase 33 | Pending |
 | TEN-02 | Phase 33 | Pending |
-| TEN-03 | Phase 33 | Pending |
+| TEN-03 | Phase 34 | Pending |
 | TEN-04 | Phase 35 | Pending |
 | TEN-05 | Phase 35 | Pending |
 | TEN-06 | Phase 35 | Pending |
