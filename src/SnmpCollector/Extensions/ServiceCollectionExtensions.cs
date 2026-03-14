@@ -357,6 +357,27 @@ public static class ServiceCollectionExtensions
     /// 4. <see cref="ValueExtractionBehavior{TRequest,TResponse}"/>      — extracts numeric/string value once
     /// 5. <see cref="TenantVectorFanOutBehavior{TRequest,TResponse}"/>   — routes to tenant vector slots
     /// </para>
+    /// <remarks>
+    /// <para><strong>Operator config ordering guidance (CS-07):</strong></para>
+    /// <para>
+    /// Each config file (oidmaps, commandmaps, devices, tenants) has an independent
+    /// Kubernetes ConfigMap watcher — there is no cross-watcher coupling or guaranteed
+    /// load order at runtime. However, because devices reference OID/command maps and
+    /// tenants reference devices, the recommended apply order when deploying config
+    /// changes is:
+    /// </para>
+    /// <list type="number">
+    ///   <item><description>OID maps and command maps (independent of each other)</description></item>
+    ///   <item><description>Devices (references OID map for MetricName resolution)</description></item>
+    ///   <item><description>Tenants (references devices for IP+Port validation, OID map for MetricName validation)</description></item>
+    /// </list>
+    /// <para>
+    /// Applying in this order ensures that validation checks (MetricName resolution,
+    /// IP+Port existence) pass on first load. If applied out of order, entries may be
+    /// skipped with Error logs until the referenced config catches up on the next
+    /// watcher reload cycle.
+    /// </para>
+    /// </remarks>
     /// </summary>
     public static IServiceCollection AddSnmpPipeline(
         this IServiceCollection services)
