@@ -202,7 +202,6 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
         // Real registry with no tenants loaded — TryRoute returns false
         var registry = new TenantVectorRegistry(
             NSubstitute.Substitute.For<IDeviceRegistry>(),
-            NSubstitute.Substitute.For<IOidMapService>(),
             NullLogger<TenantVectorRegistry>.Instance);
         var deviceRegistry = new StubDeviceRegistry("test-device", "10.0.0.1", 161);
         var behavior = CreateBehavior(registry, deviceRegistry);
@@ -306,7 +305,6 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
     {
         var registry = new TenantVectorRegistry(
             NSubstitute.Substitute.For<IDeviceRegistry>(),
-            NSubstitute.Substitute.For<IOidMapService>(),
             NullLogger<TenantVectorRegistry>.Instance);
         registry.Reload(new TenantVectorOptions
         {
@@ -329,7 +327,6 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
     {
         var registry = new TenantVectorRegistry(
             NSubstitute.Substitute.For<IDeviceRegistry>(),
-            NSubstitute.Substitute.For<IOidMapService>(),
             NullLogger<TenantVectorRegistry>.Instance);
         registry.Reload(new TenantVectorOptions
         {
@@ -360,7 +357,6 @@ public sealed class TenantVectorFanOutBehaviorTests : IDisposable
     {
         var registry = new TenantVectorRegistry(
             NSubstitute.Substitute.For<IDeviceRegistry>(),
-            NSubstitute.Substitute.For<IOidMapService>(),
             NullLogger<TenantVectorRegistry>.Instance);
         registry.Reload(new TenantVectorOptions
         {

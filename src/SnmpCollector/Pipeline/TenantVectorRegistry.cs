@@ -15,7 +15,6 @@ namespace SnmpCollector.Pipeline;
 public sealed class TenantVectorRegistry : ITenantVectorRegistry
 {
     private readonly IDeviceRegistry _deviceRegistry;
-    private readonly IOidMapService _oidMapService;
     private readonly ILogger<TenantVectorRegistry> _logger;
 
     // Volatile fields: readers always observe a fully-constructed object reference.
@@ -26,11 +25,9 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
 
     public TenantVectorRegistry(
         IDeviceRegistry deviceRegistry,
-        IOidMapService oidMapService,
         ILogger<TenantVectorRegistry> logger)
     {
         _deviceRegistry = deviceRegistry;
-        _oidMapService = oidMapService;
         _logger = logger;
     }
 
@@ -96,19 +93,20 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
         for (var i = 0; i < options.Tenants.Count; i++)
         {
             var tenantOpts = options.Tenants[i];
-            var tenantId = $"tenant-{i}";
+            var tenantId = !string.IsNullOrWhiteSpace(tenantOpts.Name)
+                ? tenantOpts.Name
+                : $"tenant-{i}";
 
             var holders = new List<MetricSlotHolder>(tenantOpts.Metrics.Count);
 
             foreach (var metric in tenantOpts.Metrics)
             {
                 var resolvedIp = ResolveIp(metric.Ip);
-                var derivedInterval = DeriveIntervalSeconds(metric.Ip, metric.Port, metric.MetricName);
                 var newHolder = new MetricSlotHolder(
                     resolvedIp,
                     metric.Port,
                     metric.MetricName,
-                    derivedInterval,
+                    metric.IntervalSeconds,
                     metric.TimeSeriesSize);
 
                 // Carry over existing slot value when the same (ip, port, metricName) exists.
@@ -206,19 +204,4 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
         return configIp;
     }
 
-    private int DeriveIntervalSeconds(string ip, int port, string metricName)
-    {
-        if (!_deviceRegistry.TryGetByIpPort(ip, port, out var device))
-            return 0;
-
-        foreach (var pollGroup in device.PollGroups)
-        {
-            foreach (var oid in pollGroup.Oids)
-            {
-                if (string.Equals(_oidMapService.Resolve(oid), metricName, StringComparison.OrdinalIgnoreCase))
-                    return pollGroup.IntervalSeconds;
-            }
-        }
-        return 0;
-    }
 }
