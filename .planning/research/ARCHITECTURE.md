@@ -1,630 +1,485 @@
-# Architecture Patterns: v1.6 Organization & Command Map Foundation
+# Architecture Patterns: v1.7 Configuration Consistency & Tenant Commands
 
-**Domain:** SNMP monitoring agent -- OID map validation, human-name device config, command map infrastructure
-**Researched:** 2026-03-13
+**Domain:** SNMP monitoring agent -- self-describing tenant metrics, commands data model, CommunityString validation, tenantvector rename
+**Researched:** 2026-03-14
 **Confidence:** HIGH (all findings based on direct codebase analysis; no training-data speculation)
 
 ---
 
-## Existing Architecture Snapshot
+## Existing Architecture Snapshot (v1.6 baseline)
 
-Understanding the current components is required before placement of new features.
+### Component Inventory
 
-### Configuration Load Path (Startup)
+| Component | Kind | File | Role |
+|-----------|------|------|------|
+| `TenantVectorRegistry` | Singleton class | `Pipeline/TenantVectorRegistry.cs` | Builds priority groups + routing index from `TenantVectorOptions`; volatile swap on `Reload()` |
+| `TenantVectorWatcherService` | BackgroundService | `Services/TenantVectorWatcherService.cs` | Watches `simetra-tenantvector` ConfigMap; calls `registry.Reload(options)` |
+| `DeviceRegistry` | Singleton class | `Pipeline/DeviceRegistry.cs` | Holds `FrozenDictionary` by `ip:port` and by `Name`; exposes `AllDevices`, `TryGetByIpPort`, `TryGetDeviceByName` |
+| `DynamicPollScheduler` | Singleton class | `Services/DynamicPollScheduler.cs` | Diffs Quartz jobs vs desired device list; add/remove/reschedule |
+| `TenantVectorFanOutBehavior` | MediatR behavior | `Pipeline/Behaviors/TenantVectorFanOutBehavior.cs` | Routes received samples to `MetricSlotHolder`s; uses `IDeviceRegistry` to resolve port |
+| `TenantVectorOptions` | Config model | `Configuration/TenantVectorOptions.cs` | Top-level wrapper: `{ "Tenants": [...] }` |
+| `TenantOptions` | Config model | `Configuration/TenantOptions.cs` | `Priority` + `List<MetricSlotOptions>` |
+| `MetricSlotOptions` | Config model | `Configuration/MetricSlotOptions.cs` | `Ip`, `Port`, `MetricName`, `TimeSeriesSize` |
+| `TenantVectorOptionsValidator` | Validator | `Configuration/Validators/TenantVectorOptionsValidator.cs` | Currently a no-op pass-through |
+| `DeviceOptions` | Config model | `Configuration/DeviceOptions.cs` | `Name`, `IpAddress`, `Port`, `CommunityString?`, `List<PollOptions>` |
+| `DevicesOptionsValidator` | Validator | `Configuration/Validators/DevicesOptionsValidator.cs` | Validates name, IP, port, poll intervals; does NOT validate `CommunityString` |
+| `CommunityStringHelper` | Static helper | `Pipeline/CommunityStringHelper.cs` | `Simetra.{DeviceName}` convention; `TryExtractDeviceName`, `DeriveFromDeviceName` |
+| `MetricSlotHolder` | Runtime model | `Pipeline/MetricSlotHolder.cs` | Volatile cyclic time-series; `WriteValue`, `ReadSlot`, `CopyFrom` |
+| `Tenant` | Runtime model | `Pipeline/Tenant.cs` | `Id`, `Priority`, `IReadOnlyList<MetricSlotHolder>` |
+
+### Current `TenantVectorRegistry.Reload()` Data Flow
 
 ```
-simetra-oidmaps ConfigMap
-    |  watched by OidMapWatcherService (BackgroundService)
-    |  ParseJSON -> Dictionary<string, string>
-    v
-OidMapService.UpdateMap(entries)
-    |  MergeWithHeartbeatSeed() -- adds HeartbeatOid
-    |  BuildFrozenMap() -- FrozenDictionary<string, string>
-    |  volatile swap of _map
-    |  volatile swap of _metricNames (FrozenSet for ContainsMetricName)
-
-simetra-devices ConfigMap
-    |  watched by DeviceWatcherService (BackgroundService)
-    |  ParseJSON -> List<DeviceOptions>
-    v
-DeviceRegistry.ReloadAsync(List<DeviceOptions>)
-    |  DNS resolution per device
-    |  builds _byIpPort and _byName FrozenDictionaries
-    |  volatile swap of both
-    v
-DynamicPollScheduler.ReconcileAsync(IReadOnlyList<DeviceInfo>)
-    |  diffs current Quartz jobs vs desired
-    |  adds / removes / reschedules metric-poll-* jobs
+TenantVectorOptions.Tenants[]
+    for each TenantOptions:
+        for each MetricSlotOptions metric:
+            resolvedIp = ResolveIp(metric.Ip)          // USES _deviceRegistry.AllDevices
+            intervalSeconds = DeriveIntervalSeconds(...)  // USES _deviceRegistry.TryGetByIpPort
+                                                          // then _oidMapService.Resolve(oid) == metricName
+            new MetricSlotHolder(resolvedIp, port, metricName, intervalSeconds, timeSeriesSize)
+            carry-over old value if (ip, port, metricName) existed
+        new Tenant(id, priority, holders)
+    FrozenDictionary<RoutingKey, IReadOnlyList<MetricSlotHolder>> routingIndex
+    volatile swap _groups and _routingIndex
 ```
 
-### DeviceOptions (existing config model)
+Key observation: `TenantVectorRegistry` currently has **two dependencies on `DeviceRegistry`**:
 
+1. `ResolveIp()` -- translates a DNS config address (e.g. `npb-simulator.simetra.svc.cluster.local`) to a resolved IPv4 string
+2. `DeriveIntervalSeconds()` -- walks device poll groups to find which interval a given metric runs at, by reverse-resolving OID → metricName via `IOidMapService`
+
+### Current `TenantVectorFanOutBehavior` Device Registry Dependency
+
+```csharp
+else if (_deviceRegistry.TryGetDeviceByName(msg.DeviceName!, out var device))
+{
+    var ip = msg.AgentIp.ToString();
+    if (_registry.TryRoute(ip, device.Port, metricName, out var holders))
+    { ... }
+}
+```
+
+The behavior uses `DeviceRegistry` only to look up the **port** for a given device name, so it can form the `(ip, port, metricName)` routing key.
+
+### ConfigMap Names (current)
+
+| ConfigMap | Watched by | Key | Content |
+|-----------|-----------|-----|---------|
+| `simetra-tenantvector` | `TenantVectorWatcherService` | `tenantvector.json` | `{ "Tenants": [...] }` |
+| `simetra-devices` | `DeviceWatcherService` | `devices.json` | `[{ "Name": ..., "Polls": [...] }]` |
+
+---
+
+## v1.7 Feature Integration Analysis
+
+### Feature 1: Tenant Metrics as Self-Describing Objects
+
+**What changes:** Each metric slot carries its own `Ip`, `Port`, `MetricName`, `IntervalSeconds`, and optionally `TimeSeriesSize`. The tenant config does NOT rely on DeviceRegistry to supply the interval or resolve the IP. The config author writes the interval directly in the tenant metric entry.
+
+**New `MetricSlotOptions` shape:**
 ```json
 {
-  "Name": "OBP-01",
-  "IpAddress": "127.0.0.1",
-  "Port": 10161,
-  "CommunityString": null,
-  "MetricPolls": [
-    { "IntervalSeconds": 10, "Oids": ["1.3.6.1.4.1..."] }
+  "Ip": "npb-simulator.simetra.svc.cluster.local",
+  "Port": 161,
+  "MetricName": "npb_cpu_util",
+  "IntervalSeconds": 10,
+  "TimeSeriesSize": 10
+}
+```
+
+`IntervalSeconds` becomes a first-class field on `MetricSlotOptions` (currently absent). The existing `TimeSeriesSize` field is already there.
+
+**Impact on `TenantVectorRegistry.Reload()`:**
+
+`DeriveIntervalSeconds()` is eliminated. It was the only reason `TenantVectorRegistry` needed `IOidMapService`. The new `intervalSeconds` comes directly from the config object.
+
+`ResolveIp()` remains if the tenant config can contain DNS names (it currently does: `npb-simulator.simetra.svc.cluster.local`). However, the DNS-to-IP resolution that `ResolveIp()` performs today is a delegating lookup into `DeviceRegistry.AllDevices` — it does not do DNS itself. If the feature intent is "self-describing means no DeviceRegistry dependency at all", then the tenant config must either:
+  - Accept only resolved IPs, OR
+  - Do its own DNS resolution in `Reload()` (new DNS call, no DeviceRegistry)
+
+The simpler and more consistent interpretation: **`MetricSlotOptions.Ip` must be a resolved IP address or a DNS name that `TenantVectorRegistry` resolves directly** (same as `DeviceRegistry` does with `Dns.GetHostAddresses`). This removes the `IDeviceRegistry` constructor dependency from `TenantVectorRegistry`.
+
+**Constructor change:**
+
+Current:
+```csharp
+public TenantVectorRegistry(IDeviceRegistry deviceRegistry, IOidMapService oidMapService, ILogger<TenantVectorRegistry> logger)
+```
+
+After removing both usages:
+```csharp
+public TenantVectorRegistry(ILogger<TenantVectorRegistry> logger)
+```
+
+Both `_deviceRegistry` and `_oidMapService` fields are removed. The DI registration in `ServiceCollectionExtensions` is simplified accordingly.
+
+**Impact on `Reload()` signature:** No change to the method signature. `TenantVectorOptions` is still the parameter. The internal body changes: build `MetricSlotHolder` from `metric.IntervalSeconds` directly instead of calling `DeriveIntervalSeconds`.
+
+**Impact on routing index:** No change to structure. The routing index is still `FrozenDictionary<RoutingKey(ip, port, metricName), IReadOnlyList<MetricSlotHolder>>`. The values in the routing index now use the interval supplied directly from config. The routing key tuple is identical.
+
+**Carry-over logic:** No change. Carry-over is keyed on `(ip, port, metricName)` and is not affected by where `intervalSeconds` came from.
+
+---
+
+### Feature 2: Tenant Commands Array
+
+**What changes:** `TenantOptions` gains a `Commands` list alongside `Metrics`. Each command entry has a name, value, and value type.
+
+**New config shape:**
+```json
+{
+  "Priority": 1,
+  "Metrics": [...],
+  "Commands": [
+    { "Name": "obp_set_bypass_L1", "Value": "1", "ValueType": "Integer32" }
   ]
 }
 ```
 
-`Oids` in `MetricPolls` are raw OID strings today. The human-name feature introduces the ability to express them as metric names instead.
-
-### DynamicPollScheduler Job Key Pattern
-
-```
-metric-poll-{device.ConfigAddress}_{device.Port}-{pollGroupIndex}
-```
-
-Job data map contains `configAddress`, `port`, `pollIndex`, `intervalSeconds`. These are used at execution time to look up the device from `IDeviceRegistry`.
-
-### OidMapService Internal State
-
+**New configuration model: `TenantCommandOptions`**
 ```csharp
-private volatile FrozenDictionary<string, string> _map;   // OID -> MetricName
-private volatile FrozenSet<string>  _metricNames;          // set of MetricName values
+public sealed class TenantCommandOptions
+{
+    public string Name { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+    public string ValueType { get; set; } = string.Empty;
+}
 ```
 
-The `_metricNames` set already exists on `IOidMapService` via `ContainsMetricName(string)`. There is no reverse lookup (MetricName -> OID) today.
+**Modified `TenantOptions`:**
+```csharp
+public List<TenantCommandOptions> Commands { get; set; } = [];
+```
+Adding `Commands` is additive and backward-compatible — existing configs without `Commands` will deserialize with an empty list.
 
-### OidMapWatcherService Parse Location
+**New runtime model: `TenantCommand`**
 
-`HandleConfigMapChangedAsync()` does:
-1. JSON deserialization into `Dictionary<string, string>`
-2. Null guard
-3. `SemaphoreSlim` gate
-4. `_oidMapService.UpdateMap(oidMap)`
+The `Tenant` class needs to carry commands at runtime. Parallel to `Holders` (which holds `MetricSlotHolder` instances), a `Commands` property would hold the command definitions:
+```csharp
+public sealed class Tenant
+{
+    public string Id { get; }
+    public int Priority { get; }
+    public IReadOnlyList<MetricSlotHolder> Holders { get; }
+    public IReadOnlyList<TenantCommand> Commands { get; }   // NEW
+}
+```
 
-Validation (duplicate detection) belongs between steps 1 and 3 -- after successful parse, before calling `UpdateMap`.
+`TenantCommand` is a simple value record (no live state):
+```csharp
+public sealed record TenantCommand(string Name, string Value, string ValueType);
+```
+
+**Impact on `TenantVectorRegistry.Reload()`:**
+During the build loop, after building `holders`, build `commands` from `tenantOpts.Commands`. Construct `Tenant` with both. No routing index needed for commands — they are accessed by iterating `group.Tenants[i].Commands`.
+
+**Impact on routing index:** None. Commands are not part of the routing index.
+
+**Impact on `ITenantVectorRegistry`:** No interface change required unless consumers need to query commands by tenant ID. For now, commands are accessed via `Groups → Tenants → Commands`. No new interface method is needed for this milestone.
 
 ---
 
-## Integration Architecture: Three New Features
+### Feature 3: CommunityString Validation
 
-### Feature 1: OID Map Duplicate Validation
+**What changes:** Every `CommunityString` field (in both `DeviceOptions` and `MetricSlotOptions`) must follow the `Simetra.*` pattern when present. Null/empty is allowed (falls back to convention).
 
-**What:** Detect when two OIDs map to the same MetricName in `oidmaps.json`. The JSON `Dictionary<string, string>` deserialization silently accepts duplicates at the value level (many OIDs can share a name) -- this is the case we want to detect and warn about at load time.
+**Where validation lives:**
 
-**Where to integrate:** `OidMapWatcherService.HandleConfigMapChangedAsync()`, immediately after successful JSON deserialization, before `UpdateMap`.
+The `Simetra.*` prefix check already exists in `CommunityStringHelper`. The validation logic should live in a dedicated validator, not scattered across watcher services or inline in registry code.
 
-**Why there, not in OidMapService.UpdateMap:** The watcher is the parse boundary. It is the appropriate place for data quality checks that operate on the raw incoming map. `UpdateMap` is a pure swap method -- keeping validation separate preserves single-responsibility and makes the watcher independently testable. The local-dev path in `Program.cs` also calls `UpdateMap` directly (after loading `oidmaps.json` from disk), so any validation placed only in `UpdateMap` would also run for local dev; whether that is desirable is a decision point.
+Recommended placement: **expand the existing validators**.
 
-**Recommended: validate in watcher only.** Local dev does not need the warning -- duplicate detection is primarily a production config quality signal.
+- `DevicesOptionsValidator` gains a `CommunityString` check in `ValidateDevice()`:
+  ```
+  if CommunityString is not null/empty AND does not start with "Simetra."
+      failures.Add(...)
+  ```
 
-**Data flow addition:**
+- `TenantVectorOptionsValidator` (currently a no-op) gains actual validation:
+  ```
+  for each tenant metric with CommunityString:
+      if not null/empty AND not "Simetra.*"
+          failures.Add(...)
+  ```
+
+**CommunityString on `MetricSlotOptions`:** This is a new field. `MetricSlotOptions` currently has `Ip`, `Port`, `MetricName`, `TimeSeriesSize`. A `CommunityString?` field is added.
+
+**Why validators, not inline:**
+- Watcher services already call the validator before calling `Reload()`. Invalid configs are rejected at the watcher boundary with the current config retained. This is the correct guard point.
+- Inline checks in `Reload()` would require exception-based control flow or silent skipping — neither matches the existing pattern.
+- `CommunityStringHelper` remains a utility; it does not validate (already exists as `TryExtractDeviceName`/`DeriveFromDeviceName`).
+
+**No new validator class needed.** The two existing validator classes absorb the new rules.
+
+---
+
+### Feature 4: Name → CommunityString Rename in DeviceOptions
+
+**What changes:** The `DeviceOptions` property `Name` is NOT being renamed — `Name` is the human-readable device name. The change is that `CommunityString` is the explicit SNMP community string field. Looking at the current `DeviceOptions`, it already has `CommunityString` as a property. This rename is already complete in the codebase.
+
+The milestone description says "Name → CommunityString rename". In context, this likely refers to a rename within a different model that has a `Name` property meaning something like community string. Based on the code, `DeviceOptions.Name` is device identity (e.g., "OBP-01") and `DeviceOptions.CommunityString` is the SNMP community. Both already exist with the correct names.
+
+If the rename refers to `MetricSlotOptions` gaining a `CommunityString` field (which it does not currently have), that is a new field addition, not a rename. The `TenantOptions` model similarly has no field named `Name` that maps to a community string.
+
+**Assessment:** This feature is either already done (DeviceOptions already has CommunityString), or refers to a rename within a model that is yet to be identified. The roadmap creator should clarify scope. For now, this research treats it as: `MetricSlotOptions` gains an optional `CommunityString?` field (aligns with feature 3 where validation is needed).
+
+---
+
+### Feature 5: Skip Poll Job When All Metric Names Unresolvable
+
+**Context from Phase 31 decisions:** "Poll group behavior: within a poll group, resolved names are collected into one poll job. If zero names resolve in a group, no job for that group." This was already decided for Phase 31.
+
+**Where the skip logic lives:**
+
+In `DeviceRegistry.BuildPollGroups()`, a `MetricPollInfo` is currently returned for every poll group, even if `resolvedOids` is empty. The skip behavior means: if `resolvedOids.Count == 0`, do NOT include this group in the returned `ReadOnlyCollection<MetricPollInfo>`.
+
+```csharp
+// Current (always includes group):
+return new MetricPollInfo(PollIndex: index, Oids: resolvedOids.AsReadOnly(), IntervalSeconds: ...);
+
+// After skip behavior:
+if (resolvedOids.Count == 0)
+{
+    _logger.LogWarning("Device '{DeviceName}' poll group {index}: all {count} metric names unresolvable -- skipping job");
+    return; // or continue in LINQ select
+}
+return new MetricPollInfo(...);
+```
+
+The `Select` + `ToList` in `BuildPollGroups` needs to become a `SelectMany` or filtered `Where`, since `Select` requires a 1:1 transformation. The simplest refactor is changing from LINQ `Select` to a foreach loop with conditional `Add`.
+
+**Impact on `DynamicPollScheduler`:** No change. The scheduler sees only the `MetricPollInfo` list that `DeviceRegistry` exposes. If a group produces no `MetricPollInfo`, the scheduler simply has fewer jobs to create. This is already how removal works.
+
+**Impact on initial Quartz registration in `ServiceCollectionExtensions.AddSnmpScheduling()`:**
+
+The startup registration iterates `devicesOptions.Devices` and registers a Quartz job per `device.Polls[pi]`. It does not consult `IOidMapService` at this point (the OID map may be empty at startup). After the skip behavior, the startup registration could still create a job for a poll group whose MetricNames are all invalid — this job would fire and send an empty OID list to SNMP. This is a latent issue pre-existing from v1.6. The correct fix is the same: skip groups with zero names at `BuildPollGroups` time, and since `DeviceRegistry` is called during `DeviceWatcherService.HandleConfigMapChangedAsync` → `ReconcileAsync`, the reconcile will produce the correct desired set. The startup Quartz registration (in `AddSnmpScheduling`) is a separate path that should also apply the same skip logic — but since Phase 31 decisions indicate this is "no job for that group", the reconcile path is what matters for hot-reload.
+
+---
+
+### Feature 6: tenantvector → tenants Rename
+
+**What changes:** The ConfigMap name `simetra-tenantvector` and key `tenantvector.json` are renamed. The new names are `simetra-tenants` and `tenants.json` (inferred from "tenantvector → tenants" rename).
+
+**Touched files:**
+
+| File | Change |
+|------|--------|
+| `Services/TenantVectorWatcherService.cs` | `ConfigMapName = "simetra-tenants"`, `ConfigKey = "tenants.json"` |
+| `deploy/k8s/snmp-collector/simetra-tenantvector.yaml` | Rename file to `simetra-tenants.yaml`; update `metadata.name` and data key |
+| `Program.cs` | Local dev path reads `tenants.json` (currently reads `tenantvector.json`) |
+| `TenantVectorOptions.SectionName` | Currently `"TenantVector"` -- if the section name also renames to `"Tenants"`, the JSON wrapper in local dev changes accordingly |
+
+**The DI registration class name stays the same:** `TenantVectorWatcherService`, `TenantVectorRegistry`, `TenantVectorOptions` are internal class names. The rename is external (ConfigMap names, file names, JSON keys). No class renaming is required unless explicitly in scope.
+
+**`TenantVectorOptions.SectionName`:** Currently `"TenantVector"`. The current `simetra-tenantvector.yaml` uses `{ "Tenants": [...] }` as the JSON content (no section wrapper — it's unwrapped). The local `tenantvector.json` uses `{ "TenantVector": { "Tenants": [...] } }` (section-wrapped for IConfiguration binding). If the ConfigMap key becomes `tenants.json` and the section wrapper also renames to `"Tenants"`, then `TenantVectorOptions.SectionName` changes to `"Tenants"` and the local dev JSON wrapper key changes. If the section wrapper stays as `"TenantVector"` but the file name changes to `tenants.json`, only the file names and ConfigMap key change.
+
+**Recommendation:** Keep `TenantVectorOptions.SectionName = "TenantVector"` (internal binding key) and only rename the ConfigMap/file names. This isolates the rename to infrastructure artifacts, not the options binding chain.
+
+---
+
+### Feature 7: Remove Redundant Code from DeviceRegistry Tenant Dependency
+
+**Redundant code that is eliminated when metrics become self-describing:**
+
+1. `TenantVectorRegistry._deviceRegistry` field — removed entirely
+2. `TenantVectorRegistry._oidMapService` field — removed entirely
+3. `TenantVectorRegistry.ResolveIp()` method — removed (or replaced with direct DNS resolution)
+4. `TenantVectorRegistry.DeriveIntervalSeconds()` method — removed
+5. Constructor parameter `IDeviceRegistry deviceRegistry` — removed
+6. Constructor parameter `IOidMapService oidMapService` — removed
+7. DI registration in `ServiceCollectionExtensions` that passes these two parameters — simplified
+
+**Redundant code that is eliminated from `TenantVectorFanOutBehavior` when tenants carry their own port:**
+
+Currently `TenantVectorFanOutBehavior` calls `_deviceRegistry.TryGetDeviceByName(msg.DeviceName!, out var device)` to get the port. If tenant metrics are self-describing and the routing index is built with the correct port already embedded in the `RoutingKey`, then the behavior can route using `msg.AgentIp` + port from the holder (or from the routing key lookup itself).
+
+However: the routing lookup is `TryRoute(ip, port, metricName)`. The behavior needs to know the port to call `TryRoute`. There are two options:
+
+- **Option A:** Keep `IDeviceRegistry` in `TenantVectorFanOutBehavior` for port lookup (no change here). This means `TenantVectorFanOutBehavior` still depends on `DeviceRegistry` even after the tenant side is self-describing. Not fully redundant.
+- **Option B:** Change `TryRoute` to accept `ip` and `metricName` only (drop port), and change the routing key to `(ip, metricName)`. This removes all DeviceRegistry dependency from the fan-out path. However it risks key collisions if two devices share an IP but use different ports with the same metric name — unlikely in practice but architecturally risky.
+- **Option C:** Expose port directly from `MetricSlotHolder` (already available: `holder.Port`) and restructure the fan-out to look up by IP only, then filter by port. Overhead but correct.
+
+**Recommended:** Option A — leave `TenantVectorFanOutBehavior._deviceRegistry` in place for this milestone. The port-lookup dependency is a small, well-contained coupling. Removing it requires a routing key model change that touches the hot path. Flag it as a future cleanup.
+
+---
+
+## Component Change Map
+
+### New Files
+
+| File | Kind | Purpose |
+|------|------|---------|
+| `Configuration/TenantCommandOptions.cs` | Config model | `Name`, `Value`, `ValueType` per tenant command |
+| `Pipeline/TenantCommand.cs` | Runtime record | Immutable command descriptor carried by `Tenant` |
+
+### Modified Files
+
+| File | Change |
+|------|--------|
+| `Configuration/MetricSlotOptions.cs` | Add `IntervalSeconds` field; add optional `CommunityString?` field |
+| `Configuration/TenantOptions.cs` | Add `List<TenantCommandOptions> Commands { get; set; } = []` |
+| `Configuration/Validators/TenantVectorOptionsValidator.cs` | Replace no-op with real validation: non-empty CommunityString must match `Simetra.*`; `IntervalSeconds > 0` per metric slot |
+| `Configuration/Validators/DevicesOptionsValidator.cs` | Add CommunityString pattern check in `ValidateDevice()` |
+| `Pipeline/TenantVectorRegistry.cs` | Remove `IDeviceRegistry` and `IOidMapService` constructor deps; remove `ResolveIp()` and `DeriveIntervalSeconds()`; read interval from `metric.IntervalSeconds`; build `Tenant` with commands |
+| `Pipeline/Tenant.cs` | Add `IReadOnlyList<TenantCommand> Commands` property; update constructor |
+| `Pipeline/DeviceRegistry.cs` | `BuildPollGroups()`: skip poll group when `resolvedOids.Count == 0` (log warning, exclude from return value) |
+| `Services/TenantVectorWatcherService.cs` | Update `ConfigMapName` and `ConfigKey` constants for rename |
+| `Extensions/ServiceCollectionExtensions.cs` | Simplify `TenantVectorRegistry` DI registration (no longer passes `IDeviceRegistry` or `IOidMapService`) |
+| `Program.cs` | Update local dev file path from `tenantvector.json` to `tenants.json` (if renamed) |
+| `deploy/k8s/snmp-collector/simetra-tenantvector.yaml` | Rename file; update `metadata.name` to `simetra-tenants`; update data key to `tenants.json`; add `IntervalSeconds` to metric slot examples; add `Commands` array example |
+
+### Unchanged Files
+
+| File | Reason unchanged |
+|------|-----------------|
+| `Pipeline/TenantVectorFanOutBehavior.cs` | Port lookup via DeviceRegistry stays (see Feature 7 analysis) |
+| `Pipeline/MetricSlotHolder.cs` | No new fields; `IntervalSeconds` already exists on the holder |
+| `Pipeline/ITenantVectorRegistry.cs` | Interface surface unchanged: `TryRoute`, `Groups`, `TenantCount`, `SlotCount` |
+| `Pipeline/IDeviceRegistry.cs` | No change |
+| `Pipeline/DeviceInfo.cs` | No change |
+| `Pipeline/CommunityStringHelper.cs` | Used by validators; no change to its own logic |
+| `Services/DeviceWatcherService.cs` | Device reload path unchanged |
+| `Services/DynamicPollScheduler.cs` | Receives `IReadOnlyList<DeviceInfo>` from registry; only sees the filtered list |
+| `Pipeline/OidMapService.cs` / `IOidMapService.cs` | No change |
+| `Pipeline/CommandMapService.cs` / `ICommandMapService.cs` | No change |
+| `Services/OidMapWatcherService.cs` | No change |
+| `Services/CommandMapWatcherService.cs` | No change |
+| All MediatR behaviors except `TenantVectorFanOutBehavior` | No change |
+| `Pipeline/RoutingKey.cs` | No change (key shape stays `(ip, port, metricName)`) |
+| `Pipeline/PriorityGroup.cs` | No change |
+
+---
+
+## Data Flow After v1.7
+
+### Tenant Config Load Path
 
 ```
-OidMapWatcherService.HandleConfigMapChangedAsync()
-    |  JSON deserialize -> Dictionary<string, string>
-    |  [NEW] ValidateDuplicateNames(oidMap) -> logs warnings per duplicate MetricName
-    |         groups by Value, filters groups.Count > 1
-    |         LogWarning per group: "MetricName '{name}' mapped from {N} OIDs: ..."
-    |  (continues to UpdateMap regardless -- validation is advisory, not blocking)
+simetra-tenants ConfigMap (renamed from simetra-tenantvector)
+    key: tenants.json (renamed from tenantvector.json)
+    |
+    TenantVectorWatcherService (updated ConfigMapName/ConfigKey constants)
+    |  JsonDeserialize -> TenantVectorOptions
+    |  TenantVectorOptionsValidator.Validate()
+    |    - each metric.IntervalSeconds > 0
+    |    - each metric.CommunityString if present matches "Simetra.*"
+    |    - each command.Name non-empty
     v
-OidMapService.UpdateMap(oidMap)
+TenantVectorRegistry.Reload(TenantVectorOptions)
+    |  for each TenantOptions:
+    |      for each MetricSlotOptions metric:
+    |          resolvedIp = DirectResolve(metric.Ip)    // DNS or pass-through (NO DeviceRegistry)
+    |          new MetricSlotHolder(resolvedIp, metric.Port, metric.MetricName,
+    |                               metric.IntervalSeconds, metric.TimeSeriesSize)
+    |          carry-over old value by (ip, port, metricName)
+    |      for each TenantCommandOptions cmd:
+    |          new TenantCommand(cmd.Name, cmd.Value, cmd.ValueType)
+    |      new Tenant(id, priority, holders, commands)
+    |  build FrozenDictionary routing index
+    |  volatile swap _groups and _routingIndex
 ```
 
-The check does NOT block the reload. An operator error in OID naming should not prevent metrics from flowing. The warning is sufficient.
-
-**IOidMapService interface:** No changes needed. Validation is watcher-internal.
-
-**New private method in OidMapWatcherService:**
-
-```csharp
-private void ValidateDuplicateMetricNames(Dictionary<string, string> oidMap)
-{
-    var duplicates = oidMap
-        .GroupBy(kv => kv.Value, StringComparer.OrdinalIgnoreCase)
-        .Where(g => g.Count() > 1);
-
-    foreach (var group in duplicates)
-    {
-        _logger.LogWarning(
-            "OID map validation: MetricName '{MetricName}' is assigned to {Count} OIDs: {Oids}. " +
-            "Only one OID per MetricName is recommended for unambiguous resolution.",
-            group.Key,
-            group.Count(),
-            string.Join(", ", group.Select(kv => kv.Key)));
-    }
-}
-```
-
-**Confidence:** HIGH -- based on direct read of `OidMapWatcherService.HandleConfigMapChangedAsync` and `OidMapService.UpdateMap`.
-
----
-
-### Feature 2: Reverse-Lookup Index (MetricName -> OID)
-
-**What:** Complement to the forward map. Enables the device config to reference OIDs by human name (`"obp_channel_L1"`) rather than raw OID string (`"1.3.6.1.4.1.47477.10.21.1.3.4.0"`). Also enables command dispatch: given a MetricName, what OID do we SET?
-
-**Where to integrate:** `OidMapService`. Add a second `volatile FrozenDictionary<string, string>` for the reverse map, built and swapped alongside `_map` in `UpdateMap` and the constructor.
-
-**Note on uniqueness:** The reverse index assumes MetricName -> single OID. If duplicates exist (caught by Feature 1), the reverse index retains one entry arbitrarily (last-writer-wins from dictionary iteration order). Feature 1 warns about this situation; Feature 2 documents the consequence.
-
-**Changes to `IOidMapService`:**
-
-```csharp
-/// <summary>
-/// Resolves a metric name back to its OID string.
-/// Returns null if the metric name is not in the map.
-/// Used by device config human-name resolution and command dispatch.
-/// </summary>
-string? ResolveOid(string metricName);
-```
-
-**Changes to `OidMapService`:**
-
-```csharp
-private volatile FrozenDictionary<string, string> _reverseMap;  // MetricName -> OID
-
-// In constructor and UpdateMap:
-_reverseMap = BuildReverseMap(seeded);
-
-// BuildReverseMap:
-private static FrozenDictionary<string, string> BuildReverseMap(Dictionary<string, string> entries)
-{
-    // Last-writer-wins for duplicate MetricNames
-    var reverse = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-    foreach (var (oid, name) in entries)
-        reverse[name] = oid;
-    return reverse.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-}
-
-// ResolveOid implementation:
-public string? ResolveOid(string metricName)
-    => _reverseMap.TryGetValue(metricName, out var oid) ? oid : null;
-```
-
-**Both maps rebuild together on every `UpdateMap` call** -- they are always in sync. The `volatile` field swap ensures atomic visibility to concurrent readers.
-
-**Confidence:** HIGH.
-
----
-
-### Feature 3: Human-Name Device Config
-
-**What:** Allow `MetricPolls[].Oids` entries in `devices.json` to be either raw OID strings or human metric names. Before Quartz jobs are created, names are resolved back to OIDs.
-
-**Where to integrate:** `DeviceWatcherService.HandleConfigMapChangedAsync()`, between JSON deserialization and `DeviceRegistry.ReloadAsync`. This is the mirror of where OID map validation integrates in Feature 1.
-
-**Dependency order issue:** `DeviceWatcherService` currently depends only on `IDeviceRegistry` and `DynamicPollScheduler`. Human-name resolution requires `IOidMapService`. This is a new dependency injection point.
-
-**Change to `DeviceWatcherService` constructor:**
-
-```csharp
-public DeviceWatcherService(
-    IKubernetes kubeClient,
-    IDeviceRegistry deviceRegistry,
-    DynamicPollScheduler pollScheduler,
-    IOidMapService oidMapService,           // NEW
-    ILogger<DeviceWatcherService> logger)
-```
-
-**Resolution logic** (new private method):
-
-```csharp
-private List<DeviceOptions> ResolveHumanNames(List<DeviceOptions> devices)
-{
-    // For each device, for each poll group, for each OID entry:
-    // if it looks like a metric name (no dots, matches OidMapService.ResolveOid),
-    // replace with the resolved OID.
-    // Log a warning if a name cannot be resolved (leave as-is, will become "Unknown" in pipeline).
-    foreach (var device in devices)
-    {
-        foreach (var poll in device.MetricPolls)
-        {
-            for (var i = 0; i < poll.Oids.Count; i++)
-            {
-                var entry = poll.Oids[i];
-                if (!IsRawOid(entry))
-                {
-                    var resolved = _oidMapService.ResolveOid(entry);
-                    if (resolved is null)
-                        _logger.LogWarning(
-                            "Device '{Device}': OID entry '{Entry}' is not a raw OID and not found in OID map -- leaving as-is",
-                            device.Name, entry);
-                    else
-                        poll.Oids[i] = resolved;
-                }
-            }
-        }
-    }
-    return devices;
-}
-
-private static bool IsRawOid(string entry)
-    => entry.Length > 0 && (char.IsDigit(entry[0]) || entry[0] == '.');
-```
-
-**Timing dependency -- startup ordering risk:** `DeviceWatcherService` and `OidMapWatcherService` are both `BackgroundService` instances that start concurrently. At startup, the OID map may not be loaded yet when the device watcher first runs its initial load. This is a real race.
-
-**Resolution strategy:** The device watcher should attempt name resolution, log unresolved names as warnings, but proceed with raw OID strings for unresolved entries. This is the same "degrade gracefully" policy the existing pipeline uses (unresolved OIDs become `"Unknown"`). At the next ConfigMap reload cycle, if the OID map has loaded by then, device name resolution will succeed.
-
-An alternative -- making `DeviceWatcherService` wait for `OidMapWatcherService` to complete its initial load -- introduces a startup ordering dependency that is fragile and contradicts the existing design of independent watchers. Do not add that dependency.
-
-**Confidence:** HIGH on the integration point; MEDIUM on startup race handling (the graceful-degrade approach is correct but should be explicitly tested).
-
----
-
-### Feature 4: CommandMapService
-
-**What:** A new singleton service for writable OIDs (SNMP SET targets). Structurally parallel to `OidMapService`, but for a different map: `commandName -> OID`. Enables the system to look up the OID for a named command (e.g., `"obp_bypass_activate"` -> `"1.3.6.1.4.1.47477.10.21.1.2.1.0"`).
-
-**Why a separate service, not merged into OidMapService:** The two maps have different semantics. The OID map is poll-oriented (OID -> MetricName for read). The command map is write-oriented (CommandName -> OID for SET). Keeping them separate avoids confusion and lets each evolve independently. The pattern is already established in the codebase -- `OidMapService` and `DeviceRegistry` are separate singletons for the same reason.
-
-**New components:**
+### Device Config Load Path (with skip behavior)
 
 ```
-src/SnmpCollector/Pipeline/ICommandMapService.cs
-src/SnmpCollector/Pipeline/CommandMapService.cs
-src/SnmpCollector/Configuration/CommandMapOptions.cs
-```
-
-**`ICommandMapService`:**
-
-```csharp
-public interface ICommandMapService
-{
-    /// <summary>Resolves a command name to its OID. Returns null if not found.</summary>
-    string? ResolveCommandOid(string commandName);
-
-    /// <summary>Number of entries in the command map.</summary>
-    int EntryCount { get; }
-
-    /// <summary>Replaces the command map atomically. Called by watcher on ConfigMap change.</summary>
-    void UpdateMap(Dictionary<string, string> entries);
-}
-```
-
-**`CommandMapService`:** Structurally identical to `OidMapService` minus the `_metricNames` set and the heartbeat seed merge. Uses `volatile FrozenDictionary<string, string>` with the same volatile-swap pattern.
-
-**`CommandMapOptions`:**
-
-```csharp
-public sealed class CommandMapOptions
-{
-    public const string SectionName = "CommandMap";
-    public Dictionary<string, string> Entries { get; set; } = [];
-}
-```
-
-**ConfigMap format (`simetra-commandmaps`):**
-
-```json
-{
-  "obp_bypass_activate":   "1.3.6.1.4.1.47477.10.21.1.2.1.0",
-  "obp_bypass_deactivate": "1.3.6.1.4.1.47477.10.21.1.2.2.0"
-}
-```
-
-The ConfigMap key should be `commandmaps.json`, matching the `oidmaps.json` naming convention.
-
----
-
-### Feature 5: CommandMapWatcherService
-
-**What:** `BackgroundService` that watches `simetra-commandmaps` ConfigMap and calls `ICommandMapService.UpdateMap()`. Structurally identical to `OidMapWatcherService`.
-
-**New file:**
-
-```
-src/SnmpCollector/Services/CommandMapWatcherService.cs
-```
-
-**Template:** Clone `OidMapWatcherService` with:
-- `ConfigMapName = "simetra-commandmaps"`
-- `ConfigKey = "commandmaps.json"`
-- Dependency: `ICommandMapService` instead of `IOidMapService`
-- Remove the K8s config-only guard (OidMapWatcherService is already guard-gated in `ServiceCollectionExtensions`; follow the same pattern)
-
-**No validation of command map duplicates is needed at this phase.** Command names are unique by definition (a `Dictionary<string, string>` key). OID values could be duplicated (two commands hitting the same OID) -- that is valid.
-
-**DI registration (in `ServiceCollectionExtensions.AddSnmpConfiguration`, inside `IsInCluster()` block):**
-
-```csharp
-services.AddSingleton<ICommandMapService, CommandMapService>();
-
-services.AddSingleton<CommandMapWatcherService>();
-services.AddHostedService(sp => sp.GetRequiredService<CommandMapWatcherService>());
-```
-
-**Local dev fallback (Program.cs):** Add after the oidmaps.json block, following the same pattern. A `config/commandmaps.json` file with a small set of test commands.
-
-**K8s manifest:**
-
-```
-deploy/k8s/snmp-collector/simetra-commandmaps.yaml
-```
-
----
-
-## Component Boundaries
-
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| `OidMapWatcherService` | Watch `simetra-oidmaps`, validate duplicates, call `UpdateMap` | `IOidMapService` |
-| `OidMapService` | Forward OID->Name resolution, reverse Name->OID resolution | `IDeviceRegistry` (indirectly via DeviceWatcher) |
-| `DeviceWatcherService` | Watch `simetra-devices`, resolve human names, reload registry | `IDeviceRegistry`, `DynamicPollScheduler`, `IOidMapService` (NEW) |
-| `CommandMapService` | CommandName->OID resolution, hot-reload via atomic swap | None (read by future SNMP SET handler) |
-| `CommandMapWatcherService` | Watch `simetra-commandmaps`, call `UpdateMap` | `ICommandMapService` |
-
----
-
-## Data Flow Changes
-
-### OID Map Load (modified)
-
-```
-simetra-oidmaps ConfigMap
-    v
-OidMapWatcherService.HandleConfigMapChangedAsync
-    |  JSON deserialize
-    |  [NEW] ValidateDuplicateMetricNames() -- log warnings, continue
-    v
-OidMapService.UpdateMap
-    |  MergeWithHeartbeatSeed
-    |  BuildFrozenMap() -> volatile swap _map
-    |  [NEW] BuildReverseMap() -> volatile swap _reverseMap
-```
-
-### Device Load (modified)
-
-```
-simetra-devices ConfigMap
-    v
-DeviceWatcherService.HandleConfigMapChangedAsync
-    |  JSON deserialize -> List<DeviceOptions>
-    |  [NEW] ResolveHumanNames(devices, _oidMapService)
-    |         for each OID entry: if IsMetricName -> ResolveOid -> replace
+simetra-devices ConfigMap (unchanged name)
+    |
+    DeviceWatcherService
+    |  JsonDeserialize -> List<DeviceOptions>
     v
 DeviceRegistry.ReloadAsync(List<DeviceOptions>)
+    |  for each DeviceOptions d:
+    |      DNS resolution -> resolved IP
+    |      BuildPollGroups(d.Polls, d.Name):
+    |          for each PollOptions poll:
+    |              for each MetricName name:
+    |                  oid = _oidMapService.ResolveToOid(name)
+    |                  if oid is null: warn, skip
+    |              if resolvedOids.Count == 0: warn, SKIP THIS GROUP (no MetricPollInfo)
+    |              else: emit MetricPollInfo(oids, interval)
+    |      DeviceInfo(name, configAddress, resolvedIp, port, pollGroups, communityString)
+    |      DevicesOptionsValidator: CommunityString pattern check fires here (watcher path)
+    |  FrozenDictionary volatile swap
     v
-DynamicPollScheduler.ReconcileAsync(IReadOnlyList<DeviceInfo>)
-```
-
-### Command Map Load (new path)
-
-```
-simetra-commandmaps ConfigMap
-    v
-CommandMapWatcherService.HandleConfigMapChangedAsync
-    |  JSON deserialize -> Dictionary<string, string>
-    v
-CommandMapService.UpdateMap
-    |  BuildFrozenMap() -> volatile swap
+DynamicPollScheduler.ReconcileAsync(AllDevices)
+    |  desired jobs = only poll groups that survived skip filter
+    |  add/remove/reschedule Quartz metric-poll-* jobs
 ```
 
 ---
 
-## Modified Components
+## Build Order for v1.7
 
-| File | What Changes | Scope |
-|------|-------------|-------|
-| `Services/OidMapWatcherService.cs` | Add `ValidateDuplicateMetricNames()` call after JSON parse | ~20 lines |
-| `Pipeline/IOidMapService.cs` | Add `ResolveOid(string metricName)` method | 1 method |
-| `Pipeline/OidMapService.cs` | Add `_reverseMap` field, `BuildReverseMap()`, `ResolveOid()` impl, update both constructor and `UpdateMap` | ~20 lines |
-| `Services/DeviceWatcherService.cs` | Add `IOidMapService` constructor parameter, add `ResolveHumanNames()` method | ~40 lines |
-| `Extensions/ServiceCollectionExtensions.cs` | Register `ICommandMapService`, `CommandMapWatcherService` in K8s block; register `ICommandMapService` singleton | ~10 lines |
-| `Program.cs` | Add local-dev loading for `commandmaps.json` | ~15 lines |
+Dependencies flow from models → validators → registry → watcher → infrastructure.
 
-## New Components
+### Phase ordering rationale
 
-| File | Type | Description |
-|------|------|-------------|
-| `Pipeline/ICommandMapService.cs` | Interface | `ResolveCommandOid`, `EntryCount`, `UpdateMap` |
-| `Pipeline/CommandMapService.cs` | Singleton service | Volatile FrozenDictionary, same pattern as OidMapService |
-| `Configuration/CommandMapOptions.cs` | Options POCO | `Dictionary<string, string> Entries` |
-| `Services/CommandMapWatcherService.cs` | BackgroundService | Clone of OidMapWatcherService for `simetra-commandmaps` |
-| `config/commandmaps.json` | Config file | Local dev fallback command map |
-| `deploy/k8s/snmp-collector/simetra-commandmaps.yaml` | K8s manifest | ConfigMap for command map data |
+1. **Config model additions first** (`MetricSlotOptions`, `TenantOptions`, `TenantCommandOptions`, `TenantCommand`)
+   - Everything else depends on these shapes. No dependencies upstream.
+   - `MetricSlotOptions.IntervalSeconds` must exist before `TenantVectorRegistry.Reload()` can use it.
+   - `TenantCommandOptions` must exist before `TenantOptions.Commands` compiles.
 
-## Files That Do NOT Change
+2. **Validator changes second** (`TenantVectorOptionsValidator`, `DevicesOptionsValidator`)
+   - Depends on updated model shapes.
+   - Fail-fast at watcher boundary; must be correct before watcher integration is tested.
+   - `TenantVectorOptionsValidator` currently a no-op — activating it changes behavior; test it before wiring.
 
-| File | Why Unchanged |
-|------|---------------|
-| `Pipeline/SnmpOidReceived.cs` | No new message properties needed |
-| `Jobs/MetricPollJob.cs` | OID entries already raw strings by the time Quartz runs |
-| `Pipeline/DeviceRegistry.cs` | No changes -- receives already-resolved `DeviceOptions` |
-| `Services/DynamicPollScheduler.cs` | No changes -- receives `DeviceInfo` from registry |
-| `Pipeline/Behaviors/OidResolutionBehavior.cs` | No changes -- forward resolution path unchanged |
-| `Services/TenantVectorWatcherService.cs` | Independent -- no coupling to command map |
-| `Pipeline/TenantVectorRegistry.cs` | Independent |
-| All MediatR behaviors | Unaffected by map infrastructure |
+3. **`DeviceRegistry.BuildPollGroups` skip behavior**
+   - Depends only on existing `IOidMapService` (unchanged).
+   - Isolated change within one method; can be written and unit-tested independently.
+   - No dependency on tenant changes.
 
----
+4. **`TenantVectorRegistry` refactor** (remove DeviceRegistry/OidMapService deps, use `metric.IntervalSeconds`, add commands build)
+   - Depends on model additions (step 1).
+   - Remove two constructor parameters; DI registration update is part of this step.
+   - Carry-over logic and routing index construction are unchanged structurally.
 
-## Patterns to Follow
+5. **`Tenant` runtime model update** (add `Commands` property)
+   - Must happen in the same step as `TenantVectorRegistry` refactor — they compile together.
 
-### Pattern: Volatile FrozenDictionary Swap (existing, replicate for CommandMapService)
+6. **ConfigMap rename** (`simetra-tenantvector` → `simetra-tenants`, `TenantVectorWatcherService` constants)
+   - Purely mechanical; no logic changes.
+   - Last to minimize noise on prior steps' diffs.
+   - Requires updating: watcher constants, YAML manifests, local dev `Program.cs` file path.
 
-All hot-reloadable maps in this codebase use the same pattern:
-- `private volatile FrozenDictionary<string, string> _map`
-- Constructor builds initial `FrozenDictionary` (from empty dict or seed)
-- `UpdateMap()` builds new dict, assigns to `_map` with volatile write
-- Readers call `_map.TryGetValue()` -- no locking needed (immutable dict, volatile read)
+7. **K8s ConfigMap YAML updates** (`simetra-tenantvector.yaml` → `simetra-tenants.yaml`)
+   - Add `IntervalSeconds` to existing metric slot examples.
+   - Add `Commands` array example entries.
+   - CommunityString validation: existing entries have no CommunityString fields, so they pass.
 
-This pattern is well-established in `OidMapService` and `DeviceRegistry`. `CommandMapService` must follow it exactly.
+### Suggested Phase Structure
 
-### Pattern: Watcher with Initial Load + Reconnect Loop (existing, replicate for CommandMapWatcherService)
+| Phase | Content | Key files |
+|-------|---------|-----------|
+| Phase A | Config models: `MetricSlotOptions` + `IntervalSeconds` + `CommunityString?`; `TenantCommandOptions`; `TenantCommand` record | `MetricSlotOptions.cs`, `TenantOptions.cs`, `TenantCommandOptions.cs`, `TenantCommand.cs` |
+| Phase B | Validators: activate `TenantVectorOptionsValidator`; add CommunityString check to `DevicesOptionsValidator` | `TenantVectorOptionsValidator.cs`, `DevicesOptionsValidator.cs` |
+| Phase C | `DeviceRegistry.BuildPollGroups` skip behavior + unit tests | `DeviceRegistry.cs`, test file |
+| Phase D | `TenantVectorRegistry` refactor: remove deps, use `metric.IntervalSeconds`, build commands; `Tenant` commands; DI registration | `TenantVectorRegistry.cs`, `Tenant.cs`, `ServiceCollectionExtensions.cs` |
+| Phase E | ConfigMap rename + YAML updates | `TenantVectorWatcherService.cs`, `simetra-tenantvector.yaml` (rename), `Program.cs` |
 
-Both existing watchers (`OidMapWatcherService`, `DeviceWatcherService`) share identical structure:
-1. Initial load via `ReadNamespacedConfigMapAsync` (non-watch, gets current state immediately)
-2. Watch loop with `ListNamespacedConfigMapWithHttpMessagesAsync` + `WatchAsync`
-3. Handles `Added`/`Modified`: call `Handle...Async()`
-4. Handles `Deleted`: log warning, retain current state
-5. On normal watch closure (30-min timeout): reconnect silently
-6. On unexpected disconnect: log warning, delay 5s, reconnect
-7. `SemaphoreSlim(1,1)` for reload serialization
-
-`CommandMapWatcherService` must follow this structure exactly. Copy from `OidMapWatcherService` and change `ConfigMapName`, `ConfigKey`, and the service dependency type.
-
-### Pattern: Graceful Degrade on Parse Failure
-
-Both existing watchers return early (skip reload) on JSON parse failure, retaining the previous map. `CommandMapWatcherService` must follow the same pattern. This keeps the last-known-good state active.
+Phases A and B can be combined. Phases C and D can be combined if tests are included. Phase E is always last.
 
 ---
 
-## Anti-Patterns to Avoid
+## Confidence Assessment
 
-### Anti-Pattern 1: Making Device Load Wait for OID Map Load
-
-**What:** Blocking `DeviceWatcherService.HandleConfigMapChangedAsync` until `OidMapService` has a non-empty map.
-
-**Why bad:** Creates startup ordering coupling between two independent `BackgroundService` instances. If the OID map fails to load (network issue), device polling never starts. The existing architecture deliberately avoids such dependencies.
-
-**Instead:** Attempt name resolution, log unresolved entries as warnings, proceed with raw OID strings (or leave the entry as-is). The device will poll successfully; the "Unknown" metric name issue is caught separately by Feature 1 warnings.
-
-### Anti-Pattern 2: Putting Validation in OidMapService.UpdateMap
-
-**What:** Adding duplicate detection or any validation logic to `OidMapService.UpdateMap`.
-
-**Why bad:** `UpdateMap` is called from multiple entry points (watcher in K8s mode, `Program.cs` in local-dev mode). Mixing validation into the atomic swap method conflates data quality with state management. Validation should live at the parse/ingest boundary, not in the service's core swap method.
-
-**Instead:** Validate in `OidMapWatcherService.HandleConfigMapChangedAsync`, before calling `UpdateMap`.
-
-### Anti-Pattern 3: Reverse Map as Dictionary<string, List<string>>
-
-**What:** Building the reverse map as `MetricName -> List<OID>` to handle duplicates.
-
-**Why bad:** Command dispatch needs exactly one OID per name. Exposing ambiguity at the API level pushes the resolution decision to every caller. Feature 1 (warnings) is the right mechanism for surfacing the ambiguity; Feature 2 (reverse map) can safely use last-writer-wins.
-
-**Instead:** `FrozenDictionary<string, string>` (one-to-one), built with last-writer-wins. The warning from Feature 1 makes the ambiguity visible to operators.
-
-### Anti-Pattern 4: Merging OID Map and Command Map
-
-**What:** Adding `commandmaps.json` content as a second section of `simetra-oidmaps`, or adding a `Commands` property to `OidMapService`.
-
-**Why bad:** Read-OIDs (poll targets) and write-OIDs (SET targets) have different lifecycles, different audiences (metrics team vs operations team), and different validation rules. Coupling them into one service creates a class with two unrelated responsibilities.
-
-**Instead:** Separate `CommandMapService` / `CommandMapWatcherService` / `simetra-commandmaps` ConfigMap.
-
-### Anti-Pattern 5: Rebuilding the Quartz Job Key After Name Resolution
-
-**What:** Using resolved MetricNames (rather than OID strings or the device ConfigAddress) in Quartz job key construction inside `DynamicPollScheduler`.
-
-**Why bad:** The Quartz job key is currently `metric-poll-{device.ConfigAddress}_{device.Port}-{pollGroupIndex}`. It is based on the stable device identity. If OID-to-name resolution is inserted before `DeviceRegistry.ReloadAsync`, the device options have OID strings again by the time `DynamicPollScheduler` runs. Job key construction is unaffected.
-
-**Instead:** Human-name resolution replaces metric names with OID strings inside `DeviceOptions.MetricPolls[].Oids` before passing to `DeviceRegistry`. The scheduler sees only raw OID strings -- no change to job keys or job data maps.
+| Area | Confidence | Basis |
+|------|------------|-------|
+| `TenantVectorRegistry` DeviceRegistry removal | HIGH | Direct code read; both usages (`ResolveIp`, `DeriveIntervalSeconds`) identified and traced |
+| `MetricSlotOptions.IntervalSeconds` new field | HIGH | Absence confirmed by reading the model file |
+| `TenantCommandOptions` new model | HIGH | `TenantOptions.Commands` does not exist; no `Commands` field anywhere in config models |
+| `DeviceRegistry.BuildPollGroups` skip | HIGH | Current code returns all groups regardless of resolved count; skip behavior is a 5-line change |
+| CommunityString validation placement | HIGH | Existing validator pattern is clear; `CommunityStringHelper` prefix constant already defined |
+| ConfigMap rename scope | MEDIUM | Rename touches watcher constants, YAML, Program.cs -- exhaustive list requires grep verification |
+| "Name → CommunityString rename" scope | LOW | Current `DeviceOptions` already has both `Name` and `CommunityString`; the rename target is unclear from milestone description; needs clarification |
+| `TenantVectorFanOutBehavior` DeviceRegistry dep | HIGH | Code read confirms port lookup via DeviceRegistry; removing it requires routing key model change (deferred) |
 
 ---
 
-## Build Order
+## Open Questions for Roadmap
 
-Dependencies flow downward. Each step is independently testable before the next.
+1. **DNS resolution in `TenantVectorRegistry`:** If `IDeviceRegistry` is removed, how should DNS names in `MetricSlotOptions.Ip` be handled? Options: require resolved IPs only, or add `Dns.GetHostAddressesAsync` in `Reload()`. The current `ResolveIp()` delegates to `DeviceRegistry` which already resolved the DNS. A direct DNS call in `Reload()` works but makes `Reload()` async (currently synchronous). Recommend either: (a) require IP-only in tenant config, or (b) make `Reload()` return `Task` and resolve DNS directly.
 
-### Step 1: Reverse Lookup Index (OidMapService change)
+2. **"Name → CommunityString rename" clarification:** The milestone description mentions this but both properties already exist in `DeviceOptions` with the correct names. Either this refers to a model not yet identified, or it is referring to adding `CommunityString` as a new required field in a context where `Name` was previously repurposed. Needs clarification before Phase B is planned.
 
-**Files:** `Pipeline/IOidMapService.cs` (+`ResolveOid` method), `Pipeline/OidMapService.cs` (`_reverseMap` field, `BuildReverseMap`, `ResolveOid` impl)
-
-**Tests:** Unit tests for `ResolveOid` (found, not-found, duplicate-name last-writer-wins, case-insensitive, heartbeat seed OID is in reverse map)
-
-**Dependencies:** None -- self-contained change to existing service
-
-**Why first:** Feature 3 (human-name device config) depends on `IOidMapService.ResolveOid`. Feature 2 must exist before Feature 3 can be built.
-
----
-
-### Step 2: OID Map Duplicate Validation (OidMapWatcherService change)
-
-**Files:** `Services/OidMapWatcherService.cs` (`ValidateDuplicateMetricNames` private method, call site in `HandleConfigMapChangedAsync`)
-
-**Tests:** Unit test with mocked `IOidMapService`: feed a map with duplicates, verify `LogWarning` fires with correct MetricName and OID list. Feed a map without duplicates, verify no warning. Reload does not block on duplicate detection.
-
-**Dependencies:** Step 1 completed (IOidMapService interface stable -- but this step does NOT use ResolveOid; can be done in parallel with Step 1)
-
-**Why here:** Independent of Steps 1 and 3. Can be developed in parallel but keeps the interface stable before adding watcher dependencies.
-
----
-
-### Step 3: Human-Name Device Config (DeviceWatcherService change)
-
-**Files:** `Services/DeviceWatcherService.cs` (add `IOidMapService` parameter, add `ResolveHumanNames` private method, call it in `HandleConfigMapChangedAsync`)
-
-**Tests:** Unit test: feed `DeviceOptions` with metric names, mock `IOidMapService.ResolveOid` returning OIDs, verify entries replaced. Feed unresolvable name, verify `LogWarning`, entry left as-is. Feed raw OID string, verify `IsRawOid` returns true and entry unchanged.
-
-**Dependencies:** Step 1 (`ResolveOid` on `IOidMapService`)
-
-**Why here:** Cannot build until `IOidMapService.ResolveOid` exists. Must come before Step 4 so the device config can reference command OIDs by name once command map is loaded.
-
----
-
-### Step 4: CommandMapService (new service)
-
-**Files:** `Configuration/CommandMapOptions.cs`, `Pipeline/ICommandMapService.cs`, `Pipeline/CommandMapService.cs`
-
-**Tests:** Unit tests identical in structure to OidMapService tests: initial state (empty map), `UpdateMap` (volatile swap), `ResolveCommandOid` (found / not-found), `EntryCount`.
-
-**Dependencies:** None -- pure new code, no changes to existing services
-
-**Why here:** CommandMapService can be built in parallel with Steps 1-3. No cross-dependency.
-
----
-
-### Step 5: CommandMapWatcherService + DI + Config Files
-
-**Files:** `Services/CommandMapWatcherService.cs`, additions to `Extensions/ServiceCollectionExtensions.cs`, additions to `Program.cs`, `config/commandmaps.json`, `deploy/k8s/snmp-collector/simetra-commandmaps.yaml`
-
-**Tests:** Unit test with mocked `IKubernetes` and `ICommandMapService`. Verify initial load path, Added/Modified event path, Deleted event path (retain + warn), JSON parse failure path (skip + log). Integration: deploy ConfigMap in K8s, verify `CommandMapService.EntryCount > 0`.
-
-**Dependencies:** Step 4 (`ICommandMapService` must exist)
-
-**Why last:** Wiring and infrastructure. Can be done after Step 4 independently; no dependency on Steps 1-3.
-
----
-
-## Startup Ordering Summary
-
-After all five features are built, the startup sequence becomes:
-
-```
-BackgroundService startup (concurrent, .NET Generic Host):
-  OidMapWatcherService       -- loads simetra-oidmaps, populates OidMapService
-  DeviceWatcherService       -- loads simetra-devices, resolves human names via OidMapService
-                             -- NOTE: OidMapService may still be empty at this point
-                             -- unresolvable names logged as warnings; raw OID left as-is
-  CommandMapWatcherService   -- loads simetra-commandmaps, populates CommandMapService
-  TenantVectorWatcherService -- loads simetra-tenantvector, populates TenantVectorRegistry
-  K8sLeaseElection           -- acquires or waits for leadership
-
-Quartz scheduler startup (after BackgroundServices start):
-  DynamicPollScheduler initialized with devices from DeviceRegistry
-  Metric poll jobs scheduled
-```
-
-The race between OidMapWatcher and DeviceWatcher is a known condition. It is handled by the graceful-degrade strategy in Feature 3. Devices using only raw OID strings in their `MetricPolls` are unaffected.
-
----
-
-## Scalability Notes
-
-| Concern | Impact |
-|---------|--------|
-| Reverse map memory | Adds one `FrozenDictionary` of the same size as `_map` (~100 entries for current OID set) -- negligible |
-| `ResolveOid` lookup cost | O(1) FrozenDictionary lookup -- same cost as forward `Resolve()` |
-| Human-name resolution at reload | O(total OIDs across all devices * map lookup) -- runs once per ConfigMap change, not per poll cycle -- negligible |
-| CommandMapService size | Expected small (tens of commands) -- trivial memory overhead |
-| CommandMapWatcher startup | Adds one K8s watch connection -- same pattern as existing watchers |
-
----
-
-## Sources
-
-All findings based on direct codebase analysis (HIGH confidence):
-
-- `src/SnmpCollector/Pipeline/OidMapService.cs` -- internal state structure, `UpdateMap`, `MergeWithHeartbeatSeed`, `BuildFrozenMap`, `ContainsMetricName`
-- `src/SnmpCollector/Pipeline/IOidMapService.cs` -- current interface contract
-- `src/SnmpCollector/Services/OidMapWatcherService.cs` -- `HandleConfigMapChangedAsync` parse/validate/update sequence; watcher pattern template
-- `src/SnmpCollector/Services/DeviceWatcherService.cs` -- existing constructor dependencies; `HandleConfigMapChangedAsync` flow
-- `src/SnmpCollector/Services/DynamicPollScheduler.cs` -- job key construction, `ReconcileAsync` inputs
-- `src/SnmpCollector/Pipeline/DeviceRegistry.cs` -- `ReloadAsync` signature, FrozenDictionary swap pattern
-- `src/SnmpCollector/Pipeline/DeviceInfo.cs` -- record shape (Name, ConfigAddress, ResolvedIp, Port, PollGroups)
-- `src/SnmpCollector/Configuration/DeviceOptions.cs` -- `MetricPolls` property type (`List<MetricPollOptions>`)
-- `src/SnmpCollector/Configuration/MetricPollOptions.cs` -- `Oids: List<string>`
-- `src/SnmpCollector/Extensions/ServiceCollectionExtensions.cs` -- DI registration patterns, K8s block, local-dev patterns
-- `src/SnmpCollector/config/oidmaps.json` -- current OID map format (flat JSON object)
-- `src/SnmpCollector/config/devices.json` -- current devices format (JSON array, raw OID strings in MetricPolls)
-- `deploy/k8s/snmp-collector/simetra-oidmaps.yaml` -- ConfigMap structure (`oidmaps.json` key)
-- `deploy/k8s/snmp-collector/simetra-devices.yaml` -- ConfigMap structure (`devices.json` key)
+3. **`TenantVectorOptions.SectionName` with rename:** If ConfigMap key changes to `tenants.json` but local dev `tenantvector.json` also renames, what is the IConfiguration binding section key? Currently `"TenantVector"`. If this changes to `"Tenants"`, the IConfiguration binding chain must also update.

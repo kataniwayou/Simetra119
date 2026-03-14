@@ -222,7 +222,7 @@ Mistakes that cause delays, test failures, or operational confusion.
 
 ---
 
-## Phase-Specific Warnings
+## Phase-Specific Warnings (v1.6)
 
 | Phase Topic | Likely Pitfall | Mitigation |
 |-------------|---------------|------------|
@@ -242,20 +242,375 @@ Mistakes that cause delays, test failures, or operational confusion.
 
 ---
 
-## Sources
+---
 
-All findings derived from direct source code inspection. No external sources required; all claims are HIGH confidence.
+# v1.7 Addendum: Configuration Consistency & Tenant Commands
 
-- `/c/Users/UserL/source/repos/Simetra118/src/SnmpCollector/Pipeline/OidMapService.cs` — UpdateMap sequence, MergeWithHeartbeatSeed, FrozenSet values, EntryCount
-- `/c/Users/UserL/source/repos/Simetra118/src/SnmpCollector/Services/OidMapWatcherService.cs` — reload lock scope, no cross-service notification
-- `/c/Users/UserL/source/repos/Simetra118/src/SnmpCollector/Services/DeviceWatcherService.cs` — independent reload lock, no oidmap coordination
-- `/c/Users/UserL/source/repos/Simetra118/src/SnmpCollector/Services/DynamicPollScheduler.cs` — job key format `metric-poll-{configAddress}_{port}-{pi}`, ReconcileAsync diff logic
-- `/c/Users/UserL/source/repos/Simetra118/src/SnmpCollector/Jobs/MetricPollJob.cs` — direct `new ObjectIdentifier(oid)` without pre-validation (line 80-83)
-- `/c/Users/UserL/source/repos/Simetra118/src/SnmpCollector/Pipeline/TenantVectorRegistry.cs` — routing index keyed by metric name, no oidmap-change trigger
-- `/c/Users/UserL/source/repos/Simetra118/src/SnmpCollector/Pipeline/DeviceRegistry.cs` — `_byName` silent overwrite on duplicate name, ReloadAsync pattern
-- `/c/Users/UserL/source/repos/Simetra118/src/SnmpCollector/Configuration/Validators/DevicesOptionsValidator.cs` — IP+Port duplicate check, no name uniqueness check
-- `/c/Users/UserL/source/repos/Simetra118/src/SnmpCollector/Extensions/ServiceCollectionExtensions.cs` — IsInCluster() gate pattern, local-dev else branch
-- `/c/Users/UserL/source/repos/Simetra118/src/SnmpCollector/config/devices.json` — raw OID format in MetricPolls.Oids (current baseline)
-- `/c/Users/UserL/source/repos/Simetra118/src/SnmpCollector/config/oidmaps.json` — 98 entries, all currently unique values
-- `/c/Users/UserL/source/repos/Simetra118/tests/e2e/scenarios/` — fixture-based format, 27 scenarios, manual YAML maintenance
-- `/c/Users/UserL/source/repos/Simetra118/tests/SnmpCollector.Tests/Pipeline/OidMapServiceTests.cs` — existing test coverage gaps confirmed
+**Researched:** 2026-03-14
+**Confidence:** HIGH — all pitfalls derived from direct source inspection of this repository
+
+The pitfalls below are specific to adding: self-describing tenant entries, CommunityString
+validation, Name → CommunityString property rename, tenantvector.json → tenants.json rename,
+poll group skip for zero-OID groups, and command entries with Value/ValueType in tenant config.
+
+---
+
+## Critical Pitfalls (v1.7)
+
+---
+
+### v1.7 Pitfall A: ConfigMap Data Key Rename Silently Kills Initial Load
+
+**What goes wrong:**
+`TenantVectorWatcherService` has two hard-coded constants at lines 31–36:
+
+```
+internal const string ConfigMapName = "simetra-tenantvector";
+internal const string ConfigKey = "tenantvector.json";
+```
+
+`HandleConfigMapChangedAsync` does:
+```csharp
+if (!configMap.Data.TryGetValue(ConfigKey, out var jsonContent))
+```
+
+If the YAML `data:` key is renamed to `tenants.json` without updating `ConfigKey`, the
+`TryGetValue` call returns false. The watcher logs `"ConfigMap does not contain key
+tenantvector.json -- skipping reload"` and leaves the registry with zero tenants. Both the
+initial load path (`LoadFromConfigMapAsync`) and the ongoing watch loop share this code path.
+
+**Why it happens:** The rename touches three independent artifacts: the C# constant, the
+YAML `data:` stanza, and the local dev `config/tenantvector.json` filename. They are not
+linked at compile time. Any partial rename is valid at the compiler level but broken at
+runtime.
+
+**Consequences:** Pod starts with zero tenants (only heartbeat). `snmp_tenantvector_routed_total`
+never increments. E2E scenario 28b (`TenantVectorWatcher initial load detected`) fails because
+the expected log message never appears. The failure is indistinguishable from "tenant vector
+has no entries" or a routing bug.
+
+**Warning signs:**
+- Log: `"ConfigMap simetra-tenantvector does not contain key tenantvector.json"` at pod startup
+- `TenantCount = 1` (heartbeat only) after initial load completes
+- `snmp_tenantvector_routed_total` delta is zero despite confirmed poll activity
+
+**Prevention:** Rename `ConfigKey`, the YAML `data:` key, and the local `config/` file
+atomically in a single commit. Add an assertion to E2E scenario 28b that specifically checks
+the new key name appears in pod logs (not just the ConfigMap name).
+
+**Phase address:** The phase introducing the tenantvector.json → tenants.json rename.
+
+---
+
+### v1.7 Pitfall B: Name → CommunityString Rename Silently Produces null via JSON Fallback
+
+**What goes wrong:**
+`DeviceWatcherService.HandleConfigMapChangedAsync` deserializes with:
+```csharp
+PropertyNameCaseInsensitive = true
+```
+If old ConfigMaps contain `"Name": "Simetra.MyDevice"` in the community string position, and
+the C# model property is now `CommunityString`, deserialization produces
+`CommunityString = null` with no error. `System.Text.Json` silently ignores unknown JSON
+properties.
+
+`DeviceRegistry` then passes `d.CommunityString` (null) to `DeviceInfo`, which is documented
+as: "If null or empty, falls back to the `Simetra.{Name}` convention." The device starts
+polling using the derived convention string instead of the explicitly configured one.
+
+**Why it happens:** The validator (`DevicesOptionsValidator`) runs only at startup via
+IOptions, not in the hot-reload path. It validates `Name` (device name), `IpAddress`, and
+`Port` but has no check that catches a null `CommunityString` when one was previously set.
+The `CommunityString` field is already named correctly in the current source (`DeviceOptions`
+line 31), so this pitfall applies specifically if there are any older format config files or
+ConfigMaps still using `"Name"` as the community string property name.
+
+**Consequences:** Any device relying on an explicit community string different from
+`Simetra.{DeviceName}` silently falls back to the derived convention. SNMP GETs start
+returning authentication failures. These look like device unreachability, not config errors.
+
+**Warning signs:**
+- `snmp_poll_errors_total` increases for specific devices after deployment
+- Those devices were reachable before the deployment
+- Debug: `DeviceInfo.CommunityString` is null for affected devices in log output
+
+**Prevention:** Before the rename ships, grep all config files and K8s ConfigMap YAMLs for
+`"Name":` appearing in the community string context. The `device-added-configmap.yaml`
+fixture already uses `"CommunityString"` correctly — verify all other fixtures match.
+
+**Phase address:** Any phase touching the DeviceOptions property name.
+
+---
+
+### v1.7 Pitfall C: Self-Describing Tenant Entries — DNS Name in Routing Index, Resolved IP in Incoming Packet
+
+**What goes wrong:**
+`TenantVectorRegistry.Reload` calls `ResolveIp(metric.Ip)` which iterates
+`_deviceRegistry.AllDevices` to translate a DNS name (e.g.,
+`"npb-simulator.simetra.svc.cluster.local"`) to its resolved IPv4 (e.g., `"10.96.1.5"`).
+The routing index key is built using the **resolved** IP.
+
+`TenantVectorFanOutBehavior` routes via `msg.AgentIp.ToString()` — the IP from the incoming
+SNMP packet. These match.
+
+If self-describing tenant entries remove the DeviceRegistry dependency and `ResolveIp` is
+no longer called during `Reload`, the routing index key becomes the raw DNS name string.
+The incoming SNMP packet still arrives with the resolved IP. `TryRoute` is called with
+`("10.96.1.5", 161, "npb_cpu_util")`, the index contains
+`("npb-simulator.simetra.svc.cluster.local", 161, "npb_cpu_util")` — miss every time.
+
+**Why it happens:** Removing `_deviceRegistry` from `TenantVectorRegistry` without replacing
+the DNS resolution step. `ResolveIp` and `DeriveIntervalSeconds` both depend on
+`_deviceRegistry` — they will be compile errors only if `_deviceRegistry` is removed from
+the constructor. If the field is kept but the methods are not called, the routing index uses
+unresolved names silently.
+
+**Consequences:** `snmp_tenantvector_routed_total` stays at zero for every DNS-name tenant.
+Time-series slots are never written. `carried_over=0` on every reload. Indistinguishable
+from misconfigured tenant entries.
+
+**Warning signs:**
+- `TenantVectorRegistry reloaded: ... carried_over=0` on consecutive reloads with unchanged config
+- `snmp_tenantvector_routed_total` delta is zero despite `snmp_poll_executed_total` incrementing
+
+**Prevention:** When removing or weakening the DeviceRegistry dependency, ensure `Reload`
+still resolves DNS names to IPs before building routing index keys. If DeviceRegistry is
+removed, replace with direct `Dns.GetHostAddressesAsync` in `Reload`. Write an integration
+test: configure a tenant with a DNS name, confirm routing occurs after a poll.
+
+**Phase address:** The phase introducing self-describing tenant entries.
+
+---
+
+### v1.7 Pitfall D: Zero-OID Poll Group Still Schedules a Quartz Job
+
+**What goes wrong:**
+`BuildPollGroups` in `DeviceRegistry` creates a `MetricPollInfo` even when all
+`MetricNames` fail resolution and `resolvedOids` is empty. The current code (lines 186–192):
+
+```csharp
+return new MetricPollInfo(
+    PollIndex: index,
+    Oids: resolvedOids.AsReadOnly(),   // could be empty list
+    IntervalSeconds: poll.IntervalSeconds,
+    TimeoutMultiplier: poll.TimeoutMultiplier);
+```
+
+`DynamicPollScheduler.ReconcileAsync` then includes this group in `desiredJobs` and
+schedules it. The Quartz job fires on interval, attempts to SNMP GET an empty OID list.
+The Phase 31 CONTEXT.md decision says "If zero names resolve in a group, no job for that
+group" — but this is not yet implemented in the code.
+
+**Why it happens:** The design intent (skip zero-OID groups) was documented in CONTEXT.md
+but not yet enforced in `BuildPollGroups`. Any phase that depends on the skip behavior
+before it is coded will schedule empty-OID poll jobs.
+
+**Consequences:** The Quartz job fires at interval with an empty OID list. `SharpSnmpClient`
+behavior with empty GET OIDs is undefined — it may throw, send a malformed PDU, or return
+an error response. Either way, `snmp_poll_errors_total` inflates and the device may log
+spurious authentication requests.
+
+**Warning signs:**
+- Log: `"Device 'X' poll N: resolved 0/N metric names"` with no subsequent "skipping" message
+- `snmp_poll_errors_total` increases for a device after reload where some metrics were
+  unresolvable
+- A Quartz job exists with zero OIDs in its `MetricPollInfo`
+
+**Prevention:** Implement the skip guard in `BuildPollGroups` before any phase depends on
+it. Add a unit test: device with all-unresolvable metric names → `BuildPollGroups` returns
+zero groups (or returns groups with non-empty OID lists only).
+
+**Phase address:** Whichever phase implements the zero-OID skip — must be completed before
+any downstream phase relies on the behavior.
+
+---
+
+## Moderate Pitfalls (v1.7)
+
+---
+
+### v1.7 Pitfall E: Rolling Deployment Format Divergence — Old Pods Skip Reload
+
+**What goes wrong:**
+During a K8s rolling update, old and new pods run simultaneously. The ConfigMap is a single
+cluster resource. If the ConfigMap data key is renamed (e.g., `tenantvector.json` →
+`tenants.json`) and the ConfigMap is updated while old pods are still running:
+
+- Old pods: watch fires, `TryGetValue("tenantvector.json")` misses, logs "skipping reload,"
+  retains previous in-memory state (tolerable but config is now stale)
+- New pods: `TryGetValue("tenants.json")` hits, reloads correctly
+
+If the ConfigMap is updated before the old pods are terminated, the old pods retain their
+last valid config until they are replaced — not ideal but survivable. If the ConfigMap is
+updated after the rollout completes but new pods started before the ConfigMap was present,
+new pods start with empty registry and rely on the watch loop to recover.
+
+**Consequences:** During the overlap window, pods in the same deployment have different
+active configs. A tenant metric might route correctly on one pod and miss on another.
+This is visible in Prometheus as inconsistent `snmp_tenantvector_routed_total` per pod.
+
+**Warning signs:**
+- Mix of `"tenantvector.json"` and `"tenants.json"` appears in logs from different pods
+  at the same time
+- `TenantCount` varies between pods serving the same deployment
+
+**Prevention:** Apply ConfigMap changes before triggering rollout. The watch loop's
+initial-load failure path already has "will retry via watch loop" resilience. Standard
+procedure: `kubectl apply -f configmaps/ && kubectl rollout restart deployment/snmp-collector`.
+Document this order in the deployment runbook.
+
+**Phase address:** Any phase renaming a ConfigMap name or data key.
+
+---
+
+### v1.7 Pitfall F: CommunityString Validation Logic Diverges From Runtime Extraction
+
+**What goes wrong:**
+`CommunityStringHelper.TryExtractDeviceName` uses:
+```csharp
+community.StartsWith("Simetra.", StringComparison.Ordinal)
+&& community.Length > CommunityPrefix.Length
+```
+
+This is case-sensitive (Ordinal) and requires at least one character after the prefix.
+If a load-time validator checks community strings against a different rule — e.g., a
+case-insensitive regex `Simetra\..+` or a simpler `StartsWith("Simetra.")` without the
+length guard — the validator passes strings that runtime extraction rejects (or vice versa).
+
+Specific edge cases:
+- `"Simetra."` (empty suffix): length guard rejects at runtime, but `Simetra\..+` also
+  rejects — these agree. However `Simetra\..*` passes and runtime rejects. One character
+  matters.
+- `"simetra.MyDevice"` (lowercase): runtime rejects (Ordinal), but a case-insensitive
+  validator passes. SNMP AUTH fails silently.
+- `"Simetra.My Device"` (space in suffix): runtime extracts `"My Device"`, device lookup
+  is OrdinalIgnoreCase against device names — space in name likely does not match any
+  registered device name.
+
+**Prevention:** Write the load-time validator to call `CommunityStringHelper.TryExtractDeviceName`
+directly — not a separate regex. This guarantees validation and runtime share identical logic.
+Test: pass `"simetra.device"` (lowercase) to the validator — expect failure.
+
+**Phase address:** The phase adding CommunityString format validation at load time.
+
+---
+
+### v1.7 Pitfall G: Value/ValueType Mismatch for Command Entries Is a Silent Runtime Crash
+
+**What goes wrong:**
+Command entries with `Value` (a string) and `ValueType` (an enum like `Integer32`, `OctetString`)
+in tenant config need validation that `Value` is parseable as `ValueType`. If the validator
+only checks that `Value` is non-empty and `ValueType` is a recognized enum value, a config
+like `{ "ValueType": "Integer32", "Value": "not-a-number" }` passes validation. At command
+execution time, the conversion attempt throws — likely an `InvalidOperationException` or
+`FormatException` in the SNMP PDU builder.
+
+**Why it happens:** Validators typically check structural completeness, not semantic
+correctness. Parsing `Value` as `ValueType` is a semantic check that must be explicitly added.
+
+**Consequences:** Command fails at execution time. The error is logged but the invalid
+config is not flagged at load time. Operators see intermittent command failures with cryptic
+PDU construction errors rather than a clear "invalid value for type" config error.
+
+**Prevention:** At validation time, for each command entry, attempt to parse `Value` as the
+declared `ValueType` using the same conversion logic used at execution time. Reject the
+config with a structured error: `"Command entry: Value 'not-a-number' cannot be parsed as
+Integer32"`. This produces a clear operator error at config load, not a runtime exception.
+
+**Phase address:** The phase adding command entry validation in tenant config.
+
+---
+
+### v1.7 Pitfall H: Carry-Over Key Mismatch Resets All Time-Series Slots on Every Reload
+
+**What goes wrong:**
+`TenantVectorRegistry.Reload` builds `oldSlotLookup` keyed on `holder.Ip`. If a previous
+reload resolved DNS names to IPs, old keys are resolved IPs. A new reload that resolves the
+same DNS names differently (e.g., due to a pod restart where DNS TTL caused a different IP
+resolution) produces new keys that miss the old lookup. `carried_over = 0`, all time-series
+samples are discarded.
+
+More directly: if the IP used to build routing keys changes (DNS TTL expiry, cluster
+reschedule), the carry-over mechanism silently loses all time-series history on every reload.
+
+**Why it happens:** The key used in `oldSlotLookup` (from `holder.Ip`) and the key used for
+new holders (from `ResolveIp(metric.Ip)`) must be produced by the same resolution at the
+same point in time. If DNS resolution produces different IPs across reloads, keys diverge.
+
+**Warning signs:**
+- `TenantVectorRegistry reloaded: ... carried_over=0` consistently on hot-reloads where
+  config has not changed
+- Debug log: `"TimeSeries holder: ... samples=0"` immediately after reload despite history
+  existing before
+
+**Prevention:** Normalize carry-over keys to use the raw config address (before DNS
+resolution), not the resolved IP. The routing index still uses resolved IPs for runtime
+matching, but carry-over uses the stable config key. Or: design carry-over to use metric
+names and the config-level address as the key, not the resolved IP.
+
+**Phase address:** The phase where tenant metric IPs change their resolution strategy.
+
+---
+
+### v1.7 Pitfall I: E2E Scenario 28 Fixtures Reference tenantvector.json by Name — Break After Rename
+
+**What goes wrong:**
+E2E scenario 28d (`TenantVector hot-reload detects added tenant`) applies an inline
+`kubectl apply` with a hardcoded ConfigMap data key `tenantvector.json` (line 108 of
+`28-tenantvector-routing.sh`). After renaming the data key to `tenants.json`, this inline
+fixture still uses `tenantvector.json`. The watcher sees the update but reads an empty
+data block (wrong key), skips reload, and logs "skipping reload." The scenario then checks
+for `"tenants=4"` in logs, which never appears. Scenario 28d fails.
+
+The same scenario also checks `DESCRIBE_OUTPUT` for `"simetra-tenantvector"` (the ConfigMap
+name, not the key) — this check is unaffected by the data key rename. So 28a passes, 28b
+may pass (initial load from correct key), but 28d fails.
+
+**Warning signs:**
+- Scenario 28d fails: `"No pod logged 'reloaded' with 'tenants=4' within 30s window"`
+- Pod logs contain `"ConfigMap does not contain key tenantvector.json"` during scenario 28d
+
+**Prevention:** When renaming the data key, search `tests/e2e/scenarios/` for the old key
+name as a string, not just in fixture YAML files. Inline heredoc content in `.sh` files is
+not caught by grep on `*.yaml` files. Update scenario 28d's inline fixture at the same time
+as the YAML manifest.
+
+**Phase address:** The phase renaming tenantvector.json → tenants.json.
+
+---
+
+## Phase-Specific Warnings (v1.7)
+
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| tenantvector.json → tenants.json rename | ConfigKey constant mismatch kills initial load (Pitfall A) | Atomic rename: constant + YAML + local config + E2E inline fixtures |
+| tenantvector.json → tenants.json rename | E2E scenario 28d inline heredoc uses old key (Pitfall I) | Grep .sh files for old key name, not just .yaml files |
+| Name → CommunityString property rename | Silent JSON null deserialization (Pitfall B) | Grep all config files for old property name before merge |
+| Self-describing tenant entries | DNS name in routing index vs resolved IP in packets (Pitfall C) | Keep DNS resolution in Reload; integration test required |
+| Zero-OID poll group skip | Empty-OID job scheduled and fires (Pitfall D) | Implement skip guard before any dependent phase; unit test |
+| Rolling deployment | Format divergence between pod generations (Pitfall E) | Apply ConfigMap before `kubectl rollout restart` |
+| CommunityString format validation | Regex diverges from runtime TryExtractDeviceName (Pitfall F) | Use TryExtractDeviceName as the validator, not a standalone regex |
+| Value/ValueType for command entries | Type mismatch is silent at load time (Pitfall G) | Parse Value as ValueType at validation time |
+| Time-series carry-over after IP change | DNS re-resolution produces different keys, zeroes history (Pitfall H) | Use config-level address as carry-over key, not resolved IP |
+
+---
+
+## Sources (v1.7 Addendum)
+
+All findings derived from direct source inspection (HIGH confidence):
+
+- `src/SnmpCollector/Services/TenantVectorWatcherService.cs` — ConfigKey constant (line 36), initial load path
+- `src/SnmpCollector/Pipeline/TenantVectorRegistry.cs` — Reload, ResolveIp, carry-over logic, oldSlotLookup
+- `src/SnmpCollector/Pipeline/DeviceRegistry.cs` — BuildPollGroups (lines 156–194), zero-OID group creation
+- `src/SnmpCollector/Services/DynamicPollScheduler.cs` — job scheduling from MetricPollInfo with empty Oids
+- `src/SnmpCollector/Pipeline/Behaviors/TenantVectorFanOutBehavior.cs` — DeviceRegistry lookup for port resolution
+- `src/SnmpCollector/Pipeline/CommunityStringHelper.cs` — Ordinal comparison, length guard (line 19–21)
+- `src/SnmpCollector/Pipeline/DeviceInfo.cs` — CommunityString field, null = convention fallback
+- `src/SnmpCollector/Configuration/DeviceOptions.cs` — CommunityString property (already renamed in current code)
+- `src/SnmpCollector/Configuration/Validators/DevicesOptionsValidator.cs` — startup-only scope, no hot-reload path
+- `src/SnmpCollector/Configuration/Validators/TenantVectorOptionsValidator.cs` — current no-op validator
+- `deploy/k8s/snmp-collector/simetra-tenantvector.yaml` — data key `tenantvector.json` (line 7)
+- `deploy/k8s/snmp-collector/simetra-devices.yaml` — DNS names as IpAddress values
+- `tests/e2e/scenarios/28-tenantvector-routing.sh` — inline fixture at line 108 using `tenantvector.json`
+- `tests/e2e/fixtures/device-added-configmap.yaml` — already uses `CommunityString` correctly
+- `.planning/phases/31-human-name-device-config/31-CONTEXT.md` — zero-OID skip design decision
