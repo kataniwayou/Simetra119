@@ -45,6 +45,8 @@ public sealed class TenantVectorWatcherService : BackgroundService
     private readonly IKubernetes _kubeClient;
     private readonly TenantVectorRegistry _registry;
     private readonly TenantVectorOptionsValidator _validator;
+    private readonly IOidMapService _oidMapService;
+    private readonly IDeviceRegistry _deviceRegistry;
     private readonly ILogger<TenantVectorWatcherService> _logger;
     private readonly SemaphoreSlim _reloadLock = new(1, 1);
     private readonly string _namespace;
@@ -53,14 +55,221 @@ public sealed class TenantVectorWatcherService : BackgroundService
         IKubernetes kubeClient,
         TenantVectorRegistry registry,
         TenantVectorOptionsValidator validator,
+        IOidMapService oidMapService,
+        IDeviceRegistry deviceRegistry,
         ILogger<TenantVectorWatcherService> logger)
     {
         _kubeClient = kubeClient ?? throw new ArgumentNullException(nameof(kubeClient));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _validator = validator ?? throw new ArgumentNullException(nameof(validator));
+        _oidMapService = oidMapService ?? throw new ArgumentNullException(nameof(oidMapService));
+        _deviceRegistry = deviceRegistry ?? throw new ArgumentNullException(nameof(deviceRegistry));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _namespace = ReadNamespace();
+    }
+
+    /// <summary>
+    /// Validates, resolves IPs, and filters tenant vector options, returning a clean
+    /// <see cref="TenantVectorOptions"/> containing only valid entries with resolved IPs.
+    /// Invalid entries are logged as errors and excluded; the TEN-13 completeness gate
+    /// skips entire tenants missing Resolved metrics, Evaluate metrics, or commands.
+    /// </summary>
+    /// <param name="options">Raw options from ConfigMap or local dev file.</param>
+    /// <param name="oidMapService">OID map for MetricName existence checks (TEN-05).</param>
+    /// <param name="deviceRegistry">Device registry for IP+Port existence checks (TEN-07) and IP resolution.</param>
+    /// <param name="logger">Logger for per-entry skip and TEN-13 messages.</param>
+    /// <returns>A new <see cref="TenantVectorOptions"/> containing only valid, resolved tenants.</returns>
+    internal static TenantVectorOptions ValidateAndBuildTenants(
+        TenantVectorOptions options,
+        IOidMapService oidMapService,
+        IDeviceRegistry deviceRegistry,
+        ILogger logger)
+    {
+        var cleanTenants = new List<TenantOptions>();
+
+        for (var i = 0; i < options.Tenants.Count; i++)
+        {
+            var tenantOpts = options.Tenants[i];
+            var tenantId = !string.IsNullOrWhiteSpace(tenantOpts.Name)
+                ? tenantOpts.Name
+                : $"tenant-{i}";
+
+            var cleanMetrics = new List<MetricSlotOptions>();
+            int evaluateCount = 0;
+            int resolvedCount = 0;
+
+            // Per-metric entry validation (per-entry skip semantics).
+            for (var j = 0; j < tenantOpts.Metrics.Count; j++)
+            {
+                var metric = tenantOpts.Metrics[j];
+
+                // 1. Structural: empty Ip
+                if (string.IsNullOrWhiteSpace(metric.Ip))
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Metrics[{Index}] skipped: Ip is empty",
+                        tenantId, j);
+                    continue;
+                }
+
+                // 2. Structural: port out of range
+                if (metric.Port < 1 || metric.Port > 65535)
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Metrics[{Index}] skipped: Port {Port} is out of range [1, 65535]",
+                        tenantId, j, metric.Port);
+                    continue;
+                }
+
+                // 3. Structural: empty MetricName
+                if (string.IsNullOrWhiteSpace(metric.MetricName))
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Metrics[{Index}] skipped: MetricName is empty",
+                        tenantId, j);
+                    continue;
+                }
+
+                // 4. Role validation
+                if (metric.Role != "Evaluate" && metric.Role != "Resolved")
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Metrics[{Index}] skipped: Role '{Role}' is invalid (must be 'Evaluate' or 'Resolved')",
+                        tenantId, j, metric.Role);
+                    continue;
+                }
+
+                // 5. MetricName resolution (TEN-05): must exist in OID map
+                if (!oidMapService.ContainsMetricName(metric.MetricName))
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Metrics[{Index}] skipped: MetricName '{MetricName}' not found in OID map (TEN-05)",
+                        tenantId, j, metric.MetricName);
+                    continue;
+                }
+
+                // 6. IP+Port existence (TEN-07): device must be registered
+                if (!deviceRegistry.TryGetByIpPort(metric.Ip, metric.Port, out _))
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Metrics[{Index}] skipped: IP+Port '{Ip}:{Port}' not found in DeviceRegistry (TEN-07)",
+                        tenantId, j, metric.Ip, metric.Port);
+                    continue;
+                }
+
+                // Passed all validation — resolve IP via DeviceRegistry.AllDevices.
+                var resolvedIp = metric.Ip;
+                foreach (var device in deviceRegistry.AllDevices)
+                {
+                    if (string.Equals(device.ConfigAddress, metric.Ip, StringComparison.OrdinalIgnoreCase))
+                    {
+                        logger.LogDebug("Resolved tenant metric IP {ConfigIp} -> {ResolvedIp}", metric.Ip, device.ResolvedIp);
+                        resolvedIp = device.ResolvedIp;
+                        break;
+                    }
+                }
+
+                metric.Ip = resolvedIp;
+                cleanMetrics.Add(metric);
+
+                // Track role counts for TEN-13 gate.
+                if (metric.Role == "Evaluate") evaluateCount++;
+                else resolvedCount++;
+            }
+
+            // Per-command entry validation.
+            var cleanCommands = new List<CommandSlotOptions>();
+            for (var k = 0; k < tenantOpts.Commands.Count; k++)
+            {
+                var cmd = tenantOpts.Commands[k];
+
+                // 1. Structural: empty Ip
+                if (string.IsNullOrWhiteSpace(cmd.Ip))
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Commands[{Index}] skipped: Ip is empty",
+                        tenantId, k);
+                    continue;
+                }
+
+                // 2. Structural: port out of range
+                if (cmd.Port < 1 || cmd.Port > 65535)
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Commands[{Index}] skipped: Port {Port} is out of range [1, 65535]",
+                        tenantId, k, cmd.Port);
+                    continue;
+                }
+
+                // 3. Structural: empty CommandName
+                if (string.IsNullOrWhiteSpace(cmd.CommandName))
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Commands[{Index}] skipped: CommandName is empty",
+                        tenantId, k);
+                    continue;
+                }
+
+                // 4. ValueType validation (TEN-03)
+                if (cmd.ValueType != "Integer32" && cmd.ValueType != "IpAddress" && cmd.ValueType != "OctetString")
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Commands[{Index}] skipped: ValueType '{ValueType}' is invalid (must be 'Integer32', 'IpAddress', or 'OctetString') (TEN-03)",
+                        tenantId, k, cmd.ValueType);
+                    continue;
+                }
+
+                // 5. Empty Value
+                if (string.IsNullOrWhiteSpace(cmd.Value))
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Commands[{Index}] skipped: Value is empty",
+                        tenantId, k);
+                    continue;
+                }
+
+                // 6. IP+Port existence (TEN-07)
+                if (!deviceRegistry.TryGetByIpPort(cmd.Ip, cmd.Port, out _))
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Commands[{Index}] skipped: IP+Port '{Ip}:{Port}' not found in DeviceRegistry (TEN-07)",
+                        tenantId, k, cmd.Ip, cmd.Port);
+                    continue;
+                }
+
+                // TEN-06: CommandName stored as-is — resolution deferred to execution time.
+                logger.LogDebug(
+                    "Tenant '{TenantId}' Commands[{Index}]: CommandName '{CommandName}' stored as-is (resolution deferred to execution)",
+                    tenantId, k, cmd.CommandName);
+
+                cleanCommands.Add(cmd);
+            }
+
+            // TEN-13 post-validation completeness gate.
+            var missing = new List<string>(3);
+            if (resolvedCount == 0) missing.Add("no Resolved metrics remaining after validation");
+            if (evaluateCount == 0) missing.Add("no Evaluate metrics remaining after validation");
+            if (cleanCommands.Count == 0) missing.Add("no commands remaining after validation");
+
+            if (missing.Count > 0)
+            {
+                logger.LogError(
+                    "Tenant '{TenantId}' skipped: {Reason}",
+                    tenantId, string.Join("; ", missing));
+                continue;
+            }
+
+            cleanTenants.Add(new TenantOptions
+            {
+                Name = tenantOpts.Name,
+                Priority = tenantOpts.Priority,
+                Metrics = cleanMetrics,
+                Commands = cleanCommands
+            });
+        }
+
+        return new TenantVectorOptions { Tenants = cleanTenants };
     }
 
     /// <inheritdoc />
@@ -205,7 +414,8 @@ public sealed class TenantVectorWatcherService : BackgroundService
         await _reloadLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            _registry.Reload(options);
+            var cleanOptions = ValidateAndBuildTenants(options, _oidMapService, _deviceRegistry, _logger);
+            _registry.Reload(cleanOptions);
 
             _logger.LogInformation(
                 "Tenant vector reload complete for {ConfigMap}/{Key}",

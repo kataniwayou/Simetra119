@@ -122,13 +122,13 @@ if (!k8s.KubernetesClientConfiguration.IsInCluster())
                     tvElement.GetRawText(), jsonOptions);
             if (tvOptions != null)
             {
-                var tvValidator = app.Services.GetRequiredService<SnmpCollector.Configuration.Validators.TenantVectorOptionsValidator>();
-                var tvValidation = tvValidator.Validate(null, tvOptions);
-                if (!tvValidation.Failed)
-                {
-                    var tvRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.TenantVectorRegistry>();
-                    tvRegistry.Reload(tvOptions);
-                }
+                var oidMapService = app.Services.GetRequiredService<SnmpCollector.Pipeline.IOidMapService>();
+                var deviceRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.IDeviceRegistry>();
+                var tvLogger = app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SnmpCollector.Services.TenantVectorWatcherService>>();
+                var cleanOptions = SnmpCollector.Services.TenantVectorWatcherService.ValidateAndBuildTenants(
+                    tvOptions, oidMapService, deviceRegistry, tvLogger);
+                var tvRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.TenantVectorRegistry>();
+                tvRegistry.Reload(cleanOptions);
             }
         }
     }
