@@ -69,40 +69,40 @@ Requirements for CommunityString validation, self-describing tenant entries, ten
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CS-01 | TBD | Pending |
-| CS-02 | TBD | Pending |
-| CS-03 | TBD | Pending |
-| CS-04 | TBD | Pending |
-| CS-05 | TBD | Pending |
-| CS-06 | TBD | Pending |
-| CS-07 | TBD | Pending |
-| TEN-01 | TBD | Pending |
-| TEN-02 | TBD | Pending |
-| TEN-03 | TBD | Pending |
-| TEN-04 | TBD | Pending |
-| TEN-05 | TBD | Pending |
-| TEN-06 | TBD | Pending |
-| TEN-07 | TBD | Pending |
-| TEN-08 | TBD | Pending |
-| TEN-09 | TBD | Pending |
-| TEN-10 | TBD | Pending |
-| TEN-11 | TBD | Pending |
-| DEV-08 | TBD | Pending |
-| DEV-09 | TBD | Pending |
-| DEV-10 | TBD | Pending |
-| REN-01 | TBD | Pending |
-| REN-02 | TBD | Pending |
-| REN-03 | TBD | Pending |
-| REN-04 | TBD | Pending |
-| CLN-01 | TBD | Pending |
-| CLN-02 | TBD | Pending |
-| CLN-03 | TBD | Pending |
+| CS-01 | Phase 33 | Pending |
+| CS-02 | Phase 33 | Pending |
+| CS-03 | Phase 34 | Pending |
+| CS-04 | Phase 34 | Pending |
+| CS-05 | Phase 34 | Pending |
+| CS-06 | Phase 34 | Pending |
+| CS-07 | Phase 34 | Pending |
+| TEN-01 | Phase 33 | Pending |
+| TEN-02 | Phase 33 | Pending |
+| TEN-03 | Phase 33 | Pending |
+| TEN-04 | Phase 35 | Pending |
+| TEN-05 | Phase 35 | Pending |
+| TEN-06 | Phase 35 | Pending |
+| TEN-07 | Phase 34 | Pending |
+| TEN-08 | Phase 35 | Pending |
+| TEN-09 | Phase 33 | Pending |
+| TEN-10 | Phase 33 | Pending |
+| TEN-11 | Phase 34 | Pending |
+| DEV-08 | Phase 34 | Pending |
+| DEV-09 | Phase 34 | Pending |
+| DEV-10 | Phase 34 | Pending |
+| REN-01 | Phase 36 | Pending |
+| REN-02 | Phase 36 | Pending |
+| REN-03 | Phase 36 | Pending |
+| REN-04 | Phase 36 | Pending |
+| CLN-01 | Phase 35 | Pending |
+| CLN-02 | Phase 35 | Pending |
+| CLN-03 | Phase 34 | Pending |
 
 **Coverage:**
 - v1.7 requirements: 28 total
-- Mapped to phases: 0
-- Unmapped: 28 ⚠️
+- Mapped to phases: 28
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-14*
-*Last updated: 2026-03-14 after scope clarification — fully independent watchers, operator-supplied CommunityString on tenants*
+*Last updated: 2026-03-14 after v1.7 roadmap — all 28 requirements mapped to Phases 33-36*

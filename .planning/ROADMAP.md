@@ -9,6 +9,7 @@
 - ✅ **v1.4 E2E System Verification** - Phases 20-24 (shipped 2026-03-09)
 - ✅ **v1.5 Priority Vector Data Layer** - Phases 25-29 (shipped 2026-03-10)
 - ✅ **v1.6 Organization & Command Map Foundation** - Phases 30-32 (shipped 2026-03-13)
+- 🚧 **v1.7 Configuration Consistency & Tenant Commands** - Phases 33-36 (in progress)
 
 ## Phases
 
@@ -26,13 +27,8 @@ See `.planning/MILESTONES.md` for details.
 
 </details>
 
----
-
-### 🔄 v1.6 Organization & Command Map Foundation
-
-**Milestone Goal:** OID maps self-validate for integrity, devices.json accepts human-readable metric names, and a command map lookup table (prerequisite for future SNMP SET) is operational with hot-reload.
-
----
+<details>
+<summary>✅ v1.6 Organization & Command Map Foundation (Phases 30-32) - SHIPPED 2026-03-13</summary>
 
 #### Phase 30: OID Map Integrity
 
@@ -93,11 +89,82 @@ Plans:
 - [x] 32-02-PLAN.md — simetra-commandmaps K8s ConfigMap manifests (standalone + production)
 - [x] 32-03-PLAN.md — CommandMapWatcherService + DI wiring + local dev fallback + 10 validation tests
 
+</details>
+
+---
+
+### 🚧 v1.7 Configuration Consistency & Tenant Commands
+
+**Milestone Goal:** CommunityString becomes explicit and validated across all config layers, tenant entries become self-describing with a full Commands data model, TenantVectorRegistry drops its DeviceRegistry/OidMapService dependencies, and all config file names align to a consistent naming convention.
+
+---
+
+#### Phase 33: Config Model Additions
+
+**Goal**: All new C# types and fields that v1.7 requires exist in the codebase — tenant entries are fully self-describing in the options layer, the Commands data model has its complete shape, and optional observability fields are present. All additions are backward-compatible with existing configs.
+**Depends on**: Nothing (purely additive)
+**Requirements**: CS-01, CS-02, TEN-01, TEN-02, TEN-03, TEN-09, TEN-10
+**Success Criteria** (what must be TRUE):
+  1. `DeviceOptions` has a `CommunityString` property holding the full credential string (e.g. `"Simetra.NPB-01"`), and `DeviceInfo.Name` is derived from it via `CommunityStringHelper.TryExtractDeviceName()` at load time — no consumer has to change its use of the short name
+  2. `MetricSlotOptions` has `Device` and `CommunityString` string fields, plus an optional `IntervalSeconds` int field — a tenant config entry with all fields populated deserializes without error
+  3. `TenantOptions` has a `Commands` list of `CommandSlotOptions`, where each entry has Device, Ip, Port, CommunityString, CommandName, Value, and ValueType — a tenant config with a Commands array deserializes without error
+  4. `ValueType` on `CommandSlotOptions` is validated against the allowed set `{ "Integer32", "IpAddress", "OctetString" }` — a value outside the set logs an Error and skips that command entry; entries with valid ValueType are accepted
+  5. `TenantOptions` has an optional `Name` field — when present, it appears in log context instead of the synthetic `tenant-{index}` identifier; when absent, the auto-generated ID is used as before
+
+**Plans:** TBD
+
+---
+
+#### Phase 34: CommunityString Validation & MetricPollJob Cleanup
+
+**Goal**: Every CommunityString value in every config layer — devices, tenant metrics, tenant commands — is validated at load time against the `Simetra.*` pattern using `CommunityStringHelper.IsValidCommunityString()` as the single authoritative check. Invalid entries are skipped with structured Error logs. Duplicate device names are caught before silently overwriting the registry. Empty poll groups and the MetricPollJob CommunityString fallback are removed.
+**Depends on**: Phase 33 (CommunityString fields must exist on all options types before validation can reference them)
+**Requirements**: CS-03, CS-04, CS-05, CS-06, CS-07, DEV-08, DEV-09, DEV-10, TEN-07, TEN-11, CLN-03
+**Success Criteria** (what must be TRUE):
+  1. A devices.json entry with a missing, empty, or non-`Simetra.`-prefixed CommunityString is skipped entirely at load time — an Error-level structured log names the entry, the invalid value, and the validation rule; other device entries in the same file load normally
+  2. A tenant metric or command entry with an invalid CommunityString logs an Error with EntryType, EntryIndex, InvalidValue, ValidationRule, and ConfigMap source fields — the entry is skipped; sibling entries in the same tenant are unaffected
+  3. Two device entries in the same devices.json that resolve to the same short name (e.g. both yield `"NPB-01"`) produce a structured Error log naming both CommunityString values and the conflict — neither device is registered, preventing silent dictionary overwrite
+  4. A device whose entire poll group has zero resolvable MetricNames produces no Quartz job registration — a Warning log identifies the device name and skipped group; no empty SNMP GET is ever sent to the device
+  5. `MetricPollJob` uses `DeviceInfo.CommunityString` directly with no fallback derivation — the `?? CommunityStringHelper.DeriveFromDeviceName()` code path is gone; trap listener continues extracting device name from community string and routing via `DeviceRegistry.TryGetDeviceByName()` unchanged
+
+**Plans:** TBD
+
+---
+
+#### Phase 35: TenantVectorRegistry Refactor & Validator Activation
+
+**Goal**: `TenantVectorRegistry` is fully self-contained — it reads Device, Ip, CommunityString, and IntervalSeconds from config entries directly without calling `IDeviceRegistry` or `IOidMapService`, builds the Commands list from `CommandSlotOptions`, and the `TenantVectorOptionsValidator` enforces structural correctness on load. Unresolvable MetricNames are skipped with Error logs. CommandName lookup is deferred to execution time.
+**Depends on**: Phase 33 (model fields must exist), Phase 34 (CommunityString validation pattern established)
+**Requirements**: TEN-04, TEN-05, TEN-06, TEN-08, CLN-01, CLN-02
+**Success Criteria** (what must be TRUE):
+  1. `TenantVectorRegistry` constructs and reloads without `IDeviceRegistry` or `IOidMapService` parameters — DI registration compiles and all existing tests pass with the updated constructor signature
+  2. A tenant metric entry whose MetricName is not present in the current OID map is skipped with an Error log naming the tenant, entry index, and unresolvable MetricName — other entries in the same tenant load normally and route correctly
+  3. A tenant command entry with an unrecognized CommandName is stored as-is with a Debug log — it does not block the tenant from loading or routing metric entries
+  4. `TenantVectorOptionsValidator` rejects configs with null/empty Ip, empty MetricName or CommandName, Port outside 1–65535, TimeSeriesSize less than 1, or empty Value on command entries — each violation produces a structured validation error before the registry ever attempts to load the config
+  5. `TenantVectorRegistry.ResolveIp()` and `DeriveIntervalSeconds()` methods no longer exist in the codebase — all code that previously called them now reads self-describing fields from the config entries directly
+
+**Plans:** TBD
+
+---
+
+#### Phase 36: Config File Renames
+
+**Goal**: All config file names, ConfigMap names, config keys, C# constants, K8s manifests, local dev files, and E2E test scripts are updated atomically to the new naming convention — `tenants.json` / `simetra-tenants`, `oid_metric_map.json` / `simetra-oid-metric-map`, `oid_command_map.json` / `simetra-oid-command-map`. No artifact retains the old name after this phase.
+**Depends on**: Phase 35 (all logic changes complete before any mechanical rename introduces diff noise)
+**Requirements**: REN-01, REN-02, REN-03, REN-04
+**Success Criteria** (what must be TRUE):
+  1. The local dev config directory contains `tenants.json`, `oid_metric_map.json`, and `oid_command_map.json` — the old filenames `tenantvector.json`, `oidmaps.json`, and `commandmaps.json` no longer exist anywhere in the repository
+  2. K8s ConfigMap manifests (standalone, production) reference `simetra-tenants`, `simetra-oid-metric-map`, and `simetra-oid-command-map` as ConfigMap names and data keys — applying them to a cluster succeeds without naming conflicts
+  3. The C# constants `ConfigMapName` and `ConfigKey` in `TenantVectorWatcherService`, `OidMapWatcherService`, and `CommandMapWatcherService` match the new names exactly — a pod reload after ConfigMap apply picks up new config data without any "skipping reload" log
+  4. E2E test scripts and inline heredoc fixtures reference only the new file and ConfigMap names — running the full E2E suite against a cluster with the renamed ConfigMaps produces the same pass results as before the rename
+
+**Plans:** TBD
+
 ---
 
 ## Progress
 
-**Execution Order:** 30 → 31 → 32 (32 can run in parallel with 30 and 31)
+**Execution Order:** 33 → 34 → 35 → 36
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -109,7 +176,11 @@ Plans:
 | 30. OID Map Integrity | v1.6 | 2/2 | Complete | 2026-03-13 |
 | 31. Human-Name Device Config | v1.6 | 3/3 | Complete | 2026-03-13 |
 | 32. Command Map Infrastructure | v1.6 | 3/3 | Complete | 2026-03-13 |
+| 33. Config Model Additions | v1.7 | 0/TBD | Not started | - |
+| 34. CommunityString Validation & MetricPollJob Cleanup | v1.7 | 0/TBD | Not started | - |
+| 35. TenantVectorRegistry Refactor & Validator Activation | v1.7 | 0/TBD | Not started | - |
+| 36. Config File Renames | v1.7 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-13 after Phase 32 execution — v1.6 milestone complete*
+*Last updated: 2026-03-14 after v1.7 roadmap — Phases 33-36 defined*
