@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.7 Configuration Consistency & Tenant Commands — Phase 34 in progress (plan 1 of 2 complete)
+**Current focus:** v1.7 Configuration Consistency & Tenant Commands — Phase 34 complete
 
 ## Current Position
 
 Phase: 34 of 36 (CommunityString Validation & MetricPollJob Cleanup)
-Plan: 01 of 2
-Status: In progress
-Last activity: 2026-03-14 — Completed 34-01 (DeviceRegistry skip semantics, DEV-08, DEV-10, CS-07)
+Plan: 02 of 2
+Status: Phase complete
+Last activity: 2026-03-14 — Completed 34-02 (TenantVectorRegistry per-entry validation, TEN-13 gate, IOidMapService re-added)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 8/8 v1.6 | [###       ] 3/? v1.7
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 8/8 v1.6 | [####      ] 5/? v1.7
 
 ## Milestone History
 
@@ -57,7 +57,9 @@ See `.planning/MILESTONES.md` for details.
 - TenantOptions.Name (string?) overrides auto-generated tenant-{i} id; TenantOptions.Commands holds CommandSlotOptions list
 - MetricSlotOptions.IntervalSeconds (int): direct config field, replaces DeriveIntervalSeconds cross-service derivation
 - MetricSlotOptions.Role (string): "Evaluate" or "Resolved"; validated in Phase 34
-- TenantVectorRegistry constructor: takes only IDeviceRegistry + ILogger (IOidMapService removed); DeriveIntervalSeconds deleted
+- TenantVectorRegistry constructor: takes IDeviceRegistry + IOidMapService + ILogger (IOidMapService re-added in Phase 34-02 for TEN-05; Phase 35 will restructure)
+- TenantVectorRegistry.Reload: per-entry validation (structural, Role, TEN-05 MetricName resolution, TEN-07 IP+Port); TEN-13 completeness gate skips tenants missing Resolved/Evaluate/commands (Phase 34-02)
+- TenantCount = survivingTenants + 1 heartbeat (not options.Tenants.Count + 1); reflects post-TEN-13 count (Phase 34-02)
 
 ### v1.7 Pre-Phase Decisions (to resolve in plans)
 
@@ -75,6 +77,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-14T21:03Z
-Stopped at: Completed 34-01-PLAN.md (DeviceRegistry skip semantics, DEV-08 zero-OID filter, DEV-10 CommunityString Warning, CS-07 docs)
+Last session: 2026-03-14T21:13Z
+Stopped at: Completed 34-02-PLAN.md (TenantVectorRegistry per-entry validation, IOidMapService re-added, TEN-13 gate, 12 new validation tests)
 Resume file: None
