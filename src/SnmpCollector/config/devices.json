@@ -1,6 +1,6 @@
 [
   {
-    "Name": "OBP-01",
+    "CommunityString": "Simetra.OBP-01",
     "IpAddress": "127.0.0.1",
     "Port": 10161,
     "Polls": [
@@ -49,7 +49,7 @@
     ]
   },
   {
-    "Name": "NPB-01",
+    "CommunityString": "Simetra.NPB-01",
     "IpAddress": "127.0.0.1",
     "Port": 10162,
     "Polls": [

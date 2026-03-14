@@ -20,9 +20,8 @@ save_configmap "simetra-devices" "simetra" "$ORIGINAL_CM"
 # Build a ConfigMap with FAKE-UNREACHABLE pointing to E2E simulator (reachable)
 CURRENT_JSON=$(kubectl get configmap simetra-devices -n simetra -o jsonpath='{.data.devices\.json}')
 REACHABLE_JSON=$(echo "$CURRENT_JSON" | jq '. + [{
-    "Name": "FAKE-UNREACHABLE",
+    "CommunityString": "Simetra.FAKE-UNREACHABLE",
     "IpAddress": "e2e-simulator.simetra.svc.cluster.local",
-    "CommunityString": "Simetra.E2E-SIM",
     "Port": 161,
     "Polls": [{"IntervalSeconds": 10, "MetricNames": ["e2e_gauge_test"]}]
 }]')

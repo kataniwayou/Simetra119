@@ -239,11 +239,10 @@ data:
   # ConfigMap for live reload without affecting OID map.
   #
   # Each device entry requires:
-  #   Name          - Human-readable device name (e.g., "npb-2e-01", "obp-link-03")
-  #   IpAddress     - Device IP address on the production LAN (e.g., "10.0.1.100")
-  #   Port          - SNMP port (default: 161)
-  #   CommunityString - Optional override; null falls back to Simetra.{Name} convention
-  #   Polls         - Array of SNMP poll definitions for this device
+  #   CommunityString - Full SNMP community string (e.g., "Simetra.npb-2e-01"). Device name derived from this.
+  #   IpAddress       - Device IP address on the production LAN (e.g., "10.0.1.100")
+  #   Port            - SNMP port (default: 161)
+  #   Polls           - Array of SNMP poll definitions for this device
   #
   # Each Poll entry:
   #   MetricNames     - Array of human-readable metric names (resolved to OIDs at load time via oidmaps)
@@ -253,7 +252,7 @@ data:
   devices.json: |
     [
       {
-        "Name": "OBP-01",
+        "CommunityString": "Simetra.OBP-01",
         "IpAddress": "obp-simulator.simetra.svc.cluster.local",
         "Port": 161,
         "Polls": [
@@ -302,7 +301,7 @@ data:
         ]
       },
       {
-        "Name": "NPB-01",
+        "CommunityString": "Simetra.NPB-01",
         "IpAddress": "npb-simulator.simetra.svc.cluster.local",
         "Port": 161,
         "Polls": [
@@ -390,7 +389,7 @@ data:
         ]
       },
       {
-        "Name": "E2E-SIM",
+        "CommunityString": "Simetra.E2E-SIM",
         "IpAddress": "e2e-simulator.simetra.svc.cluster.local",
         "Port": 161,
         "Polls": [
