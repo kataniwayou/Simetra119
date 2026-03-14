@@ -124,15 +124,20 @@ Plans:
 
 **Goal**: Every CommunityString value in every config layer — devices, tenant metrics, tenant commands — is validated at load time against the `Simetra.*` pattern using `CommunityStringHelper.IsValidCommunityString()` as the single authoritative check. Invalid entries are skipped with structured Error logs. Duplicate device names are caught before silently overwriting the registry. Empty poll groups and the MetricPollJob CommunityString fallback are removed.
 **Depends on**: Phase 33 (CommunityString fields must exist on all options types before validation can reference them)
-**Requirements**: CS-03, CS-04, CS-05, CS-06, CS-07, DEV-08, DEV-09, DEV-10, TEN-07, TEN-11, CLN-03
+**Requirements**: CS-03, CS-04, CS-06, CS-07, DEV-08, DEV-09, DEV-10, TEN-03, TEN-05, TEN-07, TEN-11, TEN-13
 **Success Criteria** (what must be TRUE):
-  1. A devices.json entry with a missing, empty, or non-`Simetra.`-prefixed CommunityString is skipped entirely at load time — an Error-level structured log names the entry, the invalid value, and the validation rule; other device entries in the same file load normally
-  2. A tenant metric or command entry with an invalid CommunityString logs an Error with EntryType, EntryIndex, InvalidValue, ValidationRule, and ConfigMap source fields — the entry is skipped; sibling entries in the same tenant are unaffected
-  3. Two device entries in the same devices.json that resolve to the same short name (e.g. both yield `"NPB-01"`) produce a structured Error log naming both CommunityString values and the conflict — neither device is registered, preventing silent dictionary overwrite
-  4. A device whose entire poll group has zero resolvable MetricNames produces no Quartz job registration — a Warning log identifies the device name and skipped group; no empty SNMP GET is ever sent to the device
-  5. `MetricPollJob` uses `DeviceInfo.CommunityString` directly with no fallback derivation — the `?? CommunityStringHelper.DeriveFromDeviceName()` code path is gone; trap listener continues extracting device name from community string and routing via `DeviceRegistry.TryGetDeviceByName()` unchanged
+  1. DeviceRegistry skips duplicate IP+Port (Error log) and warns on duplicate CommunityString (Warning, both load)
+  2. Zero-OID poll groups filtered from job registration (DEV-08)
+  3. Tenant metric entries validated: structural (Ip, port, MetricName), Role (Evaluate/Resolved), MetricName in OidMap, IP+Port in DeviceRegistry — invalid = skip entry
+  4. Tenant command entries validated: structural (Ip, port, CommandName), ValueType (Integer32/IpAddress/OctetString), non-empty Value, IP+Port in DeviceRegistry — invalid = skip entry
+  5. TEN-13 post-validation gate: tenant requires ≥1 Resolved + ≥1 Evaluate metric + ≥1 command after validation
+  6. Operator config ordering documented in ServiceCollectionExtensions.cs (CS-07)
 
-**Plans:** TBD
+**Plans:** 2 plans
+
+Plans:
+- [x] 34-01-PLAN.md — DeviceRegistry validation: dup IP+Port skip, CommunityString Warning, zero-OID filter, CS-07 doc (CS-03, CS-04, CS-07, DEV-08, DEV-10)
+- [x] 34-02-PLAN.md — TenantVectorRegistry validation: per-entry skip, Role/ValueType/MetricName, TEN-13 gate (TEN-03, TEN-05, TEN-07, TEN-11, TEN-13)
 
 ---
 
@@ -182,7 +187,7 @@ Plans:
 | 31. Human-Name Device Config | v1.6 | 3/3 | Complete | 2026-03-13 |
 | 32. Command Map Infrastructure | v1.6 | 3/3 | Complete | 2026-03-13 |
 | 33. Config Model Additions | v1.7 | 2/2 | Complete | 2026-03-14 |
-| 34. CommunityString Validation & MetricPollJob Cleanup | v1.7 | 0/TBD | Not started | - |
+| 34. CommunityString Validation & MetricPollJob Cleanup | v1.7 | 2/2 | Complete | 2026-03-14 |
 | 35. TenantVectorRegistry Refactor & Validator Activation | v1.7 | 0/TBD | Not started | - |
 | 36. Config File Renames | v1.7 | 0/TBD | Not started | - |
 
