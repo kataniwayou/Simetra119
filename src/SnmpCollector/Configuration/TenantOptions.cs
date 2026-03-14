@@ -17,4 +17,16 @@ public sealed class TenantOptions
     /// An empty list is valid (tenant exists but has no poll targets).
     /// </summary>
     public List<MetricSlotOptions> Metrics { get; set; } = [];
+
+    /// <summary>
+    /// Optional human-readable tenant name. When present, used in log context
+    /// instead of the auto-generated "tenant-{index}" identifier.
+    /// </summary>
+    public string? Name { get; set; }
+
+    /// <summary>
+    /// Command slots defining SNMP SET commands for this tenant.
+    /// An empty list (or absent from JSON) is valid -- tenant has no command targets.
+    /// </summary>
+    public List<CommandSlotOptions> Commands { get; set; } = [];
 }

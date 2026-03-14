@@ -28,4 +28,16 @@ public sealed class MetricSlotOptions
     /// Default 1 (single latest value, backward compatible).
     /// </summary>
     public int TimeSeriesSize { get; set; } = 1;
+
+    /// <summary>
+    /// Poll interval in seconds for this metric slot, used for observability.
+    /// Optional; defaults to 0 (unspecified). Stored directly in MetricSlotHolder.
+    /// </summary>
+    public int IntervalSeconds { get; set; } = 0;
+
+    /// <summary>
+    /// Role of this metric slot within the tenant. Must be "Evaluate" or "Resolved".
+    /// Validated at load time in Phase 34.
+    /// </summary>
+    public string Role { get; set; } = string.Empty;
 }
