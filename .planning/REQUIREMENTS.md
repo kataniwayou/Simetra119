@@ -31,7 +31,9 @@ Requirements for CommunityString validation, self-describing tenant entries, ten
 - [ ] **TEN-08**: `TenantVectorOptionsValidator` activated with real structural validation — non-null/non-empty Ip, MetricName/CommandName; Port 1–65535; TimeSeriesSize >= 1; non-empty Value on commands
 - [ ] **TEN-09**: Optional `IntervalSeconds` field on `MetricSlotOptions` — stored in `MetricSlotHolder` for observability; defaults to 0 if absent
 - [ ] **TEN-10**: Optional `Name` field on `TenantOptions` — used in log context instead of synthetic `tenant-{index}` ID; falls back to auto-generated ID if absent
-- [ ] **TEN-11**: Structured log fields on tenant entry skip events include EntryType, EntryIndex, Reason (unresolvable MetricName / device not found by IP+Port / invalid ValueType), ConfigMap source — suitable for Loki alerting
+- [ ] **TEN-11**: Structured log fields on tenant entry skip events include EntryType, EntryIndex, Reason (unresolvable MetricName / device not found by IP+Port / invalid ValueType / missing role), ConfigMap source — suitable for Loki alerting
+- [ ] **TEN-12**: `MetricSlotOptions` gains required `Role` property — valid values `"Evaluate"` or `"Resolved"`, validated at load time; invalid or missing Role = skip metric entry with Error log
+- [ ] **TEN-13**: Tenant loading requires at least one metric with Role="Resolved" AND at least one with Role="Evaluate" AND at least one command entry — missing any = skip entire tenant with Error log
 
 ### Device Registry Consistency
 
@@ -97,10 +99,12 @@ Requirements for CommunityString validation, self-describing tenant entries, ten
 | CLN-01 | Phase 35 | Pending |
 | CLN-02 | Phase 35 | Pending |
 | CLN-03 | Phase 34 | Pending |
+| TEN-12 | Phase 33 | Pending |
+| TEN-13 | Phase 34 | Pending |
 
 **Coverage:**
-- v1.7 requirements: 28 total
-- Mapped to phases: 28
+- v1.7 requirements: 30 total
+- Mapped to phases: 30
 - Unmapped: 0 ✓
 
 ---

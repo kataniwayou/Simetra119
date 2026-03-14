@@ -19,7 +19,9 @@ Add new C# model types/fields for v1.7: DeviceOptions.Name renamed to CommunityS
 - Command entry: `{ Ip, Port, CommandName, Value, ValueType }` — new model
 - NO Device field on tenant entries — not needed
 - NO CommunityString field on tenant entries — resolved from DeviceRegistry by IP+Port at load time
-- Commands[] absent from a tenant = valid (empty list)
+- Commands[] required — tenant must have at least one command (empty = skip tenant in Phase 34 validation)
+- Each metric entry has a required `Role` field: `"Evaluate"` or `"Resolved"` — validated in Phase 34
+- Tenant must have at least one Resolved metric AND at least one Evaluate metric (validated in Phase 34)
 - Optional `Name` on TenantOptions for log context; absent = auto-generated `tenant-{index}`
 - Optional `IntervalSeconds` on MetricSlotOptions; absent = defaults to 0
 
@@ -62,7 +64,7 @@ Add new C# model types/fields for v1.7: DeviceOptions.Name renamed to CommunityS
 
 - Tenant JSON format confirmed with exact field names:
   ```json
-  { "Ip": "...", "Port": 161, "MetricName": "npb_cpu_util", "TimeSeriesSize": 5 }
+  { "Ip": "...", "Port": 161, "MetricName": "npb_cpu_util", "TimeSeriesSize": 5, "Role": "Resolved" }
   { "Ip": "...", "Port": 161, "CommandName": "npb_set_x", "Value": "1", "ValueType": "Integer32" }
   ```
 - Device JSON format confirmed:
