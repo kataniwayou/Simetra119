@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.6 Organization & Command Map Foundation
+**Current focus:** v1.7 Configuration Consistency & Tenant Commands
 
 ## Current Position
 
-Phase: 32 — Command Map Infrastructure (complete, verified)
+Phase: Not started (defining requirements)
 Plan: —
-Status: v1.6 milestone complete — all 3 phases verified
-Last activity: 2026-03-13 — Phase 32 executed and verified (3 plans, 6/6 must-haves, CMD-01 through CMD-06 complete)
+Status: Defining requirements for v1.7
+Last activity: 2026-03-14 — Milestone v1.7 started
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 3/3 phases v1.6
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 8/8 v1.6 | [          ] 0/? v1.7
 
 ## Milestone History
 
@@ -122,6 +122,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-13
-Stopped at: v1.6 milestone complete — all phases verified
+Last session: 2026-03-14
+Stopped at: v1.7 milestone initialization — defining requirements
 Resume file: None

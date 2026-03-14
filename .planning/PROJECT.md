@@ -72,18 +72,19 @@ See `.planning/milestones/v1.4-REQUIREMENTS.md` for full requirement details.
 
 ### Active
 
-**v1.6 Organization & Command Map Foundation**
+**v1.7 Configuration Consistency & Tenant Commands**
 
-- OID map duplicate validation — reject entries with duplicate OIDs or duplicate names, log warnings
-- Device config human names — devices.json uses metric names instead of raw OIDs, reverse-lookup at poll registration, unknown names → warning + no poll job
-- Command map lookup table — commandmaps.json in same OID → name format as oidmaps, for writable (SET) OIDs
-- CommandMapService + CommandMapWatcherService — simetra-commandmaps ConfigMap with K8s API watch, hot-reload, local dev fallback
-- Command map duplicate validation — same rules as oidmaps (no duplicate OIDs, no duplicate names)
-- Keep snmp_gauge / snmp_info instruments unchanged — source label ready for future "command" value
+- Tenant structure overhaul — Metrics array becomes self-describing objects (Device, Ip, Port, CommunityString, MetricName, TimeSeriesSize). New Commands array (Device, Ip, Port, CommunityString, CommandName, Value, ValueType). No DeviceRegistry dependency for tenant resolution.
+- CommunityString rename — `Name` → `CommunityString` on devices.json and tenants.json. Full value e.g. `"Simetra.NPB-01"`. Validate `Simetra.*` pattern at load time everywhere.
+- Consistent ignore-and-log — Invalid CommunityString = ignore device/metric/command. Unresolvable metric name = ignore entry. All unresolvable in a poll group = skip job registration. Unresolvable command name = ignore entry. All with structured logging.
+- Rename tenantvector.json → tenants.json — File, ConfigMap name (`simetra-tenants`), code references, watcher service.
+- Remove redundant code — DeviceRegistry IP resolution for tenants, dead code from these changes.
+- Hot-reload consistency — Same watcher pattern across all configs.
+- SET command data model — Command entries in tenants carry Value and ValueType for future SNMP SET execution.
 
 ### Out of Scope
 
-- SNMP SET execution path — command map is lookup-only this milestone, no SET sending
+- SNMP SET execution path — command entries are loaded and validated only, no SET PDU sending
 - Custom middleware pipeline — using MediatR
 - Device modules (`IDeviceModule`) — device-agnostic, flat OID map only
 - Traces / distributed tracing — no TracerProvider, no ActivitySource
@@ -91,6 +92,7 @@ See `.planning/milestones/v1.4-REQUIREMENTS.md` for full requirement details.
 - Per-OID metric names — using two shared instruments (snmp_gauge, snmp_info)
 - `raw_value` label on gauge metrics — only snmp_info carries string `value` label
 - SNMPv3 auth / USM security — target devices use v2c
+- Cross-watcher cascade reloads — operator triggers reload manually after config changes
 
 ## Context
 
@@ -149,4 +151,4 @@ See `.planning/milestones/v1.4-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-10 after v1.5 milestone start*
+*Last updated: 2026-03-14 after v1.7 milestone start*
