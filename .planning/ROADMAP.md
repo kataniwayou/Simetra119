@@ -103,15 +103,20 @@ Plans:
 
 **Goal**: All new C# types and fields that v1.7 requires exist in the codebase — tenant entries are fully self-describing in the options layer, the Commands data model has its complete shape, and optional observability fields are present. All additions are backward-compatible with existing configs.
 **Depends on**: Nothing (purely additive)
-**Requirements**: CS-01, CS-02, TEN-01, TEN-02, TEN-03, TEN-09, TEN-10
+**Requirements**: CS-01, CS-02, CS-05, TEN-01, TEN-02, TEN-09, TEN-10, TEN-12
 **Success Criteria** (what must be TRUE):
   1. `DeviceOptions` has a `CommunityString` property holding the full credential string (e.g. `"Simetra.NPB-01"`), and `DeviceInfo.Name` is derived from it via `CommunityStringHelper.TryExtractDeviceName()` at load time — no consumer has to change its use of the short name
-  2. `MetricSlotOptions` has `Device` and `CommunityString` string fields, plus an optional `IntervalSeconds` int field — a tenant config entry with all fields populated deserializes without error
-  3. `TenantOptions` has a `Commands` list of `CommandSlotOptions`, where each entry has Device, Ip, Port, CommunityString, CommandName, Value, and ValueType — a tenant config with a Commands array deserializes without error
-  4. `ValueType` on `CommandSlotOptions` is validated against the allowed set `{ "Integer32", "IpAddress", "OctetString" }` — a value outside the set logs an Error and skips that command entry; entries with valid ValueType are accepted
-  5. `TenantOptions` has an optional `Name` field — when present, it appears in log context instead of the synthetic `tenant-{index}` identifier; when absent, the auto-generated ID is used as before
+  2. `MetricSlotOptions` has optional `IntervalSeconds` (int, default 0) and required `Role` (string) fields
+  3. `TenantOptions` has a `Commands` list of `CommandSlotOptions` (Ip, Port, CommandName, Value, ValueType) and optional `Name`
+  4. `TenantVectorRegistry` constructor no longer takes `IOidMapService`; `DeriveIntervalSeconds()` deleted; uses `metric.IntervalSeconds` directly
+  5. `MetricPollJob` uses `device.CommunityString` directly with no fallback derivation
+  6. All config files use `"CommunityString": "Simetra.XXX"` instead of `"Name": "XXX"`
 
-**Plans:** TBD
+**Plans:** 2 plans
+
+Plans:
+- [x] 33-01-PLAN.md — DeviceOptions CommunityString rename + all consumers + config files (CS-01, CS-02, CS-05)
+- [x] 33-02-PLAN.md — CommandSlotOptions + tenant model additions + IOidMapService removal (TEN-01, TEN-02, TEN-09, TEN-10, TEN-12)
 
 ---
 
@@ -176,7 +181,7 @@ Plans:
 | 30. OID Map Integrity | v1.6 | 2/2 | Complete | 2026-03-13 |
 | 31. Human-Name Device Config | v1.6 | 3/3 | Complete | 2026-03-13 |
 | 32. Command Map Infrastructure | v1.6 | 3/3 | Complete | 2026-03-13 |
-| 33. Config Model Additions | v1.7 | 0/TBD | Not started | - |
+| 33. Config Model Additions | v1.7 | 2/2 | Complete | 2026-03-14 |
 | 34. CommunityString Validation & MetricPollJob Cleanup | v1.7 | 0/TBD | Not started | - |
 | 35. TenantVectorRegistry Refactor & Validator Activation | v1.7 | 0/TBD | Not started | - |
 | 36. Config File Renames | v1.7 | 0/TBD | Not started | - |

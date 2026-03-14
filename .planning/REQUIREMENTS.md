@@ -71,23 +71,23 @@ Requirements for CommunityString validation, self-describing tenant entries, ten
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CS-01 | Phase 33 | Pending |
-| CS-02 | Phase 33 | Pending |
+| CS-01 | Phase 33 | Complete |
+| CS-02 | Phase 33 | Complete |
 | CS-03 | Phase 34 | Pending |
 | CS-04 | Phase 34 | Pending |
-| CS-05 | Phase 34 | Pending |
+| CS-05 | Phase 33 | Complete |
 | CS-06 | Phase 34 | Pending |
 | CS-07 | Phase 34 | Pending |
-| TEN-01 | Phase 33 | Pending |
-| TEN-02 | Phase 33 | Pending |
+| TEN-01 | Phase 33 | Complete |
+| TEN-02 | Phase 33 | Complete |
 | TEN-03 | Phase 34 | Pending |
 | TEN-04 | Phase 35 | Pending |
 | TEN-05 | Phase 35 | Pending |
 | TEN-06 | Phase 35 | Pending |
 | TEN-07 | Phase 34 | Pending |
 | TEN-08 | Phase 35 | Pending |
-| TEN-09 | Phase 33 | Pending |
-| TEN-10 | Phase 33 | Pending |
+| TEN-09 | Phase 33 | Complete |
+| TEN-10 | Phase 33 | Complete |
 | TEN-11 | Phase 34 | Pending |
 | DEV-08 | Phase 34 | Pending |
 | DEV-09 | Phase 34 | Pending |
@@ -99,7 +99,7 @@ Requirements for CommunityString validation, self-describing tenant entries, ten
 | CLN-01 | Phase 35 | Pending |
 | CLN-02 | Phase 35 | Pending |
 | CLN-03 | Phase 34 | Pending |
-| TEN-12 | Phase 33 | Pending |
+| TEN-12 | Phase 33 | Complete |
 | TEN-13 | Phase 34 | Pending |
 
 **Coverage:**
