@@ -150,7 +150,7 @@ public sealed class TenantVectorWatcherService : BackgroundService
                 }
 
                 // 6. IP+Port existence (TEN-07): device must be registered
-                if (!deviceRegistry.TryGetByIpPort(metric.Ip, metric.Port, out _))
+                if (!deviceRegistry.TryGetByIpPort(metric.Ip, metric.Port, out var device))
                 {
                     logger.LogError(
                         "Tenant '{TenantId}' Metrics[{Index}] skipped: IP+Port '{Ip}:{Port}' not found in DeviceRegistry (TEN-07)",
@@ -167,14 +167,52 @@ public sealed class TenantVectorWatcherService : BackgroundService
                     metric.Threshold = null;
                 }
 
+                // Resolve IntervalSeconds + GraceMultiplier from device poll group.
+                var resolvedInterval = 0;
+                var resolvedGrace = 2.0;
+                var oid = oidMapService.ResolveToOid(metric.MetricName);
+                if (oid is not null && device is not null)
+                {
+                    foreach (var pg in device.PollGroups)
+                    {
+                        if (pg.Oids.Contains(oid))
+                        {
+                            resolvedInterval = pg.IntervalSeconds;
+                            resolvedGrace = pg.GraceMultiplier;
+                            break;
+                        }
+                    }
+                }
+
+                // Fallback: check aggregated metrics (MetricName won't have an OID entry).
+                if (resolvedInterval == 0 && device is not null)
+                {
+                    foreach (var pg in device.PollGroups)
+                    {
+                        foreach (var agg in pg.AggregatedMetrics)
+                        {
+                            if (string.Equals(agg.MetricName, metric.MetricName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                resolvedInterval = pg.IntervalSeconds;
+                                resolvedGrace = pg.GraceMultiplier;
+                                goto resolved;
+                            }
+                        }
+                    }
+                    resolved:;
+                }
+
+                metric.IntervalSeconds = resolvedInterval;
+                metric.GraceMultiplier = resolvedGrace;
+
                 // Passed all checks — resolve IP via DeviceRegistry.AllDevices.
                 var resolvedIp = metric.Ip;
-                foreach (var device in deviceRegistry.AllDevices)
+                foreach (var registeredDevice in deviceRegistry.AllDevices)
                 {
-                    if (string.Equals(device.ConfigAddress, metric.Ip, StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(registeredDevice.ConfigAddress, metric.Ip, StringComparison.OrdinalIgnoreCase))
                     {
-                        logger.LogDebug("Resolved tenant metric IP {ConfigIp} -> {ResolvedIp}", metric.Ip, device.ResolvedIp);
-                        resolvedIp = device.ResolvedIp;
+                        logger.LogDebug("Resolved tenant metric IP {ConfigIp} -> {ResolvedIp}", metric.Ip, registeredDevice.ResolvedIp);
+                        resolvedIp = registeredDevice.ResolvedIp;
                         break;
                     }
                 }

@@ -607,4 +607,175 @@ public sealed class TenantVectorWatcherValidationTests
         Assert.Equal(2, result.Tenants[0].Metrics.Count);
         Assert.NotNull(result.Tenants[0].Metrics[0].Threshold); // threshold object preserved (always-violated)
     }
+
+    // ──────────────────────────────────────────────────────
+    // IntervalSeconds + GraceMultiplier resolution tests
+    // ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void IntervalSeconds_ResolvedFromDevicePollGroup()
+    {
+        // Poll group contains OID "1.2.3" at IntervalSeconds=10.
+        var pollGroup = new MetricPollInfo(
+            PollIndex: 0,
+            Oids: new[] { "1.2.3" }.AsReadOnly(),
+            IntervalSeconds: 10,
+            GraceMultiplier: 2.0);
+
+        var device = new DeviceInfo(
+            Name: "dev",
+            ConfigAddress: "10.0.0.1",
+            ResolvedIp: "10.0.0.1",
+            Port: 161,
+            PollGroups: new[] { pollGroup },
+            CommunityString: "Simetra.dev");
+
+        var oidMap = Substitute.For<IOidMapService>();
+        oidMap.ContainsMetricName(Arg.Any<string>()).Returns(true);
+        oidMap.ResolveToOid("m1").Returns("1.2.3");
+        oidMap.ResolveToOid("m2").Returns((string?)null);
+
+        var devReg = Substitute.For<IDeviceRegistry>();
+        devReg.TryGetByIpPort(Arg.Any<string>(), Arg.Any<int>(), out Arg.Any<DeviceInfo?>())
+            .Returns(x => { x[2] = device; return true; });
+        devReg.AllDevices.Returns(new[] { device });
+
+        var tenant = CreateValidTenant();
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), oidMap, devReg, NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Equal(10, result.Tenants[0].Metrics[0].IntervalSeconds);
+    }
+
+    [Fact]
+    public void GraceMultiplier_ResolvedFromDevicePollGroup()
+    {
+        // Poll group contains OID "1.2.3" at GraceMultiplier=3.0.
+        var pollGroup = new MetricPollInfo(
+            PollIndex: 0,
+            Oids: new[] { "1.2.3" }.AsReadOnly(),
+            IntervalSeconds: 10,
+            GraceMultiplier: 3.0);
+
+        var device = new DeviceInfo(
+            Name: "dev",
+            ConfigAddress: "10.0.0.1",
+            ResolvedIp: "10.0.0.1",
+            Port: 161,
+            PollGroups: new[] { pollGroup },
+            CommunityString: "Simetra.dev");
+
+        var oidMap = Substitute.For<IOidMapService>();
+        oidMap.ContainsMetricName(Arg.Any<string>()).Returns(true);
+        oidMap.ResolveToOid("m1").Returns("1.2.3");
+        oidMap.ResolveToOid("m2").Returns((string?)null);
+
+        var devReg = Substitute.For<IDeviceRegistry>();
+        devReg.TryGetByIpPort(Arg.Any<string>(), Arg.Any<int>(), out Arg.Any<DeviceInfo?>())
+            .Returns(x => { x[2] = device; return true; });
+        devReg.AllDevices.Returns(new[] { device });
+
+        var tenant = CreateValidTenant();
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), oidMap, devReg, NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Equal(3.0, result.Tenants[0].Metrics[0].GraceMultiplier);
+    }
+
+    [Fact]
+    public void MetricNameNotInAnyPollGroup_DefaultsPreserved()
+    {
+        // Device exists but OID "9.9.9" is not in any poll group.
+        var pollGroup = new MetricPollInfo(
+            PollIndex: 0,
+            Oids: new[] { "1.2.3" }.AsReadOnly(),
+            IntervalSeconds: 10,
+            GraceMultiplier: 2.0);
+
+        var device = new DeviceInfo(
+            Name: "dev",
+            ConfigAddress: "10.0.0.1",
+            ResolvedIp: "10.0.0.1",
+            Port: 161,
+            PollGroups: new[] { pollGroup },
+            CommunityString: "Simetra.dev");
+
+        var oidMap = Substitute.For<IOidMapService>();
+        oidMap.ContainsMetricName(Arg.Any<string>()).Returns(true);
+        // Both metrics resolve to OIDs not in any poll group.
+        oidMap.ResolveToOid(Arg.Any<string>()).Returns("9.9.9");
+
+        var devReg = Substitute.For<IDeviceRegistry>();
+        devReg.TryGetByIpPort(Arg.Any<string>(), Arg.Any<int>(), out Arg.Any<DeviceInfo?>())
+            .Returns(x => { x[2] = device; return true; });
+        devReg.AllDevices.Returns(new[] { device });
+
+        var tenant = CreateValidTenant();
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), oidMap, devReg, NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Equal(0, result.Tenants[0].Metrics[0].IntervalSeconds);
+        Assert.Equal(2.0, result.Tenants[0].Metrics[0].GraceMultiplier);
+    }
+
+    [Fact]
+    public void AggregatedMetricName_ResolvedFromPollGroup()
+    {
+        // Poll group has AggregatedMetrics containing "agg_metric" at IntervalSeconds=15.
+        var aggDef = new AggregatedMetricDefinition(
+            MetricName: "agg_metric",
+            Kind: AggregationKind.Sum,
+            SourceOids: Array.Empty<string>());
+
+        var pollGroup = new MetricPollInfo(
+            PollIndex: 0,
+            Oids: new[] { "1.2.3" }.AsReadOnly(),
+            IntervalSeconds: 15,
+            GraceMultiplier: 2.0)
+        {
+            AggregatedMetrics = new[] { aggDef }
+        };
+
+        var device = new DeviceInfo(
+            Name: "dev",
+            ConfigAddress: "10.0.0.1",
+            ResolvedIp: "10.0.0.1",
+            Port: 161,
+            PollGroups: new[] { pollGroup },
+            CommunityString: "Simetra.dev");
+
+        var oidMap = Substitute.For<IOidMapService>();
+        oidMap.ContainsMetricName(Arg.Any<string>()).Returns(true);
+        // agg_metric has no OID entry — ResolveToOid returns null, triggering fallback.
+        oidMap.ResolveToOid("agg_metric").Returns((string?)null);
+        oidMap.ResolveToOid("m2").Returns((string?)null);
+
+        var devReg = Substitute.For<IDeviceRegistry>();
+        devReg.TryGetByIpPort(Arg.Any<string>(), Arg.Any<int>(), out Arg.Any<DeviceInfo?>())
+            .Returns(x => { x[2] = device; return true; });
+        devReg.AllDevices.Returns(new[] { device });
+
+        var tenant = new TenantOptions
+        {
+            Priority = 1,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "agg_metric", Role = "Evaluate" },
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m2", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd1", Value = "1", ValueType = "Integer32" }
+            }
+        };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), oidMap, devReg, NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Equal(15, result.Tenants[0].Metrics[0].IntervalSeconds);
+    }
 }
