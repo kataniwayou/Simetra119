@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.10 Heartbeat Refactor & Pipeline Liveness — Phase 43 complete, Phase 44 ready
+**Current focus:** v1.10 Heartbeat Refactor & Pipeline Liveness — COMPLETE (Phase 44 done)
 
 ## Current Position
 
 Phase: 44 of 44 (Pipeline Liveness)
-Plan: 01 of 02 (in progress)
-Status: In progress
-Last activity: 2026-03-15 — Completed 44-01-PLAN.md (IHeartbeatLivenessService + OtelMetricHandler stamp)
+Plan: 02 of 02 (complete)
+Status: Phase complete
+Last activity: 2026-03-15 — Completed 44-02-PLAN.md (LivenessHealthCheck extended with pipeline-arrival staleness)
 
-Progress: [####################] v1.0-v1.9 complete | [██ ] 2/3 v1.10 plans
+Progress: [####################] v1.0-v1.9 complete | [███] 3/3 v1.10 plans — v1.10 COMPLETE
 
 ## Performance Metrics
 
@@ -43,8 +43,11 @@ Progress: [####################] v1.0-v1.9 complete | [██ ] 2/3 v1.10 plans
 - `HeartbeatLivenessService`: volatile long (UTC ticks), Volatile.Write in Stamp(), Volatile.Read in LastArrival getter
 - Stamp point: AFTER `_pipelineMetrics.IncrementHandled(deviceName)` in numeric case, guarded by `deviceName == HeartbeatJobOptions.HeartbeatDeviceName`
 - DI: `services.AddSingleton<IHeartbeatLivenessService, HeartbeatLivenessService>()` in `AddSnmpPipeline`
-- Staleness window: `HeartbeatJobOptions.DefaultIntervalSeconds` (15) × default `GraceMultiplier` (2.0) = 30s — no hardcoded magic numbers
-- HB-08/09/10 are preserved-behavior requirements — verified in Phase 44, not implemented
+- Staleness window: `IOptions<HeartbeatJobOptions>.Value.IntervalSeconds` (runtime-configured) × `GraceMultiplier` = threshold — no hardcoded values
+- HB-06, HB-07 satisfied by Phase 44-02: LivenessHealthCheck reads IHeartbeatLivenessService.LastArrival, reports pipeline-heartbeat stale in K8s liveness probe
+- HB-08/09/10 preserved and verified: HeartbeatJob.cs, OidMapService.cs, ILivenessVectorService untouched
+- LivenessHealthCheck constructor now takes IHeartbeatLivenessService + IOptions<HeartbeatJobOptions> (DI auto-resolves via AddCheck<T>)
+- Null LastArrival → always stale; pipeline-heartbeat key always in diagnostic data dict; 338 tests green
 
 ### Blockers/Concerns
 
@@ -58,6 +61,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-15T16:13:35Z
-Stopped at: Completed 44-01-PLAN.md — IHeartbeatLivenessService created, OtelMetricHandler stamps heartbeat pipeline arrival; 334 tests green
+Last session: 2026-03-15T16:17:42Z
+Stopped at: Completed 44-02-PLAN.md — LivenessHealthCheck extended with pipeline-arrival staleness; 338 tests green; v1.10 complete
 Resume file: None
