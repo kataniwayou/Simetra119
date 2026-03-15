@@ -8,7 +8,7 @@ using SnmpCollector.Pipeline;
 namespace SnmpCollector.Services;
 
 /// <summary>
-/// Background service that watches the <c>simetra-oidmaps</c> ConfigMap via the Kubernetes
+/// Background service that watches the <c>simetra-oid-metric-map</c> ConfigMap via the Kubernetes
 /// API and triggers an OID map reload on change. Only updates OidMapService -- does not
 /// touch DeviceRegistry or DynamicPollScheduler.
 /// <para>
@@ -26,12 +26,12 @@ public sealed class OidMapWatcherService : BackgroundService
     /// <summary>
     /// ConfigMap name containing the OID-to-metric-name mapping.
     /// </summary>
-    internal const string ConfigMapName = "simetra-oidmaps";
+    internal const string ConfigMapName = "simetra-oid-metric-map";
 
     /// <summary>
     /// Key within the ConfigMap data that holds the OID map JSON document.
     /// </summary>
-    internal const string ConfigKey = "oidmaps.json";
+    internal const string ConfigKey = "oid_metric_map.json";
 
     private readonly IKubernetes _kubeClient;
     private readonly IOidMapService _oidMapService;

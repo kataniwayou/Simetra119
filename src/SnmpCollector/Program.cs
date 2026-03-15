@@ -73,11 +73,11 @@ if (!k8s.KubernetesClientConfiguration.IsInCluster())
         PropertyNameCaseInsensitive = true
     };
 
-    // Load OID map from oidmaps.json (array-of-objects format)
-    var oidmapsPath = Path.Combine(configDir, "oidmaps.json");
-    if (File.Exists(oidmapsPath))
+    // Load OID map from oid_metric_map.json (array-of-objects format)
+    var oidMetricMapPath = Path.Combine(configDir, "oid_metric_map.json");
+    if (File.Exists(oidMetricMapPath))
     {
-        var oidJson = File.ReadAllText(oidmapsPath);
+        var oidJson = File.ReadAllText(oidMetricMapPath);
         var oidMapLogger = app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SnmpCollector.Services.OidMapWatcherService>>();
         var oidMap = SnmpCollector.Services.OidMapWatcherService.ValidateAndParseOidMap(oidJson, oidMapLogger);
         if (oidMap != null)

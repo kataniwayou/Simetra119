@@ -110,7 +110,7 @@ FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 snapshot_configmaps() {
     log_info "Snapshotting ConfigMaps for mutation testing..."
     save_configmap "simetra-devices" "simetra" "$FIXTURES_DIR/.original-devices-configmap.yaml"
-    save_configmap "simetra-oidmaps" "simetra" "$FIXTURES_DIR/.original-oidmaps-configmap.yaml"
+    save_configmap "simetra-oid-metric-map" "simetra" "$FIXTURES_DIR/.original-oid-metric-map-configmap.yaml"
     save_configmap "simetra-tenants" "simetra" "$FIXTURES_DIR/.original-tenants-configmap.yaml"
     log_info "ConfigMap snapshots saved"
 }
@@ -120,8 +120,8 @@ restore_configmaps() {
     if [ -f "$FIXTURES_DIR/.original-devices-configmap.yaml" ]; then
         restore_configmap "$FIXTURES_DIR/.original-devices-configmap.yaml"
     fi
-    if [ -f "$FIXTURES_DIR/.original-oidmaps-configmap.yaml" ]; then
-        restore_configmap "$FIXTURES_DIR/.original-oidmaps-configmap.yaml"
+    if [ -f "$FIXTURES_DIR/.original-oid-metric-map-configmap.yaml" ]; then
+        restore_configmap "$FIXTURES_DIR/.original-oid-metric-map-configmap.yaml"
     fi
     if [ -f "$FIXTURES_DIR/.original-tenants-configmap.yaml" ]; then
         restore_configmap "$FIXTURES_DIR/.original-tenants-configmap.yaml"

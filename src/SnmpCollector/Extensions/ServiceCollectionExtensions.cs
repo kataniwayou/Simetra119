@@ -317,7 +317,7 @@ public static class ServiceCollectionExtensions
             new DeviceRegistry(sp.GetRequiredService<ILogger<DeviceRegistry>>()));
 
         // OidMapService: initial empty map. In K8s mode, OidMapWatcherService populates it.
-        // In local dev mode, populated after DI build from oidmaps.json.
+        // In local dev mode, populated after DI build from oid_metric_map.json.
         services.AddSingleton<OidMapService>(sp =>
             new OidMapService(new Dictionary<string, string>(), sp.GetRequiredService<ILogger<OidMapService>>()));
         services.AddSingleton<IOidMapService>(sp => sp.GetRequiredService<OidMapService>());

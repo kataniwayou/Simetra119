@@ -9,19 +9,19 @@ namespace SnmpCollector.Tests.Configuration;
 /// <summary>
 /// Integration tests verifying OID map configuration: JSONC parsing, multi-file merge,
 /// OBP entry count, naming convention, and OID prefix consistency.
-/// Tests read from the standalone oidmaps.json file.
+/// Tests read from the standalone oid_metric_map.json file.
 /// </summary>
 public class OidMapAutoScanTests
 {
     /// <summary>
-    /// Locates the real oidmaps.json relative to the test assembly output directory.
-    /// Path: {testBin}/../../../../src/SnmpCollector/config/oidmaps.json
+    /// Locates the real oid_metric_map.json relative to the test assembly output directory.
+    /// Path: {testBin}/../../../../src/SnmpCollector/config/oid_metric_map.json
     /// </summary>
     private static string GetOidMapsPath()
     {
         var testDir = Path.GetDirectoryName(typeof(OidMapAutoScanTests).Assembly.Location)!;
         var repoRoot = Path.GetFullPath(Path.Combine(testDir, "..", "..", "..", "..", ".."));
-        return Path.Combine(repoRoot, "src", "SnmpCollector", "config", "oidmaps.json");
+        return Path.Combine(repoRoot, "src", "SnmpCollector", "config", "oid_metric_map.json");
     }
 
     /// <summary>
@@ -150,9 +150,9 @@ public class OidMapAutoScanTests
     [Fact]
     public void ObpOidMapHas24Entries()
     {
-        // Arrange: load OBP entries from oidmaps.json
+        // Arrange: load OBP entries from oid_metric_map.json
         var path = GetOidMapsPath();
-        Assert.True(File.Exists(path), $"oidmaps.json not found at: {path}");
+        Assert.True(File.Exists(path), $"oid_metric_map.json not found at: {path}");
 
         var oidMap = LoadOidMap();
 

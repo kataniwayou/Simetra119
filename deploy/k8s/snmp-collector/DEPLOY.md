@@ -66,7 +66,7 @@ docker build -f src/SnmpCollector/Dockerfile -t snmp-collector:local .
 
 ```bash
 kubectl apply -f deploy/k8s/snmp-collector/snmp-collector-config.yaml
-kubectl apply -f deploy/k8s/snmp-collector/simetra-oidmaps.yaml
+kubectl apply -f deploy/k8s/snmp-collector/simetra-oid-metric-map.yaml
 kubectl apply -f deploy/k8s/snmp-collector/simetra-devices.yaml
 kubectl apply -f deploy/k8s/snmp-collector/deployment.yaml
 kubectl apply -f deploy/k8s/snmp-collector/service.yaml

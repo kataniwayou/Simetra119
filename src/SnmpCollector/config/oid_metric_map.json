@@ -1,7 +1,7 @@
 [
   // ===========================================================================
   // OID-to-Metric-Name Mapping
-  // Local development fallback -- same format as ConfigMap key "oidmaps.json"
+  // Local development fallback -- same format as ConfigMap key "oid_metric_map.json"
   // ===========================================================================
 
   // ---- OBP (Optical Bypass) OIDs -- 27 entries ----

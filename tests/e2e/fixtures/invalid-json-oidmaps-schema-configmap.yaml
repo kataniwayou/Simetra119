@@ -1,8 +1,8 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: simetra-oidmaps
+  name: simetra-oid-metric-map
   namespace: simetra
 data:
-  oidmaps.json: |
+  oid_metric_map.json: |
     { "not": "an array" }

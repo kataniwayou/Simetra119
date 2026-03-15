@@ -79,7 +79,7 @@ spec:
           - configMap:
               name: snmp-collector-config
           - configMap:
-              name: simetra-oidmaps
+              name: simetra-oid-metric-map
           - configMap:
               name: simetra-devices
           - configMap:
