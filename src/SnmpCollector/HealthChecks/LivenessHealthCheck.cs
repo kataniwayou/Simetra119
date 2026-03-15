@@ -9,6 +9,8 @@ namespace SnmpCollector.HealthChecks;
 /// <summary>
 /// Liveness health check (HLTH-03). Iterates all liveness vector stamps and compares
 /// each job's stamp age against its configured interval multiplied by the grace multiplier.
+/// Also checks the heartbeat pipeline-arrival stamp (HB-06, HB-07) to detect silent pipelines
+/// (blocked channel, crashed consumer, broken MediatR registration).
 /// Returns Unhealthy with diagnostic data when any stamp is stale; returns Healthy silently
 /// when all stamps are fresh (no log on healthy -- HLTH-07).
 /// <para>
@@ -22,17 +24,23 @@ public sealed class LivenessHealthCheck : IHealthCheck
     private readonly ILivenessVectorService _liveness;
     private readonly IJobIntervalRegistry _intervals;
     private readonly double _graceMultiplier;
+    private readonly IHeartbeatLivenessService _heartbeatLiveness;
+    private readonly int _heartbeatIntervalSeconds;
     private readonly ILogger<LivenessHealthCheck> _logger;
 
     public LivenessHealthCheck(
         ILivenessVectorService liveness,
         IJobIntervalRegistry intervals,
         IOptions<LivenessOptions> options,
+        IHeartbeatLivenessService heartbeatLiveness,
+        IOptions<HeartbeatJobOptions> heartbeatOptions,
         ILogger<LivenessHealthCheck> logger)
     {
         _liveness = liveness;
         _intervals = intervals;
         _graceMultiplier = options.Value.GraceMultiplier;
+        _heartbeatLiveness = heartbeatLiveness;
+        _heartbeatIntervalSeconds = heartbeatOptions.Value.IntervalSeconds;
         _logger = logger;
     }
 
@@ -64,6 +72,40 @@ public sealed class LivenessHealthCheck : IHealthCheck
 
             if (age > threshold)
                 staleEntries[jobKey] = entry;
+        }
+
+        // Pipeline-arrival liveness: detect silent pipeline (blocked channel, crashed consumer, etc.)
+        var pipelineThreshold = TimeSpan.FromSeconds(_heartbeatIntervalSeconds * _graceMultiplier);
+        var pipelineArrival = _heartbeatLiveness.LastArrival;
+
+        if (pipelineArrival.HasValue)
+        {
+            var pipelineAge = now - pipelineArrival.Value;
+            var pipelineEntry = new
+            {
+                ageSeconds = Math.Round(pipelineAge.TotalSeconds, 1),
+                thresholdSeconds = pipelineThreshold.TotalSeconds,
+                lastStamp = pipelineArrival.Value.ToString("O"),
+                stale = pipelineAge > pipelineThreshold
+            };
+            allEntries["pipeline-heartbeat"] = pipelineEntry;
+            if (pipelineAge > pipelineThreshold)
+                staleEntries["pipeline-heartbeat"] = pipelineEntry;
+        }
+        else
+        {
+            // Never stamped since startup — treat as stale.
+            // K8s failureThreshold=3 at periodSeconds=15 provides 45s margin.
+            // HeartbeatJob fires at StartNow(), so first arrival within 15-30s.
+            var pipelineEntry = new
+            {
+                ageSeconds = (double?)null,
+                thresholdSeconds = pipelineThreshold.TotalSeconds,
+                lastStamp = (string?)null,
+                stale = true
+            };
+            allEntries["pipeline-heartbeat"] = pipelineEntry;
+            staleEntries["pipeline-heartbeat"] = pipelineEntry;
         }
 
         if (staleEntries.Count > 0)
