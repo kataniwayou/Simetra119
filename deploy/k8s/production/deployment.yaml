@@ -84,4 +84,4 @@ spec:
           - configMap:
               name: simetra-devices
           - configMap:
-              name: simetra-tenantvector
+              name: simetra-tenants

@@ -412,7 +412,7 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: simetra-tenantvector
+  name: simetra-tenants
   namespace: simetra
 data:
   # ============================================================================
@@ -432,10 +432,10 @@ data:
   #   MetricName     - Prometheus metric name (must exist in simetra-oidmaps)
   #
   # IMPORTANT: JSON uses bare TenantVectorOptions format { "Tenants": [...] },
-  # NOT the IConfiguration section wrapper { "TenantVector": { ... } }.
+  # NOT the IConfiguration section wrapper.
   #
   # ============================================================================
-  tenantvector.json: |
+  tenants.json: |
     {
       "Tenants": [
         {

@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: simetra-tenantvector
+  name: simetra-tenants
   namespace: simetra
 data:
-  tenantvector.json: |
+  tenants.json: |
     {
       "Tenants": [
         {
