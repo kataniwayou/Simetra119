@@ -323,7 +323,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IOidMapService>(sp => sp.GetRequiredService<OidMapService>());
 
         // CommandMapService: initial empty map. In K8s mode, CommandMapWatcherService populates it.
-        // In local dev mode, populated after DI build from commandmaps.json.
+        // In local dev mode, populated after DI build from oid_command_map.json.
         services.AddSingleton<CommandMapService>(sp =>
             new CommandMapService(new Dictionary<string, string>(), sp.GetRequiredService<ILogger<CommandMapService>>()));
         services.AddSingleton<ICommandMapService>(sp => sp.GetRequiredService<CommandMapService>());

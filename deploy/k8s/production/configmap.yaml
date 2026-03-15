@@ -471,7 +471,7 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: simetra-commandmaps
+  name: simetra-oid-command-map
   namespace: simetra
 data:
   # ============================================================================
@@ -482,7 +482,7 @@ data:
   # Add entries for every SET OID your devices support.
   # CommandMapWatcherService watches this ConfigMap for live reload.
   # ============================================================================
-  commandmaps.json: |
+  oid_command_map.json: |
     [
       { "Oid": "1.3.6.1.4.1.47477.10.21.1.4.1.0", "CommandName": "obp_set_bypass_L1" },
       { "Oid": "1.3.6.1.4.1.47477.10.21.2.4.1.0", "CommandName": "obp_set_bypass_L2" },

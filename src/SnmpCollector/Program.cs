@@ -133,11 +133,11 @@ if (!k8s.KubernetesClientConfiguration.IsInCluster())
         }
     }
 
-    // Load command map from commandmaps.json (array-of-objects format)
-    var commandmapsPath = Path.Combine(configDir, "commandmaps.json");
-    if (File.Exists(commandmapsPath))
+    // Load command map from oid_command_map.json (array-of-objects format)
+    var oidCommandMapPath = Path.Combine(configDir, "oid_command_map.json");
+    if (File.Exists(oidCommandMapPath))
     {
-        var cmdJson = File.ReadAllText(commandmapsPath);
+        var cmdJson = File.ReadAllText(oidCommandMapPath);
         var cmdMapLogger = app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SnmpCollector.Services.CommandMapWatcherService>>();
         var cmdMap = SnmpCollector.Services.CommandMapWatcherService.ValidateAndParseCommandMap(cmdJson, cmdMapLogger);
         if (cmdMap != null)

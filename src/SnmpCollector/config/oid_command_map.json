@@ -1,8 +1,8 @@
 [
   // ===========================================================================
   // OID-to-Command-Name Mapping
-  // Local development fallback -- same format as ConfigMap key "commandmaps.json"
-  // ConfigMap name: simetra-commandmaps
+  // Local development fallback -- same format as ConfigMap key "oid_command_map.json"
+  // ConfigMap name: simetra-oid-command-map
   // ===========================================================================
 
   // ---- OBP (Optical Bypass) bypass commands -- 4 entries ----

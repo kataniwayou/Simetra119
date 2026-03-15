@@ -8,7 +8,7 @@ using SnmpCollector.Pipeline;
 namespace SnmpCollector.Services;
 
 /// <summary>
-/// Background service that watches the <c>simetra-commandmaps</c> ConfigMap via the Kubernetes
+/// Background service that watches the <c>simetra-oid-command-map</c> ConfigMap via the Kubernetes
 /// API and triggers a command map reload on change. Only updates CommandMapService -- does not
 /// touch DeviceRegistry or DynamicPollScheduler.
 /// <para>
@@ -26,12 +26,12 @@ public sealed class CommandMapWatcherService : BackgroundService
     /// <summary>
     /// ConfigMap name containing the OID-to-command-name mapping.
     /// </summary>
-    internal const string ConfigMapName = "simetra-commandmaps";
+    internal const string ConfigMapName = "simetra-oid-command-map";
 
     /// <summary>
     /// Key within the ConfigMap data that holds the command map JSON document.
     /// </summary>
-    internal const string ConfigKey = "commandmaps.json";
+    internal const string ConfigKey = "oid_command_map.json";
 
     private readonly IKubernetes _kubeClient;
     private readonly ICommandMapService _commandMapService;
