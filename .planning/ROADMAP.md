@@ -175,7 +175,11 @@ Plans:
   3. The C# constants `ConfigMapName` and `ConfigKey` in `TenantVectorWatcherService`, `OidMapWatcherService`, and `CommandMapWatcherService` match the new names exactly — a pod reload after ConfigMap apply picks up new config data without any "skipping reload" log
   4. E2E test scripts and inline heredoc fixtures reference only the new file and ConfigMap names — running the full E2E suite against a cluster with the renamed ConfigMaps produces the same pass results as before the rename
 
-**Plans:** TBD
+**Plans:** 2 plans
+
+Plans:
+- [x] 36-01-PLAN.md — tenantvector → tenants rename (C# constants, SectionName, configs, manifests, E2E)
+- [x] 36-02-PLAN.md — oidmaps → oid_metric_map + commandmaps → oid_command_map (all references)
 
 ---
 
@@ -196,7 +200,7 @@ Plans:
 | 33. Config Model Additions | v1.7 | 2/2 | Complete | 2026-03-14 |
 | 34. CommunityString Validation & MetricPollJob Cleanup | v1.7 | 2/2 | Complete | 2026-03-14 |
 | 35. TenantVectorRegistry Refactor & Validator Activation | v1.7 | 2/2 | Complete | 2026-03-15 |
-| 36. Config File Renames | v1.7 | 0/TBD | Not started | - |
+| 36. Config File Renames | v1.7 | 2/2 | Complete | 2026-03-15 |
 
 ---
 *Roadmap created: 2026-03-10*

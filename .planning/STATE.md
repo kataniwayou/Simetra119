@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.7 Configuration Consistency & Tenant Commands — Phase 36 in progress
+**Current focus:** v1.7 Configuration Consistency & Tenant Commands — v1.7 milestone complete
 
 ## Current Position
 
 Phase: 36 of 36 (Config File Renames)
-Plan: 02 of 2
-Status: Phase complete
-Last activity: 2026-03-15 — Completed 36-02 (rename oidmaps -> oid_metric_map and commandmaps -> oid_command_map)
+Plan: —
+Status: v1.7 milestone complete — all 4 phases verified
+Last activity: 2026-03-15 — Phase 36 executed and verified (2 plans, all renames complete)
 
-Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 8/8 v1.6 | [#####     ] 6/? v1.7
+Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 8/8 v1.6 | [##########] 8/8 v1.7
 
 ## Milestone History
 

@@ -92,10 +92,10 @@ Requirements for CommunityString validation, self-describing tenant entries, ten
 | DEV-08 | Phase 34 | Complete |
 | DEV-09 | Phase 34 | Complete |
 | DEV-10 | Phase 34 | Complete |
-| REN-01 | Phase 36 | Pending |
-| REN-02 | Phase 36 | Pending |
-| REN-03 | Phase 36 | Pending |
-| REN-04 | Phase 36 | Pending |
+| REN-01 | Phase 36 | Complete |
+| REN-02 | Phase 36 | Complete |
+| REN-03 | Phase 36 | Complete |
+| REN-04 | Phase 36 | Complete |
 | CLN-01 | Phase 35 | Complete |
 | CLN-02 | Phase 35 | Complete |
 | CLN-03 | Phase 33 | Complete |
