@@ -30,10 +30,10 @@ if (Directory.Exists(configDir))
 
     // Phase 25: Load tenant vector configuration if present.
     // reloadOnChange: false -- tenant vector changes require restart for validation.
-    var tenantVectorConfig = Path.Combine(configDir, "tenantvector.json");
-    if (File.Exists(tenantVectorConfig))
+    var tenantsConfig = Path.Combine(configDir, "tenants.json");
+    if (File.Exists(tenantsConfig))
     {
-        builder.Configuration.AddJsonFile(tenantVectorConfig, optional: true, reloadOnChange: false);
+        builder.Configuration.AddJsonFile(tenantsConfig, optional: true, reloadOnChange: false);
     }
 }
 
@@ -108,15 +108,15 @@ if (!k8s.KubernetesClientConfiguration.IsInCluster())
         }
     }
 
-    // Load tenant vector from tenantvector.json (section-wrapped format)
-    var tenantVectorPath = Path.Combine(configDir, "tenantvector.json");
-    if (File.Exists(tenantVectorPath))
+    // Load tenant vector from tenants.json (section-wrapped format)
+    var tenantsPath = Path.Combine(configDir, "tenants.json");
+    if (File.Exists(tenantsPath))
     {
-        var tvJson = File.ReadAllText(tenantVectorPath);
-        // tenantvector.json uses IConfiguration section wrapper { "TenantVector": { "Tenants": [...] } }.
-        // Extract the inner TenantVector object for direct deserialization as TenantVectorOptions.
+        var tvJson = File.ReadAllText(tenantsPath);
+        // tenants.json uses IConfiguration section wrapper { "Tenants": { "Tenants": [...] } }.
+        // Extract the inner Tenants object for direct deserialization as TenantVectorOptions.
         using var tvDoc = System.Text.Json.JsonDocument.Parse(tvJson);
-        if (tvDoc.RootElement.TryGetProperty("TenantVector", out var tvElement))
+        if (tvDoc.RootElement.TryGetProperty("Tenants", out var tvElement))
         {
             var tvOptions = System.Text.Json.JsonSerializer.Deserialize<SnmpCollector.Configuration.TenantVectorOptions>(
                     tvElement.GetRawText(), jsonOptions);

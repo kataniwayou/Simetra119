@@ -10,7 +10,7 @@ using SnmpCollector.Pipeline;
 namespace SnmpCollector.Services;
 
 /// <summary>
-/// Background service that watches the <c>simetra-tenantvector</c> ConfigMap via the Kubernetes
+/// Background service that watches the <c>simetra-tenants</c> ConfigMap via the Kubernetes
 /// API and triggers a tenant vector reload on change. Only updates TenantVectorRegistry -- does
 /// not touch DeviceRegistry or DynamicPollScheduler.
 /// <para>
@@ -28,12 +28,12 @@ public sealed class TenantVectorWatcherService : BackgroundService
     /// <summary>
     /// ConfigMap name containing the tenant vector configuration.
     /// </summary>
-    internal const string ConfigMapName = "simetra-tenantvector";
+    internal const string ConfigMapName = "simetra-tenants";
 
     /// <summary>
     /// Key within the ConfigMap data that holds the tenant vector JSON document.
     /// </summary>
-    internal const string ConfigKey = "tenantvector.json";
+    internal const string ConfigKey = "tenants.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
