@@ -15,6 +15,12 @@ public sealed record MetricPollInfo(
     double TimeoutMultiplier = 0.8)
 {
     /// <summary>
+    /// Aggregate metrics to compute from the polled OID values in this group.
+    /// Empty by default; populated when PollOptions has AggregatedMetricName + Aggregator.
+    /// </summary>
+    public IReadOnlyList<CombinedMetricDefinition> AggregatedMetrics { get; init; } = [];
+
+    /// <summary>
     /// Returns the Quartz job key for this poll group.
     /// Pattern: "metric-poll-{configAddress}_{port}-{pollIndex}"
     /// Uses the raw config address (DNS or IP) so operators can correlate to ConfigMap entries.

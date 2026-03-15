@@ -23,4 +23,16 @@ public sealed class PollOptions
     /// Defaults to 0.8 (80% of interval). Leaves headroom before next trigger fires.
     /// </summary>
     public double TimeoutMultiplier { get; set; } = 0.8;
+
+    /// <summary>
+    /// Optional. When set, names the aggregate metric to compute from this poll group's values.
+    /// Both AggregatedMetricName and Aggregator must be non-empty to activate aggregation.
+    /// </summary>
+    public string? AggregatedMetricName { get; set; }
+
+    /// <summary>
+    /// Optional. Aggregation function: "sum", "subtract", "absDiff", "mean".
+    /// Both AggregatedMetricName and Aggregator must be non-empty to activate aggregation.
+    /// </summary>
+    public string? Aggregator { get; set; }
 }
