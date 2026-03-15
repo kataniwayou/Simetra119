@@ -83,7 +83,12 @@ See `.planning/milestones/v1.7-REQUIREMENTS.md` for full requirement details.
 
 ### Active
 
-(None — next milestone not yet defined)
+**v1.8 Combined Metrics**
+
+- Poll group combined metric — optional CombinedMetricName + Action (sum/diff/mean) on poll groups; computes aggregate from individual SNMP GET responses
+- Synthetic metric pipeline — dispatches combined result as snmp_gauge with oid="", source="synthetic"; OidResolutionBehavior passes through pre-set MetricName
+- All-or-nothing computation — all inputs must be numeric (snmp_gauge) and all must respond successfully; any failure skips combined metric for that cycle
+- Tenant vector routing — synthetic metrics routable via (ip, port, metricName) like any other metric
 
 ### Out of Scope
 
@@ -154,4 +159,4 @@ See `.planning/milestones/v1.7-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-15 after v1.7 milestone complete*
+*Last updated: 2026-03-15 after v1.8 milestone start*
