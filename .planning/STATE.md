@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.9 Metric Threshold Structure & Validation — Phase 42
+**Current focus:** v1.9 Metric Threshold Structure & Validation — Phase 42 COMPLETE
 
 ## Current Position
 
 Phase: 42 of 42 (Threshold Validation and Config Files)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-03-15 — Completed 42-01-PLAN.md
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-03-15 — Completed 42-02-PLAN.md
 
-Progress: [####################] v1.0-v1.8 complete | [##] 2/3 v1.9 plans complete
+Progress: [####################] v1.0-v1.8 complete | [###] 3/3 v1.9 plans complete — v1.9 DONE
 
 ## Performance Metrics
 
@@ -43,6 +43,7 @@ Progress: [####################] v1.0-v1.8 complete | [##] 2/3 v1.9 plans comple
 - No `[JsonPropertyName]` attributes needed — `PropertyNameCaseInsensitive = true` in existing deserializer covers it (established in v1.8 Phase 37)
 - **Phase 41 complete:** ThresholdOptions sealed class exists; MetricSlotOptions.Threshold and MetricSlotHolder.Threshold are wired end-to-end; Threshold is NOT in CopyFrom (config identity, not runtime state); 329 tests pass
 - **Phase 42-01 complete:** Threshold Min > Max validation added as check 7 in ValidateAndBuildTenants; uses pattern match, LogError with TenantName/MetricIndex/Min/Max, sets metric.Threshold = null (no continue); 3 new tests; 332 tests pass
+- **Phase 42-02 complete:** Threshold examples added to all three config file locations (local dev double-wrapped, K8s single-wrapped YAML, production configmap); 2 entries in tenants.json (T1/T2), 3 entries each in simetra-tenants.yaml and configmap.yaml (T1/T2/T3); THR-07 satisfied; v1.9 done
 
 ### Blockers/Concerns
 
@@ -50,6 +51,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-15T12:40:23Z
-Stopped at: Completed 42-01-PLAN.md — Threshold Min > Max validation check 7 added, 3 tests added (332 total)
+Last session: 2026-03-15T12:43:50Z
+Stopped at: Completed 42-02-PLAN.md — Threshold examples in all 3 config file locations; v1.9 phase complete
 Resume file: None
