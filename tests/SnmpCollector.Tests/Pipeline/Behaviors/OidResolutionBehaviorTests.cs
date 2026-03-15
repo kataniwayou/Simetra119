@@ -11,13 +11,13 @@ namespace SnmpCollector.Tests.Pipeline.Behaviors;
 
 public sealed class OidResolutionBehaviorTests
 {
-    private static SnmpOidReceived MakeNotification(string oid) =>
+    private static SnmpOidReceived MakeNotification(string oid, SnmpSource source = SnmpSource.Poll) =>
         new()
         {
             Oid = oid,
             AgentIp = IPAddress.Parse("10.0.0.1"),
             Value = new Integer32(42),
-            Source = SnmpSource.Poll,
+            Source = source,
             TypeCode = SnmpType.Integer32,
             DeviceName = "test-device"
         };
@@ -111,6 +111,51 @@ public sealed class OidResolutionBehaviorTests
 
         Assert.Equal("Heartbeat", notification.MetricName);  // OidMapService resolved it
         Assert.True(nextCalled);                              // Pipeline still continues
+    }
+
+    [Fact]
+    public async Task SyntheticMessage_BypassesOidResolution_MetricNamePreserved()
+    {
+        // Synthetic message with pre-set MetricName exits OidResolutionBehavior with MetricName intact
+        var oidMapService = new StubOidMapService(knownOid: "1.3.6.1.2.1.25.3.3.1.2", metricName: "hrProcessorLoad");
+        var behavior = new OidResolutionBehavior<SnmpOidReceived, Unit>(oidMapService, NullLogger<OidResolutionBehavior<SnmpOidReceived, Unit>>.Instance);
+        var notification = MakeNotification("0.0", SnmpSource.Synthetic);
+        notification.MetricName = "obp_combined_power";
+
+        await behavior.Handle(notification, ct => Task.FromResult(Unit.Value), CancellationToken.None);
+
+        Assert.Equal("obp_combined_power", notification.MetricName);  // OID resolution was bypassed
+    }
+
+    [Fact]
+    public async Task SyntheticMessage_StillCallsNext()
+    {
+        // Bypass guard must still call next() so the pipeline continues downstream
+        var oidMapService = new StubOidMapService(knownOid: null, metricName: null);
+        var behavior = new OidResolutionBehavior<SnmpOidReceived, Unit>(oidMapService, NullLogger<OidResolutionBehavior<SnmpOidReceived, Unit>>.Instance);
+        var notification = MakeNotification("0.0", SnmpSource.Synthetic);
+        var nextCalled = false;
+
+        await behavior.Handle(notification, ct =>
+        {
+            nextCalled = true;
+            return Task.FromResult(Unit.Value);
+        }, CancellationToken.None);
+
+        Assert.True(nextCalled);
+    }
+
+    [Fact]
+    public async Task PollMessage_StillResolvesOid_NotAffectedByBypassGuard()
+    {
+        // Regression: Poll messages must still go through full OID resolution unaffected
+        var oidMapService = new StubOidMapService(knownOid: "1.3.6.1.2.1.25.3.3.1.2", metricName: "hrProcessorLoad");
+        var behavior = new OidResolutionBehavior<SnmpOidReceived, Unit>(oidMapService, NullLogger<OidResolutionBehavior<SnmpOidReceived, Unit>>.Instance);
+        var notification = MakeNotification("1.3.6.1.2.1.25.3.3.1.2", SnmpSource.Poll);
+
+        await behavior.Handle(notification, ct => Task.FromResult(Unit.Value), CancellationToken.None);
+
+        Assert.Equal("hrProcessorLoad", notification.MetricName);
     }
 
     // --- Stub IOidMapService ---

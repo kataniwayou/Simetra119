@@ -138,4 +138,21 @@ public sealed class ValidationBehaviorTests : IDisposable
 
         Assert.True(nextCalled);
     }
+
+    [Fact]
+    public async Task AcceptsSentinelOid_ZeroDotZero_WhenDeviceNameSet()
+    {
+        // "0.0" is the synthetic sentinel OID -- must pass OID format and DeviceName checks
+        // Regex ^\d+(\.\d+){1,}$ matches "0.0": \d+ = "0", (\.\d+){1,} = ".0" (one arc, satisfies minimum)
+        var behavior = CreateBehavior();
+        var nextCalled = false;
+
+        await behavior.Handle(MakeNotification("0.0", deviceName: "synthetic-device"), ct =>
+        {
+            nextCalled = true;
+            return Task.FromResult(Unit.Value);
+        }, CancellationToken.None);
+
+        Assert.True(nextCalled);
+    }
 }
