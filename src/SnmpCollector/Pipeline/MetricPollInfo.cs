@@ -8,11 +8,13 @@ namespace SnmpCollector.Pipeline;
 /// <param name="Oids">OID strings to fetch together in a single SNMP GET request.</param>
 /// <param name="IntervalSeconds">Polling interval in seconds for this group.</param>
 /// <param name="TimeoutMultiplier">SNMP GET response timeout as multiplier of interval (0.1–0.9, default 0.8).</param>
+/// <param name="GraceMultiplier">Grace multiplier for stale detection. Stale threshold = IntervalSeconds * GraceMultiplier. Defaults to 2.0.</param>
 public sealed record MetricPollInfo(
     int PollIndex,
     IReadOnlyList<string> Oids,
     int IntervalSeconds,
-    double TimeoutMultiplier = 0.8)
+    double TimeoutMultiplier = 0.8,
+    double GraceMultiplier = 2.0)
 {
     /// <summary>
     /// Aggregate metrics to compute from the polled OID values in this group.

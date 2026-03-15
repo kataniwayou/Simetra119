@@ -107,6 +107,7 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                     metric.MetricName,
                     metric.IntervalSeconds,
                     metric.TimeSeriesSize,
+                    metric.GraceMultiplier,
                     metric.Threshold);
 
                 // Carry over existing slot value when the same (ip, port, metricName) exists.

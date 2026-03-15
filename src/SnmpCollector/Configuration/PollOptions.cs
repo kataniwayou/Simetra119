@@ -35,4 +35,9 @@ public sealed class PollOptions
     /// Both AggregatedMetricName and Aggregator must be non-empty to activate aggregation.
     /// </summary>
     public string? Aggregator { get; set; }
+
+    /// <summary>
+    /// Grace multiplier for stale detection. Stale threshold = IntervalSeconds * GraceMultiplier. Defaults to 2.0.
+    /// </summary>
+    public double GraceMultiplier { get; set; } = 2.0;
 }

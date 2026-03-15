@@ -403,7 +403,8 @@ public sealed class DeviceWatcherService : BackgroundService
                 PollIndex: index,
                 Oids: resolvedOids.AsReadOnly(),
                 IntervalSeconds: poll.IntervalSeconds,
-                TimeoutMultiplier: poll.TimeoutMultiplier)
+                TimeoutMultiplier: poll.TimeoutMultiplier,
+                GraceMultiplier: poll.GraceMultiplier)
             {
                 AggregatedMetrics = aggregatedMetric is not null ? [aggregatedMetric] : []
             });

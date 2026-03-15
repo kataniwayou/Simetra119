@@ -13,6 +13,7 @@ data:
         "Polls": [
           {
             "IntervalSeconds": 10,
+            "GraceMultiplier": 2.0,
             "MetricNames": [
               "obp_channel_L1",
               "obp_r1_power_L1",
@@ -41,6 +42,7 @@ data:
           },
           {
             "IntervalSeconds": 10,
+            "GraceMultiplier": 2.0,
             "MetricNames": [
               "obp_r1_power_L1",
               "obp_r2_power_L1",
@@ -52,12 +54,14 @@ data:
           },
           {
             "IntervalSeconds": 30,
+            "GraceMultiplier": 2.0,
             "MetricNames": [
               "obp_link_state_L1"
             ]
           },
           {
             "IntervalSeconds": 60,
+            "GraceMultiplier": 2.0,
             "MetricNames": [
               "obp_device_type",
               "obp_sw_version",
@@ -73,6 +77,7 @@ data:
         "Polls": [
           {
             "IntervalSeconds": 10,
+            "GraceMultiplier": 2.0,
             "MetricNames": [
               "npb_cpu_util",
               "npb_mem_util",
@@ -146,6 +151,7 @@ data:
           },
           {
             "IntervalSeconds": 10,
+            "GraceMultiplier": 2.0,
             "MetricNames": [
               "npb_port_rx_octets_P1",
               "npb_port_rx_octets_P2",
@@ -161,6 +167,7 @@ data:
           },
           {
             "IntervalSeconds": 10,
+            "GraceMultiplier": 2.0,
             "MetricNames": [
               "npb_port_tx_octets_P1",
               "npb_port_tx_octets_P2",
@@ -176,6 +183,7 @@ data:
           },
           {
             "IntervalSeconds": 60,
+            "GraceMultiplier": 2.0,
             "MetricNames": [
               "npb_model",
               "npb_serial",
@@ -191,6 +199,7 @@ data:
         "Polls": [
           {
             "IntervalSeconds": 10,
+            "GraceMultiplier": 2.0,
             "MetricNames": [
               "e2e_gauge_test",
               "e2e_integer_test",

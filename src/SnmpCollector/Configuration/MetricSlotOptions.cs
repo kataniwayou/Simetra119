@@ -47,4 +47,9 @@ public sealed class MetricSlotOptions
     /// for future runtime evaluation.
     /// </summary>
     public ThresholdOptions? Threshold { get; set; }
+
+    /// <summary>
+    /// Resolved grace multiplier from the device's poll group. Not operator-set; populated at tenant load time.
+    /// </summary>
+    public double GraceMultiplier { get; set; } = 2.0;
 }
