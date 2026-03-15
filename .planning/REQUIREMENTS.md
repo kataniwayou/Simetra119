@@ -40,9 +40,9 @@ Requirements for removing hardcoded heartbeat special cases and adding pipeline-
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HB-01 | Phase 43 | Pending |
-| HB-02 | Phase 43 | Pending |
-| HB-03 | Phase 43 | Pending |
+| HB-01 | Phase 43 | Complete |
+| HB-02 | Phase 43 | Complete |
+| HB-03 | Phase 43 | Complete |
 | HB-04 | Phase 44 | Pending |
 | HB-05 | Phase 44 | Pending |
 | HB-06 | Phase 44 | Pending |
