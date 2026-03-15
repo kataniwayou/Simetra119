@@ -158,7 +158,16 @@ public sealed class TenantVectorWatcherService : BackgroundService
                     continue;
                 }
 
-                // Passed all validation — resolve IP via DeviceRegistry.AllDevices.
+                // 7. Threshold: Min > Max clears threshold; metric still loads (THR-04/THR-05)
+                if (metric.Threshold is { Min: not null, Max: not null } thr && thr.Min > thr.Max)
+                {
+                    logger.LogError(
+                        "Tenant '{TenantName}' Metrics[{MetricIndex}] threshold invalid: Min {Min} > Max {Max} -- threshold cleared, metric still loads",
+                        tenantId, j, thr.Min, thr.Max);
+                    metric.Threshold = null;
+                }
+
+                // Passed all checks — resolve IP via DeviceRegistry.AllDevices.
                 var resolvedIp = metric.Ip;
                 foreach (var device in deviceRegistry.AllDevices)
                 {
