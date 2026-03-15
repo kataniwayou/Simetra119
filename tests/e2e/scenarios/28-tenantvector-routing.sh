@@ -8,9 +8,9 @@
 
 # Snapshot current tenantvector ConfigMap BEFORE applying (for restore later)
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
-save_configmap "simetra-tenantvector" "simetra" "$FIXTURES_DIR/.original-tenantvector-configmap.yaml" || true
+save_configmap "simetra-tenants" "simetra" "$FIXTURES_DIR/.original-tenants-configmap.yaml" || true
 
-TENANTVECTOR_YAML="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/deploy/k8s/snmp-collector/simetra-tenantvector.yaml"
+TENANTVECTOR_YAML="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/deploy/k8s/snmp-collector/simetra-tenants.yaml"
 
 log_info "Applying tenantvector ConfigMap..."
 kubectl apply -f "$TENANTVECTOR_YAML" || true
@@ -34,10 +34,10 @@ if [ -z "$POD1" ]; then
     record_fail "$SCENARIO_NAME" "No snmp-collector pods found"
 else
     DESCRIBE_OUTPUT=$(kubectl describe pod "$POD1" -n simetra 2>/dev/null) || true
-    if echo "$DESCRIBE_OUTPUT" | grep "simetra-tenantvector" > /dev/null 2>&1; then
-        record_pass "$SCENARIO_NAME" "pod=${POD1} describe output contains simetra-tenantvector mount"
+    if echo "$DESCRIBE_OUTPUT" | grep "simetra-tenants" > /dev/null 2>&1; then
+        record_pass "$SCENARIO_NAME" "pod=${POD1} describe output contains simetra-tenants mount"
     else
-        record_fail "$SCENARIO_NAME" "pod=${POD1} describe output does not contain simetra-tenantvector"
+        record_fail "$SCENARIO_NAME" "pod=${POD1} describe output does not contain simetra-tenants"
     fi
 fi
 
@@ -102,10 +102,10 @@ kubectl apply -f - <<EOF || true
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: simetra-tenantvector
+  name: simetra-tenants
   namespace: simetra
 data:
-  tenantvector.json: |
+  tenants.json: |
     {
       "Tenants": [
         {
@@ -173,8 +173,8 @@ fi
 # ---------------------------------------------------------------------------
 
 log_info "Restoring original tenantvector ConfigMap..."
-if [ -f "$FIXTURES_DIR/.original-tenantvector-configmap.yaml" ]; then
-    restore_configmap "$FIXTURES_DIR/.original-tenantvector-configmap.yaml" || \
+if [ -f "$FIXTURES_DIR/.original-tenants-configmap.yaml" ]; then
+    restore_configmap "$FIXTURES_DIR/.original-tenants-configmap.yaml" || \
         log_warn "Failed to restore tenantvector ConfigMap from snapshot; re-applying dev file"
 else
     log_warn "Original tenantvector snapshot not found; re-applying dev file"
