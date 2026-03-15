@@ -43,7 +43,8 @@ public sealed class ExceptionBehavior<TNotification, TResponse>
                 "Pipeline exception for {NotificationType}",
                 typeof(TNotification).Name);
 
-            _metrics.IncrementErrors();
+            var deviceName = (notification is SnmpOidReceived msg) ? msg.DeviceName ?? "unknown" : "unknown";
+            _metrics.IncrementErrors(deviceName);
 
             return default!;
         }

@@ -10,7 +10,7 @@ public static class TelemetryConstants
 
     /// <summary>
     /// Business metrics meter -- exported ONLY by the leader instance.
-    /// Used by SnmpMetricFactory for snmp_gauge, snmp_counter, snmp_info instruments.
+    /// Used by SnmpMetricFactory for snmp_gauge and snmp_info instruments.
     /// </summary>
     public const string LeaderMeterName = "SnmpCollector.Leader";
 }

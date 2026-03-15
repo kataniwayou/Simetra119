@@ -348,7 +348,7 @@ public sealed class DeviceWatcherService : BackgroundService
                 continue;
             }
 
-            CombinedMetricDefinition? combinedMetric = null;
+            AggregatedMetricDefinition? aggregatedMetric = null;
 
             var hasName = !string.IsNullOrEmpty(poll.AggregatedMetricName);
             var hasAggregator = !string.IsNullOrEmpty(poll.Aggregator);
@@ -392,7 +392,7 @@ public sealed class DeviceWatcherService : BackgroundService
                 }
                 else
                 {
-                    combinedMetric = new CombinedMetricDefinition(
+                    aggregatedMetric = new AggregatedMetricDefinition(
                         poll.AggregatedMetricName!,
                         kind,
                         resolvedOids.AsReadOnly());
@@ -405,7 +405,7 @@ public sealed class DeviceWatcherService : BackgroundService
                 IntervalSeconds: poll.IntervalSeconds,
                 TimeoutMultiplier: poll.TimeoutMultiplier)
             {
-                AggregatedMetrics = combinedMetric is not null ? [combinedMetric] : []
+                AggregatedMetrics = aggregatedMetric is not null ? [aggregatedMetric] : []
             });
         }
         return result.AsReadOnly();

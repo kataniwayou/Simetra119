@@ -42,6 +42,7 @@ public sealed class LivenessHealthCheck : IHealthCheck
         var stamps = _liveness.GetAllStamps();
         var now = DateTimeOffset.UtcNow;
         var staleEntries = new Dictionary<string, object>();
+        var allEntries = new Dictionary<string, object>();
 
         foreach (var (jobKey, lastStamp) in stamps)
         {
@@ -51,15 +52,18 @@ public sealed class LivenessHealthCheck : IHealthCheck
             var threshold = TimeSpan.FromSeconds(intervalSeconds * _graceMultiplier);
             var age = now - lastStamp;
 
-            if (age > threshold)
+            var entry = new
             {
-                staleEntries[jobKey] = new
-                {
-                    ageSeconds = Math.Round(age.TotalSeconds, 1),
-                    thresholdSeconds = threshold.TotalSeconds,
-                    lastStamp = lastStamp.ToString("O")
-                };
-            }
+                ageSeconds = Math.Round(age.TotalSeconds, 1),
+                thresholdSeconds = threshold.TotalSeconds,
+                lastStamp = lastStamp.ToString("O"),
+                stale = age > threshold
+            };
+
+            allEntries[jobKey] = entry;
+
+            if (age > threshold)
+                staleEntries[jobKey] = entry;
         }
 
         if (staleEntries.Count > 0)
@@ -71,13 +75,17 @@ public sealed class LivenessHealthCheck : IHealthCheck
 
             return Task.FromResult(HealthCheckResult.Unhealthy(
                 $"{staleEntries.Count} stale job(s)",
-                data: staleEntries.ToDictionary(
+                data: allEntries.ToDictionary(
                     kv => kv.Key,
                     kv => kv.Value,
                     StringComparer.Ordinal) as IReadOnlyDictionary<string, object>));
         }
 
         // HLTH-07: Healthy returns 200 silently (no log)
-        return Task.FromResult(HealthCheckResult.Healthy());
+        return Task.FromResult(HealthCheckResult.Healthy(
+            data: allEntries.ToDictionary(
+                kv => kv.Key,
+                kv => kv.Value,
+                StringComparer.Ordinal) as IReadOnlyDictionary<string, object>));
     }
 }

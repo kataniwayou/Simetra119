@@ -517,7 +517,7 @@ public sealed class DeviceWatcherValidationTests
     ];
 
     [Fact]
-    public async Task CombinedMetric_ValidConfig_PopulatesAggregatedMetrics()
+    public async Task AggregatedMetric_ValidConfig_PopulatesAggregatedMetrics()
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
@@ -538,7 +538,7 @@ public sealed class DeviceWatcherValidationTests
     }
 
     [Fact]
-    public async Task CombinedMetric_InvalidAggregator_LogsErrorAndSkipsCombinedMetric()
+    public async Task AggregatedMetric_InvalidAggregator_LogsErrorAndSkipsAggregatedMetric()
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
@@ -569,7 +569,7 @@ public sealed class DeviceWatcherValidationTests
     }
 
     [Fact]
-    public async Task CombinedMetric_MissingAggregator_LogsErrorAndSkipsCombinedMetric()
+    public async Task AggregatedMetric_MissingAggregator_LogsErrorAndSkipsAggregatedMetric()
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
@@ -598,7 +598,7 @@ public sealed class DeviceWatcherValidationTests
     }
 
     [Fact]
-    public async Task CombinedMetric_MissingName_LogsErrorAndSkipsCombinedMetric()
+    public async Task AggregatedMetric_MissingName_LogsErrorAndSkipsAggregatedMetric()
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
@@ -627,7 +627,7 @@ public sealed class DeviceWatcherValidationTests
     }
 
     [Fact]
-    public async Task CombinedMetric_FewerThan2ResolvedOids_LogsErrorAndSkipsCombinedMetric()
+    public async Task AggregatedMetric_FewerThan2ResolvedOids_LogsErrorAndSkipsAggregatedMetric()
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
@@ -656,7 +656,7 @@ public sealed class DeviceWatcherValidationTests
     }
 
     [Fact]
-    public async Task CombinedMetric_DuplicateNameOnSameDevice_LogsErrorAndSkipsSecond()
+    public async Task AggregatedMetric_DuplicateNameOnSameDevice_LogsErrorAndSkipsSecond()
     {
         var poll1 = new PollOptions
         {
@@ -705,7 +705,7 @@ public sealed class DeviceWatcherValidationTests
     }
 
     [Fact]
-    public async Task CombinedMetric_OidMapCollision_LogsErrorAndSkipsCombinedMetric()
+    public async Task AggregatedMetric_OidMapCollision_LogsErrorAndSkipsAggregatedMetric()
     {
         var svc = CreatePassthroughOidMapService();
         svc.ContainsMetricName("colliding_name").Returns(true);
@@ -737,7 +737,7 @@ public sealed class DeviceWatcherValidationTests
     }
 
     [Fact]
-    public async Task CombinedMetric_NeitherFieldSet_NoCombinedMetricNoError()
+    public async Task AggregatedMetric_NeitherFieldSet_NoAggregatedMetricNoError()
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
@@ -770,7 +770,7 @@ public sealed class DeviceWatcherValidationTests
     [InlineData("subtract", AggregationKind.Subtract)]
     [InlineData("absDiff", AggregationKind.AbsDiff)]
     [InlineData("mean", AggregationKind.Mean)]
-    public async Task CombinedMetric_AllFourAggregatorValues_ParseCorrectly(string aggregator, AggregationKind expectedKind)
+    public async Task AggregatedMetric_AllFourAggregatorValues_ParseCorrectly(string aggregator, AggregationKind expectedKind)
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
@@ -787,7 +787,7 @@ public sealed class DeviceWatcherValidationTests
     }
 
     [Fact]
-    public async Task CombinedMetric_InvalidCombinedMetric_PollGroupStillLoadsIndividualOids()
+    public async Task AggregatedMetric_InvalidAggregatedMetric_PollGroupStillLoadsIndividualOids()
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {

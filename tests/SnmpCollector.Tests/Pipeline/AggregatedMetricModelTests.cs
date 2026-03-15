@@ -5,7 +5,7 @@ using Xunit;
 
 namespace SnmpCollector.Tests.Pipeline;
 
-public class CombinedMetricModelTests
+public class AggregatedMetricModelTests
 {
     [Fact]
     public void AggregationKind_HasFourMembers()
@@ -38,22 +38,22 @@ public class CombinedMetricModelTests
     }
 
     [Fact]
-    public void CombinedMetricDefinition_PositionalConstruction_PropertiesAccessible()
+    public void AggregatedMetricDefinition_PositionalConstruction_PropertiesAccessible()
     {
         var sourceOids = new[] { "1.3.6.1.2.1.1.0", "1.3.6.1.2.1.2.0" };
-        var definition = new CombinedMetricDefinition("test_combined", AggregationKind.Sum, sourceOids);
+        var definition = new AggregatedMetricDefinition("test_aggregated", AggregationKind.Sum, sourceOids);
 
-        Assert.Equal("test_combined", definition.MetricName);
+        Assert.Equal("test_aggregated", definition.MetricName);
         Assert.Equal(AggregationKind.Sum, definition.Kind);
         Assert.Equal(sourceOids, definition.SourceOids);
     }
 
     [Fact]
-    public void CombinedMetricDefinition_RecordEquality_Works()
+    public void AggregatedMetricDefinition_RecordEquality_Works()
     {
         IReadOnlyList<string> oids = new[] { "1.3.6.1.2.1.1.0", "1.3.6.1.2.1.2.0" };
-        var a = new CombinedMetricDefinition("test_combined", AggregationKind.Sum, oids);
-        var b = new CombinedMetricDefinition("test_combined", AggregationKind.Sum, oids);
+        var a = new AggregatedMetricDefinition("test_aggregated", AggregationKind.Sum, oids);
+        var b = new AggregatedMetricDefinition("test_aggregated", AggregationKind.Sum, oids);
 
         Assert.Equal(a, b);
     }
@@ -74,8 +74,8 @@ public class CombinedMetricModelTests
     [Fact]
     public void MetricPollInfo_WithAggregatedMetrics_Populates()
     {
-        var definition = new CombinedMetricDefinition(
-            "test_combined",
+        var definition = new AggregatedMetricDefinition(
+            "test_aggregated",
             AggregationKind.Sum,
             new[] { "1.3.6.1.2.1.1.0", "1.3.6.1.2.1.2.0" });
 
@@ -88,7 +88,7 @@ public class CombinedMetricModelTests
         };
 
         var single = Assert.Single(info.AggregatedMetrics);
-        Assert.Equal("test_combined", single.MetricName);
+        Assert.Equal("test_aggregated", single.MetricName);
     }
 
     [Fact]

@@ -23,22 +23,22 @@ Requirements for computing aggregate metrics from SNMP poll group responses and 
 ### Computation
 
 - [ ] **CM-08**: MetricPollJob computes aggregate after all individual varbind dispatches — `sum()` adds all values, `subtract()` subtracts sequentially (m1-m2-m3), `absDiff()` takes absolute value of sequential subtraction (|m1-m2-m3|), `mean()` divides sum by count (double, not integer truncation)
-- [ ] **CM-09**: All inputs must respond successfully AND be numeric (snmp_gauge type) — any missing response or snmp_info input = skip combined metric for this cycle with Warning log
+- [ ] **CM-09**: All inputs must respond successfully AND be numeric (snmp_gauge type) — any missing response or snmp_info input = skip aggregated metric for this cycle with Warning log
 - [ ] **CM-10**: Combined metric dispatched through full MediatR pipeline (Logging → Exception → Validation → OidResolution [bypassed] → ValueExtraction → TenantVectorFanOut → OtelMetricHandler)
 
 ### Validation at Load Time
 
-- [ ] **CM-11**: `AggregatedMetricName` collision with existing OID map entry produces structured Error log — combined metric skipped, real metric takes priority
-- [ ] **CM-12**: Combined metric config validated in `DeviceWatcherService.ValidateAndBuildDevicesAsync` (BuildPollGroups) — invalid = skip combined metric definition, poll group still loads for individual metrics
+- [ ] **CM-11**: `AggregatedMetricName` collision with existing OID map entry produces structured Error log — aggregated metric skipped, real metric takes priority
+- [ ] **CM-12**: Combined metric config validated in `DeviceWatcherService.ValidateAndBuildDevicesAsync` (BuildPollGroups) — invalid = skip aggregated metric definition, poll group still loads for individual metrics
 
 ### Observability
 
-- [ ] **CM-13**: New `snmp.combined.computed` pipeline counter increments each time a combined metric is successfully computed and dispatched
-- [ ] **CM-14**: Warning log when combined metric computation is skipped (partial response, non-numeric input) with device name, poll group index, and reason
+- [ ] **CM-13**: New `snmp.aggregated.computed` pipeline counter increments each time a aggregated metric is successfully computed and dispatched
+- [ ] **CM-14**: Warning log when aggregated metric computation is skipped (partial response, non-numeric input) with device name, poll group index, and reason
 
 ### Tenant Routing
 
-- [ ] **CM-15**: Synthetic combined metrics route to tenant vector slots via (ip, port, metricName) — tenants can register AggregatedMetricName in their Metrics[] array
+- [ ] **CM-15**: Synthetic aggregated metrics route to tenant vector slots via (ip, port, metricName) — tenants can register AggregatedMetricName in their Metrics[] array
 
 ## Out of Scope
 

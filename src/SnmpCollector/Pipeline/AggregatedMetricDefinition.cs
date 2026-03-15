@@ -7,8 +7,8 @@ namespace SnmpCollector.Pipeline;
 /// </summary>
 /// <param name="MetricName">Name of the aggregate metric to emit.</param>
 /// <param name="Kind">Aggregation function to apply to SourceOids values.</param>
-/// <param name="SourceOids">Resolved OID strings whose values are combined.</param>
-public sealed record CombinedMetricDefinition(
+/// <param name="SourceOids">Resolved OID strings whose values are aggregated.</param>
+public sealed record AggregatedMetricDefinition(
     string MetricName,
     AggregationKind Kind,
     IReadOnlyList<string> SourceOids);

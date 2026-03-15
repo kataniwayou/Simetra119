@@ -33,18 +33,24 @@ public sealed class ReadinessHealthCheck : IHealthCheck
             .OfType<SnmpTrapListenerService>()
             .FirstOrDefault();
 
-        if (listener?.IsBound != true)
-        {
-            return HealthCheckResult.Unhealthy("Trap listener is not bound");
-        }
+        var trapListenerBound = listener?.IsBound == true;
 
         // HLTH-02: Quartz scheduler is running = application is past startup phase
         var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
-        if (!scheduler.IsStarted || scheduler.IsShutdown)
-        {
-            return HealthCheckResult.Unhealthy("Quartz scheduler is not running");
-        }
+        var schedulerRunning = scheduler.IsStarted && !scheduler.IsShutdown;
 
-        return HealthCheckResult.Healthy();
+        var data = new Dictionary<string, object>
+        {
+            ["trapListenerBound"] = trapListenerBound,
+            ["schedulerRunning"] = schedulerRunning
+        };
+
+        if (!trapListenerBound)
+            return HealthCheckResult.Unhealthy("Trap listener is not bound", data: data);
+
+        if (!schedulerRunning)
+            return HealthCheckResult.Unhealthy("Quartz scheduler is not running", data: data);
+
+        return HealthCheckResult.Healthy(data: data);
     }
 }

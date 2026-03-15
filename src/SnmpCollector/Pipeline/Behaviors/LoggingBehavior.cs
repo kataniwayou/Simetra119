@@ -34,7 +34,7 @@ public sealed class LoggingBehavior<TNotification, TResponse>
     {
         if (notification is SnmpOidReceived msg)
         {
-            _metrics.IncrementPublished();
+            _metrics.IncrementPublished(msg.DeviceName ?? "unknown");
             _logger.LogDebug(
                 "SnmpOidReceived OID={Oid} Agent={Agent} Source={Source}",
                 msg.Oid,

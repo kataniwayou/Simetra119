@@ -6,7 +6,7 @@
 <domain>
 ## Phase Boundary
 
-Replace raw OID strings in devices.json with human-readable metric names resolved via the OID map. Full rename of config structure (MetricPolls → Polls, Oids → Names) and C# models. Rewrite devices.json, K8s ConfigMap, and all E2E scenarios. No cross-watcher triggering — each ConfigMap reloads independently.
+Replace raw OID strings in devices.json with human-readable metric names resolved via the OID map. Full rename of config structure (MetricPolls → Polls, Oids → MetricNames) and C# models. Restructure oidmaps.json from flat dictionary to array of objects with explicit Oid/MetricName fields (reworks Phase 30 parsing). Rewrite devices.json, K8s ConfigMap, and all E2E scenarios. No cross-watcher triggering — each ConfigMap reloads independently.
 
 </domain>
 
@@ -14,9 +14,10 @@ Replace raw OID strings in devices.json with human-readable metric names resolve
 ## Implementation Decisions
 
 ### Migration strategy
-- **Full replacement, not coexistence.** The `Oids[]` field is removed entirely. `Names[]` is the only field. All entries are metric names resolved via `IOidMapService.ResolveToOid` at config load time.
-- **Rename config structure:** `MetricPolls` → `Polls`, `Oids` → `Names` in JSON. Future-proofs for `Commands[]` as a sibling field.
-- **Rename C# models:** `MetricPollOptions` → `PollOptions`, property `Oids` → `Names`. Full rename through all code references (DeviceWatcherService, MetricPollJob, tests, etc.).
+- **Full replacement, not coexistence.** The `Oids[]` field is removed entirely. `MetricNames[]` is the only field. All entries are metric names resolved via `IOidMapService.ResolveToOid` at config load time.
+- **Rename config structure:** `MetricPolls` → `Polls`, `Oids` → `MetricNames` in JSON. Future-proofs for `Commands[]` as a sibling field.
+- **Rename C# models:** `MetricPollOptions` → `PollOptions`, property `Oids` → `MetricNames`. Full rename through all code references (DeviceWatcherService, MetricPollJob, tests, etc.).
+- **Restructure oidmaps.json:** Change from flat dictionary `{ "OID": "name" }` to array of objects `[{ "Oid": "1.3.6...", "MetricName": "obp_link_state_L1" }]`. Consistent field naming across all config files. Reworks Phase 30 OidMapService/OidMapWatcherService parsing and validation.
 - **Rewrite devices.json now:** Translate all current OID entries to their human-readable metric names using the OID map as part of this phase. Ship a working config.
 - **Rewrite K8s ConfigMap:** Both local `config/devices.json` and the K8s `simetra-devices` ConfigMap manifest are rewritten to use metric names.
 - **Update all E2E scenarios:** Every E2E scenario that touches device config is updated to use metric names.
@@ -48,8 +49,10 @@ Replace raw OID strings in devices.json with human-readable metric names resolve
 <specifics>
 ## Specific Ideas
 
-- The rename from MetricPolls/Oids to Polls/Names is designed to be future-proof: `Polls` (read operations) and future `Commands` (write operations) sit as siblings under a device.
+- The rename from MetricPolls/Oids to Polls/MetricNames is designed to be future-proof: `Polls` (read operations) and future `Commands` (write operations) sit as siblings under a device.
 - Resolution is config-level only — the SNMP wire protocol still uses OIDs. The translation happens once at config load, not per-poll.
+- Consistent field naming: `MetricName` appears in both oidmaps entries and device config (`MetricNames` plural for lists). `Oid` field explicit in oidmap entries.
+- Oidmap restructure enables future extensibility (additional fields per entry like Type, Description).
 
 </specifics>
 

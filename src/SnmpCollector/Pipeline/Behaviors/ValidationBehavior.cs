@@ -52,7 +52,7 @@ public sealed class ValidationBehavior<TNotification, TResponse>
                 msg.AgentIp,
                 "InvalidOidFormat");
 
-            _metrics.IncrementRejected();
+            _metrics.IncrementRejected(msg.DeviceName ?? "unknown");
             return default!;
         }
 
@@ -67,7 +67,7 @@ public sealed class ValidationBehavior<TNotification, TResponse>
                 msg.AgentIp,
                 "MissingDeviceName");
 
-            _metrics.IncrementRejected();
+            _metrics.IncrementRejected(msg.DeviceName ?? "unknown");
             return default!;
         }
 

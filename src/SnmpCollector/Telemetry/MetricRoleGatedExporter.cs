@@ -9,8 +9,8 @@ namespace SnmpCollector.Telemetry;
 /// (e.g., "SnmpCollector.Leader") behind leader election, while allowing all other meters
 /// (e.g., System.Runtime, SnmpCollector) to export on every instance regardless of role.
 /// This ensures runtime and pipeline metrics are always exported by both leader and follower
-/// pods for operational visibility, while business metrics (snmp_gauge, snmp_counter,
-/// snmp_info) are exported only by the leader.
+/// pods for operational visibility, while business metrics (snmp_gauge, snmp_info)
+/// are exported only by the leader.
 /// </summary>
 public sealed class MetricRoleGatedExporter : BaseExporter<Metric>
 {

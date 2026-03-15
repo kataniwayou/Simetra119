@@ -10,8 +10,8 @@ log_info "Applying renamed oidmaps ConfigMap..."
 kubectl apply -f "$SCRIPT_DIR/fixtures/oid-renamed-configmap.yaml" -n simetra
 
 # Allow watcher detection + reload
-log_info "Waiting 10s for watcher detection and reload..."
-sleep 10
+log_info "Waiting 15s for watcher detection and reload..."
+sleep 15
 
 # Get all snmp-collector pod names
 PODS=$(kubectl get pods -n simetra -l app=snmp-collector -o jsonpath='{.items[*].metadata.name}')
@@ -20,16 +20,14 @@ FOUND_SECONDARY=0
 EVIDENCE=""
 
 for POD in $PODS; do
-    LOGS=$(kubectl logs "$POD" -n simetra --since=30s 2>/dev/null) || true
-
-    # Primary: watcher received the event
-    if echo "$LOGS" | grep -q "OidMapWatcher received" 2>/dev/null; then
+    # Use grep > /dev/null instead of grep -q to avoid SIGPIPE with pipefail.
+    # grep -q closes stdin early; kubectl gets SIGPIPE; pipefail treats pipe as failed.
+    if kubectl logs "$POD" -n simetra --since=60s 2>/dev/null | grep "OidMapWatcher received" > /dev/null 2>&1; then
         FOUND_PRIMARY=1
         EVIDENCE="pod=${POD} saw 'OidMapWatcher received'"
     fi
 
-    # Secondary: reload completed successfully
-    if echo "$LOGS" | grep -q "OID map reload complete" 2>/dev/null; then
+    if kubectl logs "$POD" -n simetra --since=60s 2>/dev/null | grep "OID map reload complete" > /dev/null 2>&1; then
         FOUND_SECONDARY=1
         EVIDENCE="${EVIDENCE}, 'OID map reload complete' confirmed"
     fi
@@ -44,7 +42,7 @@ if [ "$FOUND_PRIMARY" -eq 1 ] && [ "$FOUND_SECONDARY" -eq 1 ]; then
 elif [ "$FOUND_PRIMARY" -eq 1 ]; then
     record_pass "$SCENARIO_NAME" "${EVIDENCE} (reload log not found but event detected)"
 else
-    record_fail "$SCENARIO_NAME" "No pod logged 'OidMapWatcher received' within 30s window"
+    record_fail "$SCENARIO_NAME" "No pod logged 'OidMapWatcher received' within 60s window"
 fi
 
 # Restore original ConfigMaps

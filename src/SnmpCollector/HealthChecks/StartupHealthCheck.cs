@@ -27,8 +27,13 @@ public sealed class StartupHealthCheck : IHealthCheck
         // (OidMapService is resolved before scheduling starts).
         var hasJobs = _intervals.TryGetInterval("correlation", out _);
 
+        var data = new Dictionary<string, object>
+        {
+            ["jobsRegistered"] = hasJobs
+        };
+
         return Task.FromResult(hasJobs
-            ? HealthCheckResult.Healthy()
-            : HealthCheckResult.Unhealthy("Poll definitions not yet registered with Quartz"));
+            ? HealthCheckResult.Healthy(data: data)
+            : HealthCheckResult.Unhealthy("Poll definitions not yet registered with Quartz", data: data));
     }
 }

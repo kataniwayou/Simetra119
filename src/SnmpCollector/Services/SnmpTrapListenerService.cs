@@ -143,7 +143,7 @@ public sealed class SnmpTrapListenerService : BackgroundService
                 _logger.LogDebug(
                     "Trap dropped: invalid community string from {SourceIp}",
                     senderIp);
-                _pipelineMetrics.IncrementTrapAuthFailed();
+                _pipelineMetrics.IncrementTrapAuthFailed("unknown");
                 continue;
             }
 
