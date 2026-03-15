@@ -139,7 +139,7 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 38-01: BuildPollGroups extension — Aggregator parsing, co-presence validation, AggregatedMetricName collision check, CombinedMetricDefinition construction + unit tests
+- [x] 38-01: BuildPollGroups 5-rule validation + 10 unit tests (CM-02, CM-03, CM-11, CM-12)
 
 ---
 
@@ -197,7 +197,7 @@ Plans:
 | 35. Watcher-Registry Refactor | v1.7 | 2/2 | Complete | 2026-03-15 |
 | 36. Config File Renames | v1.7 | 2/2 | Complete | 2026-03-15 |
 | 37. Config and Runtime Models | v1.8 | 1/1 | Complete | 2026-03-15 |
-| 38. DeviceWatcherService Validation | v1.8 | 0/1 | Not started | - |
+| 38. DeviceWatcherService Validation | v1.8 | 1/1 | Complete | 2026-03-15 |
 | 39. Pipeline Bypass Guards | v1.8 | 0/1 | Not started | - |
 | 40. MetricPollJob Aggregate Dispatch | v1.8 | 0/1 | Not started | - |
 
