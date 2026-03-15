@@ -49,6 +49,12 @@ Progress: [####################] v1.0-v1.8 complete | [###] 3/3 v1.9 plans compl
 
 None.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 058 | Add GraceMultiplier + resolve IntervalSeconds/GraceMultiplier from device poll group | 2026-03-15 | b2059b6 | [058-gracemultiplier-device-resolved](./quick/058-gracemultiplier-device-resolved/) |
+
 ## Session Continuity
 
 Last session: 2026-03-15T13:25:29Z
