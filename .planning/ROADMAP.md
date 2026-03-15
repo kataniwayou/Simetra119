@@ -174,7 +174,7 @@ Plans:
 | 39. Pipeline Bypass Guards | v1.8 | 1/1 | Complete | 2026-03-15 |
 | 40. MetricPollJob Aggregate Dispatch | v1.8 | 1/1 | Complete | 2026-03-15 |
 | 41. Threshold Model & Holder Storage | v1.9 | 1/1 | Complete | 2026-03-15 |
-| 42. Threshold Validation & Config Files | v1.9 | 0/2 | Not started | - |
+| 42. Threshold Validation & Config Files | v1.9 | 2/2 | Complete | 2026-03-15 |
 
 ---
 *Roadmap created: 2026-03-10*

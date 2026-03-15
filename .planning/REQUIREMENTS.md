@@ -40,10 +40,10 @@ Requirements for adding threshold config model to tenant metric entries with loa
 | THR-01 | Phase 41 | Complete |
 | THR-02 | Phase 41 | Complete |
 | THR-03 | Phase 41 | Complete |
-| THR-04 | Phase 42 | Pending |
-| THR-05 | Phase 42 | Pending |
-| THR-06 | Phase 42 | Pending |
-| THR-07 | Phase 42 | Pending |
+| THR-04 | Phase 42 | Complete |
+| THR-05 | Phase 42 | Complete |
+| THR-06 | Phase 42 | Complete |
+| THR-07 | Phase 42 | Complete |
 | THR-08 | Phase 41 | Complete |
 
 **Coverage:**
