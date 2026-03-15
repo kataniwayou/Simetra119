@@ -7,8 +7,18 @@
           {
             "Ip": "127.0.0.1",
             "Port": 10161,
-            "MetricName": "obp_link_state_L1"
+            "MetricName": "obp_link_state_L1",
+            "Role": "Resolved"
+          },
+          {
+            "Ip": "127.0.0.1",
+            "Port": 10161,
+            "MetricName": "obp_r1_power_L1",
+            "Role": "Evaluate"
           }
+        ],
+        "Commands": [
+          { "Ip": "127.0.0.1", "Port": 10161, "CommandName": "obp_set_bypass_L1", "Value": "1", "ValueType": "Integer32" }
         ]
       },
       {
@@ -18,8 +28,18 @@
             "Ip": "127.0.0.1",
             "Port": 10162,
             "MetricName": "npb_cpu_util",
-            "TimeSeriesSize": 5
+            "TimeSeriesSize": 5,
+            "Role": "Evaluate"
+          },
+          {
+            "Ip": "127.0.0.1",
+            "Port": 10162,
+            "MetricName": "npb_port_status_P1",
+            "Role": "Resolved"
           }
+        ],
+        "Commands": [
+          { "Ip": "127.0.0.1", "Port": 10162, "CommandName": "npb_reset_counters_P1", "Value": "1", "ValueType": "Integer32" }
         ]
       }
     ]

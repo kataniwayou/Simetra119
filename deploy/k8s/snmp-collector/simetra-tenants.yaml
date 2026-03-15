@@ -10,28 +10,38 @@ data:
         {
           "Priority": 1,
           "Metrics": [
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_status_P1" },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_rx_octets_P1" },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_tx_octets_P1" },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_cpu_util", "TimeSeriesSize": 10 }
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_status_P1", "Role": "Resolved" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_rx_octets_P1", "Role": "Evaluate" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_tx_octets_P1", "Role": "Evaluate" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_cpu_util", "TimeSeriesSize": 10, "Role": "Evaluate" }
+          ],
+          "Commands": [
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "CommandName": "npb_reset_counters_P1", "Value": "1", "ValueType": "Integer32" }
           ]
         },
         {
           "Priority": 2,
           "Metrics": [
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_mem_util", "TimeSeriesSize": 5 },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_sys_temp" },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_rx_packets_P1" },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_tx_packets_P1" }
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_mem_util", "TimeSeriesSize": 5, "Role": "Evaluate" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_sys_temp", "Role": "Evaluate" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_rx_packets_P1", "Role": "Evaluate" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_tx_packets_P1", "Role": "Evaluate" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_status_P2", "Role": "Resolved" }
+          ],
+          "Commands": [
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "CommandName": "npb_reset_counters_P2", "Value": "1", "ValueType": "Integer32" }
           ]
         },
         {
           "Priority": 3,
           "Metrics": [
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L1" },
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r1_power_L1", "TimeSeriesSize": 3 },
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r2_power_L1" },
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L2" }
+            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L1", "Role": "Resolved" },
+            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r1_power_L1", "TimeSeriesSize": 3, "Role": "Evaluate" },
+            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r2_power_L1", "Role": "Evaluate" },
+            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L2", "Role": "Resolved" }
+          ],
+          "Commands": [
+            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "CommandName": "obp_set_bypass_L1", "Value": "1", "ValueType": "Integer32" }
           ]
         }
       ]
