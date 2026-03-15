@@ -1,578 +1,594 @@
-# Feature Landscape: v1.7 Configuration Consistency & Tenant Commands
+# Feature Landscape: Combined / Synthetic Metrics on Poll Groups
 
-**Domain:** SNMP monitoring agent — tenant config self-description, command data model, community string validation, config rename
-**Researched:** 2026-03-14
-**Confidence:** HIGH — derived from full codebase analysis of TenantVectorRegistry, DeviceRegistry, CommunityStringHelper, MetricPollJob, TenantVectorWatcherService, DeviceWatcherService, DeviceOptions, MetricSlotOptions, TenantVectorOptions, K8s ConfigMap manifests, and Phase 31 context document.
+**Domain:** SNMP monitoring agent — poll-group-level aggregate computation
+**Researched:** 2026-03-15
+**Confidence:** HIGH — derived from full codebase analysis of MetricPollJob, OtelMetricHandler,
+SnmpMetricFactory, PipelineMetricService, PollOptions, SnmpOidReceived, OidMapService, and
+TelemetryConstants. No external library questions were in scope; all findings are grounded in the
+existing implementation.
 
 ---
 
-## Context: Baseline State After v1.6
+## Scope
 
-Before specifying what v1.7 builds, the current state must be understood precisely. This prevents restating what already exists.
+A `PollOptions` (poll group) gains two new optional fields:
 
-| Existing Capability | Implementation | Relevant to v1.7? |
-|---------------------|----------------|--------------------|
-| `devices.json` with human-readable MetricNames | `DeviceOptions.Polls[].MetricNames[]`, resolved to OIDs via `IOidMapService.ResolveToOid` at load | Yes — `Name` field renamed |
-| `TenantVectorOptions` with flat `Metrics[]` of `MetricSlotOptions` | `MetricSlotOptions { Ip, Port, MetricName, TimeSeriesSize }` | Yes — becomes self-describing |
-| IP resolution via DeviceRegistry | `TenantVectorRegistry.ResolveIp()` iterates `_deviceRegistry.AllDevices` | Yes — removed |
-| CommunityString derived internally | `MetricPollJob` calls `CommunityStringHelper.DeriveFromDeviceName(device.Name)` when `device.CommunityString` is null | Yes — must be explicit |
-| `DeviceOptions.CommunityString` optional | Nullable field, fallback to `Simetra.{Name}` convention | Yes — becomes required |
-| OidMapService + CommandMapService | Volatile FrozenDictionary swap, forward + reverse lookups | Indirect dependency |
-| Hot-reload watcher pattern | All ConfigMaps: initial load + watch loop + SemaphoreSlim | Yes — new watcher or rename |
-| `TenantVectorOptionsValidator` is no-op | Always returns success | Yes — now needs validation |
-| K8s ConfigMap `simetra-tenantvector` key `tenantvector.json` | `TenantVectorWatcherService.ConfigMapName`, `ConfigKey` | Yes — both renamed |
+```json
+{
+  "MetricNames": ["ifInOctets", "ifOutOctets"],
+  "IntervalSeconds": 30,
+  "CombinedMetricName": "ifTotalOctets",
+  "Action": "sum"
+}
+```
 
-**The gap this milestone fills:**
+When `CombinedMetricName` and `Action` are both present, the poll job collects all SNMP responses
+for the group, computes the aggregate, and dispatches it as a synthetic metric alongside (not
+instead of) the individual per-OID metrics.
 
-1. **Tenant config entries are not self-describing.** A `MetricSlotOptions` entry only knows Ip, Port, MetricName, TimeSeriesSize. It carries no CommunityString — the SNMP credential used when that metric was polled is opaque to the tenant.
-2. **Tenant config has no command entries.** Tenants can observe metrics (read OIDs) but have no place to declare which SNMP SET commands they want to send. The data model for tenant commands does not exist.
-3. **CommunityString is implicitly derived**, breaking the config-as-truth principle. An operator reading `devices.json` cannot know what community string is actually used — it is constructed at runtime by `CommunityStringHelper.DeriveFromDeviceName()`. The same gap exists for new-style tenant metric entries.
-4. **Tenant config is still linked to DeviceRegistry for IP resolution**, creating an implicit dependency that makes tenant config harder to reason about independently.
-5. **File and section naming is inconsistent.** `tenantvector.json` and `TenantVector` section refer to a concept now known as `tenants`. The `Name` field on `DeviceOptions` is being renamed to `CommunityString`.
+---
+
+## Context: How the Current Poll Flow Works
+
+Understanding the dispatch path is required before specifying combined metric behavior.
+
+```
+MetricPollJob.Execute()
+    → _snmpClient.GetAsync(variables)                        // all OIDs in one GET
+    → DispatchResponseAsync()
+        → foreach variable in response
+            → new SnmpOidReceived { Oid, Value, Source=Poll, TypeCode, PollDurationMs }
+            → _sender.Send(msg)                              // MediatR pipeline per varbind
+                → ValidationBehavior
+                → OidResolutionBehavior      (sets msg.MetricName)
+                → ValueExtractionBehavior    (sets msg.ExtractedValue)
+                → TenantVectorFanOutBehavior (routes to tenant slots)
+                → OtelMetricHandler          (calls ISnmpMetricFactory.RecordGauge)
+```
+
+Key observations for combined metrics design:
+
+1. **Dispatch is per-varbind, not per-group.** `DispatchResponseAsync` iterates over the response
+   list and sends one `SnmpOidReceived` per variable. There is no post-loop hook in the current
+   job.
+2. **Numeric values are extracted in the pipeline**, not in the job. `ExtractedValue` is populated
+   by `ValueExtractionBehavior`. The job itself does not see the numeric values.
+3. **`MetricPollJob` does have access to the full `pollGroup` object** — `device.PollGroups[pollIndex]`
+   is in scope at the top of `Execute()`. This is where `CombinedMetricName` and `Action` will live.
+4. **`ISnmpMetricFactory.RecordGauge` is the write path** for numeric metrics. Combined metrics
+   must call `RecordGauge` on the `LeaderMeterName` meter (via `SnmpMetricFactory`) so they
+   participate in leader-gated export correctly.
 
 ---
 
 ## Table Stakes
 
-Features that MUST exist for v1.7 to be coherent. Missing any of these leaves the system in a partially-broken or inconsistent state.
+Features that MUST exist for combined metrics to be correct and safe.
 
 ---
 
-### TS-01: Tenant Metric Entry — Self-Describing Object
+### TS-01: `PollOptions` — `CombinedMetricName` and `Action` Fields
 
-**What:** `MetricSlotOptions` (in `TenantOptions.Metrics[]`) gains five new required fields so each entry is fully self-describing without any external lookup:
+**What:** Two new optional fields on `PollOptions`:
 
-```json
-{
-  "Device": "NPB-01",
-  "Ip": "npb-simulator.simetra.svc.cluster.local",
-  "Port": 161,
-  "CommunityString": "Simetra.NPB-01",
-  "MetricName": "npb_cpu_util",
-  "TimeSeriesSize": 10
-}
+```csharp
+public string? CombinedMetricName { get; set; }
+public string? Action { get; set; }   // "sum" | "diff" | "mean"
 ```
 
-**Existing fields:** `Ip`, `Port`, `MetricName`, `TimeSeriesSize` — all retained with same semantics.
+Both must be present together or both absent. One without the other is a configuration error (see
+TS-05 on validation). When absent, poll group behavior is unchanged.
 
-**New fields:**
-- `Device` (string) — human-readable device label. Used as the routing context label in fan-out. Must match a key in `devices.json` (not enforced at load time — see AF-04).
-- `CommunityString` (string) — the full, explicit SNMP community string for this entry. Validated at load time (see TS-05).
-
-**Why Expected:** The tenant vector is the authoritative declaration of "what this tenant cares about." Today it only says (ip, port, metric name) — it says nothing about how to SNMP GET that value or which device it belongs to. The current `TenantVectorRegistry` must call into `DeviceRegistry` to infer the interval and the community string. A self-describing entry removes this dependency and makes the config auditable.
-
-**Complexity:** Low — new fields on existing model
-**Depends On:** Existing `MetricSlotOptions`, existing `TenantOptions`
-
-**Edge cases:**
-- `Device` field absent or empty: validate and log error, skip entry (see TS-06).
-- `CommunityString` absent or empty: validate and log error, skip entry (see TS-05, TS-06).
-- `Ip` and `CommunityString` belonging to different physical devices: no cross-validation in this milestone (see AF-04). The combination is accepted as-is.
-- `TimeSeriesSize` absent: defaults to 1 (existing default, unchanged).
-- `Port` absent: defaults to 161 (existing default, unchanged).
+**Complexity:** Low — two nullable string properties on an existing model.
 
 ---
 
-### TS-02: Tenant Command Entry Data Model
+### TS-02: Combined Metric Computation — `sum`, `diff`, `mean`
 
-**What:** `TenantOptions` gains a new `Commands[]` array alongside `Metrics[]`. Each command entry is a flat object:
+**What:** After all individual per-varbind dispatches complete, `MetricPollJob.DispatchResponseAsync`
+(or a new post-dispatch step in `Execute`) collects the numeric values and computes the aggregate.
 
-```json
-{
-  "Device": "OBP-01",
-  "Ip": "obp-simulator.simetra.svc.cluster.local",
-  "Port": 161,
-  "CommunityString": "Simetra.OBP-01",
-  "CommandName": "obp_set_bypass_L1",
-  "Value": "1",
-  "ValueType": "Integer32"
-}
+#### sum
+
+`result = v₁ + v₂ + … + vₙ`
+
+Applies to all successfully received numeric values. Non-numeric OIDs (OctetString, IPAddress,
+ObjectIdentifier) in the group are silently excluded from the sum — they have no `ExtractedValue`
+equivalent. An all-string group produces a sum of 0.
+
+**Edge cases:**
+
+| Condition | Behavior |
+|-----------|----------|
+| 1 metric in group | sum = that value. Valid; no special handling needed. |
+| 0 metrics returned (all NoSuchObject/NoSuchInstance/EndOfMibView) | sum is not computed; no combined metric emitted. See TS-06. |
+| Partial response (some OIDs error, some succeed) | sum of the successfully returned numeric values. Note this in logs if any OID was skipped. |
+| Overflow (sum of Counter64 values exceeding double precision) | `double` has 53-bit mantissa (~9×10¹⁵ max exact integer). Counter64 max is ~1.8×10¹⁹. Overflow is possible for large Counter64 sums. Use `double` anyway — same representation already used for Counter64 in `ExtractedValue`. Document the limitation; do not special-case. |
+| All values are zero | sum = 0. Emitted normally. Zero is a valid metric value. |
+
+#### diff
+
+`result = v₁ − v₂`
+
+Defined as: first OID value minus second OID value, in the order defined by `MetricNames[]` in config.
+Does NOT mean delta over time — it means the arithmetic difference between two simultaneously polled
+OID values (e.g., `ifInOctets - ifOutOctets` or `totalMemory - freeMemory`).
+
+**Edge cases:**
+
+| Condition | Behavior |
+|-----------|----------|
+| Exactly 1 metric in group | diff is undefined. **Emit 0** and log a Warning: "CombinedMetric diff requires at least 2 values; group '{GroupMetricNames}' produced 1 — emitting 0." Do NOT skip silently; emitting 0 surfaces the misconfiguration in Grafana. |
+| Exactly 2 metrics | result = MetricNames[0] value − MetricNames[1] value. Canonical case. |
+| 3+ metrics in group | result = MetricNames[0] value − MetricNames[1] value. Values at index 2+ are ignored for diff. Log Debug: "diff ignores {N-2} excess values beyond the first two." This is lenient — the group may intentionally contain many metrics but only the first two participate in diff. |
+| 0 metrics returned | No combined metric emitted. See TS-06. |
+| Negative result | Valid. A diff can be negative (e.g., outbound > inbound). `double` handles this correctly. Emitted as-is. |
+| Partial response: first OID missing | Cannot compute. No combined metric emitted. Log Warning. |
+| Partial response: second OID missing | Cannot compute. No combined metric emitted. Log Warning. |
+
+#### mean
+
+`result = (v₁ + v₂ + … + vₙ) / n`
+
+where `n` is the count of successfully returned numeric values.
+
+**Edge cases:**
+
+| Condition | Behavior |
+|-----------|----------|
+| 1 metric in group | mean = that value (n=1). Valid; mathematically correct. |
+| Integer SNMP values (Integer32, Counter32, Counter64, Gauge32) | All values are already stored as `double` in `ExtractedValue` (see `SnmpOidReceived.ExtractedValue: double`). Division uses `double` arithmetic. **No integer truncation.** `mean([3, 4])` = 3.5, not 3. This is the correct behavior — callers who want integer results can floor in PromQL. |
+| 0 metrics returned | No combined metric emitted. See TS-06. |
+| Division by zero | Cannot occur if 0-metrics case is handled by TS-06 (early exit before computing). |
+| Mixed SNMP types (some Integer32, some Gauge32) | Valid — all are numeric, all have `ExtractedValue`. The mean is computed over all numeric values regardless of SNMP type. The `snmp_type` label on the synthetic metric will be set to `"combined"` (see TS-03). |
+
+---
+
+### TS-03: Combined Metric — Prometheus Metric Type and Labels
+
+**What:** The synthetic combined metric is recorded via `ISnmpMetricFactory.RecordGauge()`, using
+the same `snmp_gauge` instrument already registered on the `LeaderMeterName` meter.
+
+**Justification — why Gauge, not Counter:**
+
+The result of sum/diff/mean over instantaneous SNMP values is itself an instantaneous value. It
+represents a point-in-time aggregate (e.g., "total octets across interfaces right now"), not a
+monotonically increasing accumulation. The individual constituent OIDs — even Counter32/Counter64 —
+are already recorded as gauges in `OtelMetricHandler` per the existing pattern (Counter raw values
+are recorded as gauges; Prometheus `rate()` is applied by consumers). The combined metric follows
+the same pattern: it is the arithmetic result of values at a moment in time, expressed as a gauge.
+
+Recording as a Counter would be wrong: the sum of two instantaneous values is not a counter.
+Recording as a Histogram would be wrong: we have one value per poll, not a distribution of samples.
+
+**Labels for the synthetic metric:**
+
+The `RecordGauge` signature is:
+```csharp
+void RecordGauge(string metricName, string oid, string deviceName, string ip, string source, string snmpType, double value)
 ```
 
-Fields:
-- `Device` (string) — device label for routing context.
-- `Ip` (string) — target device address.
-- `Port` (int, default 161) — SNMP port.
-- `CommunityString` (string) — full community string, validated at load time.
-- `CommandName` (string) — human-readable command name, resolved to an OID at execution time via `ICommandMapService.ResolveCommandOid()`.
-- `Value` (string) — the value to SET, stored as string for transport. Type interpretation is deferred to execution.
-- `ValueType` (string) — SNMP type hint for encoding (e.g., `"Integer32"`, `"OctetString"`, `"IpAddress"`). Not validated against MIB in this milestone.
+For a combined metric:
 
-**Why Expected:** Without a `Commands[]` array, there is nowhere to declare tenant-scoped SNMP SET intent. The data model must exist before any execution logic can be built. This milestone delivers the model; execution is a future milestone (see AF-01).
+| Label | Value | Rationale |
+|-------|-------|-----------|
+| `metric_name` | `CombinedMetricName` from config | The name the operator chose (e.g., `"ifTotalOctets"`) |
+| `oid` | `"combined"` | No single OID applies; use a sentinel string. Avoids null. |
+| `device_name` | `device.Name` | Same as individual metrics — this is a per-device aggregate |
+| `ip` | `device.ResolvedIp` | Same as individual metrics |
+| `source` | `"poll"` | Combined metrics only arise from polling, never from traps |
+| `snmp_type` | `"combined"` | Distinguishes from any single-OID snmp_type |
 
-**Complexity:** Low — new model class and new array property on `TenantOptions`
-**Depends On:** Existing `TenantOptions`, `ICommandMapService` (for future resolution, not load-time validation in this milestone)
-
-**Edge cases:**
-- `Commands[]` absent from a tenant entry: treated as empty list (backward compatible).
-- `Commands[]` is an empty array `[]`: valid, tenant has no commands.
-- `CommandName` not in commandmap at load time: do NOT fail. CommandMap is hot-reloaded independently; a command name that doesn't resolve today may resolve after a commandmap reload. Log a debug entry; store the entry as-is.
-- `Value` is empty string: permitted. Value validation belongs to command execution, not config load.
-- `ValueType` is empty or unrecognized: permitted. Type validation belongs to command execution.
-- `CommunityString` empty or invalid: skip this command entry with Error log (see TS-06).
+**Why `oid = "combined"` is correct:** The `oid` label on `snmp_gauge` currently serves as a
+disambiguator when two metric names map to different OIDs. For a combined metric there is no
+canonical OID. Using `"combined"` is honest and Grafana-filterable. Using `""` would produce an
+empty label, which in some Prometheus exporters is treated as absent. Using a comma-joined OID list
+would create high cardinality per label value permutation.
 
 ---
 
-### TS-03: devices.json — `Name` Field Renamed to `CommunityString`
+### TS-04: Combined Metric Dispatches AFTER Individual Metrics
 
-**What:** The `Name` field on `DeviceOptions` (and in `devices.json`) is renamed to `CommunityString`. The field now holds the full community string value (e.g., `"Simetra.NPB-01"`) rather than just the device label.
+**What:** The combined metric computation and `RecordGauge` call happen after `DispatchResponseAsync`
+completes — not inside the per-varbind loop.
 
-**Config format before:**
-```json
-{ "Name": "NPB-01", "IpAddress": "...", "Port": 161, ... }
-```
+**Why this ordering matters:**
 
-**Config format after:**
-```json
-{ "CommunityString": "Simetra.NPB-01", "IpAddress": "...", "Port": 161, ... }
-```
+1. `DispatchResponseAsync` iterates the raw `IList<Variable>` response. At this point, numeric
+   values are available in `variable.Data` directly (SharpSnmpLib provides `.ToInt64()` or
+   type-specific accessors). The MediatR pipeline enriches `ExtractedValue` on `SnmpOidReceived`
+   — but that enrichment only exists inside the pipeline message, not in the returned value.
+2. Combined metric computation requires values for all OIDs in the group. They must all be
+   collected before the aggregate is computed. The per-varbind loop is the only place where
+   all values are available together.
 
-**Why Expected:** The current `Name` field serves as both a human label and the seed for community string construction via `CommunityStringHelper.DeriveFromDeviceName()`. This dual-purpose naming is the source of the implicit derivation problem. Making the field explicitly `CommunityString` aligns the JSON with what the field actually represents, removes the derivation ambiguity, and makes the credential visible in config.
+**Implementation path:** Collect `(oid → double)` pairs from the `response` list during
+`DispatchResponseAsync` (or as a separate pass over `response` after the dispatch loop). Match OIDs
+back to `pollGroup.MetricNames` using the reverse map from `IOidMapService.ResolveToOid()` —
+which the job already has access to through `device.PollGroups[pollIndex]`. Then compute and emit.
 
-**Complexity:** Low — rename in model and JSON; update all code that reads `device.Name` for community string purposes
-**Depends On:** Existing `DeviceOptions`, `DeviceInfo`, `CommunityStringHelper`, `MetricPollJob`
-
-**Impact surface (full rename trace required):**
-- `DeviceOptions.Name` → `DeviceOptions.CommunityString` (C# property rename)
-- `DeviceInfo.Name` — still exists as a separate identity field (see TS-04)
-- `DevicesOptionsValidator` — validation message strings updated
-- `DeviceRegistry` — `_byName` dictionary: keyed by what? (see TS-04)
-- `MetricPollJob` — currently reads `device.CommunityString ?? CommunityStringHelper.DeriveFromDeviceName(device.Name)`. After rename, fallback logic changes (see TS-05).
-- `SnmpTrapListenerService` — extracts device name from community string via `CommunityStringHelper.TryExtractDeviceName()`. This path must remain valid.
-- All `devices.json` config files (local dev + K8s ConfigMap).
-- Unit tests and integration test fixtures.
-
-**Edge cases:**
-- Empty `CommunityString` field in `devices.json`: validation must catch this (previously caught as empty `Name`).
-- `CommunityString` that does NOT start with `Simetra.`: valid for the devices.json field (see TS-05 for trap listener impact).
-- Duplicate `CommunityString` values across devices: no uniqueness constraint required (community strings per device can theoretically be shared, though unusual).
+**No new MediatR notification needed.** The combined metric is recorded directly via `ISnmpMetricFactory`
+injected into `MetricPollJob`. This avoids MediatR dispatch overhead for a simple arithmetic
+operation, and avoids complicating `SnmpOidReceived` with combined-metric semantics it was not
+designed for.
 
 ---
 
-### TS-04: DeviceInfo — Separate `Name` Identity Field
+### TS-05: Configuration Validation — Action Must Be a Known Value
 
-**What:** `DeviceInfo` retains a distinct `Name` property for use as the Prometheus `device_name` label, Quartz job identity component, log context, and registry lookup key. This `Name` is derived from the `CommunityString` field: after extracting the suffix past `Simetra.` using `CommunityStringHelper.TryExtractDeviceName()`.
-
-**Specifically:**
-- `devices.json` has `CommunityString: "Simetra.NPB-01"`.
-- `DeviceRegistry` extracts `Name = "NPB-01"` from the community string at load time.
-- `DeviceInfo.Name` = `"NPB-01"`, `DeviceInfo.CommunityString` = `"Simetra.NPB-01"`.
-- `_byName` dictionary in `DeviceRegistry` continues to key on the extracted `Name` = `"NPB-01"`.
-
-**Why Expected:** The rest of the system (Quartz job keys, Prometheus labels, log messages, trap listener device lookup) all identify devices by their short name (e.g., `"NPB-01"`). These consumers must not change. The extraction step is already implemented in `CommunityStringHelper.TryExtractDeviceName()` — it is currently used only in the trap listener. This milestone reuses it in `DeviceRegistry`.
-
-**Complexity:** Low — extraction using existing helper; no logic changes to consumers of `DeviceInfo.Name`
-**Depends On:** TS-03 (CommunityString field exists on DeviceOptions), existing `CommunityStringHelper`
-
-**Edge cases:**
-- `CommunityString` does not follow `Simetra.{Name}` pattern (e.g., `"public"`, `"private"`, `"custom-community"`): `TryExtractDeviceName` returns false. The device cannot be registered because `Name` is required for identity. This is an invalid-CommunityString condition handled by TS-05.
-- `CommunityString` = `"Simetra."` (prefix only, no suffix): `TryExtractDeviceName` returns false (current implementation checks `community.Length > CommunityPrefix.Length`). Same handling as above.
-- Two devices with community strings that produce the same extracted name (e.g., `"Simetra.OBP-01"` and `"simetra.OBP-01"` with different casing): `DeviceRegistry._byName` uses `StringComparer.OrdinalIgnoreCase`, so this would be a duplicate. Log error, skip one entry (consistent with existing duplicate detection behavior).
-
----
-
-### TS-05: CommunityString Validation Rules
-
-**What:** Define explicit validation rules for `CommunityString` fields in both `devices.json` and `tenants.json`. Invalid community strings result in the entry being skipped (not a global reload failure).
-
-**Validation rules (applies to both DeviceOptions and MetricSlotOptions/CommandEntryOptions):**
-
-1. **Not null or whitespace.** A missing or blank `CommunityString` is always invalid.
-2. **Must start with `"Simetra."` prefix (case-sensitive, Ordinal).** This matches the existing `CommunityStringHelper.TryExtractDeviceName()` logic and the trap listener's validation.
-3. **Must have a non-empty suffix after `"Simetra."`.** `"Simetra."` alone is invalid.
-4. **The suffix (extracted device name) must contain only printable, non-whitespace characters.** No tabs, newlines, or control characters. This matches what would be valid in a Prometheus label.
-
-**What is NOT validated:**
-- Whether the suffix matches any known device name in `DeviceRegistry`. Cross-registry validation is an anti-feature (see AF-04).
-- Whether the community string would be accepted by the target SNMP device. That is a runtime concern.
-- Character encoding beyond ASCII printability. SNMP community strings are ASCII.
-
-**Why Expected:** The `CommunityString` is the SNMP credential. A garbage value (empty, whitespace-only, missing prefix) would produce SNMP AUTH failures at runtime with no clear root cause visible in config. Explicit validation at load time surfaces the problem before any polling starts.
-
-**Complexity:** Low — static string validation using existing `CommunityStringHelper` plus null/empty check
-**Depends On:** TS-03 (field exists), existing `CommunityStringHelper`
-
-**Edge cases — valid CommunityStrings:**
-- `"Simetra.NPB-01"` — valid.
-- `"Simetra.OBP-01"` — valid.
-- `"Simetra.device-with-hyphens"` — valid.
-- `"Simetra.DEVICE_WITH_UNDERSCORES"` — valid (non-alpha suffix is fine as long as printable/non-whitespace).
-
-**Edge cases — invalid CommunityStrings:**
-- `""` (empty) — invalid: null/empty check.
-- `"   "` (whitespace) — invalid: null/whitespace check.
-- `"Simetra."` — invalid: suffix is empty.
-- `"public"` — invalid: missing `Simetra.` prefix.
-- `"simetra.NPB-01"` (lowercase prefix) — invalid: the check is case-sensitive Ordinal to match `CommunityStringHelper` behavior. Log clear message: "CommunityString 'simetra.NPB-01' must start with 'Simetra.' (case-sensitive)".
-- `"Simetra. NPB-01"` (space after dot) — valid prefix, suffix is `" NPB-01"`. Suffix contains a leading space — invalid by the printable non-whitespace rule.
-- `null` (JSON field absent or explicitly null) — invalid.
-
----
-
-### TS-06: Invalid CommunityString — Ignore Entry with Structured Log
-
-**What:** When a `CommunityString` fails validation (TS-05), the behavior is:
-- **For `devices.json` entry:** Skip that device entirely. Log at Error level with structured fields: device index, the invalid value, which rule failed. The device is NOT registered in `DeviceRegistry` — it will not receive SNMP GET jobs or trap routing.
-- **For `tenants.json` metric entry:** Skip that metric slot entirely. Log at Error level with the tenant index, metric index, the invalid value. The slot is not added to `TenantVectorRegistry`.
-- **For `tenants.json` command entry:** Skip that command entry entirely. Log at Error level with tenant index, command index, the invalid value.
-- **Global behavior:** Other entries in the same file are unaffected. The reload continues. Only the specific invalid entry is dropped.
-
-**Why Expected:** The existing pattern in the system is "soft degradation with structured logging." `DeviceRegistry.BuildPollGroups()` already does this for unresolvable metric names — warn, skip, continue. This milestone applies the same pattern to invalid CommunityStrings. A hard failure (reject entire reload) is disproportionate: a single misconfigured entry would block all other devices/tenants from updating.
-
-**Complexity:** Low
-**Depends On:** TS-05 (validation rules), existing structured log patterns
-
-**Edge cases:**
-- All entries in a tenant's `Metrics[]` have invalid CommunityStrings: the tenant is created with zero metric slots (same as a tenant with an empty Metrics list). The tenant entry still exists in `TenantVectorRegistry` but has no routing slots.
-- All entries in `devices.json` have invalid CommunityStrings: `DeviceRegistry` is empty. All poll jobs are removed by `DynamicPollScheduler.ReconcileAsync()`. The system runs with no active polling — this is expected and correct; the operator sees Errors in logs.
-- Same entry is invalid on every reload: the Error log fires on every reload, not just the first. This is intentional — the operator needs ongoing visibility that the entry is broken.
-
----
-
-### TS-07: Remove DeviceRegistry Dependency from TenantVectorRegistry
-
-**What:** `TenantVectorRegistry.Reload()` currently calls `_deviceRegistry.AllDevices` (for IP resolution) and `_deviceRegistry.TryGetByIpPort()` + `_oidMapService.Resolve()` (for interval derivation). Both usages are removed.
-
-**IP resolution:** Removed. `MetricSlotOptions.Ip` is used directly as-is in the `MetricSlotHolder`. The tenant config now carries the explicit IP; no translation from DeviceRegistry is needed.
-
-**Interval derivation:** `DeriveIntervalSeconds()` currently finds the interval by looking up the device in DeviceRegistry and scanning its poll groups for a matching OID. This cross-registry derivation is removed. Interval for a tenant slot either:
-- Is taken from `MetricSlotOptions.IntervalSeconds` if the field is added (see D-02), OR
-- Falls back to 0 (current fallback when device not found) — which is acceptable for this milestone since the interval is informational in the holder, not used for scheduling.
-
-**Constructor impact:** `TenantVectorRegistry` no longer requires `IDeviceRegistry` or `IOidMapService` as constructor arguments.
-
-**Why Expected:** The self-describing entry (TS-01) was motivated by removing this cross-registry dependency. After TS-01, the TenantVectorRegistry has all the information it needs in the config itself. The DeviceRegistry dependency is vestigial and creates tight coupling.
-
-**Complexity:** Low (deletion of code), Medium (verifying no regressions in routing key construction or carry-over logic)
-**Depends On:** TS-01 (self-describing entry provides the data that was previously looked up)
-
-**Edge cases:**
-- Interval derivation currently returns 0 when device not found. The new behavior also returns 0 (or whatever fallback is chosen). No behavioral regression for the slot holder since 0 is already the existing fallback.
-- `ResolveIp()` currently passes through the original `configIp` when the device is not found in registry (line 206: `return configIp;`). The new behavior uses `configIp` directly, which is identical to the fallback path — no change in the common case.
-
----
-
-### TS-08: tenants.json and simetra-tenants ConfigMap Rename
-
-**What:** Three simultaneous renames that must be applied together:
-
-| Old | New |
-|-----|-----|
-| File: `config/tenantvector.json` | `config/tenants.json` |
-| ConfigMap: `simetra-tenantvector` | `simetra-tenants` |
-| ConfigMap key: `tenantvector.json` | `tenants.json` |
-| C# constant `TenantVectorWatcherService.ConfigMapName` | `"simetra-tenants"` |
-| C# constant `TenantVectorWatcherService.ConfigKey` | `"tenants.json"` |
-| `TenantVectorOptions.SectionName` = `"TenantVector"` | `"Tenants"` |
-
-**The JSON structure inside the file is unchanged.** Only the file name, ConfigMap name, ConfigMap key, and config section name change.
-
-**Why Expected:** `tenantvector.json` is an internal implementation name that leaked into operator-facing config. The concept is simply "tenants." The rename aligns the file name with the domain concept. Consistency: `devices.json` is called `devices.json`, not `deviceregistry.json`.
-
-**Complexity:** Low (mechanical rename), Medium (must update all references atomically — a partial rename leaves the system broken)
-**Depends On:** Nothing — purely mechanical
-
-**Rename impact — full surface:**
-- `src/SnmpCollector/config/tenantvector.json` → `config/tenants.json`
-- `appsettings.Development.json` — file path reference
-- `TenantVectorWatcherService.ConfigMapName` constant
-- `TenantVectorWatcherService.ConfigKey` constant
-- `TenantVectorOptions.SectionName`
-- K8s ConfigMap: `deploy/k8s/snmp-collector/simetra-tenantvector.yaml` → `simetra-tenants.yaml`, metadata name, data key
-- All deployment manifests that reference the ConfigMap name (volumes, volumeMounts in `deployment.yaml`)
-- E2E test scripts that reference the ConfigMap name (`tests/e2e/scenarios/`)
-- Unit/integration test fixtures that use `ConfigMapName` or `ConfigKey` constants
-
----
-
-### TS-09: Unresolvable Metric Name in Tenant Config — Skip Entry, Log Error
-
-**What:** For each `MetricSlotOptions` entry in `TenantOptions.Metrics[]`, validate that `MetricName` exists in the current OID map (`IOidMapService.ContainsMetricName()`). If the metric name is NOT in the OID map, the entry is skipped with an Error-level structured log.
+**What:** If `Action` is present but is not one of the known values (`sum`, `diff`, `mean`,
+case-insensitive), the poll group must be rejected at configuration load time.
 
 **Behavior:**
-- Entry is not added to `TenantVectorRegistry`.
-- Other entries in the same tenant's `Metrics[]` are unaffected.
-- The OID map is hot-reloaded independently; this validation runs only at tenant vector reload time.
 
-**Why Expected (v1.7 scope clarification):** Phase 31 context document (in `<deferred>`) explicitly deferred "Tenant vector config validation against OID map — separate concern, not in scope for device config phase." v1.7 is the milestone that makes this validation real, because tenant metric entries are now self-describing and thus validatable.
+- Log at Error level: `"PollGroup[{Index}] for device '{DeviceName}': CombinedMetricName is set
+  but Action '{Value}' is not a recognized action. Valid values: sum, diff, mean. Poll group
+  will not be scheduled."`
+- The poll group is skipped — no Quartz job is created for it.
+- Other poll groups on the same device are unaffected.
+- Existing "soft degradation with structured logging" pattern (same as `DeviceRegistry.BuildPollGroups()`
+  handling for unresolvable OIDs).
 
-**Poll group behavior when ALL metrics fail to resolve:** If ALL entries in `TenantOptions.Metrics[]` fail (invalid CommunityStrings, unresolvable metric names), the tenant is created with zero slots. The tenant still exists in `TenantVectorRegistry` but has no routing slots and will never receive fan-out data. This is a valid (degraded) state.
+**Additionally:** If exactly one of `CombinedMetricName` / `Action` is present without the other,
+treat it as a configuration error with the same skip behavior and a distinct log message:
+`"PollGroup[{Index}]: CombinedMetricName and Action must be specified together or not at all."`
 
-**Complexity:** Low — single `ContainsMetricName` call per entry during `Reload()`
-**Depends On:** Existing `IOidMapService.ContainsMetricName()`, TS-01 (self-describing entry has a MetricName), existing `TenantVectorRegistry.Reload()`
+**Case sensitivity:** `"Sum"`, `"SUM"`, `"sum"` are all valid — normalized with
+`StringComparison.OrdinalIgnoreCase` at parse time.
 
-**Edge cases:**
-- Metric name exists in OID map but the device does not actually poll it: the slot exists in `TenantVectorRegistry` but will never receive a value. This is not a validation error — the tenant config may be forward-looking or the device config may lag.
-- Metric name was valid at load time but OID map is updated and the name is removed: the tenant slot persists (no retroactive invalidation on OID map change). The slot will stop receiving values until the tenant config is reloaded.
-- MetricName is empty string: fails validation (empty string is not a valid metric name). Log Error, skip.
+**Complexity:** Low — string comparison at device config load time.
 
 ---
 
-### TS-10: Unresolvable Command Name in Tenant Config — Store Entry, Log Debug
+### TS-06: No Combined Metric Emitted When Response Is Empty or All-Error
 
-**What:** For `CommandEntryOptions` entries in `TenantOptions.Commands[]`, the `CommandName` is NOT validated against the CommandMap at load time. The entry is stored as-is regardless of whether the `CommandName` is in the current command map.
+**What:** If the SNMP GET response produces zero successfully received numeric values for the group
+(all varbinds were NoSuchObject/NoSuchInstance/EndOfMibView, or all values were non-numeric string
+types), the combined metric is NOT emitted.
 
-**Why different from TS-09:** `CommandName` validation against the CommandMap is deliberately deferred to execution time. The CommandMap is hot-reloaded independently. Unlike metric slots (which need an OID map entry to be useful immediately), command entries are only executed on demand — a command that references a name not yet in the CommandMap is not broken, it's just not yet executable. Logging a persistent Error for every such entry would produce noise on every tenant reload when the CommandMap hasn't loaded yet.
+**Why:** Emitting a combined metric of 0 when the device returned no data would be misleading —
+a Grafana panel would show "0 total octets" when the reality is "no data." The absence of a
+data point is more honest than a zero.
 
-**Behavior:** Log at Debug level: "CommandName 'X' not found in CommandMap — entry stored, will resolve at execution time."
+**Behavior:**
+- Log at Debug: `"CombinedMetric '{CombinedMetricName}' not emitted — no numeric values in response."`
+- `snmp.event.published` and `snmp.event.handled` counters are NOT incremented (the combined
+  metric bypasses the MediatR pipeline entirely, per TS-04).
+- No counter for "combined metric skipped" is added in this milestone (see AF-03).
 
-**Complexity:** Low (no action, just a debug log)
-**Depends On:** TS-02 (command entry model), existing `ICommandMapService`
+**Contrast with partial response:** If at least one numeric value was received, the combined
+metric IS emitted (using whatever values are available). The partial case for `diff` (missing
+first or second OID) is an exception — see TS-02.
 
-**Edge cases:**
-- CommandName is empty string: this IS validated — empty CommandName is an error (the command entry has no identity). Log Error, skip entry (unlike non-empty names that simply don't resolve).
-- CommandName is valid but CommandMap is empty (not yet loaded): Debug log, entry stored. This is the normal startup sequence edge case.
+---
+
+### TS-07: `CombinedMetricName` Must Not Conflict With OID Map Metric Names
+
+**What:** At configuration load time, validate that `CombinedMetricName` does NOT exist as a
+metric name in the current OID map (`IOidMapService.ContainsMetricName()`).
+
+**Why this matters:** `snmp_gauge` is partitioned by `{metric_name, oid}` label combination.
+If `CombinedMetricName = "ifInOctets"` and `ifInOctets` is also a real OID-mapped metric, both
+the real polled value and the combined synthetic value would emit data points under
+`metric_name="ifInOctets"` — but the real one has `oid="1.3.6.1.2.1.2.2.1.10"` and the synthetic
+one has `oid="combined"`. Prometheus will store both as separate time series (different label sets),
+but a naive Grafana query for `snmp_gauge{metric_name="ifInOctets"}` would return two series,
+confusing operators.
+
+**Behavior on conflict:**
+
+- Log at Warning: `"PollGroup[{Index}]: CombinedMetricName '{Name}' conflicts with an OID map
+  metric name. The synthetic metric will be emitted with oid='combined' and may overlap real
+  metrics in queries. Consider renaming."`
+- **The poll group is NOT skipped.** A naming conflict is a warning, not a fatal error. The
+  operator may intentionally reuse a name. The metrics are technically distinguishable by the
+  `oid` label. The Warning is sufficient to surface the issue.
+
+**Timing note:** OID map is hot-reloaded independently. This check runs only at device config
+load time. If the OID map is later updated to add a name that conflicts with an existing
+`CombinedMetricName`, no retroactive warning fires. This is acceptable — the same gap exists for
+all name-based validations in the system.
 
 ---
 
 ## Differentiators
 
-Features that add operational visibility and correctness without being required for basic function.
+Features that add operational value without being required for correctness.
 
 ---
 
-### D-01: TenantVectorOptionsValidator — Structural Validation
+### D-01: `snmp.combined.computed` Pipeline Counter
 
-**What:** The current `TenantVectorOptionsValidator` is a no-op (always returns Success). Replace it with real structural validation that catches the following at reload time (before calling `TenantVectorRegistry.Reload()`):
-
-- Tenant `Priority` is any integer: valid (no constraint, existing behavior).
-- `Metrics[]` entries: each must have non-null/non-empty `Ip`, `MetricName`. `Port` must be 1–65535. `TimeSeriesSize` must be >= 1.
-- `Commands[]` entries: each must have non-null/non-empty `Ip`, `CommandName`. `Port` must be 1–65535. Non-empty `Value`.
-
-**Important distinction:** This validator does NOT check CommunityString validity (that happens in TS-05 at the per-entry level during Reload, not as a pre-flight blocker). This validator catches structural issues like missing required fields.
-
-**Behavior:** Validation failures at this level reject the entire reload and log the failures (consistent with existing `DevicesOptionsValidator` behavior). This is appropriate for structural problems (malformed JSON object, missing Ip) but NOT for semantic issues like invalid CommunityString or unresolvable MetricName.
-
-**Why:** Structural failures indicate a badly malformed config where partial application would produce unpredictable behavior. Semantic failures (bad CommunityString, unknown MetricName) are per-entry and should not block other entries.
-
-**Complexity:** Low — follows existing `DevicesOptionsValidator` pattern
-**Depends On:** TS-01, TS-02 (the models these fields appear on)
-
----
-
-### D-02: MetricSlotOptions — Optional `IntervalSeconds` for Informational Storage
-
-**What:** Add an optional `IntervalSeconds` field to `MetricSlotOptions`. When present, it is stored in `MetricSlotHolder` for observability (e.g., the operations dashboard can show polling frequency per tenant slot). It is NOT used by the Quartz scheduler — only the device's poll group interval governs actual polling cadence.
-
-**Value Proposition:** Removes the awkward `DeriveIntervalSeconds()` cross-registry lookup (which goes away in TS-07 anyway) and replaces it with an operator-declared interval. The operations dashboard (Phase 18) and any future observability layer can read the interval directly from the slot without traversing the device registry.
-
-**Behavior:** If absent (field not present in JSON), defaults to 0 (same as the current DeviceRegistry-not-found fallback). No validation required — 0 is valid as "interval unknown."
-
-**Complexity:** Low
-**Depends On:** TS-01 (self-describing entry), TS-07 (DeviceRegistry dependency removed)
-
----
-
-### D-03: Structured Log Fields on CommunityString Skip Events
-
-**What:** When an entry is skipped due to invalid CommunityString (TS-06), the log entry must include structured properties suitable for Loki alerting:
+**What:** Add a new counter `snmp.combined.computed` to `PipelineMetricService` on the
+`SnmpCollector` meter (not the leader meter — this is pipeline health data, not business data).
 
 ```
-"Skipping device[{Index}]: CommunityString '{Value}' is invalid — {Reason}. Device will not be registered."
+snmp.combined.computed{device_name="NPB-01", action="sum"} 42
 ```
 
-Structured properties:
-- `EntryType`: `"Device"`, `"TenantMetric"`, or `"TenantCommand"`
-- `EntryIndex`: zero-based index within the parent array
-- `InvalidValue`: the actual CommunityString value that failed
-- `ValidationRule`: which rule failed (e.g., `"MissingSimetraPrefix"`, `"EmptySuffix"`, `"NullOrEmpty"`)
-- `ConfigMap`: which ConfigMap the entry came from
+Tags: `device_name`, `action`.
 
-**Value Proposition:** Enables Loki alert: "alert if any CommunityString skip event occurs" — catches operator config errors proactively.
+**Value Proposition:** The operations dashboard can show "how many combined metrics were computed
+per device per action type." Alerts can fire if this count drops to zero for a device that should
+be producing combined metrics.
 
-**Complexity:** Low
-**Depends On:** TS-06 (the skip behavior), TS-05 (the rule being violated)
+**Why a differentiator:** Not required for correctness. The combined metric itself appears in
+`snmp_gauge` and can be queried. But without this counter, there is no way to distinguish
+"combined metric computed and emitted 0" from "combined metric computation was skipped (TS-06)."
+
+**Complexity:** Low — one new counter field and one `Add` call in `PipelineMetricService`.
 
 ---
 
-### D-04: tenants.json — `Name` Field on Tenant Object for Readability
+### D-02: `PollDurationMs` on Combined Metric
 
-**What:** Add an optional `Name` field to `TenantOptions` (the outer tenant object, not the inner metric/command entries). Used for log context only — log messages include the tenant name rather than `"tenant-3"`.
+**What:** Pass the same `pollDurationMs` to a `RecordGaugeDuration` call for the combined metric,
+using `CombinedMetricName` as the `metricName` and `"combined"` as the `oid`.
 
-```json
-{
-  "Name": "primary-tenant",
-  "Priority": 1,
-  "Metrics": [...]
-}
-```
+**Value Proposition:** The operations dashboard already shows poll duration per metric. Including
+the combined metric means its latency profile is visible alongside the individual metrics it
+was derived from.
 
-**Behavior:** If absent, fall back to the existing `tenant-{index}` synthetic ID. No uniqueness validation required.
+**Complexity:** Low — same `pollDurationMs` value already available in `Execute()` is forwarded
+to the combined metric recording.
 
-**Value Proposition:** Operators managing many tenants can assign meaningful names that appear in logs, making config errors easier to trace.
+---
 
-**Complexity:** Low
-**Depends On:** Existing `TenantOptions`, `TenantVectorRegistry.Reload()` (which currently generates `tenant-{i}`)
+### D-03: Warn When `diff` Has More Than 2 Values
+
+**What:** When `Action = "diff"` and `MetricNames[]` contains more than 2 entries, log a Warning
+(not just Debug) at configuration load time:
+
+`"PollGroup[{Index}]: Action 'diff' with {N} MetricNames uses only the first two. The remaining
+{N-2} will be polled but not included in the diff. If this is intentional, consider moving them
+to a separate poll group."`
+
+**Value Proposition:** Diff with 3+ metrics is almost always a configuration mistake. The Warning
+at load time surfaces this before the operator wonders why the diff seems wrong.
+
+**Complexity:** Trivial — count check at load time.
 
 ---
 
 ## Anti-Features
 
-Things to deliberately NOT build in v1.7.
+Things to deliberately NOT build for combined metrics.
 
 ---
 
-### AF-01: SNMP SET Command Execution
+### AF-01: Delta-Over-Time Computation
 
-**What:** Do NOT implement any mechanism that sends SNMP SET packets to devices using the `Commands[]` entries.
-**Why Avoid:** v1.7 defines the data model. Execution requires authorization design, retry semantics, audit logging, value encoding by type, and error reporting — all separate milestone concerns. Building execution now mixes data model definition with protocol implementation, making the data model harder to iterate on.
-**What to Do Instead:** `Commands[]` is stored in `TenantOptions` and survives reload. The entries are accessible via `TenantVectorRegistry` for future consumers.
+**What:** Do NOT compute the change in a metric between consecutive polls (e.g., "rate of counter
+increase over 30 seconds").
 
----
+**Why Avoid:** Prometheus `rate()` and `increase()` already do this on the raw Counter32/Counter64
+gauges that are already emitted. Building delta-over-time in the agent requires state (previous
+value per OID per device), restart handling (what's the baseline after restart?), rollover handling
+(Counter32 wraps at 2³²). This is non-trivial stateful logic for a computation Prometheus handles
+correctly.
 
-### AF-02: Cross-Validation — CommunityString vs DeviceRegistry
-
-**What:** Do NOT validate that `CommunityString` in `tenants.json` entries matches any entry in `devices.json`.
-**Why Avoid:** These are two independently hot-reloaded ConfigMaps. Cross-validation would require ordering guarantees between reloads, circular dependencies between watchers, or a two-phase load sequence — all of which add complexity without meaningful benefit. The operator is responsible for consistency. A CommunityString mismatch will manifest as SNMP AUTH failure at runtime.
-**What to Do Instead:** TS-05 validates the CommunityString format. Runtime SNMP errors surface mismatches during polling.
-
----
-
-### AF-03: Reverse CommunityString Lookup
-
-**What:** Do NOT add a `TryGetByCommunityString()` method to `DeviceRegistry` or a CommunityString-indexed lookup.
-**Why Avoid:** The trap listener already extracts device name from the community string via `CommunityStringHelper.TryExtractDeviceName()` and then looks up by name. This works without a reverse index. Adding one would be unused infrastructure.
-**What to Do Instead:** The existing `TryGetDeviceByName()` lookup after extracting the name suffix is sufficient.
+**What to Do Instead:** Operators write `rate(snmp_gauge{metric_name="ifInOctets"}[5m])` in
+Grafana. `Action = "sum"` over two instantaneous values is sufficient for additive aggregates.
 
 ---
 
-### AF-04: Validate That Tenant Entry's `Device` Field Matches DeviceRegistry
+### AF-02: Cross-Device Aggregation
 
-**What:** Do NOT require or validate that `MetricSlotOptions.Device` or `CommandEntryOptions.Device` corresponds to a device registered in `DeviceRegistry`.
-**Why Avoid:** The `Device` field is a label for routing context and observability — it is not a foreign key. Cross-validating it against `DeviceRegistry` recreates exactly the coupling that TS-07 removes.
-**What to Do Instead:** The `Device` field is stored as-is. Mismatches show up in metric labels or log context, not in config errors.
+**What:** Do NOT aggregate values across multiple devices within a single combined metric (e.g.,
+"total CPU across all OBP devices").
 
----
+**Why Avoid:** `MetricPollJob` operates on a single device. A cross-device aggregate would require
+reading the current value of another device's metric from Prometheus or from a shared in-memory
+store — both of which break the clean isolation of the poll job. Cross-device aggregation belongs
+in Grafana or a recording rule.
 
-### AF-05: Preserve Backward Compat for `tenantvector.json` / `simetra-tenantvector`
-
-**What:** Do NOT provide a transition period where both the old ConfigMap name `simetra-tenantvector` and the new `simetra-tenants` are watched.
-**Why Avoid:** Supporting both names doubles the watcher complexity and creates ambiguity about which is authoritative. The rename is a clean break — all references are updated atomically as part of TS-08.
-**What to Do Instead:** TS-08 specifies a complete atomic rename of all references. Document the rename in the deployment note so operators know to apply the ConfigMap change and deployment config change together.
-
----
-
-### AF-06: CommandName Validation Against CommandMap at Tenant Load Time
-
-**What:** Do NOT fail or skip a command entry because its `CommandName` is not in the current CommandMap.
-**Why Avoid:** The CommandMap is hot-reloaded independently. At tenant config load time, the CommandMap may not be populated yet (startup race), or it may be temporarily stale. Rejecting command entries that don't resolve now would mean the tenant config must always be reloaded after a CommandMap reload — creating an ordering dependency.
-**What to Do Instead:** TS-10 specifies Debug-level logging. Validation at execution time (not load time) is the correct behavior.
+**What to Do Instead:** Operators use PromQL `sum(snmp_gauge{metric_name="hrProcessorLoad"})` to
+aggregate across devices.
 
 ---
 
-### AF-07: SNMP Community String Negotiation or Discovery
+### AF-03: `snmp.combined.skipped` Counter
 
-**What:** Do NOT implement any mechanism to discover or auto-configure community strings by probing the device.
-**Why Avoid:** SNMP community strings are static credentials configured by device operators. Auto-discovery would require sending SNMP requests with guessed community strings — a security violation in many environments.
-**What to Do Instead:** Require explicit `CommunityString` in config (TS-03, TS-05).
+**What:** Do NOT add a counter for "combined metric was not emitted due to empty response."
+
+**Why Avoid:** The TS-06 skip scenario (all OIDs returned NoSuchObject) is already captured by
+the individual per-OID Debug logs. Adding a separate counter for the skip case creates a parallel
+counting mechanism. If the combined metric is not appearing in Grafana, the operator looks at the
+individual OID metrics to understand why the group has no data — the diagnostic is already there.
+
+**What to Do Instead:** `snmp.combined.computed` (D-01) implicitly shows skips via absence: if
+`snmp.combined.computed` for a device drops to zero when it should be non-zero, that surfaces
+the issue.
+
+---
+
+### AF-04: MediatR Notification for Combined Metric
+
+**What:** Do NOT create a new `CombinedMetricComputed` MediatR notification or push the combined
+metric through the existing `SnmpOidReceived` pipeline.
+
+**Why Avoid:**
+- The existing `SnmpOidReceived` message is shaped around a single OID with a raw `ISnmpData`
+  value and a `TypeCode`. A combined metric has no OID, no raw SNMP value, and no SNMP type.
+  Forcing it into the existing shape requires nullable workarounds or a sentinel SNMP type.
+- A new notification type would require new pipeline behaviors, a new terminal handler, and new
+  test coverage — disproportionate for an arithmetic operation.
+- `TenantVectorFanOutBehavior` currently routes based on `(AgentIp, Port, MetricName)`. Combined
+  metrics are poll-group-level aggregates and are not tenant-routed. Running them through the
+  fan-out behavior silently (by having no matching slot) is confusing.
+
+**What to Do Instead:** Direct `ISnmpMetricFactory.RecordGauge()` call in `MetricPollJob` after
+the dispatch loop (per TS-04).
+
+---
+
+### AF-05: `snmp_info` Combined Metric
+
+**What:** Do NOT compute combined metrics on string OID values (OctetString, IPAddress,
+ObjectIdentifier) — `diff` or `sum` of strings is meaningless.
+
+**Why Avoid:** SNMP string values carry no numeric semantics. A "sum" or "mean" of interface
+descriptions is not a useful metric. A "diff" of two IP addresses is not defined.
+
+**What to Do Instead:** Poll groups that mix string and numeric OIDs can still have a combined
+metric — the string OIDs are excluded from computation (TS-02 specifies that only numeric values
+participate). But you cannot define a combined metric over exclusively string OIDs.
+
+---
+
+### AF-06: Combined Metric Participates in Tenant Vector Fan-Out
+
+**What:** Do NOT route the combined metric through `TenantVectorFanOutBehavior` and into tenant
+`MetricSlotHolder` time series.
+
+**Why Avoid:** Tenant vector routing is driven by `(ip, port, metricName)` tuples registered in
+`TenantVectorRegistry`. A combined metric produced by a poll group is a device-level construct,
+not a tenant-declared metric. A tenant that wants to observe a combined metric should declare it
+explicitly in `tenants.json` (future capability). Implicitly routing combined metrics through
+the tenant vector would bypass the explicit tenant declaration model.
+
+**What to Do Instead:** Combined metrics appear in `snmp_gauge` on the leader exporter. Tenants
+observe them via Prometheus queries if needed. Explicit tenant-level combined metric slots are
+a future milestone concern.
 
 ---
 
 ## Feature Dependencies
 
 ```
-TS-03 (Name → CommunityString rename on DeviceOptions)
+TS-05 (Action validation)
     |
-    +--> TS-04 (DeviceInfo.Name derived from CommunityString)
-              |
-              +--> TS-05 (CommunityString validation rules)
-                        |
-                        +--> TS-06 (Skip + Error log on invalid CommunityString)
-                        |
-                        +--> D-03 (Structured log fields on skip events)
+    +--> TS-01 (PollOptions fields — required before validation can run)
 
-TS-01 (Self-describing MetricSlotOptions)
+TS-02 (sum/diff/mean computation)
     |
-    +--> TS-05 (CommunityString validation — applies to MetricSlotOptions too)
-    |
-    +--> TS-07 (Remove DeviceRegistry dependency from TenantVectorRegistry)
-    |
-    +--> TS-09 (Unresolvable MetricName — skip + Error)
-    |
-    +--> D-01 (TenantVectorOptionsValidator structural validation)
-    |
-    +--> D-02 (Optional IntervalSeconds on MetricSlotOptions)
+    +--> TS-01 (fields exist)
+    +--> TS-04 (dispatch ordering — computation happens after individual dispatch)
+    +--> TS-06 (empty-response guard — prerequisite for safe division in mean)
 
-TS-02 (Tenant Commands[] data model)
+TS-03 (Prometheus type and labels)
     |
-    +--> TS-05 (CommunityString validation on command entries)
-    |
-    +--> TS-10 (Unresolvable CommandName — store + Debug)
-    |
-    +--> D-01 (TenantVectorOptionsValidator — structural validation of Commands[])
+    +--> TS-02 (computed value exists before it can be recorded)
+    +--> TS-04 (direct RecordGauge call, not MediatR)
 
-TS-08 (tenants.json / simetra-tenants rename)
-    | (independent, but must be atomic with TS-01/TS-02 deployment)
+TS-07 (OidMap name conflict warning)
+    |
+    +--> TS-01 (CombinedMetricName field exists)
+
+D-01 (snmp.combined.computed counter)
+    |
+    +--> TS-02 (computation happens before counter increment)
+
+D-02 (PollDurationMs on combined metric)
+    |
+    +--> TS-03 (RecordGaugeDuration shares the label structure of RecordGauge)
 ```
 
 ### Critical Path
 
 ```
-TS-03 + TS-04 → TS-05 → TS-06         (CommunityString validation infrastructure)
-TS-01 → TS-07 + TS-09                  (self-describing metrics, remove DeviceRegistry dep)
-TS-02 → TS-10                          (commands data model)
-TS-08                                  (rename — independent, apply atomically with deployment)
+TS-01  →  TS-05 (validation at load time)
+TS-01  →  TS-07 (OidMap conflict check at load time)
+TS-01  →  TS-02  →  TS-03  →  emit snmp_gauge
+TS-02  →  TS-04 (ordering: after dispatch loop)
+TS-02  →  TS-06 (guard: only emit when values exist)
 ```
 
-TS-08 (rename) is mechanically independent of TS-01/TS-02/TS-03 but must be deployed atomically. The ConfigMap rename and code rename must reach production together — a partial state where the code watches `simetra-tenants` but only `simetra-tenantvector` exists in K8s (or vice versa) means the watcher finds no data.
+---
+
+## Pipeline Counter Impact Analysis
+
+The question: how do combined metrics interact with the operations dashboard (`snmp.pipeline.*`
+and `snmp.event.*` counters in `PipelineMetricService`)?
+
+**Existing counters and their relationship to combined metrics:**
+
+| Counter | Current Meaning | Impact from Combined Metrics |
+|---------|-----------------|------------------------------|
+| `snmp.event.published` | Every `SnmpOidReceived` notification sent into MediatR | **No change.** Combined metric bypasses MediatR (AF-04). |
+| `snmp.event.handled` | Every notification reaching `OtelMetricHandler` successfully | **No change.** Combined metric calls `RecordGauge` directly. |
+| `snmp.event.errors` | Exceptions in pipeline behaviors or handlers | **No change.** Errors in combined metric computation are caught in `MetricPollJob.Execute()` and don't use the pipeline error path. |
+| `snmp.event.rejected` | Notifications discarded before reaching a handler | **No change.** |
+| `snmp.poll.executed` | Every completed poll attempt (success or failure) | **No change.** This fires once per job execution regardless of combined metrics. |
+| `snmp.poll.unreachable` | Device transitions to unreachable | **No change.** |
+| `snmp.poll.recovered` | Device transitions back to healthy | **No change.** |
+| `snmp.tenantvector.routed` | Fan-out writes to tenant metric slots | **No change.** Combined metrics do not fan-out (AF-06). |
+
+**Net conclusion:** No existing pipeline counter is affected by combined metric implementation.
+The combined metric path is a direct call to `ISnmpMetricFactory.RecordGauge()` inside
+`MetricPollJob`, fully outside the MediatR pipeline. The only new counter added is `snmp.combined.computed`
+(D-01), which is explicitly a new instrument.
+
+**Exception handling:** If the combined metric computation throws (e.g., `IOidMapService` is null
+for some reason, or a bug in the aggregation logic), the exception will propagate into
+`MetricPollJob.Execute()`'s catch block, which logs the error and calls `RecordFailure`. This means
+a bug in combined metric computation would incorrectly attribute the failure to device
+unreachability rather than computation error. **Mitigation:** The combined metric computation block
+should be wrapped in its own try/catch that logs at Error and increments a distinct counter (or at
+minimum logs a distinguishable message) before re-throwing or swallowing. This is a code-level
+implementation concern, not a feature boundary concern, but it must be addressed in the
+implementation plan.
 
 ---
 
 ## MVP Recommendation
 
-**Must build (10 features — all table stakes):**
+**Must build (7 — all table stakes):**
 
-1. **TS-03** `Name` → `CommunityString` rename on `DeviceOptions` and `devices.json`
-2. **TS-04** `DeviceInfo.Name` derived from `CommunityString` via `TryExtractDeviceName`
-3. **TS-05** CommunityString validation rules
-4. **TS-06** Invalid CommunityString — skip entry, Error log
-5. **TS-01** Tenant metric entry — self-describing object (`Device`, `CommunityString` added)
-6. **TS-07** Remove DeviceRegistry dependency from TenantVectorRegistry
-7. **TS-02** Tenant Commands[] data model
-8. **TS-08** `tenants.json` / `simetra-tenants` rename (atomic with deployment)
-9. **TS-09** Unresolvable MetricName in tenant config — skip entry, Error log
-10. **TS-10** Unresolvable CommandName in tenant config — store entry, Debug log
+1. **TS-01** `PollOptions.CombinedMetricName` and `Action` fields
+2. **TS-05** Configuration validation — Action must be a known value; fields must be paired
+3. **TS-07** Warning when `CombinedMetricName` conflicts with OID map metric name
+4. **TS-02** `sum`, `diff`, `mean` computation with all edge cases specified above
+5. **TS-06** No combined metric emitted on empty/all-error response
+6. **TS-04** Combined metric dispatched directly via `ISnmpMetricFactory`, after the dispatch loop
+7. **TS-03** Combined metric recorded as `snmp_gauge` with `oid="combined"`, `snmp_type="combined"`, `source="poll"`
 
-**Should build (2 differentiators — low cost, high operational value):**
+**Should build (2 differentiators — low cost, high dashboard value):**
 
-1. **D-01** `TenantVectorOptionsValidator` structural validation (replaces the no-op)
-2. **D-03** Structured log fields on CommunityString skip events (enables Loki alerts)
+1. **D-01** `snmp.combined.computed{device_name, action}` counter
+2. **D-03** Warning at load time when `diff` group has more than 2 metrics
 
-**Evaluate before committing (2 differentiators — low complexity but scope creep risk):**
+**Evaluate before committing (1 differentiator):**
 
-- **D-02** Optional `IntervalSeconds` on `MetricSlotOptions` — useful for operations dashboard but not needed for correctness in this milestone
-- **D-04** Optional `Name` on `TenantOptions` — cosmetic improvement, deferred if schedule is tight
+- **D-02** `PollDurationMs` on combined metric — trivial to add, but adds one histogram data point
+  per combined metric per poll. Adds cardinality proportional to number of combined groups.
+  Worthwhile if the operations dashboard phases (Phase 18) already show per-metric duration.
 
-**Explicitly do NOT build (7 anti-features):**
+**Explicitly do NOT build (6 anti-features):**
 
-- AF-01: SNMP SET command execution
-- AF-02: Cross-validation CommunityString vs DeviceRegistry
-- AF-03: Reverse CommunityString lookup in DeviceRegistry
-- AF-04: Validate `Device` field matches DeviceRegistry
-- AF-05: Dual ConfigMap watch for backward compat during rename
-- AF-06: CommandName validation against CommandMap at tenant load time
-- AF-07: Community string auto-discovery
+- AF-01: Delta-over-time (rate) computation — use Prometheus `rate()` instead
+- AF-02: Cross-device aggregation — use PromQL `sum()` instead
+- AF-03: `snmp.combined.skipped` counter — absence of `snmp.combined.computed` is the signal
+- AF-04: MediatR notification for combined metric
+- AF-05: Combined metric over string OID values
+- AF-06: Tenant vector fan-out for combined metrics
 
 ---
 
 ## Sources
 
-- Codebase: `src/SnmpCollector/Pipeline/TenantVectorRegistry.cs` — `ResolveIp()` and `DeriveIntervalSeconds()` cross-registry calls, volatile FrozenDictionary swap, carry-over logic (HIGH confidence)
-- Codebase: `src/SnmpCollector/Pipeline/DeviceRegistry.cs` — `BuildPollGroups()` unresolvable name handling pattern, `_byName` / `_byIpPort` indexes, `DeviceInfo` constructor (HIGH confidence)
-- Codebase: `src/SnmpCollector/Pipeline/CommunityStringHelper.cs` — `TryExtractDeviceName()` exact implementation: `Simetra.` prefix, `Length > CommunityPrefix.Length` check (HIGH confidence)
-- Codebase: `src/SnmpCollector/Jobs/MetricPollJob.cs` — community string selection logic line 86–88 (HIGH confidence)
-- Codebase: `src/SnmpCollector/Services/SnmpTrapListenerService.cs` — trap community string validation, `TryExtractDeviceName` usage, drop-with-debug behavior (HIGH confidence)
-- Codebase: `src/SnmpCollector/Services/TenantVectorWatcherService.cs` — ConfigMap name `simetra-tenantvector`, key `tenantvector.json`, no-op validator call (HIGH confidence)
-- Codebase: `src/SnmpCollector/Configuration/DeviceOptions.cs` — `Name` and nullable `CommunityString?` fields (HIGH confidence)
-- Codebase: `src/SnmpCollector/Configuration/MetricSlotOptions.cs` — current fields: Ip, Port, MetricName, TimeSeriesSize (HIGH confidence)
-- Codebase: `src/SnmpCollector/Configuration/TenantOptions.cs` — current shape: Priority + List<MetricSlotOptions> (HIGH confidence)
-- Codebase: `src/SnmpCollector/Configuration/Validators/TenantVectorOptionsValidator.cs` — confirmed no-op (HIGH confidence)
-- Codebase: `deploy/k8s/snmp-collector/simetra-tenantvector.yaml` — current ConfigMap name and key (HIGH confidence)
-- Codebase: `deploy/k8s/snmp-collector/simetra-devices.yaml` — confirmed `Name` field in current device entries (HIGH confidence)
-- Codebase: `src/SnmpCollector/config/tenantvector.json` — local dev format: `TenantVector.Tenants[]` section (HIGH confidence)
-- Phase context: `.planning/phases/31-human-name-device-config/31-CONTEXT.md` — confirmed deferred item: "Tenant vector config validation against OID map" (HIGH confidence)
+- Codebase: `src/SnmpCollector/Jobs/MetricPollJob.cs` — full dispatch flow, variable collection,
+  response loop, exception handling structure (HIGH confidence)
+- Codebase: `src/SnmpCollector/Pipeline/SnmpOidReceived.cs` — `ExtractedValue: double`,
+  `Source: SnmpSource`, `PollDurationMs: double?` (HIGH confidence)
+- Codebase: `src/SnmpCollector/Pipeline/Handlers/OtelMetricHandler.cs` — Counter32/Counter64
+  recorded as gauge (not counter), `RecordGauge` call signature (HIGH confidence)
+- Codebase: `src/SnmpCollector/Telemetry/SnmpMetricFactory.cs` — `snmp_gauge` as `Gauge<double>`,
+  `LeaderMeterName` meter, `ConcurrentDictionary` instrument cache (HIGH confidence)
+- Codebase: `src/SnmpCollector/Telemetry/ISnmpMetricFactory.cs` — `RecordGauge` and
+  `RecordGaugeDuration` signatures including all 6 label parameters (HIGH confidence)
+- Codebase: `src/SnmpCollector/Telemetry/TelemetryConstants.cs` — `MeterName` (pipeline) vs
+  `LeaderMeterName` (business metrics) split (HIGH confidence)
+- Codebase: `src/SnmpCollector/Telemetry/PipelineMetricService.cs` — all 11 existing counters,
+  `SnmpCollector` meter (HIGH confidence)
+- Codebase: `src/SnmpCollector/Configuration/PollOptions.cs` — current shape: MetricNames[],
+  IntervalSeconds, TimeoutMultiplier (HIGH confidence)
+- Codebase: `src/SnmpCollector/Pipeline/OidMapService.cs` — `ContainsMetricName()` on
+  FrozenSet<string>, `ResolveToOid()` reverse map (HIGH confidence)
+- Codebase: `src/SnmpCollector/Pipeline/Behaviors/ValidationBehavior.cs` — soft-degradation
+  pattern: log Warning + increment rejected + return default, continue for other entries (HIGH confidence)
 
 ---
 
-*Feature research for: v1.7 Configuration Consistency & Tenant Commands*
-*Researched: 2026-03-14*
+*Feature research for: Combined / Synthetic Metrics on Poll Groups*
+*Researched: 2026-03-15*

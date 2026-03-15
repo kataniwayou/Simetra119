@@ -1,291 +1,328 @@
-# Technology Stack — v1.7 Configuration Consistency & Tenant Commands
+# Technology Stack — Combined / Synthetic Metrics Milestone
 
 **Project:** Simetra119 SNMP Collector
-**Researched:** 2026-03-14
-**Milestone scope:** SET command data model, CommunityString validation, self-describing tenant entries, config rename tenantvector.json → tenants.json
-**SET execution:** OUT OF SCOPE — data model and validation only
+**Researched:** 2026-03-15
+**Milestone scope:** Adding combined (synthetic) numeric metrics computed from poll responses
+**Out of scope:** Any new NuGet packages; changes to existing behaviors unrelated to synthesis
 
 ---
 
 ## Executive Decision
 
-**Zero new NuGet packages.** All required types exist in SharpSnmpLib 12.5.7, the .NET 9 BCL, and existing configuration infrastructure. The v1.7 changes are purely additive: new fields on existing config models, a new config options class, and extended validator logic.
+**Zero new NuGet packages.** Every type needed for synthetic metric dispatch is already present in the
+existing codebase. The feature requires targeted additions to three existing files and one new enum
+member — no new classes, no new services, no new infrastructure.
 
 ---
 
-## Existing Stack (No Changes)
+## Existing Stack (Unchanged)
 
 | Technology | Version | Role |
 |------------|---------|------|
 | .NET / C# | 9.0 | Runtime |
-| Lextm.SharpSnmpLib | 12.5.7 | SNMP protocol — SnmpType enum, ISnmpData hierarchy |
-| MediatR | 12.5.0 | Pipeline behaviors |
-| KubernetesClient | 18.0.13 | ConfigMap watchers |
-| Microsoft.Extensions.Options | 9.0.0 | Validated config binding |
-| System.Collections.Frozen | BCL | FrozenDictionary volatile-swap pattern |
+| Lextm.SharpSnmpLib | 12.5.7 | SNMP types — `SnmpType` enum, `ISnmpData` hierarchy |
+| MediatR | 12.5.0 | Pipeline dispatch via `ISender.Send` |
+| OpenTelemetry SDK | 1.15.0 | `Gauge<double>.Record` / `TagList` |
+| Quartz.Extensions.Hosting | 3.15.1 | `[DisallowConcurrentExecution]` on `MetricPollJob` |
+| System.Diagnostics.Metrics | BCL (.NET 9) | `TagList`, `Gauge<double>` |
 
 ---
 
-## Device Analysis: Actual SET Command Value Types
+## Question 1: Does the MediatR pipeline need changes for synthetic dispatch?
 
-### OBP Device (OTS3000-BPS) — Source: Docs/OBP-Device-Analysis.md
+**Answer: No behavioral changes. One guard needed in `ValidationBehavior`.**
 
-The OBP exposes 31 SET-able commands across NMU and per-link levels. Full type inventory:
+The existing `ISender.Send` path works without modification. The synthetic message is constructed by
+`MetricPollJob.DispatchResponseAsync` after the varbind loop completes, then sent through the same
+`_sender.Send(msg, ct)` call. MediatR routes all `SnmpOidReceived` messages through the same behavior
+chain: Logging → Exception → Validation → OidResolution → ValueExtraction → TenantVectorFanOut →
+OtelMetricHandler.
 
-| SNMP Type | Commands |
-|-----------|----------|
-| `Integer32` | `tcpPort`, `startDelay`, `deviceAddress`, `ReturnDelay`, `BackDelay`, `ActiveSendInterval`, `ActiveTimeOut`, `ActiveLossBypass`, `PassiveTimeOut`, `PassiveLossBypass` |
-| `INTEGER` (enum) | `keyLock` (lock=0/unlock=1), `buzzerSet` (off=0/on=1), `WorkMode` (manualMode=0/autoMode=1), `Channel` (bypass=0/primary=1), `R1Wave`–`R4Wave` (w1310nm=0/w1550nm=1/na=2), `BackMode`, `SwitchProtect`, `ActiveHeartSwitch`, `PassiveHeartSwitch`, `PowerAlarmBypass4` (7 values) |
-| `IpAddress` | `ipAddress`, `subnetMask`, `gateWay` (NMU network config), `PingIpAddress` (per-link heartbeat) |
-| `DisplayString` | `R1AlarmPower`–`R4AlarmPower` (dBm threshold values such as "-20.5") |
+However, `ValidationBehavior` currently rejects any message whose `Oid` does not match the pattern
+`^\d+(\.\d+){1,}$` (verified in `ValidationBehavior.cs` line 23). A synthetic message with `Oid = ""`
+will be rejected at this gate and dropped with a Warning log and `IncrementRejected`. This is a
+hard blocker.
 
-Note: `INTEGER` (SNMP enumerated type) is transmitted as `Integer32` on the wire. The config format does not need to distinguish between "plain integer" and "enumerated integer" — `Integer32` covers both.
-
-### NPB Device (CGS NPB-2E) — Source: Docs/NPB-Device-Analysis.md
-
-The NPB exposes ~250+ SET-able commands. Key type distribution:
-
-| SNMP Type | Representative Commands |
-|-----------|------------------------|
-| `Integer32` / `Unsigned32` | `haHysteresis` (0-3600 seconds), `portsPortVlan` (1-4094), `portsPortRxTimestampId` (0-8388607), utilization thresholds (0-100) |
-| `INTEGER` (enum) | `haMode`, `haFailoverMode`, `portsPortSpeed`, `portsPortFec`, `portsPortTxLaser`, `portsPortAdmin`, `systemLogLevel`, `systemTimeAndDateNtpAdmin` |
-| `String` / `DisplayString` | `systemDetailsHostname` (max 32), `systemDetailsDescription` (max 140), `haVirtualIp`, `haMonitoredPorts`, `systemDnsNameservers`, `portsPortPortName` (max 48) |
-| `TruthValue` | `systemAlarmsSyslogEnabled`, `systemAlarmsTrapEnabled`, `systemSecurityBlockIncomingPing`, `portsPortPrbsEnabled` |
-
-Note: `TruthValue` in SNMPv2 is `Integer32` on the wire (1 = true, 2 = false). It does not require a separate config type.
-
-### Consolidated Type Set Across Both Devices
-
-After surveying all writable OIDs in both device MIBs, three wire types cover 100% of actual SET targets:
-
-1. **Integer32** — plain integers (ports, delays, thresholds, counts) and all enumerated types (on/off, mode, channel, wavelength, bypass trigger, TruthValue). Everything that sends a numeric value to the device.
-2. **IpAddress** — IPv4 address fields (OBP NMU network config, OBP ping target). Not present in NPB writable commands.
-3. **OctetString / DisplayString** — human-readable string values (dBm thresholds like "-20.5", hostnames, descriptions, nameserver lists).
-
-No writable OID in either target device requires `Gauge32`, `Counter32`, `Counter64`, `TimeTicks`, or `ObjectIdentifier`. Those are read-only metric types on these devices.
-
----
-
-## Recommended: ValueType as a String in Config
-
-### Decision: string, not C# enum
-
-Represent `ValueType` as a `string` property on `CommandSlotOptions`, validated at config load time against a fixed allowed set. Do not use a C# `enum` type.
-
-**Why string, not C# enum:**
-
-- Operators edit JSON directly. A C# `enum` provides zero IDE assistance for a JSON config file. The failure mode for an invalid value is worse ("cannot convert 'integer32' to SnmpValueType") than a custom validator message ("ValueType must be one of: Integer32, IpAddress, OctetString").
-- The allowed set is small and stable — 3 values cover both current target devices entirely. Adding a value in the future is a one-line validator change with no serialization migration.
-- Consistent with the existing project pattern: `MetricName`, `CommandName`, `CommunityString` are all `string` fields validated at load time rather than typed at the model level.
-- Using a C# enum would require `[JsonConverter(typeof(JsonStringEnumConverter))]` on the property and adds ceremony for no material benefit in a data model that is never switched on until SET execution (which is out of scope this milestone).
-
-**Allowed ValueType strings:** `"Integer32"`, `"IpAddress"`, `"OctetString"`
-
-These names match MIB terminology and are close to (but not identical to) SharpSnmpLib enum member names — see the mapping note in the next section.
-
-### SharpSnmpLib Type Mapping
-
-Verified by reading source code: `ValueExtractionBehavior.cs` and `OtelMetricHandler.cs` both switch on `SnmpType`. SharpSnmpLib 12.5.7 (confirmed in `SnmpCollector.csproj`) provides:
-
-| Config ValueType string | SharpSnmpLib SnmpType enum member | SharpSnmpLib concrete class | Constructor |
-|------------------------|-----------------------------------|-----------------------------|-------------|
-| `"Integer32"` | `SnmpType.Integer32` | `Integer32` | `new Integer32(int value)` |
-| `"IpAddress"` | `SnmpType.IPAddress` | `IP` | `new IP(string ipv4DotNotation)` |
-| `"OctetString"` | `SnmpType.OctetString` | `OctetString` | `new OctetString(string value)` |
-
-The one mapping mismatch: the SharpSnmpLib enum is `SnmpType.IPAddress` (all-caps IP), but the config string is `"IpAddress"` (MIB Pascal case). The future SET executor needs a single switch or dictionary to convert config string to SharpSnmpLib type. This is a known, one-time translation — not a design inconsistency. Keeping the config string as `"IpAddress"` is better than `"IPAddress"` because it is easier for operators to type correctly and matches how device MIB docs write it.
-
----
-
-## Recommended Data Models
-
-### CommandSlotOptions (new file)
+**Required change to `ValidationBehavior`:** Allow the empty OID when `Source == SnmpSource.Synthetic`.
+The guard should be:
 
 ```csharp
-namespace SnmpCollector.Configuration;
-
-public sealed class CommandSlotOptions
+// Allow synthetic messages to bypass OID format check
+if (msg.Source != SnmpSource.Synthetic && !OidPattern.IsMatch(msg.Oid))
 {
-    /// Human-readable device name. Self-describing — no DeviceRegistry lookup.
-    /// Optional informational field. Routing uses Ip + Port.
-    public string Device { get; set; } = string.Empty;
-
-    /// IP address of the target device. Must be a valid IPv4 or IPv6 address.
-    public string Ip { get; set; } = string.Empty;
-
-    /// SNMP port. Defaults to 161. Must be 1–65535.
-    public int Port { get; set; } = 161;
-
-    /// SNMP community string. Must start with "Simetra." prefix.
-    public string CommunityString { get; set; } = string.Empty;
-
-    /// Human-readable command name. Must exist in commandmap.json.
-    public string CommandName { get; set; } = string.Empty;
-
-    /// The value to SET, stored as a string. Interpreted per ValueType at execution time.
-    /// Examples: "1", "0", "10.0.0.1", "-20.5"
-    public string Value { get; set; } = string.Empty;
-
-    /// SNMP wire type. Must be one of: Integer32, IpAddress, OctetString.
-    public string ValueType { get; set; } = string.Empty;
+    // existing rejection path
 }
 ```
 
-### MetricSlotOptions (extended — existing file)
+**Required change to `OidResolutionBehavior`:** The behavior calls
+`_oidMapService.Resolve(msg.Oid)` for every `SnmpOidReceived`. For a synthetic message, `Oid`
+is `""` and `MetricName` is already pre-set by the caller. The OID map will return `Unknown` for
+an empty string, overwriting the pre-set `MetricName` with `"unknown"`. This is a second hard blocker.
 
-Two new fields added to the existing model. Existing fields unchanged.
-
-```csharp
-public sealed class MetricSlotOptions
-{
-    // NEW: self-describing device name. Informational; routing uses Ip + Port.
-    public string Device { get; set; } = string.Empty;
-
-    public string Ip { get; set; } = string.Empty;              // existing
-    public int Port { get; set; } = 161;                        // existing
-
-    // NEW: community string. Must start with "Simetra." prefix.
-    public string CommunityString { get; set; } = string.Empty;
-
-    public string MetricName { get; set; } = string.Empty;      // existing
-    public int TimeSeriesSize { get; set; } = 1;                // existing
-}
-```
-
-### TenantOptions (extended — existing file)
+The guard should be:
 
 ```csharp
-public sealed class TenantOptions
+// Skip OID resolution when MetricName is already set (synthetic messages)
+if (msg.Source != SnmpSource.Synthetic)
 {
-    public int Priority { get; set; }
-    public List<MetricSlotOptions> Metrics { get; set; } = [];
-    public List<CommandSlotOptions> Commands { get; set; } = []; // NEW
-}
-```
-
-### TenantsOptions (renamed from TenantVectorOptions)
-
-```csharp
-public sealed class TenantsOptions
-{
-    public const string SectionName = "Tenants";   // was "TenantVector"
-    public List<TenantOptions> Tenants { get; set; } = [];
-}
-```
-
----
-
-## CommunityString Validation
-
-### The existing authoritative source
-
-`CommunityStringHelper` (verified by reading source at `Pipeline/CommunityStringHelper.cs`) defines:
-
-```csharp
-private const string CommunityPrefix = "Simetra.";
-
-internal static bool TryExtractDeviceName(string community, out string deviceName)
-{
-    if (community.StartsWith(CommunityPrefix, StringComparison.Ordinal)
-        && community.Length > CommunityPrefix.Length)
-    { ... return true; }
+    msg.MetricName = _oidMapService.Resolve(msg.Oid);
     ...
 }
 ```
 
-The validation rule must use this exact method to ensure the validator and the runtime extraction logic can never diverge. Do not duplicate the prefix string or write a separate regex.
+`ValueExtractionBehavior` does not need changes: synthetic messages arrive with `ExtractedValue`
+already set (the computed aggregate). The behavior's `switch (msg.TypeCode)` will match `Integer32`
+(the recommended type, see Question 4) and set `ExtractedValue` from `msg.Value`. This means the
+caller must also populate `msg.Value` with an `Integer32` wrapping the computed double. Alternatively,
+the synthetic message can set `ExtractedValue` directly and the `ValueExtractionBehavior` will
+overwrite it with the same value from the `Integer32` wrapper — redundant but harmless.
 
-### Accessibility requirement
+`TenantVectorFanOutBehavior` does not need changes. It routes by `(ip, port, metricName)`. A
+synthetic message with a pre-set `MetricName` will route correctly to any tenant slot configured
+with that metric name, provided the `AgentIp` and port match a device in the registry. If no slot
+is configured for the synthetic metric, fan-out simply finds nothing and moves on.
 
-`CommunityStringHelper` is currently `internal static` in the `SnmpCollector.Pipeline` namespace. The validator will be in `SnmpCollector.Configuration.Validators`. Both are in the same assembly, so `internal` access is sufficient — no visibility change needed.
-
-Add a new public surface method to `CommunityStringHelper`:
-
-```csharp
-internal static bool IsValidCommunityString(string community)
-    => community.StartsWith(CommunityPrefix, StringComparison.Ordinal)
-       && community.Length > CommunityPrefix.Length;
-```
-
-This keeps `TryExtractDeviceName` (which has an `out` parameter) for runtime use and gives the validator a clean single-concern method.
-
-### Validator logic
-
-The existing `TenantVectorOptionsValidator` is currently a no-op. For v1.7, it becomes a real validator:
-
-```csharp
-// Validate MetricSlotOptions.CommunityString
-if (!CommunityStringHelper.IsValidCommunityString(slot.CommunityString))
-{
-    failures.Add(
-        $"Tenants[{i}].Metrics[{j}].CommunityString '{slot.CommunityString}' " +
-        "must start with 'Simetra.' followed by a device name");
-}
-
-// Validate CommandSlotOptions.ValueType
-private static readonly HashSet<string> AllowedValueTypes =
-    new(StringComparer.Ordinal) { "Integer32", "IpAddress", "OctetString" };
-
-if (!AllowedValueTypes.Contains(cmd.ValueType))
-{
-    failures.Add(
-        $"Tenants[{i}].Commands[{j}].ValueType '{cmd.ValueType}' " +
-        "must be one of: Integer32, IpAddress, OctetString");
-}
-```
+`OtelMetricHandler` does not need changes. It reads `MetricName`, `Oid`, `DeviceName`,
+`AgentIp`, `Source`, `TypeCode`, and `ExtractedValue` — all of which the synthetic message provides.
 
 ---
 
-## Config File Rename and JSON Shape
+## Question 2: How should numeric aggregation (sum/diff/mean) be implemented?
 
-### File rename
+**Answer: Inline LINQ inside `DispatchResponseAsync`. No new service or class needed.**
 
-| Aspect | Current | New |
-|--------|---------|-----|
-| Config file | `config/tenantvector.json` | `config/tenants.json` |
-| C# class | `TenantVectorOptions` | `TenantsOptions` |
-| JSON section key | `"TenantVector"` | `"Tenants"` |
-| Watcher service | `TenantVectorWatcherService` | Rename to `TenantsWatcherService` or keep name |
-| K8s ConfigMap key | `tenantvector.json` | `tenants.json` |
+The aggregation computes a single `double` from a local `IList<Variable>` that is fully resolved
+before `DispatchResponseAsync` is called. The variables are held in a local variable on the call
+stack. There is no shared mutable state — the list is created fresh per poll execution. Aggregation
+is therefore a pure local computation.
 
-### Recommended JSON shape for tenants.json
+Recommended implementation pattern:
 
-The current format has redundant nesting: the file has a `"TenantVector"` wrapper object containing a `"Tenants"` array. Flattening is possible with the rename but requires changing how `IConfiguration` binds the section. The simpler path is to keep the wrapper but change its key name:
+```csharp
+// Inside DispatchResponseAsync, after the varbind foreach loop:
+// 1. Collect the numeric values that were dispatched for the named components.
+// 2. Compute the aggregate.
+// 3. Dispatch a synthetic SnmpOidReceived.
 
-```json
+var componentValues = response
+    .Where(v => v.Data.TypeCode is SnmpType.Integer32 or SnmpType.Gauge32
+                               or SnmpType.Counter32 or SnmpType.Counter64
+                               or SnmpType.TimeTicks)
+    .Select(v => ExtractDouble(v.Data))   // local static helper, same logic as ValueExtractionBehavior
+    .ToList();
+
+if (componentValues.Count > 0)
 {
-  "Tenants": {
-    "Tenants": [
-      {
-        "Priority": 1,
-        "Metrics": [
-          {
-            "Device": "obp-core-01",
-            "Ip": "10.0.10.1",
-            "Port": 161,
-            "CommunityString": "Simetra.obp-core-01",
-            "MetricName": "obp_link_state_L1",
-            "TimeSeriesSize": 1
-          }
-        ],
-        "Commands": [
-          {
-            "Device": "obp-core-01",
-            "Ip": "10.0.10.1",
-            "Port": 161,
-            "CommunityString": "Simetra.obp-core-01",
-            "CommandName": "linkN_Channel",
-            "Value": "0",
-            "ValueType": "Integer32"
-          }
-        ]
-      }
-    ]
-  }
+    var aggregate = componentValues.Sum();  // or .Average(), or pair-wise diff
+
+    await _sender.Send(new SnmpOidReceived
+    {
+        Oid            = string.Empty,
+        AgentIp        = IPAddress.Parse(device.ResolvedIp),
+        DeviceName     = device.Name,
+        Value          = new Integer32((int)aggregate),
+        Source         = SnmpSource.Synthetic,
+        TypeCode       = SnmpType.Integer32,
+        MetricName     = "<configured synthetic metric name>",
+        ExtractedValue = aggregate,
+        PollDurationMs = null   // no round-trip concept for synthetic
+    }, ct);
 }
 ```
 
-Whether to flatten (single `"Tenants": [...]` at root) or keep the wrapper object is an implementation decision. The wrapper approach requires less code change (only `SectionName` constant changes). The flatten approach is cleaner for operators but requires updating the `Configure<TenantsOptions>` binding call. Either is acceptable — the research does not require one over the other.
+**Why LINQ, not a new service:**
+- The computation is local to one poll group response. It accesses no shared state.
+- A `SyntheticMetricEngine` service would require injecting a new dependency into `MetricPollJob`,
+  complicate DI registration, and provide no benefit for what is a two-line numeric operation.
+- The `[DisallowConcurrentExecution]` attribute on `MetricPollJob` means only one execution per
+  job instance runs at a time. The aggregate computation is therefore single-threaded within a
+  given poll group (see Question 5).
+
+**Helper method:** A `private static double ExtractDouble(ISnmpData data)` method in
+`MetricPollJob` (or `DispatchResponseAsync`) mirrors the numeric cases of `ValueExtractionBehavior`
+without the MediatR message overhead. It should not call back into MediatR or any service.
+
+**Difference (A - B) pattern:** For rate-like synthetics (e.g., `ifInOctets - ifOutOctets`),
+the poll group config must declare which OIDs are "A" and which are "B". This requires a new config
+field (see Question on `PollOptions` below). If the OID order is guaranteed stable in the SNMP
+response (it is, for a well-behaved agent), ordered index lookup works. The safer approach is OID
+keying: build a `Dictionary<string, double>` from the response, then perform named subtraction.
+
+---
+
+## Question 3: Does OTel handle empty OID labels correctly?
+
+**Answer: Yes, empty string is safe. The risk is null, not empty string.**
+
+Verified from multiple sources:
+
+1. The OTel specification explicitly states: "Empty string should be a valid attribute value" and
+   empty-string values are "considered meaningful and MUST be stored and passed on to processors /
+   exporters." (opentelemetry-specification issue #5501 for Java; same spec applies to .NET.)
+
+2. The problematic case for OTel .NET was **null** tag values, not empty strings. Issues #3451 and
+   #3846 in `opentelemetry-dotnet` document that null values caused silent metric drops or
+   NullReferenceExceptions in `Tags.GetHashCode()`. These were fixed in SDK 1.4.0. The project
+   uses OTel SDK 1.15.0 (confirmed in `SnmpCollector.csproj`), so the null bug is irrelevant.
+
+3. `SnmpMetricFactory.RecordGauge` passes `oid` directly as a `TagList` value (line 44 of
+   `SnmpMetricFactory.cs`). An empty string there is a valid `string` value — `TagList` accepts
+   `object?` per the BCL API, and `string.Empty` boxes to a non-null object.
+
+**Conclusion:** Set `Oid = string.Empty` on synthetic messages. The `oid` label in Prometheus will
+show as an empty string. This is the intended behavior — it signals "no source OID" to dashboards.
+Do not use `null`; that would break the current `TagList` composition.
+
+**Cardinality note:** The `oid` label is currently the highest-cardinality label (one unique value
+per polled OID per device). For a synthetic metric, `oid = ""` creates exactly one label
+combination per `(metric_name, device_name, ip)` tuple — lower cardinality than real OIDs.
+
+---
+
+## Question 4: Does the existing `SnmpType` enum cover synthetic needs?
+
+**Answer: A new `SnmpSource.Synthetic` member is needed. `SnmpType` does not need a new member.**
+
+**`SnmpSource` — add `Synthetic` member:**
+
+`SnmpSource.cs` currently defines:
+```csharp
+public enum SnmpSource { Poll, Trap }
+```
+
+A `Synthetic` member is necessary for the two pipeline bypasses described in Question 1
+(ValidationBehavior OID regex guard, OidResolutionBehavior MetricName preservation). Without it,
+there is no clean way for behaviors to distinguish "this OID is intentionally empty" from
+"this message is malformed."
+
+Change to:
+```csharp
+public enum SnmpSource { Poll, Trap, Synthetic }
+```
+
+This is a one-line change. All existing `switch` statements and `if`/`is` checks on `SnmpSource`
+do not enumerate it exhaustively — they check for specific values — so no existing code breaks.
+`TenantVectorFanOutBehavior` has no `SnmpSource` check at all. `OtelMetricHandler` formats source
+as `notification.Source.ToString().ToLowerInvariant()` — the synthetic label will appear as
+`"synthetic"` in the `source` Prometheus label, which is correct and useful.
+
+**`SnmpType` — no new member needed:**
+
+The existing `SnmpType.Integer32` from SharpSnmpLib covers synthetic numeric values. The
+`ValueExtractionBehavior` switch already handles `Integer32` correctly. `OtelMetricHandler`
+dispatches `Integer32` to `RecordGauge`. The computed aggregate (sum/diff/mean as `double`)
+must be wrapped in a `new Integer32((int)aggregate)` to satisfy the `required ISnmpData Value`
+field on `SnmpOidReceived`. Precision loss from the `double → int` cast is acceptable for
+integer network metrics. For sub-integer precision (e.g., percentage averages), `Gauge32` is
+equivalent — it also maps to `RecordGauge` via the same case in `OtelMetricHandler`.
+
+**The `ExtractedValue` shortcut:** Because `ValueExtractionBehavior` runs in the pipeline, the
+caller can set `ExtractedValue = aggregate` directly and also set `Value = new Integer32((int)aggregate)`.
+The behavior will overwrite `ExtractedValue` with the same integer, creating harmless redundancy.
+This is preferable to adding a skip-extraction path because it keeps the behavior's contract intact
+(it always sets `ExtractedValue` from `Value` for numeric types).
+
+---
+
+## Question 5: Thread-safety of aggregate computation in `MetricPollJob`
+
+**Answer: No threading concern. `[DisallowConcurrentExecution]` already provides the guarantee.**
+
+`MetricPollJob` is annotated `[DisallowConcurrentExecution]` (verified in `MetricPollJob.cs` line 22).
+Quartz's contract for this attribute: if the trigger fires while the previous execution is still
+running for that job key, Quartz skips the fire. There is at most one active `Execute(...)` call
+per job key at any moment.
+
+The poll response `IList<Variable>` is created fresh per `Execute` call by `_snmpClient.GetAsync`.
+It is local to the call stack and never shared across calls or stored in any field. The aggregate
+computation over this list happens entirely within `DispatchResponseAsync`, which is called once
+per `Execute`. There are no shared mutable fields involved in the aggregation.
+
+`_sender.Send` is the only external call during aggregation. `ISender` (MediatR) is thread-safe
+by design (it is a factory for pipeline invocations). Each `Send` call creates its own pipeline
+instance.
+
+**Conclusion:** No lock, `Interlocked`, or `ConcurrentDictionary` is needed for the aggregation.
+LINQ `Sum()` / `Average()` on a local `List<double>` is sufficient.
+
+---
+
+## Required Type Changes Summary
+
+### 1. `SnmpSource.cs` — Add enum member
+
+```csharp
+public enum SnmpSource { Poll, Trap, Synthetic }
+```
+
+**Why:** Required by ValidationBehavior and OidResolutionBehavior to distinguish intentional
+synthetic messages from malformed ones. Without this, synthetic messages are either rejected by
+the OID regex check or have their MetricName overwritten by OID resolution.
+
+### 2. `ValidationBehavior.cs` — Guard the OID regex check
+
+```csharp
+if (msg.Source != SnmpSource.Synthetic && !OidPattern.IsMatch(msg.Oid))
+{ /* existing rejection */ }
+```
+
+**Why:** Synthetic messages have `Oid = ""` by design. The existing regex `^\d+(\.\d+){1,}$`
+rejects empty strings. Without this guard, all synthetic messages are dropped.
+
+### 3. `OidResolutionBehavior.cs` — Guard MetricName overwrite
+
+```csharp
+if (msg.Source != SnmpSource.Synthetic)
+{
+    msg.MetricName = _oidMapService.Resolve(msg.Oid);
+    ...
+}
+```
+
+**Why:** Synthetic messages have MetricName pre-set by the caller. `_oidMapService.Resolve("")`
+returns `OidMapService.Unknown`, which would overwrite the correct pre-set name.
+
+### 4. `MetricPollJob.cs` — Inline aggregate + synthetic dispatch
+
+No new field or dependency injection. `DispatchResponseAsync` gains post-loop code that:
+- Extracts numeric values from the response into a local `List<double>`
+- Computes the aggregate with LINQ
+- Constructs and sends a synthetic `SnmpOidReceived`
+
+The synthetic metric name and aggregation function (sum/diff/mean) must come from configuration.
+Whether those live on `PollOptions` or elsewhere is a design decision for the roadmap, but the
+data must flow into `MetricPollJob` via its existing `IJobExecutionContext.MergedJobDataMap`
+(the established pattern for per-job configuration).
+
+### 5. `PollOptions.cs` — New optional fields for synthetic definition
+
+`PollOptions` currently holds `MetricNames`, `IntervalSeconds`, and `TimeoutMultiplier`. To
+express "after polling these OIDs, compute this aggregate and emit it as a synthetic metric,"
+the poll group needs:
+
+```csharp
+/// Optional. When non-null, a synthetic metric is computed from the poll response
+/// and dispatched after individual varbinds.
+public SyntheticMetricOptions? Synthetic { get; set; }
+```
+
+New supporting type:
+
+```csharp
+public sealed class SyntheticMetricOptions
+{
+    /// The metric name for the synthetic result. Must exist in the OID map is NOT required —
+    /// it is a user-assigned name for the computed metric.
+    public string MetricName { get; set; } = string.Empty;
+
+    /// Aggregation function. Allowed: "Sum", "Mean", "Diff".
+    /// "Diff" expects exactly 2 MetricNames in the enclosing PollOptions: result = A - B.
+    public string Aggregation { get; set; } = string.Empty;
+}
+```
+
+This follows the existing pattern of `PollOptions` holding polling behavior config, and avoids
+coupling synthetic logic to tenant vectors or OID maps.
 
 ---
 
@@ -293,30 +330,26 @@ Whether to flatten (single `"Tenants": [...]` at root) or keep the wrapper objec
 
 | Omission | Rationale |
 |----------|-----------|
-| C# `enum` for ValueType | No operator benefit in JSON config; string validated at load time is simpler and more operator-friendly |
-| `ISnmpData` factory at config load time | SET execution is out of scope; Value+ValueType → ISnmpData conversion belongs in the future SET executor, not the config model |
-| Regex-based community string validation | `CommunityStringHelper.IsValidCommunityString` is the authoritative parser; a regex duplicate is a consistency hazard |
-| `Gauge32`, `Counter32`, `Counter64` in AllowedValueTypes | Not present as a writable type in either target device's MIB; add only when a new device requires it |
-| Hex-encoded OctetString support | All string SETs in both device MIBs are human-readable text (dBm values, hostnames); raw hex encoding is not needed |
-| New NuGet packages | All required types are in BCL, SharpSnmpLib 12.5.7, or existing Microsoft.Extensions packages |
-| Per-command OID resolution at config load | CommandName → OID mapping happens via ICommandMapService at execution time, same as how MetricName → OID works today. Do not pre-resolve at config load. |
-| TenantId field | Priority field handles ordering; an explicit ID is scope creep not required by any consumer |
+| New `SyntheticMetricEngine` service | Aggregation is a local two-line LINQ operation; a service adds DI complexity for zero benefit |
+| New `SnmpType` enum member (e.g., `Synthetic`) | `Integer32` or `Gauge32` covers synthetic numeric values; both route to `RecordGauge` |
+| `null` for `Oid` on synthetic messages | OTel .NET had a null-tag-value bug (fixed in 1.4.0, but `string.Empty` is safer and explicit) |
+| Separate MediatR request type for synthetic | Reusing `SnmpOidReceived` with `Source = Synthetic` reuses the full behavior chain; a second type doubles the behavior registration surface |
+| `[AllowConcurrentExecution]` on `MetricPollJob` | Current concurrency guard is correct; relaxing it would require locking the aggregate computation |
+| Pre-resolution of synthetic MetricName to OID | Synthetic metrics have no source OID; OID resolution is irrelevant and should be skipped (see OidResolutionBehavior guard above) |
+| New NuGet packages | Every required type exists in SharpSnmpLib 12.5.7, .NET 9 BCL, and existing OTel 1.15.0 |
 
 ---
 
-## Integration with Existing Patterns
+## Integration Fit
 
-The v1.7 changes follow every established pattern in the codebase:
-
-| Pattern | Existing example | v1.7 application |
-|---------|-----------------|-----------------|
-| String field validated at load against allowed set | `DevicesOptionsValidator` port range check | `AllowedValueTypes` HashSet check on `CommandSlotOptions.ValueType` |
-| Community string convention helper | `CommunityStringHelper.TryExtractDeviceName` in pipeline | `CommunityStringHelper.IsValidCommunityString` in validator |
-| `IValidateOptions<T>` with `List<string>` failures | `DevicesOptionsValidator`, `LeaseOptionsValidator` | Extended `TenantsOptionsValidator` |
-| FrozenDictionary volatile-swap for config models | `TenantVectorRegistry`, `CommandMapService` | No change — these already exist |
-| `List<CommandSlotOptions>` pattern | n/a (new) | Mirrors `List<MetricSlotOptions>` shape |
-
-No new architectural patterns are introduced. All v1.7 code will be immediately recognizable to anyone familiar with the existing codebase.
+| Concern | Existing pattern | Synthetic fit |
+|---------|-----------------|---------------|
+| Source label in Prometheus | `"poll"` or `"trap"` | `"synthetic"` (from `SnmpSource.Synthetic.ToString().ToLowerInvariant()`) |
+| OID label in Prometheus | The source OID string | `""` (empty string, valid OTel tag value) |
+| MetricName routing | Set by OidResolutionBehavior | Pre-set by caller; OidResolutionBehavior bypassed via Source guard |
+| Tenant vector fan-out | Routes by (ip, port, metricName) | Works unchanged if a tenant slot is configured with the synthetic MetricName |
+| `MetricSlotHolder.WriteValue` | Called by TenantVectorFanOutBehavior | Called unchanged; synthetic `TypeCode = Integer32`, `Source = Synthetic` stored on holder |
+| Duration recording in OtelMetricHandler | `PollDurationMs.HasValue` guard | `PollDurationMs = null` on synthetic — no duration recorded (correct: no round-trip) |
 
 ---
 
@@ -324,33 +357,35 @@ No new architectural patterns are introduced. All v1.7 code will be immediately 
 
 | Area | Confidence | Source |
 |------|------------|--------|
-| OBP SET type inventory | HIGH | Read exhaustively from Docs/OBP-Device-Analysis.md Section 5 |
-| NPB SET type inventory | HIGH | Read exhaustively from Docs/NPB-Device-Analysis.md Section 5 |
-| Three types cover all current devices | HIGH | Derived from complete MIB analysis above |
-| SharpSnmpLib type names and versions | HIGH | Read from ValueExtractionBehavior.cs, OtelMetricHandler.cs, SnmpCollector.csproj |
-| CommunityStringHelper convention | HIGH | Read directly from CommunityStringHelper.cs source |
-| Existing MetricSlotOptions / TenantOptions shape | HIGH | Read directly from MetricSlotOptions.cs, TenantOptions.cs, TenantVectorOptions.cs |
-| JSON shape recommendation | MEDIUM | Design inference; exact binding approach (wrapper vs flat) is an implementation choice |
+| MediatR pipeline behavior chain order | HIGH | Read `ValidationBehavior.cs`, `OidResolutionBehavior.cs`, `ValueExtractionBehavior.cs`, `TenantVectorFanOutBehavior.cs`, `OtelMetricHandler.cs` directly |
+| ValidationBehavior OID regex rejects `""` | HIGH | Read regex pattern directly from `ValidationBehavior.cs` line 23 |
+| OidResolutionBehavior overwrites MetricName unconditionally | HIGH | Read behavior code directly; no existing guard |
+| OTel empty string tag safety | MEDIUM | OTel specification states empty strings are meaningful and must be preserved; .NET SDK null-tag bug is fixed in 1.4.0; project uses 1.15.0. Direct SDK code read was rate-limited, so not personally verified at source level |
+| `[DisallowConcurrentExecution]` thread-safety guarantee | HIGH | Read annotation directly in `MetricPollJob.cs` line 22; Quartz contract is well-documented |
+| `SnmpType.Integer32` covers synthetic numeric values | HIGH | Read `OtelMetricHandler.cs` and `ValueExtractionBehavior.cs` — Integer32 case exists and routes to `RecordGauge` |
+| No new NuGet packages needed | HIGH | All required types identified in existing source files |
 
 ---
 
 ## Sources
 
-All sources are in the repository and were read directly:
+All sources read directly from repository (no hypothesis):
 
-- `Docs/OBP-Device-Analysis.md` — Section 5: SNMP Commands, complete writable OID type inventory
-- `Docs/NPB-Device-Analysis.md` — Section 5: SNMP Commands, complete writable OID type inventory
-- `src/SnmpCollector/Pipeline/Behaviors/ValueExtractionBehavior.cs` — live SnmpType enum usage confirming Integer32, Gauge32, TimeTicks, Counter32, Counter64, OctetString, IPAddress, ObjectIdentifier members
-- `src/SnmpCollector/Pipeline/Handlers/OtelMetricHandler.cs` — corroborating SnmpType usage
-- `src/SnmpCollector/Pipeline/CommunityStringHelper.cs` — authoritative community string convention source
-- `src/SnmpCollector/Configuration/MetricSlotOptions.cs` — existing metric slot model
-- `src/SnmpCollector/Configuration/TenantOptions.cs` — existing tenant model
-- `src/SnmpCollector/Configuration/TenantVectorOptions.cs` — existing top-level config shape
-- `src/SnmpCollector/Configuration/Validators/TenantVectorOptionsValidator.cs` — current no-op validator
-- `src/SnmpCollector/SnmpCollector.csproj` — SharpSnmpLib 12.5.7 version confirmed
-- `src/SnmpCollector/config/tenantvector.json` — current config file shape and section key
+- `src/SnmpCollector/Pipeline/SnmpOidReceived.cs` — field inventory, `required ISnmpData Value`, `Source` type
+- `src/SnmpCollector/Pipeline/SnmpSource.cs` — confirmed only `Poll` and `Trap` exist; `Synthetic` is missing
+- `src/SnmpCollector/Pipeline/Behaviors/ValidationBehavior.cs` — OID regex pattern, rejection path
+- `src/SnmpCollector/Pipeline/Behaviors/OidResolutionBehavior.cs` — unconditional `msg.MetricName =` assignment
+- `src/SnmpCollector/Pipeline/Behaviors/ValueExtractionBehavior.cs` — numeric TypeCode switch, `ExtractedValue` assignment
+- `src/SnmpCollector/Pipeline/Behaviors/TenantVectorFanOutBehavior.cs` — routing logic, no SnmpSource check
+- `src/SnmpCollector/Pipeline/Handlers/OtelMetricHandler.cs` — `source` label, `Integer32` → `RecordGauge` path
+- `src/SnmpCollector/Jobs/MetricPollJob.cs` — `[DisallowConcurrentExecution]`, `DispatchResponseAsync` structure
+- `src/SnmpCollector/Configuration/PollOptions.cs` — current fields, extension point for `SyntheticMetricOptions`
+- `src/SnmpCollector/Telemetry/SnmpMetricFactory.cs` — `TagList` composition, `oid` tag, empty string safety
+- `src/SnmpCollector/SnmpCollector.csproj` — OpenTelemetry SDK 1.15.0 version confirmed
+- OTel specification (via WebSearch): empty string is a valid, meaningful attribute value
+- opentelemetry-dotnet issues #3451 and #3846 (via WebSearch): null tag bug fixed in SDK 1.4.0; empty string is not the problematic case
 
 ---
 
-*Stack research for: v1.7 Configuration Consistency & Tenant Commands*
-*Researched: 2026-03-14*
+*Stack research for: Combined / Synthetic Metrics milestone*
+*Researched: 2026-03-15*

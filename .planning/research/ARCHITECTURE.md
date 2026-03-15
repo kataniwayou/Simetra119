@@ -1,305 +1,378 @@
-# Architecture Patterns: v1.7 Configuration Consistency & Tenant Commands
+# Architecture Patterns: Combined / Synthetic Metrics
 
-**Domain:** SNMP monitoring agent -- self-describing tenant metrics, commands data model, CommunityString validation, tenantvector rename
-**Researched:** 2026-03-14
-**Confidence:** HIGH (all findings based on direct codebase analysis; no training-data speculation)
+**Domain:** SNMP monitoring agent -- combined metrics via synthetic SnmpOidReceived dispatch
+**Researched:** 2026-03-15
+**Confidence:** HIGH (all findings based on direct codebase read; no training-data speculation)
 
 ---
 
-## Existing Architecture Snapshot (v1.6 baseline)
+## Context: What "Combined Metric" Means Here
 
-### Component Inventory
+A combined metric aggregates two or more raw SNMP OID values (already fetched in one multi-GET)
+into a single synthetic value, then records it as a named gauge through the same OTel pipeline
+that records individual OIDs. The canonical example is computing a ratio or sum from values that
+arrived in the same varbind list.
 
-| Component | Kind | File | Role |
-|-----------|------|------|------|
-| `TenantVectorRegistry` | Singleton class | `Pipeline/TenantVectorRegistry.cs` | Builds priority groups + routing index from `TenantVectorOptions`; volatile swap on `Reload()` |
-| `TenantVectorWatcherService` | BackgroundService | `Services/TenantVectorWatcherService.cs` | Watches `simetra-tenantvector` ConfigMap; calls `registry.Reload(options)` |
-| `DeviceRegistry` | Singleton class | `Pipeline/DeviceRegistry.cs` | Holds `FrozenDictionary` by `ip:port` and by `Name`; exposes `AllDevices`, `TryGetByIpPort`, `TryGetDeviceByName` |
-| `DynamicPollScheduler` | Singleton class | `Services/DynamicPollScheduler.cs` | Diffs Quartz jobs vs desired device list; add/remove/reschedule |
-| `TenantVectorFanOutBehavior` | MediatR behavior | `Pipeline/Behaviors/TenantVectorFanOutBehavior.cs` | Routes received samples to `MetricSlotHolder`s; uses `IDeviceRegistry` to resolve port |
-| `TenantVectorOptions` | Config model | `Configuration/TenantVectorOptions.cs` | Top-level wrapper: `{ "Tenants": [...] }` |
-| `TenantOptions` | Config model | `Configuration/TenantOptions.cs` | `Priority` + `List<MetricSlotOptions>` |
-| `MetricSlotOptions` | Config model | `Configuration/MetricSlotOptions.cs` | `Ip`, `Port`, `MetricName`, `TimeSeriesSize` |
-| `TenantVectorOptionsValidator` | Validator | `Configuration/Validators/TenantVectorOptionsValidator.cs` | Currently a no-op pass-through |
-| `DeviceOptions` | Config model | `Configuration/DeviceOptions.cs` | `Name`, `IpAddress`, `Port`, `CommunityString?`, `List<PollOptions>` |
-| `DevicesOptionsValidator` | Validator | `Configuration/Validators/DevicesOptionsValidator.cs` | Validates name, IP, port, poll intervals; does NOT validate `CommunityString` |
-| `CommunityStringHelper` | Static helper | `Pipeline/CommunityStringHelper.cs` | `Simetra.{DeviceName}` convention; `TryExtractDeviceName`, `DeriveFromDeviceName` |
-| `MetricSlotHolder` | Runtime model | `Pipeline/MetricSlotHolder.cs` | Volatile cyclic time-series; `WriteValue`, `ReadSlot`, `CopyFrom` |
-| `Tenant` | Runtime model | `Pipeline/Tenant.cs` | `Id`, `Priority`, `IReadOnlyList<MetricSlotHolder>` |
+The dispatch model is: after iterating the real varbinds in `DispatchResponseAsync`, compute the
+aggregate in `MetricPollJob` and dispatch one additional `SnmpOidReceived` whose `MetricName`
+is already populated and whose `Oid` is a sentinel (not a real SNMP OID).
 
-### Current `TenantVectorRegistry.Reload()` Data Flow
+---
+
+## Existing Pipeline (Baseline)
+
+Full behavior chain for every `SnmpOidReceived`:
 
 ```
-TenantVectorOptions.Tenants[]
-    for each TenantOptions:
-        for each MetricSlotOptions metric:
-            resolvedIp = ResolveIp(metric.Ip)          // USES _deviceRegistry.AllDevices
-            intervalSeconds = DeriveIntervalSeconds(...)  // USES _deviceRegistry.TryGetByIpPort
-                                                          // then _oidMapService.Resolve(oid) == metricName
-            new MetricSlotHolder(resolvedIp, port, metricName, intervalSeconds, timeSeriesSize)
-            carry-over old value if (ip, port, metricName) existed
-        new Tenant(id, priority, holders)
-    FrozenDictionary<RoutingKey, IReadOnlyList<MetricSlotHolder>> routingIndex
-    volatile swap _groups and _routingIndex
+ISender.Send(SnmpOidReceived)
+  1. LoggingBehavior         -- increments snmp.event.published; logs Oid/Agent/Source at Debug
+  2. ExceptionBehavior       -- wraps next() in try/catch; prevents unhandled exceptions leaking
+  3. ValidationBehavior      -- rejects bad OID format; rejects null DeviceName; short-circuits on fail
+  4. OidResolutionBehavior   -- msg.MetricName = _oidMapService.Resolve(msg.Oid)   (overwrites)
+  5. ValueExtractionBehavior -- sets msg.ExtractedValue / msg.ExtractedStringValue from TypeCode
+  6. TenantVectorFanOutBehavior -- routes to MetricSlotHolder(s) by (ip, port, metricName)
+  7. OtelMetricHandler       -- records snmp_gauge or snmp_info; calls RecordGauge / RecordInfo
 ```
 
-Key observation: `TenantVectorRegistry` currently has **two dependencies on `DeviceRegistry`**:
+Key properties of this chain:
 
-1. `ResolveIp()` -- translates a DNS config address (e.g. `npb-simulator.simetra.svc.cluster.local`) to a resolved IPv4 string
-2. `DeriveIntervalSeconds()` -- walks device poll groups to find which interval a given metric runs at, by reverse-resolving OID → metricName via `IOidMapService`
+- Every behavior checks `if (notification is SnmpOidReceived msg)` and is a no-op for other types.
+- `OidResolutionBehavior` **overwrites** `msg.MetricName` unconditionally:
+  `msg.MetricName = _oidMapService.Resolve(msg.Oid)` -- there is no guard on whether
+  `MetricName` is already set.
+- `ValidationBehavior` rejects any `Oid` that does not match `^\d+(\.\d+){1,}$`. A sentinel OID
+  like `"synthetic"` or an empty string would be rejected here.
+- `OtelMetricHandler` reads `msg.MetricName ?? OidMapService.Unknown` -- it does not require that
+  the name was set by OID resolution specifically.
 
-### Current `TenantVectorFanOutBehavior` Device Registry Dependency
+---
+
+## Integration Point 1: Where Aggregation Happens in MetricPollJob
+
+`MetricPollJob.Execute` calls `DispatchResponseAsync(response, device, sw.Elapsed.TotalMilliseconds, ct)`.
+`DispatchResponseAsync` iterates the varbind list, skips error sentinels, and dispatches each real
+varbind individually.
+
+**Placement: after the `DispatchResponseAsync` call, before the success/failure tracking.**
+
+```
+await DispatchResponseAsync(response, device, sw.Elapsed.TotalMilliseconds, ct);
+// NEW: compute and dispatch synthetic metrics
+await DispatchCombinedMetricsAsync(response, device, pollGroup, ct);   // new private method
+// (success path continues)
+if (_unreachabilityTracker.RecordSuccess(device.Name)) { ... }
+```
+
+This placement is correct for two reasons:
+
+1. The individual OID values are in `response` (already fetched). The combined metric reads from
+   the same `IList<Variable>` — no second SNMP call needed.
+2. `DispatchResponseAsync` does not need to know about combined metrics. Keeping aggregation in a
+   separate method maintains single-responsibility and keeps the combined-metric path unit-testable
+   in isolation.
+
+`pollGroup` (a `MetricPollInfo`) must carry the combined metric definitions. This requires
+extending `MetricPollInfo` (see Integration Point 4 below).
+
+`DispatchCombinedMetricsAsync` is a new private method on `MetricPollJob`. It:
+- Receives the raw varbind list and the `MetricPollInfo` (which now knows which OIDs combine
+  into which output metric name)
+- Extracts numeric values for the participating OIDs
+- Computes the aggregate
+- Dispatches one `SnmpOidReceived` per combined metric
+
+---
+
+## Integration Point 2: Bypassing OidResolutionBehavior
+
+`OidResolutionBehavior` unconditionally overwrites `MetricName`:
 
 ```csharp
-else if (_deviceRegistry.TryGetDeviceByName(msg.DeviceName!, out var device))
+msg.MetricName = _oidMapService.Resolve(msg.Oid);
+```
+
+If the synthetic message carries a sentinel `Oid` (e.g. `"synthetic"` or a generated string like
+`"0.0"`), `_oidMapService.Resolve` will return `OidMapService.Unknown`, which overwrites the
+pre-set `MetricName` and causes the metric to be recorded under the unknown name. This is the
+core integration problem.
+
+**Two viable mechanisms:**
+
+### Option A: Guard in OidResolutionBehavior (recommended)
+
+Add a one-line guard: if `msg.MetricName` is already set (non-null, non-Unknown), skip resolution
+and call `next()` directly.
+
+```csharp
+if (notification is SnmpOidReceived msg)
 {
-    var ip = msg.AgentIp.ToString();
-    if (_registry.TryRoute(ip, device.Port, metricName, out var holders))
-    { ... }
+    // Synthetic messages pre-populate MetricName; skip OID lookup to avoid overwrite.
+    if (msg.MetricName is null || msg.MetricName == OidMapService.Unknown)
+    {
+        msg.MetricName = _oidMapService.Resolve(msg.Oid);
+        if (msg.MetricName == OidMapService.Unknown)
+            _logger.LogDebug("OID {Oid} not found in OidMap", msg.Oid);
+        else
+            _logger.LogDebug("OID {Oid} resolved to {MetricName}", msg.Oid, msg.MetricName);
+    }
+    // else: MetricName already set by caller (synthetic path); no log needed at this stage
+}
+return await next();
+```
+
+This change is backward-compatible: all existing real varbind dispatches arrive with
+`MetricName = null` (it is not set in `DispatchResponseAsync`), so the guard does not fire for
+the normal path.
+
+### Option B: New SnmpSource value
+
+Add `SnmpSource.Synthetic` to the `SnmpSource` enum and make `OidResolutionBehavior` skip
+resolution when `msg.Source == SnmpSource.Synthetic`.
+
+```csharp
+if (notification is SnmpOidReceived msg && msg.Source != SnmpSource.Synthetic)
+{
+    msg.MetricName = _oidMapService.Resolve(msg.Oid);
+    ...
 }
 ```
 
-The behavior uses `DeviceRegistry` only to look up the **port** for a given device name, so it can form the `(ip, port, metricName)` routing key.
+This is less intrusive to the resolution behavior itself, but ties the bypass to the `Source`
+discriminator rather than the actual semantic state of `MetricName`. If a future code path sets
+`Source = Synthetic` for a message that still needs OID resolution, the guard would silently
+skip it. Option A is more defensively correct.
 
-### ConfigMap Names (current)
+**Recommendation: Option A.** The guard is on the actual state (`MetricName` already set), not
+on a discriminator that could be misused.
 
-| ConfigMap | Watched by | Key | Content |
-|-----------|-----------|-----|---------|
-| `simetra-tenantvector` | `TenantVectorWatcherService` | `tenantvector.json` | `{ "Tenants": [...] }` |
-| `simetra-devices` | `DeviceWatcherService` | `devices.json` | `[{ "Name": ..., "Polls": [...] }]` |
+**Sentinel OID requirement:** The synthetic `SnmpOidReceived` still needs a non-empty, syntactically
+valid `Oid` value because `ValidationBehavior` requires `^\d+(\.\d+){1,}$`. Use a stable synthetic
+OID like `"0.0"` (two-arc numeric, never assigned by IANA, clearly synthetic). Do not use a string
+like `"synthetic"` -- it will be rejected by `ValidationBehavior`.
 
 ---
 
-## v1.7 Feature Integration Analysis
+## Integration Point 3: Do Existing Behaviors Handle Synthetic Messages?
 
-### Feature 1: Tenant Metrics as Self-Describing Objects
+Walk through each behavior for a synthetic `SnmpOidReceived` with:
+- `Oid = "0.0"` (sentinel)
+- `MetricName = "npb_combined_throughput"` (pre-set)
+- `TypeCode = SnmpType.Gauge32` (or Integer32, depending on aggregation result)
+- `Source = SnmpSource.Poll`
+- `ExtractedValue` left at default (0.0) -- ValueExtractionBehavior will re-extract from `Value`
+- `Value` = a `Gauge32` wrapping the computed aggregate value
 
-**What changes:** Each metric slot carries its own `Ip`, `Port`, `MetricName`, `IntervalSeconds`, and optionally `TimeSeriesSize`. The tenant config does NOT rely on DeviceRegistry to supply the interval or resolve the IP. The config author writes the interval directly in the tenant metric entry.
+| Behavior | Synthetic path behavior | Change needed? |
+|----------|------------------------|----------------|
+| `LoggingBehavior` | Logs `Oid=0.0 Agent=... Source=Poll`; increments published counter | None. Works correctly. |
+| `ExceptionBehavior` | Wraps in try/catch; no opinion on content | None. |
+| `ValidationBehavior` | `"0.0"` passes regex `^\d+(\.\d+){1,}$`; `DeviceName` is set | None -- **but OID sentinel must be `"0.0"` or similar numeric form.** |
+| `OidResolutionBehavior` | With Option A guard: sees `MetricName` already set, skips lookup, calls `next()` | Yes -- add the guard (one-line change). |
+| `ValueExtractionBehavior` | Reads `msg.TypeCode` and extracts from `msg.Value`; works on any numeric TypeCode | None. Caller must set `TypeCode` and `Value` to carry the computed double. |
+| `TenantVectorFanOutBehavior` | Routes using `msg.MetricName`, `msg.AgentIp`, device port; same as real metric | None. Synthetic metric with a registered tenant slot will route correctly. |
+| `OtelMetricHandler` | `switch (notification.TypeCode)` dispatches to `RecordGauge`; uses `msg.MetricName` | None. Works as-is, records under the pre-set MetricName. |
 
-**New `MetricSlotOptions` shape:**
-```json
+**Summary: only `OidResolutionBehavior` needs a one-line change. No new behavior is required.**
+
+The existing pipeline handles synthetic messages completely if the sentinel OID is numeric and the
+bypass guard is added to `OidResolutionBehavior`.
+
+**Packaging the computed double into `ISnmpData`:**
+
+`ValueExtractionBehavior` reads from `msg.Value` (an `ISnmpData`), not from `msg.ExtractedValue`
+directly. For synthetic messages, the caller in `MetricPollJob` must wrap the computed value in a
+concrete `ISnmpData` implementation so `ValueExtractionBehavior` can extract it correctly.
+
+For a Gauge32 result, use `new Gauge32(checked((uint)computedValue))`.
+For an Integer32 result, use `new Integer32(checked((int)computedValue))`.
+
+The caller sets `TypeCode` to match. `ValueExtractionBehavior` will then set `ExtractedValue`
+from the wrapped value, and `OtelMetricHandler` will call `RecordGauge` with the correct value.
+
+Alternatively, the caller can set `ExtractedValue` directly AND set a matching `TypeCode` on a
+trivially-typed `Value`. Because `OtelMetricHandler` reads `notification.ExtractedValue` (set by
+`ValueExtractionBehavior`), the two approaches are equivalent as long as both `Value` and
+`TypeCode` are consistent. Using a real `Gauge32` wrapper is cleaner and avoids type/value
+divergence.
+
+---
+
+## Integration Point 4: PollOptions and MetricPollInfo Changes
+
+Combined metrics must be defined in config so `MetricPollJob` knows which OIDs to aggregate and
+what to call the result. The config → runtime path is:
+
+```
+PollOptions (config model)
+    -> BuildPollGroups() in DeviceWatcherService
+        -> MetricPollInfo (runtime record passed to Quartz job via JobDataMap or DeviceInfo)
+```
+
+### PollOptions change
+
+Add a new list to `PollOptions`:
+
+```csharp
+/// <summary>
+/// Zero or more combined metric definitions for this poll group.
+/// Each definition names the output metric and the source OID metric names whose values combine.
+/// </summary>
+public List<CombinedMetricOptions> CombinedMetrics { get; set; } = [];
+```
+
+`CombinedMetricOptions` is a new config model:
+
+```csharp
+public sealed class CombinedMetricOptions
 {
-  "Ip": "npb-simulator.simetra.svc.cluster.local",
-  "Port": 161,
-  "MetricName": "npb_cpu_util",
-  "IntervalSeconds": 10,
-  "TimeSeriesSize": 10
+    /// <summary>Output metric name (e.g. "npb_combined_throughput"). Must be unique within poll group.</summary>
+    public string MetricName { get; set; } = string.Empty;
+
+    /// <summary>Aggregation function: Sum, Ratio, Difference, Max, Min.</summary>
+    public string Aggregation { get; set; } = string.Empty;
+
+    /// <summary>Ordered list of source metric names (resolved to OIDs at load time).</summary>
+    public List<string> SourceMetricNames { get; set; } = [];
 }
 ```
 
-`IntervalSeconds` becomes a first-class field on `MetricSlotOptions` (currently absent). The existing `TimeSeriesSize` field is already there.
+This is additive and backward-compatible: existing `PollOptions` without `CombinedMetrics` will
+deserialize with an empty list.
 
-**Impact on `TenantVectorRegistry.Reload()`:**
+### MetricPollInfo change
 
-`DeriveIntervalSeconds()` is eliminated. It was the only reason `TenantVectorRegistry` needed `IOidMapService`. The new `intervalSeconds` comes directly from the config object.
+`MetricPollInfo` is a positional record. Add a new property:
 
-`ResolveIp()` remains if the tenant config can contain DNS names (it currently does: `npb-simulator.simetra.svc.cluster.local`). However, the DNS-to-IP resolution that `ResolveIp()` performs today is a delegating lookup into `DeviceRegistry.AllDevices` — it does not do DNS itself. If the feature intent is "self-describing means no DeviceRegistry dependency at all", then the tenant config must either:
-  - Accept only resolved IPs, OR
-  - Do its own DNS resolution in `Reload()` (new DNS call, no DeviceRegistry)
-
-The simpler and more consistent interpretation: **`MetricSlotOptions.Ip` must be a resolved IP address or a DNS name that `TenantVectorRegistry` resolves directly** (same as `DeviceRegistry` does with `Dns.GetHostAddresses`). This removes the `IDeviceRegistry` constructor dependency from `TenantVectorRegistry`.
-
-**Constructor change:**
-
-Current:
 ```csharp
-public TenantVectorRegistry(IDeviceRegistry deviceRegistry, IOidMapService oidMapService, ILogger<TenantVectorRegistry> logger)
+public sealed record MetricPollInfo(
+    int PollIndex,
+    IReadOnlyList<string> Oids,
+    int IntervalSeconds,
+    double TimeoutMultiplier = 0.8,
+    IReadOnlyList<CombinedMetricDefinition> CombinedMetrics = default!)   // NEW
 ```
 
-After removing both usages:
+`CombinedMetricDefinition` is a new runtime record (parallel to `CombinedMetricOptions`):
+
 ```csharp
-public TenantVectorRegistry(ILogger<TenantVectorRegistry> logger)
+/// <summary>
+/// Resolved combined metric definition carried by MetricPollInfo at runtime.
+/// SourceOids are the resolved OID strings whose values feed the aggregation.
+/// </summary>
+public sealed record CombinedMetricDefinition(
+    string MetricName,
+    AggregationKind Aggregation,
+    IReadOnlyList<string> SourceOids);
+
+public enum AggregationKind { Sum, Ratio, Difference, Max, Min }
 ```
 
-Both `_deviceRegistry` and `_oidMapService` fields are removed. The DI registration in `ServiceCollectionExtensions` is simplified accordingly.
+### DeviceWatcherService.ValidateAndBuildDevicesAsync change
 
-**Impact on `Reload()` signature:** No change to the method signature. `TenantVectorOptions` is still the parameter. The internal body changes: build `MetricSlotHolder` from `metric.IntervalSeconds` directly instead of calling `DeriveIntervalSeconds`.
+`BuildPollGroups` (a `private static` method in `DeviceWatcherService`) currently:
 
-**Impact on routing index:** No change to structure. The routing index is still `FrozenDictionary<RoutingKey(ip, port, metricName), IReadOnlyList<MetricSlotHolder>>`. The values in the routing index now use the interval supplied directly from config. The routing key tuple is identical.
+1. Iterates `poll.MetricNames`, resolves each to OID via `oidMapService.ResolveToOid(name)`.
+2. Builds `MetricPollInfo(PollIndex, resolvedOids, IntervalSeconds, TimeoutMultiplier)`.
 
-**Carry-over logic:** No change. Carry-over is keyed on `(ip, port, metricName)` and is not affected by where `intervalSeconds` came from.
+After the change, it must also:
+
+3. Iterate `poll.CombinedMetrics`, resolve each `SourceMetricName` to OID, and build
+   `CombinedMetricDefinition` instances.
+4. Validate: each `SourceMetricName` must resolve; if any source OID is missing, log warning and
+   skip that combined metric definition (do not skip the whole poll group).
+5. Pass the built `IReadOnlyList<CombinedMetricDefinition>` as the new `MetricPollInfo` parameter.
+
+The `ValidateAndBuildDevicesAsync` method signature does not change. The change is entirely
+within `BuildPollGroups`.
+
+**Validation rules for `CombinedMetricOptions`:**
+
+- `MetricName` must be non-empty.
+- `Aggregation` must parse to a known `AggregationKind`.
+- `SourceMetricNames` must have at least 2 entries (combining one value with nothing is not a
+  combination).
+- For `Ratio`, exactly 2 source names are required (numerator / denominator).
+- Each source name must resolve to an OID via `oidMapService.ResolveToOid`. Unresolvable sources
+  cause a warning + skip of that combined metric definition (not the whole poll group).
+
+These validation rules belong in `BuildPollGroups`, not in `DevicesOptionsValidator`, because they
+require `IOidMapService` which is not available in the validator.
 
 ---
 
-### Feature 2: Tenant Commands Array
+## Integration Point 5: Full Data Flow
 
-**What changes:** `TenantOptions` gains a `Commands` list alongside `Metrics`. Each command entry has a name, value, and value type.
-
-**New config shape:**
-```json
-{
-  "Priority": 1,
-  "Metrics": [...],
-  "Commands": [
-    { "Name": "obp_set_bypass_L1", "Value": "1", "ValueType": "Integer32" }
-  ]
-}
 ```
-
-**New configuration model: `TenantCommandOptions`**
-```csharp
-public sealed class TenantCommandOptions
-{
-    public string Name { get; set; } = string.Empty;
-    public string Value { get; set; } = string.Empty;
-    public string ValueType { get; set; } = string.Empty;
-}
+simetra-devices ConfigMap
+    key: devices.json
+    |
+    DeviceWatcherService.HandleConfigMapChangedAsync
+    |  JsonDeserialize -> List<DeviceOptions>
+    |      DeviceOptions.Polls[i].CombinedMetrics  <-- NEW LIST
+    v
+BuildPollGroups(polls, deviceName, oidMapService, logger)
+    |  for each PollOptions poll:
+    |      for each MetricName in poll.MetricNames:
+    |          resolve to OID -> resolvedOids[]
+    |      for each CombinedMetricOptions cm in poll.CombinedMetrics:   <-- NEW LOOP
+    |          validate MetricName non-empty
+    |          validate Aggregation parseable
+    |          validate SourceMetricNames.Count >= 2
+    |          for each SourceMetricName:
+    |              oid = oidMapService.ResolveToOid(sourceName)
+    |              if null: warn, skip this definition entirely
+    |          if all sources resolved: emit CombinedMetricDefinition
+    |      MetricPollInfo(PollIndex, resolvedOids, IntervalSeconds, TimeoutMultiplier,
+    |                     combinedMetricDefinitions)       <-- NEW PARAMETER
+    v
+DeviceInfo.PollGroups[i] (MetricPollInfo with combined definitions)
+    |
+    DynamicPollScheduler.ReconcileAsync
+    |  schedules Quartz metric-poll-{addr}_{port}-{pollIndex} job
+    |  JobDataMap carries configAddress, port, pollIndex, intervalSeconds
+    v
+MetricPollJob.Execute (Quartz fires on interval)
+    |  device = _deviceRegistry.TryGetByIpPort(configAddress, port)
+    |  pollGroup = device.PollGroups[pollIndex]     -- MetricPollInfo with CombinedMetrics
+    |
+    |  SNMP GET: pollGroup.Oids -> IList<Variable> response
+    |
+    |  DispatchResponseAsync(response, device, ...)
+    |      foreach varbind in response:
+    |          if error sentinel: skip
+    |          new SnmpOidReceived { Oid, AgentIp, DeviceName, Value, Source=Poll,
+    |                                TypeCode, PollDurationMs }
+    |          ISender.Send(msg)  -> full pipeline (OidResolutionBehavior sets MetricName)
+    |
+    |  DispatchCombinedMetricsAsync(response, device, pollGroup, ct)   <-- NEW
+    |      Build value index: { oid -> double } from response varbinds
+    |      foreach CombinedMetricDefinition cmd in pollGroup.CombinedMetrics:
+    |          if any source OID missing from value index: log warning, skip this metric
+    |          compute = Aggregate(cmd.Aggregation, sourceValues[])
+    |          new SnmpOidReceived
+    |          {
+    |              Oid         = "0.0"               // sentinel; passes ValidationBehavior
+    |              AgentIp     = IPAddress.Parse(device.ResolvedIp)
+    |              DeviceName  = device.Name
+    |              Value       = new Gauge32(checked((uint)compute))  // or Integer32
+    |              Source      = SnmpSource.Poll
+    |              TypeCode    = SnmpType.Gauge32
+    |              MetricName  = cmd.MetricName      // PRE-SET; bypasses OidResolutionBehavior
+    |              PollDurationMs = null             // aggregation has no separate round-trip
+    |          }
+    |          ISender.Send(syntheticMsg)
+    |          |
+    |          v  pipeline:
+    |          LoggingBehavior          -- logs Oid=0.0; increments published
+    |          ExceptionBehavior        -- wraps
+    |          ValidationBehavior       -- "0.0" passes regex; DeviceName set -> passes
+    |          OidResolutionBehavior    -- MetricName already set; GUARD fires, skips lookup
+    |          ValueExtractionBehavior  -- extracts from Gauge32 Value -> ExtractedValue
+    |          TenantVectorFanOutBehavior -- routes by (ip, port, cmd.MetricName)
+    |          OtelMetricHandler        -- RecordGauge(cmd.MetricName, "0.0", deviceName, ...)
+    v
+Prometheus scrape reads snmp_gauge{metric_name="npb_combined_throughput", ...}
 ```
-
-**Modified `TenantOptions`:**
-```csharp
-public List<TenantCommandOptions> Commands { get; set; } = [];
-```
-Adding `Commands` is additive and backward-compatible — existing configs without `Commands` will deserialize with an empty list.
-
-**New runtime model: `TenantCommand`**
-
-The `Tenant` class needs to carry commands at runtime. Parallel to `Holders` (which holds `MetricSlotHolder` instances), a `Commands` property would hold the command definitions:
-```csharp
-public sealed class Tenant
-{
-    public string Id { get; }
-    public int Priority { get; }
-    public IReadOnlyList<MetricSlotHolder> Holders { get; }
-    public IReadOnlyList<TenantCommand> Commands { get; }   // NEW
-}
-```
-
-`TenantCommand` is a simple value record (no live state):
-```csharp
-public sealed record TenantCommand(string Name, string Value, string ValueType);
-```
-
-**Impact on `TenantVectorRegistry.Reload()`:**
-During the build loop, after building `holders`, build `commands` from `tenantOpts.Commands`. Construct `Tenant` with both. No routing index needed for commands — they are accessed by iterating `group.Tenants[i].Commands`.
-
-**Impact on routing index:** None. Commands are not part of the routing index.
-
-**Impact on `ITenantVectorRegistry`:** No interface change required unless consumers need to query commands by tenant ID. For now, commands are accessed via `Groups → Tenants → Commands`. No new interface method is needed for this milestone.
-
----
-
-### Feature 3: CommunityString Validation
-
-**What changes:** Every `CommunityString` field (in both `DeviceOptions` and `MetricSlotOptions`) must follow the `Simetra.*` pattern when present. Null/empty is allowed (falls back to convention).
-
-**Where validation lives:**
-
-The `Simetra.*` prefix check already exists in `CommunityStringHelper`. The validation logic should live in a dedicated validator, not scattered across watcher services or inline in registry code.
-
-Recommended placement: **expand the existing validators**.
-
-- `DevicesOptionsValidator` gains a `CommunityString` check in `ValidateDevice()`:
-  ```
-  if CommunityString is not null/empty AND does not start with "Simetra."
-      failures.Add(...)
-  ```
-
-- `TenantVectorOptionsValidator` (currently a no-op) gains actual validation:
-  ```
-  for each tenant metric with CommunityString:
-      if not null/empty AND not "Simetra.*"
-          failures.Add(...)
-  ```
-
-**CommunityString on `MetricSlotOptions`:** This is a new field. `MetricSlotOptions` currently has `Ip`, `Port`, `MetricName`, `TimeSeriesSize`. A `CommunityString?` field is added.
-
-**Why validators, not inline:**
-- Watcher services already call the validator before calling `Reload()`. Invalid configs are rejected at the watcher boundary with the current config retained. This is the correct guard point.
-- Inline checks in `Reload()` would require exception-based control flow or silent skipping — neither matches the existing pattern.
-- `CommunityStringHelper` remains a utility; it does not validate (already exists as `TryExtractDeviceName`/`DeriveFromDeviceName`).
-
-**No new validator class needed.** The two existing validator classes absorb the new rules.
-
----
-
-### Feature 4: Name → CommunityString Rename in DeviceOptions
-
-**What changes:** The `DeviceOptions` property `Name` is NOT being renamed — `Name` is the human-readable device name. The change is that `CommunityString` is the explicit SNMP community string field. Looking at the current `DeviceOptions`, it already has `CommunityString` as a property. This rename is already complete in the codebase.
-
-The milestone description says "Name → CommunityString rename". In context, this likely refers to a rename within a different model that has a `Name` property meaning something like community string. Based on the code, `DeviceOptions.Name` is device identity (e.g., "OBP-01") and `DeviceOptions.CommunityString` is the SNMP community. Both already exist with the correct names.
-
-If the rename refers to `MetricSlotOptions` gaining a `CommunityString` field (which it does not currently have), that is a new field addition, not a rename. The `TenantOptions` model similarly has no field named `Name` that maps to a community string.
-
-**Assessment:** This feature is either already done (DeviceOptions already has CommunityString), or refers to a rename within a model that is yet to be identified. The roadmap creator should clarify scope. For now, this research treats it as: `MetricSlotOptions` gains an optional `CommunityString?` field (aligns with feature 3 where validation is needed).
-
----
-
-### Feature 5: Skip Poll Job When All Metric Names Unresolvable
-
-**Context from Phase 31 decisions:** "Poll group behavior: within a poll group, resolved names are collected into one poll job. If zero names resolve in a group, no job for that group." This was already decided for Phase 31.
-
-**Where the skip logic lives:**
-
-In `DeviceRegistry.BuildPollGroups()`, a `MetricPollInfo` is currently returned for every poll group, even if `resolvedOids` is empty. The skip behavior means: if `resolvedOids.Count == 0`, do NOT include this group in the returned `ReadOnlyCollection<MetricPollInfo>`.
-
-```csharp
-// Current (always includes group):
-return new MetricPollInfo(PollIndex: index, Oids: resolvedOids.AsReadOnly(), IntervalSeconds: ...);
-
-// After skip behavior:
-if (resolvedOids.Count == 0)
-{
-    _logger.LogWarning("Device '{DeviceName}' poll group {index}: all {count} metric names unresolvable -- skipping job");
-    return; // or continue in LINQ select
-}
-return new MetricPollInfo(...);
-```
-
-The `Select` + `ToList` in `BuildPollGroups` needs to become a `SelectMany` or filtered `Where`, since `Select` requires a 1:1 transformation. The simplest refactor is changing from LINQ `Select` to a foreach loop with conditional `Add`.
-
-**Impact on `DynamicPollScheduler`:** No change. The scheduler sees only the `MetricPollInfo` list that `DeviceRegistry` exposes. If a group produces no `MetricPollInfo`, the scheduler simply has fewer jobs to create. This is already how removal works.
-
-**Impact on initial Quartz registration in `ServiceCollectionExtensions.AddSnmpScheduling()`:**
-
-The startup registration iterates `devicesOptions.Devices` and registers a Quartz job per `device.Polls[pi]`. It does not consult `IOidMapService` at this point (the OID map may be empty at startup). After the skip behavior, the startup registration could still create a job for a poll group whose MetricNames are all invalid — this job would fire and send an empty OID list to SNMP. This is a latent issue pre-existing from v1.6. The correct fix is the same: skip groups with zero names at `BuildPollGroups` time, and since `DeviceRegistry` is called during `DeviceWatcherService.HandleConfigMapChangedAsync` → `ReconcileAsync`, the reconcile will produce the correct desired set. The startup Quartz registration (in `AddSnmpScheduling`) is a separate path that should also apply the same skip logic — but since Phase 31 decisions indicate this is "no job for that group", the reconcile path is what matters for hot-reload.
-
----
-
-### Feature 6: tenantvector → tenants Rename
-
-**What changes:** The ConfigMap name `simetra-tenantvector` and key `tenantvector.json` are renamed. The new names are `simetra-tenants` and `tenants.json` (inferred from "tenantvector → tenants" rename).
-
-**Touched files:**
-
-| File | Change |
-|------|--------|
-| `Services/TenantVectorWatcherService.cs` | `ConfigMapName = "simetra-tenants"`, `ConfigKey = "tenants.json"` |
-| `deploy/k8s/snmp-collector/simetra-tenantvector.yaml` | Rename file to `simetra-tenants.yaml`; update `metadata.name` and data key |
-| `Program.cs` | Local dev path reads `tenants.json` (currently reads `tenantvector.json`) |
-| `TenantVectorOptions.SectionName` | Currently `"TenantVector"` -- if the section name also renames to `"Tenants"`, the JSON wrapper in local dev changes accordingly |
-
-**The DI registration class name stays the same:** `TenantVectorWatcherService`, `TenantVectorRegistry`, `TenantVectorOptions` are internal class names. The rename is external (ConfigMap names, file names, JSON keys). No class renaming is required unless explicitly in scope.
-
-**`TenantVectorOptions.SectionName`:** Currently `"TenantVector"`. The current `simetra-tenantvector.yaml` uses `{ "Tenants": [...] }` as the JSON content (no section wrapper — it's unwrapped). The local `tenantvector.json` uses `{ "TenantVector": { "Tenants": [...] } }` (section-wrapped for IConfiguration binding). If the ConfigMap key becomes `tenants.json` and the section wrapper also renames to `"Tenants"`, then `TenantVectorOptions.SectionName` changes to `"Tenants"` and the local dev JSON wrapper key changes. If the section wrapper stays as `"TenantVector"` but the file name changes to `tenants.json`, only the file names and ConfigMap key change.
-
-**Recommendation:** Keep `TenantVectorOptions.SectionName = "TenantVector"` (internal binding key) and only rename the ConfigMap/file names. This isolates the rename to infrastructure artifacts, not the options binding chain.
-
----
-
-### Feature 7: Remove Redundant Code from DeviceRegistry Tenant Dependency
-
-**Redundant code that is eliminated when metrics become self-describing:**
-
-1. `TenantVectorRegistry._deviceRegistry` field — removed entirely
-2. `TenantVectorRegistry._oidMapService` field — removed entirely
-3. `TenantVectorRegistry.ResolveIp()` method — removed (or replaced with direct DNS resolution)
-4. `TenantVectorRegistry.DeriveIntervalSeconds()` method — removed
-5. Constructor parameter `IDeviceRegistry deviceRegistry` — removed
-6. Constructor parameter `IOidMapService oidMapService` — removed
-7. DI registration in `ServiceCollectionExtensions` that passes these two parameters — simplified
-
-**Redundant code that is eliminated from `TenantVectorFanOutBehavior` when tenants carry their own port:**
-
-Currently `TenantVectorFanOutBehavior` calls `_deviceRegistry.TryGetDeviceByName(msg.DeviceName!, out var device)` to get the port. If tenant metrics are self-describing and the routing index is built with the correct port already embedded in the `RoutingKey`, then the behavior can route using `msg.AgentIp` + port from the holder (or from the routing key lookup itself).
-
-However: the routing lookup is `TryRoute(ip, port, metricName)`. The behavior needs to know the port to call `TryRoute`. There are two options:
-
-- **Option A:** Keep `IDeviceRegistry` in `TenantVectorFanOutBehavior` for port lookup (no change here). This means `TenantVectorFanOutBehavior` still depends on `DeviceRegistry` even after the tenant side is self-describing. Not fully redundant.
-- **Option B:** Change `TryRoute` to accept `ip` and `metricName` only (drop port), and change the routing key to `(ip, metricName)`. This removes all DeviceRegistry dependency from the fan-out path. However it risks key collisions if two devices share an IP but use different ports with the same metric name — unlikely in practice but architecturally risky.
-- **Option C:** Expose port directly from `MetricSlotHolder` (already available: `holder.Port`) and restructure the fan-out to look up by IP only, then filter by port. Overhead but correct.
-
-**Recommended:** Option A — leave `TenantVectorFanOutBehavior._deviceRegistry` in place for this milestone. The port-lookup dependency is a small, well-contained coupling. Removing it requires a routing key model change that touches the hot path. Flag it as a future cleanup.
 
 ---
 
@@ -309,155 +382,126 @@ However: the routing lookup is `TryRoute(ip, port, metricName)`. The behavior ne
 
 | File | Kind | Purpose |
 |------|------|---------|
-| `Configuration/TenantCommandOptions.cs` | Config model | `Name`, `Value`, `ValueType` per tenant command |
-| `Pipeline/TenantCommand.cs` | Runtime record | Immutable command descriptor carried by `Tenant` |
+| `Configuration/CombinedMetricOptions.cs` | Config model | `MetricName`, `Aggregation` (string), `SourceMetricNames` list |
+| `Pipeline/CombinedMetricDefinition.cs` | Runtime record | Resolved combined metric: `MetricName`, `AggregationKind`, `SourceOids` |
+| `Pipeline/AggregationKind.cs` | Enum | `Sum`, `Ratio`, `Difference`, `Max`, `Min` |
 
 ### Modified Files
 
-| File | Change |
-|------|--------|
-| `Configuration/MetricSlotOptions.cs` | Add `IntervalSeconds` field; add optional `CommunityString?` field |
-| `Configuration/TenantOptions.cs` | Add `List<TenantCommandOptions> Commands { get; set; } = []` |
-| `Configuration/Validators/TenantVectorOptionsValidator.cs` | Replace no-op with real validation: non-empty CommunityString must match `Simetra.*`; `IntervalSeconds > 0` per metric slot |
-| `Configuration/Validators/DevicesOptionsValidator.cs` | Add CommunityString pattern check in `ValidateDevice()` |
-| `Pipeline/TenantVectorRegistry.cs` | Remove `IDeviceRegistry` and `IOidMapService` constructor deps; remove `ResolveIp()` and `DeriveIntervalSeconds()`; read interval from `metric.IntervalSeconds`; build `Tenant` with commands |
-| `Pipeline/Tenant.cs` | Add `IReadOnlyList<TenantCommand> Commands` property; update constructor |
-| `Pipeline/DeviceRegistry.cs` | `BuildPollGroups()`: skip poll group when `resolvedOids.Count == 0` (log warning, exclude from return value) |
-| `Services/TenantVectorWatcherService.cs` | Update `ConfigMapName` and `ConfigKey` constants for rename |
-| `Extensions/ServiceCollectionExtensions.cs` | Simplify `TenantVectorRegistry` DI registration (no longer passes `IDeviceRegistry` or `IOidMapService`) |
-| `Program.cs` | Update local dev file path from `tenantvector.json` to `tenants.json` (if renamed) |
-| `deploy/k8s/snmp-collector/simetra-tenantvector.yaml` | Rename file; update `metadata.name` to `simetra-tenants`; update data key to `tenants.json`; add `IntervalSeconds` to metric slot examples; add `Commands` array example |
+| File | Change | Scope |
+|------|--------|-------|
+| `Configuration/PollOptions.cs` | Add `List<CombinedMetricOptions> CombinedMetrics { get; set; } = []` | 3 lines |
+| `Pipeline/MetricPollInfo.cs` | Add `IReadOnlyList<CombinedMetricDefinition> CombinedMetrics` parameter to record | 2 lines + default |
+| `Services/DeviceWatcherService.cs` | `BuildPollGroups`: add loop to resolve and validate combined metric definitions; pass to `MetricPollInfo` | ~30 lines in existing private static method |
+| `Jobs/MetricPollJob.cs` | Add `DispatchCombinedMetricsAsync` private method; call it after `DispatchResponseAsync` | ~40 lines new method + 1 call site |
+| `Pipeline/Behaviors/OidResolutionBehavior.cs` | Add guard: if `msg.MetricName` already set and not Unknown, skip lookup | 3 lines |
 
 ### Unchanged Files
 
 | File | Reason unchanged |
 |------|-----------------|
-| `Pipeline/TenantVectorFanOutBehavior.cs` | Port lookup via DeviceRegistry stays (see Feature 7 analysis) |
-| `Pipeline/MetricSlotHolder.cs` | No new fields; `IntervalSeconds` already exists on the holder |
-| `Pipeline/ITenantVectorRegistry.cs` | Interface surface unchanged: `TryRoute`, `Groups`, `TenantCount`, `SlotCount` |
-| `Pipeline/IDeviceRegistry.cs` | No change |
-| `Pipeline/DeviceInfo.cs` | No change |
-| `Pipeline/CommunityStringHelper.cs` | Used by validators; no change to its own logic |
-| `Services/DeviceWatcherService.cs` | Device reload path unchanged |
-| `Services/DynamicPollScheduler.cs` | Receives `IReadOnlyList<DeviceInfo>` from registry; only sees the filtered list |
-| `Pipeline/OidMapService.cs` / `IOidMapService.cs` | No change |
-| `Pipeline/CommandMapService.cs` / `ICommandMapService.cs` | No change |
-| `Services/OidMapWatcherService.cs` | No change |
-| `Services/CommandMapWatcherService.cs` | No change |
-| All MediatR behaviors except `TenantVectorFanOutBehavior` | No change |
-| `Pipeline/RoutingKey.cs` | No change (key shape stays `(ip, port, metricName)`) |
-| `Pipeline/PriorityGroup.cs` | No change |
+| `Pipeline/SnmpOidReceived.cs` | All required fields already exist; `MetricName` is already mutable (`set`) |
+| `Pipeline/Behaviors/ValidationBehavior.cs` | Sentinel `"0.0"` satisfies existing OID regex |
+| `Pipeline/Behaviors/ValueExtractionBehavior.cs` | Works on any TypeCode; no knowledge of synthetic path |
+| `Pipeline/Behaviors/TenantVectorFanOutBehavior.cs` | Routes by `MetricName`; works identically for synthetic and real metrics |
+| `Pipeline/Handlers/OtelMetricHandler.cs` | Records by `MetricName` regardless of origin |
+| `Pipeline/Behaviors/LoggingBehavior.cs` | No change |
+| `Pipeline/Behaviors/ExceptionBehavior.cs` | No change |
+| `Configuration/DeviceOptions.cs` | Gains `CombinedMetrics` only through `PollOptions.CombinedMetrics` (indirectly) |
+| `Pipeline/DeviceInfo.cs` | `PollGroups` is `IReadOnlyList<MetricPollInfo>`; no change to shape |
+| `Services/DynamicPollScheduler.cs` | Schedules jobs from `MetricPollInfo.JobKey`; does not need to know about combined metrics |
+| `Pipeline/Telemetry/TelemetryConstants.cs` | Synthetic metrics use existing `snmp_gauge` instrument |
 
 ---
 
-## Data Flow After v1.7
+## Special Cases and Edge Conditions
 
-### Tenant Config Load Path
+### Ratio Aggregation and Division by Zero
 
-```
-simetra-tenants ConfigMap (renamed from simetra-tenantvector)
-    key: tenants.json (renamed from tenantvector.json)
-    |
-    TenantVectorWatcherService (updated ConfigMapName/ConfigKey constants)
-    |  JsonDeserialize -> TenantVectorOptions
-    |  TenantVectorOptionsValidator.Validate()
-    |    - each metric.IntervalSeconds > 0
-    |    - each metric.CommunityString if present matches "Simetra.*"
-    |    - each command.Name non-empty
-    v
-TenantVectorRegistry.Reload(TenantVectorOptions)
-    |  for each TenantOptions:
-    |      for each MetricSlotOptions metric:
-    |          resolvedIp = DirectResolve(metric.Ip)    // DNS or pass-through (NO DeviceRegistry)
-    |          new MetricSlotHolder(resolvedIp, metric.Port, metric.MetricName,
-    |                               metric.IntervalSeconds, metric.TimeSeriesSize)
-    |          carry-over old value by (ip, port, metricName)
-    |      for each TenantCommandOptions cmd:
-    |          new TenantCommand(cmd.Name, cmd.Value, cmd.ValueType)
-    |      new Tenant(id, priority, holders, commands)
-    |  build FrozenDictionary routing index
-    |  volatile swap _groups and _routingIndex
-```
+`Ratio(a, b) = a / b`. If `b == 0`, the result is undefined. `DispatchCombinedMetricsAsync` must
+check for zero denominator and skip dispatch (with a Debug log) rather than dividing. Emitting a
+gauge of `+Inf` or `NaN` would be recorded by OpenTelemetry but would confuse Prometheus consumers.
+The safest behavior: skip emission when denominator is zero.
 
-### Device Config Load Path (with skip behavior)
+### Missing Source OID in Response
 
-```
-simetra-devices ConfigMap (unchanged name)
-    |
-    DeviceWatcherService
-    |  JsonDeserialize -> List<DeviceOptions>
-    v
-DeviceRegistry.ReloadAsync(List<DeviceOptions>)
-    |  for each DeviceOptions d:
-    |      DNS resolution -> resolved IP
-    |      BuildPollGroups(d.Polls, d.Name):
-    |          for each PollOptions poll:
-    |              for each MetricName name:
-    |                  oid = _oidMapService.ResolveToOid(name)
-    |                  if oid is null: warn, skip
-    |              if resolvedOids.Count == 0: warn, SKIP THIS GROUP (no MetricPollInfo)
-    |              else: emit MetricPollInfo(oids, interval)
-    |      DeviceInfo(name, configAddress, resolvedIp, port, pollGroups, communityString)
-    |      DevicesOptionsValidator: CommunityString pattern check fires here (watcher path)
-    |  FrozenDictionary volatile swap
-    v
-DynamicPollScheduler.ReconcileAsync(AllDevices)
-    |  desired jobs = only poll groups that survived skip filter
-    |  add/remove/reschedule Quartz metric-poll-* jobs
-```
+If the SNMP device returns fewer varbinds than requested (e.g. NoSuchObject for one source OID),
+the value index built from `response` will be incomplete. The combined metric that requires the
+missing OID must be skipped for this poll cycle. This is a per-poll-cycle skip, not a permanent
+configuration error, so it should log at Debug level to avoid noise on flapping devices.
+
+### Negative Values from Difference Aggregation
+
+`Difference(a, b) = a - b`. This can produce a negative double. `Gauge32` is unsigned and will
+overflow. Use `Integer32` (signed) for Difference aggregation. `DispatchCombinedMetricsAsync`
+must select the TypeCode based on `AggregationKind`:
+
+- Sum, Max, Min: `Gauge32` (unsigned; safe as long as source values are non-negative counters)
+- Ratio: `Gauge32` for non-negative ratios; consider scaling (e.g. multiply by 100 for percentages)
+- Difference: `Integer32` (signed)
+
+### Synthetic OID in OtelMetricHandler
+
+`OtelMetricHandler.RecordGauge` receives `oid = "0.0"` for synthetic metrics. The `oid` parameter
+is used as a label value (`snmp_oid` label in Prometheus). This means all synthetic metrics from
+all poll groups will share `snmp_oid="0.0"`. This is acceptable because the `metric_name` label
+differentiates them. If the `snmp_oid` label is important for synthetic metrics, callers could
+use the combined metric's output `MetricName` as the synthetic OID (e.g. `"npb_combined_throughput"`)
+-- but this is a non-numeric string and would fail `ValidationBehavior`. The sentinel `"0.0"` is
+the correct choice; document it explicitly in code comments.
+
+### PollDurationMs on Synthetic Messages
+
+Set `PollDurationMs = null` on synthetic `SnmpOidReceived`. The SNMP round-trip duration belongs
+to the poll, not to the aggregation computation (which is in-process). `OtelMetricHandler` checks
+`notification.PollDurationMs.HasValue` before calling `RecordGaugeDuration` -- null safely skips
+the duration instrument. No change needed in the handler.
 
 ---
 
-## Build Order for v1.7
+## Suggested Build Order
 
-Dependencies flow from models → validators → registry → watcher → infrastructure.
+Dependencies flow from config models → runtime models → watcher resolution → job execution → pipeline bypass.
 
-### Phase ordering rationale
+### Phase 1: Config and Runtime Models
 
-1. **Config model additions first** (`MetricSlotOptions`, `TenantOptions`, `TenantCommandOptions`, `TenantCommand`)
-   - Everything else depends on these shapes. No dependencies upstream.
-   - `MetricSlotOptions.IntervalSeconds` must exist before `TenantVectorRegistry.Reload()` can use it.
-   - `TenantCommandOptions` must exist before `TenantOptions.Commands` compiles.
+New files only. No existing code changes. Fully isolated.
 
-2. **Validator changes second** (`TenantVectorOptionsValidator`, `DevicesOptionsValidator`)
-   - Depends on updated model shapes.
-   - Fail-fast at watcher boundary; must be correct before watcher integration is tested.
-   - `TenantVectorOptionsValidator` currently a no-op — activating it changes behavior; test it before wiring.
+- `Configuration/CombinedMetricOptions.cs`
+- `Pipeline/AggregationKind.cs`
+- `Pipeline/CombinedMetricDefinition.cs`
+- `Configuration/PollOptions.cs`: add `CombinedMetrics` property
+- `Pipeline/MetricPollInfo.cs`: add `CombinedMetrics` parameter
 
-3. **`DeviceRegistry.BuildPollGroups` skip behavior**
-   - Depends only on existing `IOidMapService` (unchanged).
-   - Isolated change within one method; can be written and unit-tested independently.
-   - No dependency on tenant changes.
+**Why first:** Everything downstream depends on these shapes. No behavior changes yet; existing
+tests are unaffected. `MetricPollInfo` is a positional record -- adding a new optional parameter
+with a default value (`default!` or `[]`) is source-compatible with existing construction sites.
 
-4. **`TenantVectorRegistry` refactor** (remove DeviceRegistry/OidMapService deps, use `metric.IntervalSeconds`, add commands build)
-   - Depends on model additions (step 1).
-   - Remove two constructor parameters; DI registration update is part of this step.
-   - Carry-over logic and routing index construction are unchanged structurally.
+### Phase 2: DeviceWatcherService Resolution
 
-5. **`Tenant` runtime model update** (add `Commands` property)
-   - Must happen in the same step as `TenantVectorRegistry` refactor — they compile together.
+- `Services/DeviceWatcherService.cs`: extend `BuildPollGroups` to resolve `CombinedMetricOptions`
+  into `CombinedMetricDefinition` instances; validate at load time.
 
-6. **ConfigMap rename** (`simetra-tenantvector` → `simetra-tenants`, `TenantVectorWatcherService` constants)
-   - Purely mechanical; no logic changes.
-   - Last to minimize noise on prior steps' diffs.
-   - Requires updating: watcher constants, YAML manifests, local dev `Program.cs` file path.
+**Why second:** Depends on models from Phase 1. Isolated to one private static method. Unit-testable
+without MediatR or Quartz. Existing `ValidateAndBuildDevicesAsync` tests should be extended here.
 
-7. **K8s ConfigMap YAML updates** (`simetra-tenantvector.yaml` → `simetra-tenants.yaml`)
-   - Add `IntervalSeconds` to existing metric slot examples.
-   - Add `Commands` array example entries.
-   - CommunityString validation: existing entries have no CommunityString fields, so they pass.
+### Phase 3: OidResolutionBehavior Bypass
 
-### Suggested Phase Structure
+- `Pipeline/Behaviors/OidResolutionBehavior.cs`: add pre-set MetricName guard.
 
-| Phase | Content | Key files |
-|-------|---------|-----------|
-| Phase A | Config models: `MetricSlotOptions` + `IntervalSeconds` + `CommunityString?`; `TenantCommandOptions`; `TenantCommand` record | `MetricSlotOptions.cs`, `TenantOptions.cs`, `TenantCommandOptions.cs`, `TenantCommand.cs` |
-| Phase B | Validators: activate `TenantVectorOptionsValidator`; add CommunityString check to `DevicesOptionsValidator` | `TenantVectorOptionsValidator.cs`, `DevicesOptionsValidator.cs` |
-| Phase C | `DeviceRegistry.BuildPollGroups` skip behavior + unit tests | `DeviceRegistry.cs`, test file |
-| Phase D | `TenantVectorRegistry` refactor: remove deps, use `metric.IntervalSeconds`, build commands; `Tenant` commands; DI registration | `TenantVectorRegistry.cs`, `Tenant.cs`, `ServiceCollectionExtensions.cs` |
-| Phase E | ConfigMap rename + YAML updates | `TenantVectorWatcherService.cs`, `simetra-tenantvector.yaml` (rename), `Program.cs` |
+**Why third:** This is a 3-line change with high risk of being overlooked. Doing it before
+`MetricPollJob` changes ensures the pipeline is ready before synthetic dispatches are added.
+Write a unit test: construct `SnmpOidReceived` with pre-set `MetricName`, send through the behavior,
+assert `MetricName` is unchanged and `_oidMapService.Resolve` was not called.
 
-Phases A and B can be combined. Phases C and D can be combined if tests are included. Phase E is always last.
+### Phase 4: MetricPollJob Dispatch
+
+- `Jobs/MetricPollJob.cs`: add `DispatchCombinedMetricsAsync`; call it after `DispatchResponseAsync`.
+
+**Why fourth (last):** Depends on models (Phase 1), resolved definitions arriving via `MetricPollInfo`
+(Phase 2), and the bypass being in place (Phase 3). Integration test: mock a two-OID response,
+configure one combined metric (Sum), verify a synthetic `SnmpOidReceived` is sent with the correct
+`MetricName` and computed `ExtractedValue` after the pipeline runs.
 
 ---
 
@@ -465,21 +509,32 @@ Phases A and B can be combined. Phases C and D can be combined if tests are incl
 
 | Area | Confidence | Basis |
 |------|------------|-------|
-| `TenantVectorRegistry` DeviceRegistry removal | HIGH | Direct code read; both usages (`ResolveIp`, `DeriveIntervalSeconds`) identified and traced |
-| `MetricSlotOptions.IntervalSeconds` new field | HIGH | Absence confirmed by reading the model file |
-| `TenantCommandOptions` new model | HIGH | `TenantOptions.Commands` does not exist; no `Commands` field anywhere in config models |
-| `DeviceRegistry.BuildPollGroups` skip | HIGH | Current code returns all groups regardless of resolved count; skip behavior is a 5-line change |
-| CommunityString validation placement | HIGH | Existing validator pattern is clear; `CommunityStringHelper` prefix constant already defined |
-| ConfigMap rename scope | MEDIUM | Rename touches watcher constants, YAML, Program.cs -- exhaustive list requires grep verification |
-| "Name → CommunityString rename" scope | LOW | Current `DeviceOptions` already has both `Name` and `CommunityString`; the rename target is unclear from milestone description; needs clarification |
-| `TenantVectorFanOutBehavior` DeviceRegistry dep | HIGH | Code read confirms port lookup via DeviceRegistry; removing it requires routing key model change (deferred) |
+| Aggregation placement in MetricPollJob (after DispatchResponseAsync) | HIGH | Direct code read; Execute() method structure is clear; call site is unambiguous |
+| OidResolutionBehavior overwrites MetricName unconditionally | HIGH | Line 35: `msg.MetricName = _oidMapService.Resolve(msg.Oid)` -- no guard in current code |
+| ValidationBehavior passes "0.0" | HIGH | Regex `^\d+(\.\d+){1,}$` -- "0.0" matches; verified by inspection |
+| No new pipeline behavior needed | HIGH | All existing behaviors are compatible with synthetic messages (verified per-behavior above) |
+| MetricPollInfo positional record -- adding optional parameter is source-compatible | HIGH | C# positional records with default parameter values are backward-compatible for call sites that use named parameters or trailing defaults |
+| PollOptions additive change is backward-compatible | HIGH | `List<CombinedMetricOptions> CombinedMetrics = []` -- empty default; no existing config breaks |
+| Negative Difference requiring Integer32 vs Gauge32 | HIGH | Gauge32 is uint (0..2^32-1); Integer32 is int (-2^31..2^31-1); overflow on negative is a hard bug |
+| Ratio denominator zero handling | HIGH | Standard IEEE 754 / Prometheus constraint; not specific to this codebase |
 
 ---
 
 ## Open Questions for Roadmap
 
-1. **DNS resolution in `TenantVectorRegistry`:** If `IDeviceRegistry` is removed, how should DNS names in `MetricSlotOptions.Ip` be handled? Options: require resolved IPs only, or add `Dns.GetHostAddressesAsync` in `Reload()`. The current `ResolveIp()` delegates to `DeviceRegistry` which already resolved the DNS. A direct DNS call in `Reload()` works but makes `Reload()` async (currently synchronous). Recommend either: (a) require IP-only in tenant config, or (b) make `Reload()` return `Task` and resolve DNS directly.
+1. **Scaling for Ratio results:** A ratio of two counters (e.g. error_packets / total_packets) is
+   typically 0.0–1.0, which rounds to 0 in a Gauge32 uint. Should ratios be multiplied by a
+   configurable scale factor (e.g. 10000 for 4-decimal precision)? Or should the output TypeCode
+   for Ratio be a different representation? This needs a decision before Phase 4 implementation.
 
-2. **"Name → CommunityString rename" clarification:** The milestone description mentions this but both properties already exist in `DeviceOptions` with the correct names. Either this refers to a model not yet identified, or it is referring to adding `CommunityString` as a new required field in a context where `Name` was previously repurposed. Needs clarification before Phase B is planned.
+2. **Combined metrics in TenantVector config:** Tenant vector slots route by `MetricName`. If a
+   combined metric's output name (e.g. `"npb_combined_throughput"`) is added to a tenant's
+   `MetricSlotOptions`, it will route correctly through `TenantVectorFanOutBehavior` with no
+   additional changes. No research gap -- confirming the intended behavior is sufficient.
 
-3. **`TenantVectorOptions.SectionName` with rename:** If ConfigMap key changes to `tenants.json` but local dev `tenantvector.json` also renames, what is the IConfiguration binding section key? Currently `"TenantVector"`. If this changes to `"Tenants"`, the IConfiguration binding chain must also update.
+3. **Counter-type combined metrics:** If source OIDs are `Counter32`/`Counter64`, the raw values
+   are monotonically increasing. Aggregating two raw counter values (Sum) produces a combined raw
+   counter, which is semantically correct for Prometheus `rate()`/`increase()` to process. But
+   `Ratio(counter_a, counter_b)` on raw values is not meaningful -- you would need the delta, not
+   the raw cumulative. This semantic constraint is a documentation note, not an implementation
+   blocker, but the roadmap should flag it.

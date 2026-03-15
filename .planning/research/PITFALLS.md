@@ -614,3 +614,475 @@ All findings derived from direct source inspection (HIGH confidence):
 - `tests/e2e/scenarios/28-tenantvector-routing.sh` — inline fixture at line 108 using `tenantvector.json`
 - `tests/e2e/fixtures/device-added-configmap.yaml` — already uses `CommunityString` correctly
 - `.planning/phases/31-human-name-device-config/31-CONTEXT.md` — zero-OID skip design decision
+
+---
+
+---
+
+# Combined Metrics Addendum: Synthetic/Computed Metric Pitfalls
+
+**Researched:** 2026-03-15
+**Confidence:** HIGH — all pitfalls derived from direct source inspection of this repository
+**Scope:** Pitfalls specific to adding computed/aggregate metrics (referred to as "combined metrics"
+throughout) that are synthesized inside `MetricPollJob` from raw varbind values rather than being
+dispatched directly from the SNMP wire.
+
+**What "combined metrics" means in this codebase:** A combined metric is one whose value is computed
+from two or more raw SNMP varbind values collected in the same poll group (e.g., a delta, ratio, or
+sum). It is dispatched as a synthetic `SnmpOidReceived` after the raw varbinds have been processed,
+using a configured `CombinedMetricName` and an `Action` (e.g., Diff, Sum) rather than a real OID.
+
+---
+
+## Critical Pitfalls (Combined Metrics)
+
+---
+
+### CM Pitfall 1: CombinedMetricName That Collides With a Real OID Map Entry
+
+**Severity:** CRITICAL
+
+**What goes wrong:**
+The config for a combined metric specifies `CombinedMetricName = "npb_rx_bytes"`. The OID map
+already has an entry `1.3.6.1.4.1.47477.100.4.0 -> "npb_rx_bytes"`. Both the synthetic dispatch
+and the real OID resolution resolve to the same metric name. Two separate `snmp_gauge` time series
+with `metric_name="npb_rx_bytes"` are recorded: one from the real OID (raw counter value), one
+from the combined computation (e.g., a per-interval delta). Prometheus scrapes both. Grafana queries
+return a sum of the two series, which is neither the raw value nor the delta — it is a nonsensical
+blend.
+
+**Why it happens:**
+`OidResolutionBehavior` assigns `msg.MetricName` by calling `_oidMapService.Resolve(msg.Oid)`. The
+synthetic dispatch for a combined metric would need to bypass OID resolution (it has no real OID, or
+carries a sentinel OID). If `CombinedMetricName` is not checked against the OID map at config load
+time, the collision is invisible until Prometheus aggregates the duplicates.
+
+**Consequences:**
+Silent metric contamination. The raw time series and the computed time series cannot be disentangled
+after the fact in Prometheus. Alerts that fire on `rate(snmp_gauge{metric_name="npb_rx_bytes"})` will
+produce incorrect thresholds because the denominator includes both series. Clearing the contamination
+requires flushing the Prometheus TSDB for that metric name.
+
+**Warning signs:**
+- `snmp_gauge{metric_name="npb_rx_bytes"}` shows two time series in Prometheus (different `oid` labels
+  if the combined dispatch uses an empty or sentinel OID, or the same label if the OID is copied from
+  one of the source varbinds)
+- Grafana rate calculations appear twice as large as expected for the affected metric
+- `snmp.event.published` counter increments more than `len(varbinds)` per poll cycle for the device
+
+**Prevention:**
+At config load time (in `DeviceWatcherService` or a validator), for each poll group entry that
+specifies a `CombinedMetricName`, call `_oidMapService.ContainsMetricName(combinedMetricName)`.
+If the name exists in the OID map, reject the config entry with an error log:
+`"CombinedMetricName 'npb_rx_bytes' collides with a real OID map entry — combined metric names must be distinct from polled metric names"`.
+This check must also run after an OID map hot-reload if the combined metric config is still active.
+
+**Phase address:** The phase introducing combined metric config loading and validation.
+
+---
+
+### CM Pitfall 2: Partial Config — CombinedMetricName Without Action (or Action Without Name)
+
+**Severity:** CRITICAL
+
+**What goes wrong:**
+A poll group entry has `CombinedMetricName = "npb_byte_rate"` but no `Action` field (or
+`Action = null`). The implementation code in `MetricPollJob.DispatchResponseAsync` (or a new
+`ComputeCombinedMetricsAsync` method) reads both fields and proceeds if they are both set.
+If only one is set, the code either: (a) throws a `NullReferenceException` when it tries to
+call `action.Compute(values)`, or (b) silently skips the combined dispatch with no log entry,
+depending on how the null check is written.
+
+The symmetric case — `Action = Diff` but no `CombinedMetricName` — is equally dangerous:
+the computation runs and produces a result that is then dispatched with no metric name, causing
+`OtelMetricHandler` to record it under `OidMapService.Unknown` or crash.
+
+**Why it happens:**
+These are two fields that form a logical pair. Standard config validation (`[Required]` attributes
+or `IValidateOptions<T>`) enforces per-field rules but not cross-field co-presence rules unless
+explicitly coded.
+
+**Consequences:**
+For the null-Action case: runtime exception inside `MetricPollJob.DispatchResponseAsync`. The
+`ExceptionBehavior` swallows the exception (it is outermost in the pipeline) but the exception is
+thrown in `MetricPollJob` itself, before `ISender.Send` is called — `ExceptionBehavior` does not
+wrap `MetricPollJob`. The exception propagates to the Quartz job wrapper, which catches it as a
+poll failure, increments `snmp_poll_errors_total`, and stamps liveness. The device's real metrics
+(non-combined) are not affected because the exception fires after `foreach (var variable in
+response)` has already dispatched all real varbinds — but only if combined metric computation
+happens after the real-varbind loop, not interleaved.
+
+For the no-Name case: `OtelMetricHandler` records the gauge under `"Unknown"`. This inflates
+`snmp_gauge{metric_name="Unknown"}` with synthetic data, poisoning the Unknown sentinel that
+operators use to discover unmapped OIDs.
+
+**Warning signs:**
+- `snmp_poll_errors_total` increments for a specific device while the device is reachable
+- Pod log: unhandled exception from `MetricPollJob` referencing `Action` or `CombinedMetricName`
+- `snmp_gauge{metric_name="Unknown"}` spikes with a new `oid` label that is empty or a sentinel value
+
+**Prevention:**
+Add a cross-field co-presence validator at config load time: if `CombinedMetricName` is set,
+`Action` must be set; if `Action` is set, `CombinedMetricName` must be set. Fail the config entry
+with a structured error. Do not rely on runtime null guards in `MetricPollJob` as the primary
+enforcement — the job is `[DisallowConcurrentExecution]` and exceptions there affect all polls
+for that device/poll-group pair.
+
+**Phase address:** The phase adding combined metric config model and its validator.
+
+---
+
+### CM Pitfall 3: Synthetic Dispatch Inflates `snmp.event.published` and `snmp.event.handled`
+
+**Severity:** CRITICAL
+
+**What goes wrong:**
+`LoggingBehavior` increments `snmp.event.published` (via `_metrics.IncrementPublished`) for every
+`SnmpOidReceived` message that enters the pipeline. `OtelMetricHandler` increments
+`snmp.event.handled` on every successfully recorded gauge or info. These counters are used by
+operators to verify pipeline throughput: "N OIDs polled → N events published → N events handled."
+
+When a combined metric is dispatched as a synthetic `SnmpOidReceived` (via `_sender.Send`), it
+passes through the full pipeline: `LoggingBehavior` increments `snmp.event.published`. If the
+synthetic message reaches `OtelMetricHandler`, `snmp.event.handled` also increments. Both counters
+now reflect (real OIDs + synthetic dispatches), not just real SNMP data.
+
+This means the ratio `snmp.event.published / snmp_poll_executed` — used to verify that every poll
+cycle produced the expected number of metric events — becomes consistently higher than the number
+of configured OIDs. Alarms set to fire when "events per poll exceeds configured OID count" will
+trigger spuriously.
+
+**Why it happens:**
+`LoggingBehavior` fires unconditionally on `SnmpOidReceived`. There is no `Source` flag in the
+current `SnmpOidReceived` model that distinguishes a real poll varbind from a synthetic combined
+dispatch. `SnmpSource` enum has `Poll` and `Trap` — a `Synthetic` or `Combined` variant does not
+exist yet.
+
+**Consequences:**
+Dashboards showing "pipeline throughput = events / polls" will overcount by the number of
+combined metrics per poll group per device. For a device with 3 poll groups each producing 1
+combined metric, `snmp.event.published` inflates by 3 per poll cycle. If this device runs at
+10s intervals, the counter inflates by 18 extra per minute. Alerting rules calibrated against
+a known OID count will either need recalibration or be permanently noisy.
+
+**Warning signs:**
+- `rate(snmp_event_published_total[1m]) / rate(snmp_poll_executed_total[1m])` exceeds the
+  configured OID count per poll group
+- The excess exactly equals the number of configured combined metrics across all poll groups
+
+**Prevention:** Two options, choose one before implementation:
+
+Option A — Add `SnmpSource.Combined` to the `SnmpSource` enum. Synthetic dispatches carry
+`Source = SnmpSource.Combined`. `LoggingBehavior` checks for `Combined` and uses a separate
+counter (e.g., `snmp.event.combined`) instead of `snmp.event.published`. This keeps pipeline
+counters semantically clean at the cost of adding a new counter.
+
+Option B — Accept the inflation and document it. Update all alerting rules and dashboards to
+account for combined dispatches. This is the lower-effort path if combined metrics are few.
+
+Regardless of which option is chosen, the decision must be made before implementation and
+recorded in the phase plan. Changing the counter semantics after the feature ships requires
+updating all consumer dashboards.
+
+**Phase address:** The phase implementing synthetic dispatch from `MetricPollJob`.
+
+---
+
+## Moderate Pitfalls (Combined Metrics)
+
+---
+
+### CM Pitfall 4: Same CombinedMetricName in Multiple Poll Groups on the Same Device
+
+**Severity:** MODERATE
+
+**What goes wrong:**
+A device has two poll groups: group A (10s interval) and group B (60s interval). Both configure
+`CombinedMetricName = "npb_total_throughput"`. Each poll group independently computes its own
+version of the metric and dispatches a synthetic `SnmpOidReceived`. Two time series land in
+`snmp_gauge{metric_name="npb_total_throughput", device_name="NPB-01"}`.
+
+The two series have different underlying update frequencies (10s vs 60s). Prometheus cannot
+distinguish them by label — they have identical label sets if the synthetic dispatch uses the
+same `AgentIp` and `DeviceName`. Prometheus last-write-wins in this case, creating a series
+that oscillates between values: group A writes every 10s with its computation, group B writes
+every 60s with a different computation. PromQL `rate()` over this series is garbage.
+
+**Why it happens:**
+Nothing in the config model prevents duplicate `CombinedMetricName` values across poll groups
+on the same device. Config validation would need to check uniqueness of combined metric names
+per device scope, not just per poll group.
+
+**Consequences:**
+Silent metric contamination, identical in character to the OID map collision (CM Pitfall 1) but
+arising from operator config error rather than a name clash with a real OID. Rate calculations
+are wrong. Alerting is unreliable.
+
+**Warning signs:**
+- `snmp_gauge{metric_name="npb_total_throughput", device_name="NPB-01"}` shows erratic step
+  patterns that do not correspond to either poll interval alone
+- `snmp.event.published` increments for the device exceed the sum of OIDs across all poll groups
+  by more than the number of distinct combined metric names
+
+**Prevention:**
+At config load time, after building all poll groups for a device, validate that `CombinedMetricName`
+values are unique across all poll groups within the same device. A combined metric name that appears
+in two groups of the same device is a config error. Log: `"Device 'NPB-01': CombinedMetricName
+'npb_total_throughput' appears in poll groups 0 and 2 — names must be unique per device"`.
+
+Cross-device duplicate combined names are acceptable (different devices, different label sets).
+
+**Phase address:** The phase adding combined metric config validation.
+
+---
+
+### CM Pitfall 5: Negative Diff Result Recorded as a Gauge — Valid but Misleading
+
+**Severity:** MODERATE
+
+**What goes wrong:**
+A `Diff` action computes `current - previous` for a varbind value. If the previous value was
+larger than the current value (e.g., a counter that wrapped, or a gauge that legitimately
+decreased), the result is negative. This negative value is dispatched as a synthetic
+`SnmpOidReceived` with `ExtractedValue < 0` and recorded in `snmp_gauge`.
+
+`snmp_gauge` is modeled as a Prometheus gauge, which CAN hold negative values — this is not
+technically wrong. However, operators who set up alerts like `snmp_gauge{metric_name="npb_rx_delta"} < 0`
+as anomaly detection will see false positives on every counter wrap. More subtly, if the
+combined metric is used in a tenant vector slot and the `Action = Diff` is intended to track
+utilization (always non-negative), a negative value in the time series can cause the
+downstream evaluation logic to produce incorrect results.
+
+**Why it happens:**
+Counter wrap is a known SNMP phenomenon (Counter32 wraps at 2^32). A simple `current - previous`
+diff will produce a large negative value on wrap rather than detecting the wrap and computing
+the correct delta.
+
+**Consequences:**
+For Counter32 wrap: the diff result is approximately `-4,294,967,296 + (new_value - old_value)`.
+This very large negative value in the time series is obvious and easy to detect. For genuine
+gauge decreases (e.g., active connection count drops), the negative diff is valid data and
+should be recorded.
+
+**Prevention:**
+The phase implementing `Diff` action must explicitly decide the wrap-handling policy:
+
+- Option A — Clamp to zero: if `current - previous < 0`, record 0 and emit a debug log. Simple
+  but loses information about the magnitude of decrease.
+- Option B — Wrap detection: if `TypeCode` is `Counter32` or `Counter64`, and the result is
+  negative, compute the wrapped delta: `(MaxValue - previous) + current`. For `Counter32`, MaxValue
+  = 4,294,967,295. This is the correct behavior for SNMP counters.
+- Option C — Pass through: record the negative value as-is. Correct for gauge types but
+  misleading for counter types.
+
+The policy must be documented in the config schema (e.g., `DiffMode: WrapAware | Clamp | Raw`)
+or applied by `TypeCode` automatically. Whatever is chosen, document in the phase plan and unit
+test the counter-wrap case explicitly.
+
+**Phase address:** The phase implementing the Diff action in `MetricPollJob`.
+
+---
+
+### CM Pitfall 6: Combined Metric Bypasses ValidationBehavior OID Format Check
+
+**Severity:** MODERATE
+
+**What goes wrong:**
+`ValidationBehavior` rejects any `SnmpOidReceived` where `msg.Oid` does not match the regex
+`^\d+(\.\d+){1,}$` (at least two numeric arcs separated by dots). When a synthetic
+`SnmpOidReceived` is dispatched for a combined metric, it has no real OID. The implementer
+must choose what to put in `msg.Oid`. Common choices and their failure modes:
+
+- `msg.Oid = ""` (empty): fails `OidPattern.IsMatch("")`, `ValidationBehavior` rejects,
+  increments `snmp.event.rejected`, returns without calling `OtelMetricHandler`. The
+  combined metric is silently dropped.
+- `msg.Oid = "0.0"` (sentinel): passes `OidPattern.IsMatch("0.0")`, continues through
+  pipeline. `OidResolutionBehavior` calls `_oidMapService.Resolve("0.0")`, returns
+  `"Unknown"`. `OtelMetricHandler` records it under `"Unknown"`. Combined metric appears
+  as `snmp_gauge{metric_name="Unknown"}`.
+- `msg.Oid = "combined"` (non-numeric): fails OID validation, rejected.
+- `msg.Oid = null`: `OidPattern.IsMatch(null)` throws `ArgumentNullException` inside
+  `ValidationBehavior`, caught by `ExceptionBehavior`, increments `snmp.event.errors`.
+
+**Why it happens:**
+`SnmpOidReceived.Oid` is `required` and typed as `string`. There is no variant of the message
+type for synthetic dispatches. The OID field is mandatory but meaningless for combined metrics.
+
+**Prevention:**
+Two options:
+
+Option A — Pre-set `MetricName` on the synthetic message before dispatch, bypassing
+`OidResolutionBehavior`'s overwrite. Use a sentinel OID that passes validation (e.g.,
+`"0.0"`) but ensure `MetricName` is already set to `CombinedMetricName`. Modify
+`OidResolutionBehavior` to skip resolution when `msg.MetricName` is already non-null and
+non-Unknown. This requires a single targeted change to `OidResolutionBehavior`.
+
+Option B — Add a `SnmpSource.Combined` check in `ValidationBehavior`: skip OID format
+validation if `msg.Source == SnmpSource.Combined`. Combined messages are trusted to have
+a valid `MetricName` already set by the dispatcher.
+
+Option A is lower risk because it requires only an additive guard in `OidResolutionBehavior`
+rather than a logic change in `ValidationBehavior`.
+
+**Phase address:** The phase implementing synthetic dispatch from `MetricPollJob`. Must be
+resolved before any combined metric can reach `OtelMetricHandler`.
+
+---
+
+### CM Pitfall 7: Hot-Reload Removes CombinedMetricName — Stale Prometheus Series Lingers
+
+**Severity:** MODERATE
+
+**What goes wrong:**
+A combined metric `"npb_byte_rate"` is active and has been publishing to `snmp_gauge` for
+several days. An operator removes the `CombinedMetricName` entry from the devices ConfigMap.
+`DeviceWatcherService` reloads, `MetricPollJob` no longer computes or dispatches the metric.
+No new data points for `snmp_gauge{metric_name="npb_byte_rate"}` are produced.
+
+In Prometheus, gauge time series do not auto-expire. The last known value for
+`"npb_byte_rate"` remains in the TSDB until the series staleness timeout expires (default
+5 minutes in Prometheus for scraped series, but the OTel SDK's periodic export means the
+last exported data point simply ages out after one scrape interval with no new push).
+
+In Grafana, the panel showing `"npb_byte_rate"` will display a flat line at the last known
+value, then go absent. If the panel uses `last_value` fill mode, it shows the stale value
+indefinitely until the operator notices. If the panel uses `No data` display, it goes blank,
+which may be confused with a pipeline error.
+
+**Why it happens:**
+OpenTelemetry gauge instruments in this codebase (`snmp_gauge`) are recorded using
+`ObservableGauge` or `Histogram` patterns. If the OTel SDK holds an instrument reference
+keyed by metric name, removing the combined metric from config does not remove the instrument
+from the SDK's registry — the instrument still exists, but its callback (if observable) is
+never called again, or the last explicit `Record()` call is simply the last data point.
+
+The Prometheus TSDB does not know that a metric was intentionally removed — it treats absence
+of new data as a potential scrape failure, not a metric retirement.
+
+**Consequences:**
+Operational confusion: is the metric missing because the feature was removed, or because the
+pipeline broke? No way to distinguish from Prometheus alone.
+
+**Warning signs:**
+- `snmp_gauge{metric_name="npb_byte_rate"}` time series goes flat then absent after a config
+  reload, with no corresponding error in `snmp.event.errors` or `snmp_poll_errors_total`
+- The metric name is no longer referenced in any active config but still appears in Prometheus
+
+**Prevention:**
+This is a fundamental property of Prometheus time series — there is no "delete metric on
+config remove" primitive. Mitigation strategies:
+
+1. Document in the operational runbook: "When removing a CombinedMetricName from config, the
+   old Prometheus series will remain stale for one staleness timeout. This is expected behavior."
+2. If the OTel SDK's `SnmpMetricFactory` uses an instrument cache keyed by metric name (which
+   it does — see `CONCERNS.md` "MetricFactory: Unbounded instrument cache with no eviction"),
+   the stale instrument reference prevents the same name from being re-registered cleanly if
+   the combined metric name is later re-added. Add a note in the phase plan: the instrument
+   cache does not need eviction for correctness but does prevent re-use of a removed metric
+   name without a pod restart.
+3. For production deployments: announce combined metric retirement via a separate Prometheus
+   recording rule or dashboard annotation rather than relying on the time series going absent.
+
+**Phase address:** The phase implementing combined metric dispatch. Document staleness behavior
+in the operator guide for the feature.
+
+---
+
+### CM Pitfall 8: Thread Safety — MetricPollJob is Sequential, but Two Poll Groups for the Same Device Are Separate Jobs
+
+**Severity:** MODERATE
+
+**What goes wrong:**
+`MetricPollJob` is `[DisallowConcurrentExecution]` — Quartz prevents two executions of the
+*same* job key from running simultaneously. However, a device with two poll groups has *two
+separate Quartz jobs* (e.g., `metric-poll-10.0.0.1_161-0` and `metric-poll-10.0.0.1_161-1`).
+These two jobs can and do run concurrently.
+
+If a combined metric's state (e.g., the "previous value" needed to compute a Diff) is stored
+in a shared mutable field on a service singleton (e.g., a `ConcurrentDictionary<string,
+double>` keyed on `(deviceName, metricName)`), both poll jobs may read and write to the same
+entry concurrently. A Diff computation for group 0 running simultaneously with a Diff
+computation for group 1 (if both use the same combined metric name on the same device — see
+CM Pitfall 4) may interleave reads and writes.
+
+More subtly: even within a single poll group, if the "previous value" state is stored on a
+shared singleton and the same device's poll job fires from multiple Quartz threads (which
+cannot happen due to `[DisallowConcurrentExecution]`, but this must be verified for the
+combined state store too), concurrent access is possible.
+
+**Why it happens:**
+`[DisallowConcurrentExecution]` applies per job key, not per device. Combined state that needs
+to persist across poll cycles (e.g., previous counter value for delta computation) must either:
+(a) be stored inside `MetricPollJob` itself (scoped per job instance), but Quartz re-creates
+job instances per execution, so instance state is lost; or (b) be stored in a shared service,
+requiring explicit thread safety.
+
+**Consequences:**
+Race condition in Diff computation: if two poll groups access the same entry in the shared
+previous-value store simultaneously, one may read a value written mid-update by the other.
+The computed delta is wrong. In the worst case, the previous-value store returns a value
+from a different poll group's computation, producing a nonsensical Diff result.
+
+**Warning signs:**
+- Combined Diff values oscillate erratically across poll cycles without corresponding
+  changes in the underlying SNMP counter
+- Debug log: `"Computing Diff for metric X: previous={A}, current={B}, delta={C}"` where
+  C does not match B - A for successive log lines
+
+**Prevention:**
+Store previous values for Diff computation in a structure keyed by `(deviceName, pollGroupIndex,
+combinedMetricName)`, not just `(deviceName, combinedMetricName)`. This ensures each poll group
+has its own independent state cell that cannot be accessed by other jobs. Use `Volatile.Read`
+and `Volatile.Write` (following the existing `MetricSlotHolder` pattern) or
+`Interlocked.Exchange` for atomic updates. Do not use a shared mutable class-level field in
+`MetricPollJob` — the instance is discarded after each execution.
+
+**Phase address:** The phase implementing combined metric state management in `MetricPollJob`.
+
+---
+
+## Phase-Specific Warnings (Combined Metrics)
+
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| Combined metric config model | CombinedMetricName collides with real OID map entry (CM1) | Validate against `IOidMapService.ContainsMetricName` at config load |
+| Combined metric config model | CombinedMetricName set without Action or vice versa (CM2) | Cross-field co-presence validator; fail config entry on partial spec |
+| Combined metric config model | Duplicate CombinedMetricName across poll groups on same device (CM4) | Per-device uniqueness check during config load |
+| Synthetic dispatch implementation | `snmp.event.published` and `snmp.event.handled` inflate (CM3) | Decide counter policy (new counter vs accept inflation) before implementation |
+| Synthetic dispatch implementation | Synthetic OID fails ValidationBehavior OID regex (CM6) | Pre-set MetricName on synthetic message; add guard in OidResolutionBehavior |
+| Diff action implementation | Negative result on counter wrap recorded without wrap detection (CM5) | Explicit wrap policy (WrapAware/Clamp/Raw) decided in phase plan; unit test wrap case |
+| Previous-value state store | Two poll groups on same device race on shared state (CM8) | Key state by (device, pollGroupIndex, metricName); follow MetricSlotHolder pattern |
+| Hot-reload and config removal | Stale Prometheus series lingers after CombinedMetricName removed (CM7) | Document in operator guide; note instrument cache implications |
+
+---
+
+## Sources (Combined Metrics Addendum)
+
+All findings derived from direct source inspection (HIGH confidence):
+
+- `src/SnmpCollector/Jobs/MetricPollJob.cs` — `[DisallowConcurrentExecution]`, per-job-key scope,
+  `DispatchResponseAsync` sequential varbind loop, finally-block counters
+- `src/SnmpCollector/Pipeline/Behaviors/LoggingBehavior.cs` — unconditional `IncrementPublished`
+  on every `SnmpOidReceived`; `snmp.event.published` counter semantics
+- `src/SnmpCollector/Pipeline/Behaviors/ValidationBehavior.cs` — `OidPattern` regex
+  `^\d+(\.\d+){1,}$`; rejects empty, non-numeric, and null OID strings
+- `src/SnmpCollector/Pipeline/Behaviors/OidResolutionBehavior.cs` — unconditional
+  `_oidMapService.Resolve(msg.Oid)` overwrites `msg.MetricName` on every `SnmpOidReceived`
+- `src/SnmpCollector/Pipeline/Behaviors/ExceptionBehavior.cs` — swallows exceptions from
+  downstream behaviors; does NOT wrap `MetricPollJob.Execute` itself
+- `src/SnmpCollector/Pipeline/Behaviors/ValueExtractionBehavior.cs` — extracts from TypeCode
+  switch; no special handling for synthetic messages with no real `ISnmpData`
+- `src/SnmpCollector/Pipeline/Handlers/OtelMetricHandler.cs` — `IncrementHandled` per
+  successfully recorded gauge; records `Unknown` when MetricName falls through
+- `src/SnmpCollector/Pipeline/OidMapService.cs` — `ContainsMetricName(string)` available;
+  `_metricNames` FrozenSet; `Unknown` constant used as the unresolved sentinel
+- `src/SnmpCollector/Pipeline/MetricSlotHolder.cs` — `Volatile.Read`/`Write` pattern for
+  thread-safe atomic updates; reference pattern for combined state storage
+- `src/SnmpCollector/Pipeline/SnmpOidReceived.cs` — `SnmpSource` enum (Poll/Trap only);
+  `Oid` is `required string`; no synthetic variant exists
+- `src/SnmpCollector/Telemetry/TelemetryConstants.cs` — `MeterName` (pipeline) vs
+  `LeaderMeterName` (business); combined metrics dispatched via pipeline land in leader meter
+- `src/SnmpCollector/Telemetry/MetricRoleGatedExporter.cs` — leader-only export gate applies
+  to `SnmpCollector.Leader` meter; synthetic combined metrics would be subject to same gate
+- `.planning/codebase/CONCERNS.md` — "MetricFactory: Unbounded instrument cache with no eviction"
+  (stale instrument reference after hot-reload removal)
