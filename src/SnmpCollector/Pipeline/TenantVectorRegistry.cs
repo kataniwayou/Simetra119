@@ -72,22 +72,6 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
         // SortedDictionary with ascending key order (lowest priority int = highest priority = first group).
         var priorityBuckets = new SortedDictionary<int, List<Tenant>>();
 
-        // Heartbeat tenant: hardcoded at int.MinValue priority (reserved, always present).
-        var heartbeatHolder = new MetricSlotHolder("127.0.0.1", 0, "Heartbeat", HeartbeatJobOptions.DefaultIntervalSeconds);
-        var heartbeatKey = new RoutingKey("127.0.0.1", 0, "Heartbeat");
-        if (oldSlotLookup.TryGetValue(heartbeatKey, out var oldHeartbeatHolder))
-        {
-            if (oldHeartbeatHolder.ReadSlot() is not null)
-            {
-                heartbeatHolder.CopyFrom(oldHeartbeatHolder);
-                carriedOver++;
-            }
-        }
-
-        var heartbeatTenant = new Tenant("heartbeat", int.MinValue, new[] { heartbeatHolder });
-        priorityBuckets[int.MinValue] = new List<Tenant> { heartbeatTenant };
-        totalSlots++;
-
         for (var i = 0; i < options.Tenants.Count; i++)
         {
             var tenantOpts = options.Tenants[i];
@@ -169,8 +153,7 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                 RoutingKeyComparer.Instance);
 
         // Step 6: Update counts before volatile swap.
-        // TenantCount = surviving tenants + 1 for heartbeat.
-        TenantCount = survivingTenantCount + 1;
+        TenantCount = survivingTenantCount;
         SlotCount = totalSlots;
 
         // Step 7: Volatile swap — readers see either old or new, never a partial mix.
