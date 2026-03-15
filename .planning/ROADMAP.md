@@ -12,7 +12,7 @@
 - ✅ **v1.7 Configuration Consistency & Tenant Commands** - Phases 33-36 (shipped 2026-03-15)
 - ✅ **v1.8 Combined Metrics** - Phases 37-40 (shipped 2026-03-15)
 - ✅ **v1.9 Metric Threshold Structure & Validation** - Phases 41-42 (shipped 2026-03-15)
-- 🚧 **v1.10 Heartbeat Refactor & Pipeline Liveness** - Phases 43-44 (in progress)
+- ✅ **v1.10 Heartbeat Refactor & Pipeline Liveness** - Phases 43-44 (shipped 2026-03-15)
 
 ## Phases
 
@@ -123,45 +123,12 @@ See `.planning/milestones/v1.9-ROADMAP.md` for details.
 
 ---
 
-### 🚧 v1.10 Heartbeat Refactor & Pipeline Liveness (In Progress)
+<details>
+<summary>✅ v1.10 Heartbeat Refactor & Pipeline Liveness (Phases 43-44) - SHIPPED 2026-03-15</summary>
 
-**Milestone Goal:** Remove hardcoded heartbeat special cases from the tenant and fan-out layers, then replace the old liveness signal with a pipeline-arrival timestamp that proves the full MediatR chain is working — all without changing the heartbeat job, trap wire format, or job-completion stamping.
+See `.planning/milestones/v1.10-ROADMAP.md` for details.
 
-#### Phase 43: Heartbeat Cleanup
-
-**Goal**: The codebase contains no hardcoded heartbeat tenant or bypass routing — the heartbeat message flows through the pipeline naturally, skipped by fan-out because "Simetra" is not a registered device, and `TenantCount` reflects only config-driven tenants
-**Depends on**: Nothing (cleanup before new liveness is added)
-**Requirements**: HB-01, HB-02, HB-03
-**Success Criteria** (what must be TRUE):
-  1. `TenantVectorRegistry.Reload` contains no heartbeat holder, heartbeat tenant, `int.MinValue` priority bucket, or heartbeat carry-over logic — the registry reflects only what was loaded from config
-  2. `TenantVectorFanOutBehavior` contains no `if (DeviceName == HeartbeatDeviceName)` block — the "Simetra" device name simply returns false from `TryGetDeviceByName` and fan-out is skipped without a special case
-  3. `TenantCount` returns only the count of config-driven tenants — it no longer inflates the count by 1 for the synthetic heartbeat tenant
-  4. All existing tests pass with no new failures after the removal — the heartbeat pipeline continues to process without the bypass
-
-**Plans**: TBD
-
-Plans:
-- [ ] 43-01: Remove hardcoded heartbeat tenant from TenantVectorRegistry + adjust TenantCount + tests
-
----
-
-#### Phase 44: Pipeline Liveness
-
-**Goal**: The liveness health probe detects pipeline stalls by stamping a timestamp when the heartbeat message exits `OtelMetricHandler`, and reports unhealthy when that timestamp is more than `DefaultIntervalSeconds × GraceMultiplier` seconds stale — while confirming all preserved behaviors (job-completion stamping, heartbeat job wire format, OID map seed) remain intact
-**Depends on**: Phase 43 (heartbeat bypass must be removed before stamp logic is added to OtelMetricHandler)
-**Requirements**: HB-04, HB-05, HB-06, HB-07, HB-08, HB-09, HB-10
-**Success Criteria** (what must be TRUE):
-  1. `IHeartbeatLivenessService.Stamp()` is called inside `OtelMetricHandler` when `DeviceName == HeartbeatJobOptions.HeartbeatDeviceName` — the timestamp advances on every heartbeat cycle
-  2. The liveness health check returns healthy when `now - lastArrival <= 30s` (15s interval × 2.0 grace) and unhealthy when the gap exceeds 30s — no hardcoded magic numbers; values come from `HeartbeatJobOptions.DefaultIntervalSeconds` and the default `GraceMultiplier`
-  3. `ILivenessVectorService.Stamp()` in `HeartbeatJob.finally` is unchanged — all scheduled jobs continue stamping on completion as before
-  4. `HeartbeatJob` sends the same SNMP trap with OID `1.3.6.1.4.1.9999.1.1.1.0`, Source=Trap, community `"Simetra.Simetra"` — no wire-format change
-  5. The `"Heartbeat"` metric name seed in `OidMapService` survives hot-reload — the OID map always resolves the heartbeat OID to `"Heartbeat"`
-
-**Plans**: TBD
-
-Plans:
-- [ ] 44-01: IHeartbeatLivenessService + stamp point in OtelMetricHandler + tests
-- [ ] 44-02: Liveness health check using pipeline-arrival timestamp + tests
+</details>
 
 ---
 

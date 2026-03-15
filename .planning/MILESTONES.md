@@ -1,5 +1,27 @@
 # Project Milestones: SNMP Monitoring System
 
+## v1.10 Heartbeat Refactor & Pipeline Liveness (Shipped: 2026-03-15)
+
+**Delivered:** Removed hardcoded heartbeat special cases (-115 lines) and added pipeline-arrival liveness detection proving the full MediatR chain is working, with two independent liveness layers (job completion + pipeline arrival).
+
+**Phases completed:** 43-44 (3 plans total)
+
+**Key accomplishments:**
+- Removed hardcoded heartbeat tenant from TenantVectorRegistry.Reload
+- Removed heartbeat bypass from TenantVectorFanOutBehavior (zero special cases)
+- IHeartbeatLivenessService with volatile long lock-free stamping
+- LivenessHealthCheck staleness: IntervalSeconds × GraceMultiplier (30s)
+- 6 new unit tests
+
+**Stats:**
+- 2 phases, 3 plans
+- 1 day (2026-03-15)
+- 338 unit tests passing
+
+**What's next:** TBD — runtime threshold evaluation, metric staleness detection
+
+---
+
 ## v1.9 Metric Threshold Structure & Validation (Shipped: 2026-03-15)
 
 **Delivered:** Tenant metric entries can carry an optional Threshold (Min/Max) validated at load time, with GraceMultiplier on device poll groups resolved to tenant holders for future staleness detection.

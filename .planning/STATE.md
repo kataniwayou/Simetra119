@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.10 Heartbeat Refactor & Pipeline Liveness — COMPLETE (Phase 44 done)
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 44 of 44 (Pipeline Liveness)
-Plan: 02 of 02 (complete)
-Status: Phase complete
-Last activity: 2026-03-15 — Completed 44-02-PLAN.md (LivenessHealthCheck extended with pipeline-arrival staleness)
+Phase: —
+Plan: —
+Status: Between milestones (v1.10 shipped, next milestone not defined)
+Last activity: 2026-03-15 — v1.10 milestone archived and tagged
 
 Progress: [####################] v1.0-v1.9 complete | [███] 3/3 v1.10 plans — v1.10 COMPLETE
 

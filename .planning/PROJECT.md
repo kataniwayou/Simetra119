@@ -99,15 +99,18 @@ See `.planning/milestones/v1.8-REQUIREMENTS.md` for full requirement details.
 
 See `.planning/milestones/v1.9-REQUIREMENTS.md` for full requirement details.
 
+**v1.10 Heartbeat Refactor & Pipeline Liveness (shipped 2026-03-15)**
+
+- Removed hardcoded heartbeat tenant + bypass (-115 lines, zero special cases)
+- IHeartbeatLivenessService: pipeline-arrival liveness stamp in OtelMetricHandler
+- LivenessHealthCheck: two layers — job completion (all jobs) + pipeline arrival (heartbeat)
+- Staleness: IntervalSeconds × GraceMultiplier (30s default)
+
+See `.planning/milestones/v1.10-REQUIREMENTS.md` for full requirement details.
+
 ### Active
 
-**v1.10 Heartbeat Refactor & Pipeline Liveness**
-
-- Remove hardcoded heartbeat tenant from TenantVectorRegistry.Reload
-- Remove heartbeat bypass from TenantVectorFanOutBehavior (no "Simetra" device → naturally skipped)
-- Add heartbeat pipeline arrival timestamp service (stamp when heartbeat completes pipeline)
-- Add pipeline liveness health check: `now - lastHeartbeatArrival > IntervalSeconds * GraceMultiplier` → unhealthy
-- Keep job completion stamping (ILivenessVectorService) for all scheduled jobs unchanged
+(None — next milestone not yet defined)
 
 ### Out of Scope
 
@@ -178,4 +181,4 @@ See `.planning/milestones/v1.9-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-15 after v1.10 milestone start*
+*Last updated: 2026-03-15 after v1.10 milestone complete*
