@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.8 Combined Metrics — COMPLETE (all 4 phases done)
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 40 of 40 (MetricPollJob Aggregate Dispatch)
-Plan: 01 of 1 (complete)
-Status: Phase 40 complete — v1.8 Combined Metrics feature complete
-Last activity: 2026-03-15 — Completed 40-01-PLAN.md (aggregate dispatch + 10 tests, 326 total passing)
+Phase: —
+Plan: —
+Status: Between milestones (v1.8 shipped, next milestone not defined)
+Last activity: 2026-03-15 — v1.8 milestone archived and tagged
 
 Progress: [####################] v1.0-v1.7 complete | [██████████] 4/4 v1.8 phases
 

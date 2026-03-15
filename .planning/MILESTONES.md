@@ -1,5 +1,30 @@
 # Project Milestones: SNMP Monitoring System
 
+## v1.8 Combined Metrics (Shipped: 2026-03-15)
+
+**Delivered:** Poll groups can compute aggregate metrics (sum/subtract/absDiff/mean) from individual SNMP GET responses and dispatch them as synthetic gauges through the full MediatR pipeline to Prometheus with `source="synthetic"`.
+
+**Phases completed:** 37-40 (4 plans total, 2 quick tasks)
+
+**Key accomplishments:**
+- AggregatedMetricName + Aggregator on PollOptions with 5-rule load-time validation
+- SnmpSource.Synthetic enum + OidResolutionBehavior bypass guard (3 lines)
+- DispatchAggregatedMetricAsync with 4 aggregation functions and all-or-nothing guard
+- snmp.aggregated.computed pipeline counter + operations dashboard panel
+- 37 new unit tests across 4 phases
+
+**Stats:**
+- 33 files changed (1,462 insertions, 472 deletions)
+- 4 phases, 4 plans, 2 quick tasks
+- 1 day (2026-03-15)
+- 326 unit tests passing
+
+**Git range:** `81ec507` → `e20305d`
+
+**What's next:** TBD — next milestone planning
+
+---
+
 ## v1.7 Configuration Consistency & Tenant Commands (Shipped: 2026-03-15)
 
 **Delivered:** CommunityString as explicit device identifier, self-describing tenant entries with Role and Commands, per-entry validation with TEN-13 completeness gate, architectural consistency refactor (watcher-validates-registry-stores pattern for all 4 watchers), and config file naming convention alignment.
