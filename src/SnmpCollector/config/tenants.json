@@ -14,7 +14,8 @@
             "Ip": "127.0.0.1",
             "Port": 10161,
             "MetricName": "obp_r1_power_L1",
-            "Role": "Evaluate"
+            "Role": "Evaluate",
+            "Threshold": { "Min": -10.0, "Max": 3.0 }
           },
           {
             "Ip": "127.0.0.1",
@@ -35,7 +36,8 @@
             "Port": 10162,
             "MetricName": "npb_cpu_util",
             "TimeSeriesSize": 5,
-            "Role": "Evaluate"
+            "Role": "Evaluate",
+            "Threshold": { "Min": 0.0, "Max": 95.0 }
           },
           {
             "Ip": "127.0.0.1",
