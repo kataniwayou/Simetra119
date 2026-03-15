@@ -1,6 +1,7 @@
 using Lextm.SharpSnmpLib;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using SnmpCollector.Configuration;
 using SnmpCollector.Telemetry;
 
 namespace SnmpCollector.Pipeline.Handlers;
@@ -20,15 +21,18 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
 {
     private readonly ISnmpMetricFactory _metricFactory;
     private readonly PipelineMetricService _pipelineMetrics;
+    private readonly IHeartbeatLivenessService _heartbeatLiveness;
     private readonly ILogger<OtelMetricHandler> _logger;
 
     public OtelMetricHandler(
         ISnmpMetricFactory metricFactory,
         PipelineMetricService pipelineMetrics,
+        IHeartbeatLivenessService heartbeatLiveness,
         ILogger<OtelMetricHandler> logger)
     {
         _metricFactory = metricFactory;
         _pipelineMetrics = pipelineMetrics;
+        _heartbeatLiveness = heartbeatLiveness;
         _logger = logger;
     }
 
@@ -59,6 +63,8 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     _metricFactory.RecordGaugeDuration(metricName, notification.Oid, deviceName, ip, source,
                         notification.TypeCode.ToString().ToLowerInvariant(), notification.PollDurationMs.Value);
                 _pipelineMetrics.IncrementHandled(deviceName);
+                if (deviceName == HeartbeatJobOptions.HeartbeatDeviceName)
+                    _heartbeatLiveness.Stamp();
                 break;
 
             case SnmpType.OctetString:

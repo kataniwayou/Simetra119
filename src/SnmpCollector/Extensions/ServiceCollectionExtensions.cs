@@ -415,6 +415,10 @@ public static class ServiceCollectionExtensions
         // Singleton stamped by every job's finally block, read by LivenessHealthCheck.
         services.AddSingleton<ILivenessVectorService, LivenessVectorService>();
 
+        // Phase 44: Pipeline-arrival liveness stamp for heartbeat.
+        // Singleton stamped by OtelMetricHandler, read by LivenessHealthCheck.
+        services.AddSingleton<IHeartbeatLivenessService, HeartbeatLivenessService>();
+
         return services;
     }
 
