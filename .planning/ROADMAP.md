@@ -173,7 +173,7 @@ Plans:
 | 38. DeviceWatcherService Validation | v1.8 | 1/1 | Complete | 2026-03-15 |
 | 39. Pipeline Bypass Guards | v1.8 | 1/1 | Complete | 2026-03-15 |
 | 40. MetricPollJob Aggregate Dispatch | v1.8 | 1/1 | Complete | 2026-03-15 |
-| 41. Threshold Model & Holder Storage | v1.9 | 0/1 | Not started | - |
+| 41. Threshold Model & Holder Storage | v1.9 | 1/1 | Complete | 2026-03-15 |
 | 42. Threshold Validation & Config Files | v1.9 | 0/2 | Not started | - |
 
 ---
