@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.7 Configuration Consistency & Tenant Commands — Phase 35 in progress
+**Current focus:** v1.7 Configuration Consistency & Tenant Commands — Phase 36 in progress
 
 ## Current Position
 
-Phase: 35 of 36 (TenantVectorRegistry Refactor & Validator Activation)
-Plan: 02 of 2
-Status: Phase complete
-Last activity: 2026-03-15 — Completed 35-02 (TenantVectorWatcher validates, TenantVectorRegistry pure store)
+Phase: 36 of 36 (Config File Renames)
+Plan: 01 of 2
+Status: In progress
+Last activity: 2026-03-15 — Completed 36-01 (rename tenantvector -> tenants across all layers)
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 8/8 v1.6 | [#####     ] 6/? v1.7
 
@@ -70,7 +70,7 @@ See `.planning/MILESTONES.md` for details.
 ### v1.7 Pre-Phase Decisions (to resolve in plans)
 
 - DNS resolution in TenantVectorRegistry.Reload() after removing IDeviceRegistry: async Dns.GetHostAddressesAsync vs IP-only requirement — must be named decision in Phase 35 plan
-- TenantVectorOptions.SectionName with file rename: keep "TenantVector" (simpler) vs rename to "Tenants" — must be named decision in Phase 36 plan
+- TenantVectorOptions.SectionName renamed to "Tenants" (Phase 36-01): matches file naming convention simetra-tenants/tenants.json
 - Value/ValueType parse validation at load time vs execution time — recommend load-time for early operator feedback (SET execution is out of scope)
 
 ### Known Tech Debt
@@ -83,6 +83,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-14T22:46Z
-Stopped at: Completed 35-02-PLAN.md (TenantVectorWatcher validates, TenantVectorRegistry pure store, TenantVectorWatcherValidationTests)
+Last session: 2026-03-15T04:30Z
+Stopped at: Completed 36-01-PLAN.md (rename tenantvector -> tenants: C# constants, SectionName, config files, K8s manifests, E2E scripts)
 Resume file: None
