@@ -176,7 +176,7 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 40-01: DispatchAggregatedMetricsAsync in MetricPollJob — computation (sum/subtract/absDiff/mean), all-or-nothing guard, TypeCode selection, SnmpOidReceived construction, ISender.Send dispatch, snmp.combined.computed counter, skip Warning log, dedicated try/catch + unit tests
+- [x] 40-01: DispatchAggregatedMetricAsync — sum/subtract/absDiff/mean, all-or-nothing guard, snmp.aggregated.computed counter, exception isolation + 10 tests (CM-07–10, CM-13–15)
 
 ---
 
@@ -199,7 +199,7 @@ Plans:
 | 37. Config and Runtime Models | v1.8 | 1/1 | Complete | 2026-03-15 |
 | 38. DeviceWatcherService Validation | v1.8 | 1/1 | Complete | 2026-03-15 |
 | 39. Pipeline Bypass Guards | v1.8 | 1/1 | Complete | 2026-03-15 |
-| 40. MetricPollJob Aggregate Dispatch | v1.8 | 0/1 | Not started | - |
+| 40. MetricPollJob Aggregate Dispatch | v1.8 | 1/1 | Complete | 2026-03-15 |
 
 ---
 *Roadmap created: 2026-03-10*
