@@ -5,28 +5,29 @@
 See: .planning/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.8 Combined Metrics — Phase 39 (Pipeline Bypass Guards)
+**Current focus:** v1.8 Combined Metrics — COMPLETE (all 4 phases done)
 
 ## Current Position
 
-Phase: 39 of 40 (Pipeline Bypass Guards)
+Phase: 40 of 40 (MetricPollJob Aggregate Dispatch)
 Plan: 01 of 1 (complete)
-Status: Phase 39 complete — ready for Phase 40
-Last activity: 2026-03-15 — Completed 39-01-PLAN.md (SnmpSource.Synthetic + OidResolutionBehavior bypass guard)
+Status: Phase 40 complete — v1.8 Combined Metrics feature complete
+Last activity: 2026-03-15 — Completed 40-01-PLAN.md (aggregate dispatch + 10 tests, 326 total passing)
 
-Progress: [####################] v1.0-v1.7 complete | [███░░░░░░░] 3/4 v1.8 phases
+Progress: [####################] v1.0-v1.7 complete | [██████████] 4/4 v1.8 phases
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 90 (v1.0 through v1.7, plus 37-01 through 39-01)
+- Total plans completed: 91 (v1.0 through v1.7, plus 37-01 through 40-01)
 - Average duration: ~25 min
-- Total execution time: ~36.7 hours
+- Total execution time: ~36.8 hours
 
 **Recent Trend:**
 - Last milestone (v1.7): 8 plans, 4 phases
 - 37-01: 2 min (purely additive types, no behavior)
 - 39-01: 2 min (surgical: 3 lines production code, 4 new tests)
+- 40-01: 4 min (134 production LOC, 10 new tests, 326 total passing)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -69,11 +70,18 @@ Progress: [####################] v1.0-v1.7 complete | [███░░░░░�
 - **Bypass return form:** `return await next();` — Handle returns `Task<TResponse>`, result must be returned explicitly
 - **Guard placement:** first statement inside `if (notification is SnmpOidReceived msg)` block, before `_oidMapService.Resolve`
 
+### Phase 40 Decisions
+
+- **DispatchResponseAsync extended with pollGroup param** — Option A (cleaner than splitting at call site in Execute)
+- **OID dict built inline in DispatchAggregatedMetricAsync** — per-combined-metric, keeps method self-contained
+- **Math.Clamp for overflow safety** — silent clamp when double result exceeds Integer32/Gauge32 range
+- **Aggregate exceptions: log Error only** — do NOT call RecordFailure per locked CM decision
+
 ### v1.8 Pre-Phase Decisions (record in plans)
 
 - ~~Phase 39: Name the bypass guard option (Option B: `Source == SnmpSource.Synthetic`) as a named decision~~ (DONE)
 - ~~Phase 39: Name the sentinel OID value (`"0.0"`) as a named decision~~ (DONE)
-- Phase 40: Ratio is an invalid Action value in v1.8 — BuildPollGroups skips with Error log (same as unknown string)
+- ~~Phase 40: Ratio is an invalid Action value in v1.8 — BuildPollGroups skips with Error log (same as unknown string)~~ (confirmed in BuildPollGroups; no action needed in 40-01)
 
 ### Known Tech Debt
 
@@ -81,10 +89,10 @@ None.
 
 ### Blockers/Concerns
 
-None. Phase 40 has HIGH confidence per research summary.
+None. v1.8 Combined Metrics is complete.
 
 ## Session Continuity
 
-Last session: 2026-03-15T09:37:25Z
-Stopped at: Completed 39-01-PLAN.md — SnmpSource.Synthetic + OidResolutionBehavior bypass guard, 4 new tests, 316 total passing
+Last session: 2026-03-15T10:17:29Z
+Stopped at: Completed 40-01-PLAN.md — aggregate dispatch + snmp.aggregated.computed counter, 10 new tests, 326 total passing
 Resume file: None
