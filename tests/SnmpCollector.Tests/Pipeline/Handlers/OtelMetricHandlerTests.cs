@@ -31,6 +31,7 @@ public sealed class OtelMetricHandlerTests : IDisposable
         _handler = new OtelMetricHandler(
             _testFactory,
             _pipelineMetrics,
+            new HeartbeatLivenessService(),
             NullLogger<OtelMetricHandler>.Instance);
     }
 
@@ -244,6 +245,46 @@ public sealed class OtelMetricHandlerTests : IDisposable
         await _handler.Handle(notification, CancellationToken.None);
 
         Assert.Single(_testFactory.GaugeRecords);
+    }
+
+    [Fact]
+    public async Task Heartbeat_StampsPipelineLiveness()
+    {
+        var heartbeatLiveness = new HeartbeatLivenessService();
+        var handler = new OtelMetricHandler(
+            _testFactory, _pipelineMetrics, heartbeatLiveness,
+            NullLogger<OtelMetricHandler>.Instance);
+
+        var notification = new SnmpOidReceived
+        {
+            Oid = HeartbeatJobOptions.HeartbeatOid,
+            AgentIp = IPAddress.Parse("127.0.0.1"),
+            Value = new Counter32(1),
+            Source = SnmpSource.Trap,
+            TypeCode = SnmpType.Counter32,
+            DeviceName = HeartbeatJobOptions.HeartbeatDeviceName,
+            MetricName = "Heartbeat",
+            ExtractedValue = 1.0
+        };
+
+        Assert.Null(heartbeatLiveness.LastArrival);
+        await handler.Handle(notification, CancellationToken.None);
+        Assert.NotNull(heartbeatLiveness.LastArrival);
+    }
+
+    [Fact]
+    public async Task NonHeartbeat_DoesNotStampPipelineLiveness()
+    {
+        var heartbeatLiveness = new HeartbeatLivenessService();
+        var handler = new OtelMetricHandler(
+            _testFactory, _pipelineMetrics, heartbeatLiveness,
+            NullLogger<OtelMetricHandler>.Instance);
+
+        var notification = MakeNotification(new Integer32(42), SnmpType.Integer32,
+            deviceName: "some-router", extractedValue: 42.0);
+        await handler.Handle(notification, CancellationToken.None);
+
+        Assert.Null(heartbeatLiveness.LastArrival);
     }
 
     // --- Pipeline metric counter test ---
