@@ -96,9 +96,10 @@ None. v1.8 Combined Metrics is complete.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 056 | Add snmp.aggregated.computed panel to ops dashboard | 2026-03-15 | 23c5a5a | [056-add-aggregated-computed-to-ops-dashboard](./quick/056-add-aggregated-computed-to-ops-dashboard/) |
+| 057 | Add aggregate poll groups + tenant routing to devices/tenants configs (all locations) | 2026-03-15 | bc35f6a | [057-demo-aggregate-metrics-in-devices](./quick/057-demo-aggregate-metrics-in-devices/) |
 
 ## Session Continuity
 
-Last session: 2026-03-15T10:40:38Z
-Stopped at: Completed quick/056 — Aggregated Computed panel added to ops dashboard
+Last session: 2026-03-15T10:51:28Z
+Stopped at: Completed quick/057 — Aggregate poll groups and tenant entries added to all config locations
 Resume file: None
