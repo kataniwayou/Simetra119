@@ -55,27 +55,27 @@ Requirements for computing aggregate metrics from SNMP poll group responses and 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CM-01 | TBD | Pending |
-| CM-02 | TBD | Pending |
-| CM-03 | TBD | Pending |
-| CM-04 | TBD | Pending |
-| CM-05 | TBD | Pending |
-| CM-06 | TBD | Pending |
-| CM-07 | TBD | Pending |
-| CM-08 | TBD | Pending |
-| CM-09 | TBD | Pending |
-| CM-10 | TBD | Pending |
-| CM-11 | TBD | Pending |
-| CM-12 | TBD | Pending |
-| CM-13 | TBD | Pending |
-| CM-14 | TBD | Pending |
-| CM-15 | TBD | Pending |
+| CM-01 | Phase 37 | Pending |
+| CM-02 | Phase 38 | Pending |
+| CM-03 | Phase 38 | Pending |
+| CM-04 | Phase 39 | Pending |
+| CM-05 | Phase 39 | Pending |
+| CM-06 | Phase 39 | Pending |
+| CM-07 | Phase 40 | Pending |
+| CM-08 | Phase 40 | Pending |
+| CM-09 | Phase 40 | Pending |
+| CM-10 | Phase 40 | Pending |
+| CM-11 | Phase 38 | Pending |
+| CM-12 | Phase 38 | Pending |
+| CM-13 | Phase 40 | Pending |
+| CM-14 | Phase 40 | Pending |
+| CM-15 | Phase 40 | Pending |
 
 **Coverage:**
 - v1.8 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15 ⚠️
+- Mapped to phases: 15
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-15*
-*Last updated: 2026-03-15 after initial definition*
+*Last updated: 2026-03-15 after v1.8 roadmap created (Phases 37-40)*

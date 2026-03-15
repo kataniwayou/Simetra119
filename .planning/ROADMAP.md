@@ -10,6 +10,7 @@
 - ✅ **v1.5 Priority Vector Data Layer** - Phases 25-29 (shipped 2026-03-10)
 - ✅ **v1.6 Organization & Command Map Foundation** - Phases 30-32 (shipped 2026-03-13)
 - ✅ **v1.7 Configuration Consistency & Tenant Commands** - Phases 33-36 (shipped 2026-03-15)
+- 🚧 **v1.8 Combined Metrics** - Phases 37-40 (in progress)
 
 ## Phases
 
@@ -102,6 +103,83 @@ See `.planning/milestones/v1.7-ROADMAP.md` for details.
 
 ---
 
+### 🚧 v1.8 Combined Metrics (In Progress)
+
+**Milestone Goal:** Poll groups can declare an aggregate computation (sum, subtract, absDiff, mean) over their individual SNMP GET responses. The collector computes the result and dispatches it as a named synthetic gauge through the full MediatR pipeline, appearing in Prometheus with `source="synthetic"` alongside the individual per-OID metrics.
+
+#### Phase 37: Config and Runtime Models
+
+**Goal**: The data types that describe a combined metric — config model, runtime record, and aggregation enum — exist with backward-compatible defaults so all downstream phases can reference stable types
+**Depends on**: Nothing (type-only additions; no behavior change)
+**Requirements**: CM-01
+**Success Criteria** (what must be TRUE):
+  1. A `PollOptions` entry with no `AggregateMetricName` or `Aggregator` fields deserializes and behaves identically to before — no regression to existing poll group behavior
+  2. A `PollOptions` entry with both `AggregateMetricName` and `Aggregator` set deserializes without error and the values are accessible on the model
+  3. `AggregationKind` enum has `Sum`, `Subtract`, `AbsDiff`, and `Mean` members; `CombinedMetricDefinition` runtime record holds MetricName, AggregationKind, and source OIDs list; both types compile and are referenceable from MetricPollInfo
+  4. `MetricPollInfo` carries a `CombinedMetrics` collection with a default empty value — existing `MetricPollInfo` construction sites require no changes
+
+**Plans**: TBD
+
+Plans:
+- [ ] 37-01: CombinedMetricOptions config model, AggregationKind enum, CombinedMetricDefinition runtime record, PollOptions extension, MetricPollInfo extension + unit tests
+
+---
+
+#### Phase 38: DeviceWatcherService Validation
+
+**Goal**: Combined metric definitions in devices.json are validated at load time — invalid aggregator values and mismatched field presence are rejected with Error logs, name collisions with the OID map produce Warning logs, and valid definitions are resolved to `CombinedMetricDefinition` records stored on `MetricPollInfo`
+**Depends on**: Phase 37 (CombinedMetricOptions and CombinedMetricDefinition types must exist)
+**Requirements**: CM-02, CM-03, CM-11, CM-12
+**Success Criteria** (what must be TRUE):
+  1. A poll group with `Aggregator: "invalid"` produces a structured Error log naming the device and poll group, and that poll group's combined metric definition is skipped — its individual OID polling still loads normally
+  2. A poll group with `AggregateMetricName` set but no `Aggregator` (or vice versa) produces a structured Error log — partial configuration is never silently accepted
+  3. A poll group with a valid `AggregateMetricName` that matches an existing OID map metric name produces a structured Warning log — the poll group loads normally and both metrics are distinguishable by their `oid` and `source` labels in Prometheus
+  4. A fully valid combined metric definition results in a populated `CombinedMetricDefinition` on the corresponding `MetricPollInfo`, with resolved source OIDs ready for poll-time use
+
+**Plans**: TBD
+
+Plans:
+- [ ] 38-01: BuildPollGroups extension — Aggregator parsing, co-presence validation, AggregateMetricName collision check, CombinedMetricDefinition construction + unit tests
+
+---
+
+#### Phase 39: Pipeline Bypass Guards
+
+**Goal**: The MediatR pipeline safely passes synthetic messages through without corrupting their pre-set MetricName — `SnmpSource.Synthetic` exists as the discriminant, `OidResolutionBehavior` bypasses OID lookup for synthetic messages, and `ValidationBehavior` passes them through OID regex without rejection
+**Depends on**: Phase 37 (SnmpSource enum lives alongside other pipeline types; Synthetic must be added before any message uses it)
+**Requirements**: CM-04, CM-05, CM-06
+**Success Criteria** (what must be TRUE):
+  1. `SnmpSource.Synthetic` is a valid enum member and a synthetic `SnmpOidReceived` with `Source = SnmpSource.Synthetic` can be constructed and sent through the pipeline without compile errors
+  2. A synthetic message with a pre-set `MetricName` of `"obp_combined_power"` exits `OidResolutionBehavior` with `MetricName` still equal to `"obp_combined_power"` — `OidMapService.Resolve` is never called for it
+  3. A synthetic message with `Oid = "0.0"` (or the chosen sentinel) passes `ValidationBehavior` without being rejected — the OID regex guard does not block synthetic messages
+  4. All existing non-synthetic pipeline behavior is unchanged — a regular Poll or Trap message still goes through full OID resolution as before
+
+**Plans**: TBD
+
+Plans:
+- [ ] 39-01: SnmpSource.Synthetic enum member + OidResolutionBehavior bypass guard + ValidationBehavior sentinel pass-through + unit tests
+
+---
+
+#### Phase 40: MetricPollJob Aggregate Dispatch
+
+**Goal**: After completing individual per-varbind dispatches, MetricPollJob computes the configured aggregate and dispatches it as a named synthetic gauge through the MediatR pipeline — appearing in Prometheus with correct labels, incrementing the combined counter, logging skips with structured warnings, and routing to tenant vector slots
+**Depends on**: Phase 38 (CombinedMetricDefinition on MetricPollInfo must be populated), Phase 39 (pipeline bypass guards must exist before any synthetic message is dispatched)
+**Requirements**: CM-07, CM-08, CM-09, CM-10, CM-13, CM-14, CM-15
+**Success Criteria** (what must be TRUE):
+  1. A poll group with `AggregateMetricName: "obp_combined_power"` and `Aggregator: "sum"` produces a `snmp_gauge` metric in Prometheus with labels `metric_name="obp_combined_power"`, `source="synthetic"`, `oid="0.0"` (or the chosen sentinel), and a numeric value equal to the sum of the individual OID values from that poll cycle
+  2. When any source OID in a combined group returns an error or a non-numeric (snmp_info) value, no combined metric is emitted for that cycle and a Warning log entry is written naming the device, poll group, and reason — the individual per-OID metrics for that cycle are unaffected
+  3. `snmp.combined.computed` counter increments by 1 each time a combined metric is successfully computed and dispatched — a poll cycle with no combined groups or a skipped combined group does not increment this counter
+  4. A tenant that has registered `"obp_combined_power"` in its Metrics[] array receives the synthetic metric value in its tenant vector slot — the routing key `(ip, port, metricName)` resolves correctly for synthetic metrics
+  5. An exception inside the combined metrics computation block is caught and logged as an Error naming combined metric computation as the source — it does not increment `snmp_poll_unreachable_total` and does not prevent individual varbind metrics from having been dispatched
+
+**Plans**: TBD
+
+Plans:
+- [ ] 40-01: DispatchCombinedMetricsAsync in MetricPollJob — computation (sum/subtract/absDiff/mean), all-or-nothing guard, TypeCode selection, SnmpOidReceived construction, ISender.Send dispatch, snmp.combined.computed counter, skip Warning log, dedicated try/catch + unit tests
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -118,7 +196,11 @@ See `.planning/milestones/v1.7-ROADMAP.md` for details.
 | 34. CommunityString Validation | v1.7 | 2/2 | Complete | 2026-03-14 |
 | 35. Watcher-Registry Refactor | v1.7 | 2/2 | Complete | 2026-03-15 |
 | 36. Config File Renames | v1.7 | 2/2 | Complete | 2026-03-15 |
+| 37. Config and Runtime Models | v1.8 | 0/1 | Not started | - |
+| 38. DeviceWatcherService Validation | v1.8 | 0/1 | Not started | - |
+| 39. Pipeline Bypass Guards | v1.8 | 0/1 | Not started | - |
+| 40. MetricPollJob Aggregate Dispatch | v1.8 | 0/1 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-15 after v1.7 milestone complete*
+*Last updated: 2026-03-15 after v1.8 milestone roadmap added*
