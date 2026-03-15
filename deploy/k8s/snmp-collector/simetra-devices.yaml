@@ -40,6 +40,17 @@ data:
             ]
           },
           {
+            "IntervalSeconds": 10,
+            "MetricNames": [
+              "obp_r1_power_L1",
+              "obp_r2_power_L1",
+              "obp_r3_power_L1",
+              "obp_r4_power_L1"
+            ],
+            "AggregatedMetricName": "obp_mean_power_L1",
+            "Aggregator": "mean"
+          },
+          {
             "IntervalSeconds": 30,
             "MetricNames": [
               "obp_link_state_L1"
@@ -132,6 +143,36 @@ data:
               "npb_port_tx_errors_P8",
               "npb_port_rx_drops_P8"
             ]
+          },
+          {
+            "IntervalSeconds": 10,
+            "MetricNames": [
+              "npb_port_rx_octets_P1",
+              "npb_port_rx_octets_P2",
+              "npb_port_rx_octets_P3",
+              "npb_port_rx_octets_P4",
+              "npb_port_rx_octets_P5",
+              "npb_port_rx_octets_P6",
+              "npb_port_rx_octets_P7",
+              "npb_port_rx_octets_P8"
+            ],
+            "AggregatedMetricName": "npb_total_rx_octets",
+            "Aggregator": "sum"
+          },
+          {
+            "IntervalSeconds": 10,
+            "MetricNames": [
+              "npb_port_tx_octets_P1",
+              "npb_port_tx_octets_P2",
+              "npb_port_tx_octets_P3",
+              "npb_port_tx_octets_P4",
+              "npb_port_tx_octets_P5",
+              "npb_port_tx_octets_P6",
+              "npb_port_tx_octets_P7",
+              "npb_port_tx_octets_P8"
+            ],
+            "AggregatedMetricName": "npb_total_tx_octets",
+            "Aggregator": "sum"
           },
           {
             "IntervalSeconds": 60,
