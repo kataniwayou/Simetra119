@@ -314,6 +314,7 @@ public sealed class DeviceWatcherService : BackgroundService
         ILogger logger)
     {
         var result = new List<MetricPollInfo>();
+        var seenAggregatedNames = new HashSet<string>(StringComparer.Ordinal);
         for (var index = 0; index < polls.Count; index++)
         {
             var poll = polls[index];
@@ -347,11 +348,65 @@ public sealed class DeviceWatcherService : BackgroundService
                 continue;
             }
 
+            CombinedMetricDefinition? combinedMetric = null;
+
+            var hasName = !string.IsNullOrEmpty(poll.AggregatedMetricName);
+            var hasAggregator = !string.IsNullOrEmpty(poll.Aggregator);
+
+            if (hasName || hasAggregator)
+            {
+                if (!hasName || !hasAggregator)
+                {
+                    logger.LogError(
+                        "Combined metric '{AggregatedMetricName}' on device '{DeviceName}' poll {PollGroupIndex} has {Reason} -- skipping combined metric",
+                        poll.AggregatedMetricName ?? "(null)", deviceName, index,
+                        !hasName ? "AggregatedMetricName missing" : "Aggregator missing");
+                }
+                else if (!Enum.TryParse<AggregationKind>(poll.Aggregator, ignoreCase: true, out var kind))
+                {
+                    logger.LogError(
+                        "Combined metric '{AggregatedMetricName}' on device '{DeviceName}' poll {PollGroupIndex} has {Reason} -- skipping combined metric",
+                        poll.AggregatedMetricName, deviceName, index,
+                        $"invalid Aggregator '{poll.Aggregator}'");
+                }
+                else if (resolvedOids.Count < 2)
+                {
+                    logger.LogError(
+                        "Combined metric '{AggregatedMetricName}' on device '{DeviceName}' poll {PollGroupIndex} has {Reason} -- skipping combined metric",
+                        poll.AggregatedMetricName, deviceName, index,
+                        $"fewer than 2 resolved OIDs ({resolvedOids.Count})");
+                }
+                else if (!seenAggregatedNames.Add(poll.AggregatedMetricName!))
+                {
+                    logger.LogError(
+                        "Combined metric '{AggregatedMetricName}' on device '{DeviceName}' poll {PollGroupIndex} has {Reason} -- skipping combined metric",
+                        poll.AggregatedMetricName, deviceName, index,
+                        "duplicate AggregatedMetricName on this device");
+                }
+                else if (oidMapService.ContainsMetricName(poll.AggregatedMetricName!))
+                {
+                    logger.LogError(
+                        "Combined metric '{AggregatedMetricName}' on device '{DeviceName}' poll {PollGroupIndex} has {Reason} -- skipping combined metric",
+                        poll.AggregatedMetricName, deviceName, index,
+                        "name collides with existing OID map entry");
+                }
+                else
+                {
+                    combinedMetric = new CombinedMetricDefinition(
+                        poll.AggregatedMetricName!,
+                        kind,
+                        resolvedOids.AsReadOnly());
+                }
+            }
+
             result.Add(new MetricPollInfo(
                 PollIndex: index,
                 Oids: resolvedOids.AsReadOnly(),
                 IntervalSeconds: poll.IntervalSeconds,
-                TimeoutMultiplier: poll.TimeoutMultiplier));
+                TimeoutMultiplier: poll.TimeoutMultiplier)
+            {
+                AggregatedMetrics = combinedMetric is not null ? [combinedMetric] : []
+            });
         }
         return result.AsReadOnly();
     }
