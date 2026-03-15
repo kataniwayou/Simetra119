@@ -40,4 +40,11 @@ public sealed class MetricSlotOptions
     /// Validated at load time in Phase 34.
     /// </summary>
     public string Role { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Optional threshold bounds (Min and/or Max) for this metric slot.
+    /// Null means no threshold. Stored on MetricSlotHolder at load time
+    /// for future runtime evaluation.
+    /// </summary>
+    public ThresholdOptions? Threshold { get; set; }
 }

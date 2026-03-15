@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Lextm.SharpSnmpLib;
+using SnmpCollector.Configuration;
 
 namespace SnmpCollector.Pipeline;
 
@@ -33,14 +34,16 @@ public sealed class MetricSlotHolder
     public int TimeSeriesSize { get; }
     public SnmpType TypeCode { get; private set; }
     public SnmpSource Source { get; private set; }
+    public ThresholdOptions? Threshold { get; }
 
-    public MetricSlotHolder(string ip, int port, string metricName, int intervalSeconds, int timeSeriesSize = 1)
+    public MetricSlotHolder(string ip, int port, string metricName, int intervalSeconds, int timeSeriesSize = 1, ThresholdOptions? threshold = null)
     {
         Ip = ip;
         Port = port;
         MetricName = metricName;
         IntervalSeconds = intervalSeconds;
         TimeSeriesSize = timeSeriesSize;
+        Threshold = threshold;
     }
 
     /// <summary>
