@@ -188,7 +188,7 @@ Plans:
 | 41. Threshold Model & Holder Storage | v1.9 | 1/1 | Complete | 2026-03-15 |
 | 42. Threshold Validation & Config Files | v1.9 | 2/2 | Complete | 2026-03-15 |
 | 43. Heartbeat Cleanup | v1.10 | 1/1 | Complete | 2026-03-15 |
-| 44. Pipeline Liveness | v1.10 | 0/2 | Not started | - |
+| 44. Pipeline Liveness | v1.10 | 2/2 | Complete | 2026-03-15 |
 
 ---
 *Roadmap created: 2026-03-10*
