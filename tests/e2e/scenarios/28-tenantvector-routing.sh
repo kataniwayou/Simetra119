@@ -10,7 +10,7 @@
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 save_configmap "simetra-tenants" "simetra" "$FIXTURES_DIR/.original-tenants-configmap.yaml" || true
 
-TENANTVECTOR_YAML="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/deploy/k8s/snmp-collector/simetra-tenants.yaml"
+TENANTVECTOR_YAML="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/deploy/k8s/snmp-collector/simetra-tenants.yaml"
 
 log_info "Applying tenantvector ConfigMap..."
 kubectl apply -f "$TENANTVECTOR_YAML" || true

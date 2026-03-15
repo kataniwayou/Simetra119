@@ -14,9 +14,8 @@ log_info "Patching FAKE-UNREACHABLE device to point to E2E simulator..."
 # Get current devices.json, patch FAKE-UNREACHABLE entry with jq, and re-apply
 CURRENT_JSON=$(kubectl get configmap simetra-devices -n simetra -o jsonpath='{.data.devices\.json}')
 PATCHED_JSON=$(echo "$CURRENT_JSON" | jq '
-    map(if .Name == "FAKE-UNREACHABLE" then
-        .IpAddress = "e2e-simulator.simetra.svc.cluster.local" |
-        .CommunityString = "Simetra.E2E-SIM"
+    map(if .CommunityString == "Simetra.FAKE-UNREACHABLE" then
+        .IpAddress = "e2e-simulator.simetra.svc.cluster.local"
     else . end)')
 
 # Create a temporary ConfigMap YAML with patched JSON

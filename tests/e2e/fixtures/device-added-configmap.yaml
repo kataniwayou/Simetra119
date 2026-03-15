@@ -178,7 +178,7 @@ data:
       {
         "IpAddress": "e2e-simulator.simetra.svc.cluster.local",
         "Port": 161,
-        "CommunityString": "Simetra.E2E-SIM",
+        "CommunityString": "Simetra.E2E-SIM-2",
         "Polls": [
           {
             "IntervalSeconds": 10,
