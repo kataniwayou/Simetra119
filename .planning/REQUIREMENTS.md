@@ -40,22 +40,22 @@ Requirements for removing hardcoded heartbeat special cases and adding pipeline-
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HB-01 | TBD | Pending |
-| HB-02 | TBD | Pending |
-| HB-03 | TBD | Pending |
-| HB-04 | TBD | Pending |
-| HB-05 | TBD | Pending |
-| HB-06 | TBD | Pending |
-| HB-07 | TBD | Pending |
-| HB-08 | TBD | Pending |
-| HB-09 | TBD | Pending |
-| HB-10 | TBD | Pending |
+| HB-01 | Phase 43 | Pending |
+| HB-02 | Phase 43 | Pending |
+| HB-03 | Phase 43 | Pending |
+| HB-04 | Phase 44 | Pending |
+| HB-05 | Phase 44 | Pending |
+| HB-06 | Phase 44 | Pending |
+| HB-07 | Phase 44 | Pending |
+| HB-08 | Phase 44 | Pending |
+| HB-09 | Phase 44 | Pending |
+| HB-10 | Phase 44 | Pending |
 
 **Coverage:**
 - v1.10 requirements: 10 total
-- Mapped to phases: 0
-- Unmapped: 10 ⚠️
+- Mapped to phases: 10
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-15*
-*Last updated: 2026-03-15 after initial definition*
+*Last updated: 2026-03-15 after v1.10 roadmap created*

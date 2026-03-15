@@ -5,45 +5,43 @@
 See: .planning/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.10 Heartbeat Refactor & Pipeline Liveness
+**Current focus:** v1.10 Heartbeat Refactor & Pipeline Liveness — Phase 43 ready to plan
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements for v1.10
-Last activity: 2026-03-15 — Milestone v1.10 started
+Phase: 43 of 44 (Heartbeat Cleanup)
+Plan: — (not started)
+Status: Ready to plan
+Last activity: 2026-03-15 — v1.10 roadmap created; Phase 43 and 44 defined
 
-Progress: [####################] v1.0-v1.8 complete | [###] 3/3 v1.9 plans complete — v1.9 DONE
+Progress: [####################] v1.0-v1.9 complete | [ ] 0/3 v1.10 plans
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 91 (v1.0 through v1.8)
+- Total plans completed: 94 (v1.0 through v1.9, including quick tasks)
 - Average duration: ~25 min
-- Total execution time: ~36.8 hours
+- Total execution time: ~39 hours
 
 **Recent Trend:**
-- 37-01: 2 min
-- 38-01: ~5 min
-- 39-01: 2 min
-- 40-01: 4 min
+- 41-01: ~10 min
+- 42-01: ~10 min
+- 42-02: ~5 min
+- quick/058: ~5 min
 - Trend: Stable (small surgical plans)
 
 *Updated after each plan completion*
 
 ## Accumulated Context
 
-### Key Architectural Facts (v1.9 relevant)
+### Key Architectural Facts (v1.10 relevant)
 
-- `TenantVectorWatcherService.ValidateAndBuildTenants` is the canonical validation entry point — all per-entry validation lives here (established in v1.7)
-- `MetricSlotOptions` is the config POCO for tenant metric entries; `MetricSlotHolder` is the runtime store — adding a property to both is the established pattern (v1.7: Role added this way)
-- `ThresholdOptions` semantics: both null = always-violated; max only = > max violated; min only = < min violated; both set = outside range violated — but runtime evaluation is out of scope for v1.9
-- Min > Max validation: Error log, skip threshold (set to null on holder), metric entry still loads — same "skip invalid field, keep entry" pattern as Role validation in v1.7
-- No `[JsonPropertyName]` attributes needed — `PropertyNameCaseInsensitive = true` in existing deserializer covers it (established in v1.8 Phase 37)
-- **Phase 41 complete:** ThresholdOptions sealed class exists; MetricSlotOptions.Threshold and MetricSlotHolder.Threshold are wired end-to-end; Threshold is NOT in CopyFrom (config identity, not runtime state); 329 tests pass
-- **Phase 42-01 complete:** Threshold Min > Max validation added as check 7 in ValidateAndBuildTenants; uses pattern match, LogError with TenantName/MetricIndex/Min/Max, sets metric.Threshold = null (no continue); 3 new tests; 332 tests pass
-- **Phase 42-02 complete:** Threshold examples added to all three config file locations (local dev double-wrapped, K8s single-wrapped YAML, production configmap); 2 entries in tenants.json (T1/T2), 3 entries each in simetra-tenants.yaml and configmap.yaml (T1/T2/T3); THR-07 satisfied; v1.9 done
+- Heartbeat bypass lives in `TenantVectorFanOutBehavior` as `if (DeviceName == HeartbeatDeviceName)` — Phase 43 deletes this block entirely
+- `TenantVectorRegistry.Reload` contains a hardcoded heartbeat holder + tenant at `int.MinValue` priority — Phase 43 removes all of this
+- `ILivenessVectorService` stamps on job completion in `HeartbeatJob.finally` — this is UNCHANGED; it serves scheduler liveness, not pipeline liveness
+- New `IHeartbeatLivenessService` is distinct from `ILivenessVectorService` — stamps when `OtelMetricHandler` processes a heartbeat message (pipeline arrival, not job completion)
+- Staleness window: `HeartbeatJobOptions.DefaultIntervalSeconds` (15) × default `GraceMultiplier` (2.0) = 30s — no hardcoded magic numbers
+- HB-08/09/10 are preserved-behavior requirements — verified in Phase 44, not implemented
 
 ### Blockers/Concerns
 
@@ -57,6 +55,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-15T13:25:29Z
-Stopped at: Completed quick/058 — GraceMultiplier added to PollOptions/MetricPollInfo/MetricSlotHolder; IntervalSeconds+GraceMultiplier resolved from device poll group in ValidateAndBuildTenants; 4 new tests; 336 total
+Last session: 2026-03-15
+Stopped at: v1.10 roadmap created — Phase 43 (Heartbeat Cleanup) and Phase 44 (Pipeline Liveness) defined; ready to plan Phase 43
 Resume file: None
