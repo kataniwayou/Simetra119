@@ -37,20 +37,20 @@ Requirements for adding threshold config model to tenant metric entries with loa
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| THR-01 | TBD | Pending |
-| THR-02 | TBD | Pending |
-| THR-03 | TBD | Pending |
-| THR-04 | TBD | Pending |
-| THR-05 | TBD | Pending |
-| THR-06 | TBD | Pending |
-| THR-07 | TBD | Pending |
-| THR-08 | TBD | Pending |
+| THR-01 | Phase 41 | Pending |
+| THR-02 | Phase 41 | Pending |
+| THR-03 | Phase 41 | Pending |
+| THR-04 | Phase 42 | Pending |
+| THR-05 | Phase 42 | Pending |
+| THR-06 | Phase 42 | Pending |
+| THR-07 | Phase 42 | Pending |
+| THR-08 | Phase 41 | Pending |
 
 **Coverage:**
 - v1.9 requirements: 8 total
-- Mapped to phases: 0
-- Unmapped: 8 ⚠️
+- Mapped to phases: 8
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-15*
-*Last updated: 2026-03-15 after initial definition*
+*Last updated: 2026-03-15 after phase mapping (Phases 41-42)*
