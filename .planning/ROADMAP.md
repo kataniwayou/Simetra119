@@ -121,7 +121,7 @@ See `.planning/milestones/v1.7-ROADMAP.md` for details.
 **Plans**: TBD
 
 Plans:
-- [ ] 37-01: AggregatedMetricOptions config model, AggregationKind enum, CombinedMetricDefinition runtime record, PollOptions extension, MetricPollInfo extension + unit tests
+- [x] 37-01: AggregationKind enum, CombinedMetricDefinition record, PollOptions + MetricPollInfo extensions + 13 unit tests
 
 ---
 
@@ -196,7 +196,7 @@ Plans:
 | 34. CommunityString Validation | v1.7 | 2/2 | Complete | 2026-03-14 |
 | 35. Watcher-Registry Refactor | v1.7 | 2/2 | Complete | 2026-03-15 |
 | 36. Config File Renames | v1.7 | 2/2 | Complete | 2026-03-15 |
-| 37. Config and Runtime Models | v1.8 | 0/1 | Not started | - |
+| 37. Config and Runtime Models | v1.8 | 1/1 | Complete | 2026-03-15 |
 | 38. DeviceWatcherService Validation | v1.8 | 0/1 | Not started | - |
 | 39. Pipeline Bypass Guards | v1.8 | 0/1 | Not started | - |
 | 40. MetricPollJob Aggregate Dispatch | v1.8 | 0/1 | Not started | - |
