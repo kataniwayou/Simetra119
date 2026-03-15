@@ -101,7 +101,7 @@ public sealed class MetricPollJob : IJob
                 timeoutCts.Token);
             sw.Stop();
 
-            await DispatchResponseAsync(response, device, sw.Elapsed.TotalMilliseconds, context.CancellationToken);
+            await DispatchResponseAsync(response, device, pollGroup, sw.Elapsed.TotalMilliseconds, context.CancellationToken);
 
             // Success: reset failure counter; log + counter only on recovered transition.
             if (_unreachabilityTracker.RecordSuccess(device.Name))
@@ -146,12 +146,14 @@ public sealed class MetricPollJob : IJob
     }
 
     /// <summary>
-    /// Dispatches each varbind from the SNMP GET response individually via ISender.Send.
+    /// Dispatches each varbind from the SNMP GET response individually via ISender.Send,
+    /// then computes and dispatches any configured aggregate metrics.
     /// Skips noSuchObject / noSuchInstance / EndOfMibView varbinds with a Debug log.
     /// </summary>
     private async Task DispatchResponseAsync(
         IList<Variable> response,
         DeviceInfo device,
+        MetricPollInfo pollGroup,
         double pollDurationMs,
         CancellationToken ct)
     {
@@ -181,7 +183,127 @@ public sealed class MetricPollJob : IJob
 
             await _sender.Send(msg, ct);
         }
+
+        // CM-08/CM-10: compute and dispatch aggregated metrics after all individual varbinds
+        foreach (var combined in pollGroup.AggregatedMetrics)
+        {
+            try
+            {
+                await DispatchAggregatedMetricAsync(combined, response, device, ct);
+            }
+            catch (Exception ex)
+            {
+                // CM decision: aggregate exceptions do NOT call RecordFailure / increment snmp_poll_unreachable_total
+                _logger.LogError(ex,
+                    "Combined metric {MetricName} dispatch failed for {DeviceName} poll group {PollIndex}",
+                    combined.MetricName, device.Name, pollGroup.PollIndex);
+            }
+        }
     }
+
+    /// <summary>
+    /// CM-07/CM-08/CM-09: Computes one aggregate metric from the SNMP response and dispatches
+    /// it as a synthetic SnmpOidReceived through the full MediatR pipeline.
+    /// </summary>
+    private async Task DispatchAggregatedMetricAsync(
+        AggregatedMetricDefinition combined,
+        IList<Variable> response,
+        DeviceInfo device,
+        CancellationToken ct)
+    {
+        // Build OID→data lookup from response (excluding error sentinels)
+        var oidValues = new Dictionary<string, ISnmpData>(response.Count);
+        foreach (var v in response)
+        {
+            if (v.Data.TypeCode is not SnmpType.NoSuchObject
+                                and not SnmpType.NoSuchInstance
+                                and not SnmpType.EndOfMibView)
+            {
+                oidValues[v.Id.ToString()] = v.Data;
+            }
+        }
+
+        // CM-09: all source OIDs must be present and numeric
+        var values = new List<double>(combined.SourceOids.Count);
+        foreach (var oid in combined.SourceOids)
+        {
+            if (!oidValues.TryGetValue(oid, out var data))
+            {
+                _logger.LogWarning(
+                    "Combined metric {MetricName} skipped: OID {Oid} absent from response for {DeviceName}",
+                    combined.MetricName, oid, device.Name);
+                return;
+            }
+            if (!IsNumeric(data.TypeCode))
+            {
+                _logger.LogWarning(
+                    "Combined metric {MetricName} skipped: OID {Oid} is non-numeric ({TypeCode}) for {DeviceName}",
+                    combined.MetricName, oid, data.TypeCode, device.Name);
+                return;
+            }
+            values.Add(ExtractNumericValue(data));
+        }
+
+        // CM-08: compute aggregate
+        var result = Compute(combined.Kind, values);
+        var typeCode = SelectTypeCode(combined.Kind);
+
+        // Construct ISnmpData Value wrapper with clamping for overflow safety
+        ISnmpData value = typeCode == SnmpType.Integer32
+            ? new Integer32((int)Math.Clamp(result, int.MinValue, int.MaxValue))
+            : new Gauge32((uint)Math.Clamp(result, uint.MinValue, uint.MaxValue));
+
+        // CM-07, CM-10: dispatch through full MediatR pipeline
+        var syntheticMsg = new SnmpOidReceived
+        {
+            Oid        = "0.0",                              // sentinel OID (passes ValidationBehavior regex)
+            AgentIp    = IPAddress.Parse(device.ResolvedIp),
+            DeviceName = device.Name,                        // REQUIRED: ValidationBehavior rejects null DeviceName
+            Value      = value,
+            Source     = SnmpSource.Synthetic,               // causes OidResolutionBehavior to bypass
+            TypeCode   = typeCode,
+            MetricName = combined.MetricName,                // pre-set: preserved through OidResolution bypass
+            PollDurationMs = null                            // no round-trip for synthetic metrics
+        };
+
+        await _sender.Send(syntheticMsg, ct);
+
+        // CM-13: increment counter on successful dispatch
+        _pipelineMetrics.IncrementAggregatedComputed(device.Name);
+    }
+
+    private static bool IsNumeric(SnmpType typeCode) => typeCode is
+        SnmpType.Integer32 or
+        SnmpType.Gauge32 or
+        SnmpType.TimeTicks or
+        SnmpType.Counter32 or
+        SnmpType.Counter64;
+
+    private static double ExtractNumericValue(ISnmpData data) => data.TypeCode switch
+    {
+        SnmpType.Integer32  => ((Integer32)data).ToInt32(),
+        SnmpType.Gauge32    => ((Gauge32)data).ToUInt32(),
+        SnmpType.TimeTicks  => ((TimeTicks)data).ToUInt32(),
+        SnmpType.Counter32  => ((Counter32)data).ToUInt32(),
+        SnmpType.Counter64  => (double)((Counter64)data).ToUInt64(),
+        _                   => throw new InvalidOperationException($"Non-numeric TypeCode {data.TypeCode}")
+    };
+
+    private static double Compute(AggregationKind kind, IReadOnlyList<double> values) => kind switch
+    {
+        AggregationKind.Sum      => values.Sum(),
+        AggregationKind.Subtract => values.Skip(1).Aggregate(values[0], (acc, v) => acc - v),
+        AggregationKind.AbsDiff  => Math.Abs(values.Skip(1).Aggregate(values[0], (acc, v) => acc - v)),
+        AggregationKind.Mean     => values.Sum() / values.Count,
+        _                        => throw new InvalidOperationException($"Unknown AggregationKind {kind}")
+    };
+
+    private static SnmpType SelectTypeCode(AggregationKind kind) => kind switch
+    {
+        AggregationKind.Subtract or AggregationKind.AbsDiff => SnmpType.Integer32,
+        AggregationKind.Sum      or AggregationKind.Mean    => SnmpType.Gauge32,
+        _                                                    => SnmpType.Gauge32
+    };
 
     /// <summary>
     /// Records a poll failure and fires the unreachability transition counter + log on state change.

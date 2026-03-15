@@ -4,7 +4,7 @@ using System.Diagnostics.Metrics;
 namespace SnmpCollector.Telemetry;
 
 /// <summary>
-/// Singleton service that owns all 10 pipeline counter instruments on the SnmpCollector meter.
+/// Singleton service that owns all 12 pipeline counter instruments on the SnmpCollector meter.
 /// Creating counters here (once) avoids duplicate instrument registration and provides a single
 /// injection point for all pipeline behaviors and handlers that need to record metrics.
 /// </summary>
@@ -45,6 +45,9 @@ public sealed class PipelineMetricService : IDisposable
     // Phase 27: counts successful fan-out writes to tenant vector metric slots
     private readonly Counter<long> _tenantVectorRouted;
 
+    // CM-13: counts successfully computed and dispatched combined (aggregate) metrics
+    private readonly Counter<long> _aggregatedComputed;
+
     public PipelineMetricService(IMeterFactory meterFactory)
     {
         _meter = meterFactory.Create(TelemetryConstants.MeterName);
@@ -62,6 +65,8 @@ public sealed class PipelineMetricService : IDisposable
         _pollRecovered   = _meter.CreateCounter<long>("snmp.poll.recovered");
 
         _tenantVectorRouted = _meter.CreateCounter<long>("snmp.tenantvector.routed");
+
+        _aggregatedComputed = _meter.CreateCounter<long>("snmp.aggregated.computed");
     }
 
     /// <summary>PMET-01: Increment the count of published pipeline notifications by 1.</summary>
@@ -121,6 +126,10 @@ public sealed class PipelineMetricService : IDisposable
     /// <summary>OBS-02: Increment the count of tenant vector fan-out writes by 1.</summary>
     public void IncrementTenantVectorRouted(string deviceName)
         => _tenantVectorRouted.Add(1, new TagList { { "device_name", deviceName } });
+
+    /// <summary>CM-13: Increment the count of successfully computed combined metrics by 1.</summary>
+    public void IncrementAggregatedComputed(string deviceName)
+        => _aggregatedComputed.Add(1, new TagList { { "device_name", deviceName } });
 
     public void Dispose() => _meter.Dispose();
 }
