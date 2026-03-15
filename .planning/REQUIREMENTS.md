@@ -28,7 +28,7 @@ Requirements for computing aggregate metrics from SNMP poll group responses and 
 
 ### Validation at Load Time
 
-- [ ] **CM-11**: `AggregatedMetricName` collision with existing OID map entry produces structured Warning log — both metrics load (distinguishable by oid/source labels) but operator warned
+- [ ] **CM-11**: `AggregatedMetricName` collision with existing OID map entry produces structured Error log — combined metric skipped, real metric takes priority
 - [ ] **CM-12**: Combined metric config validated in `DeviceWatcherService.ValidateAndBuildDevicesAsync` (BuildPollGroups) — invalid = skip combined metric definition, poll group still loads for individual metrics
 
 ### Observability
