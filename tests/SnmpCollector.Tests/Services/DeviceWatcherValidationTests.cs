@@ -500,4 +500,308 @@ public sealed class DeviceWatcherValidationTests
             null,
             Arg.Any<Func<object, Exception?, string>>());
     }
+
+    // -------------------------------------------------------------------------
+    // 13-22. Combined metric validation (Phase 38)
+    // -------------------------------------------------------------------------
+
+    private static List<DeviceOptions> SingleDeviceWithPoll(PollOptions poll) =>
+    [
+        new()
+        {
+            CommunityString = "Simetra.test-device",
+            IpAddress = "10.0.10.1",
+            Port = 161,
+            Polls = [poll]
+        }
+    ];
+
+    [Fact]
+    public async Task CombinedMetric_ValidConfig_PopulatesAggregatedMetrics()
+    {
+        var devices = SingleDeviceWithPoll(new PollOptions
+        {
+            MetricNames = ["m1", "m2"],
+            AggregatedMetricName = "combined_power",
+            Aggregator = "sum",
+            IntervalSeconds = 10
+        });
+
+        var result = await BuildAsync(devices);
+
+        Assert.Single(result);
+        Assert.Single(result[0].PollGroups);
+        Assert.Single(result[0].PollGroups[0].AggregatedMetrics);
+        Assert.Equal("combined_power", result[0].PollGroups[0].AggregatedMetrics[0].MetricName);
+        Assert.Equal(AggregationKind.Sum, result[0].PollGroups[0].AggregatedMetrics[0].Kind);
+        Assert.Equal(2, result[0].PollGroups[0].AggregatedMetrics[0].SourceOids.Count);
+    }
+
+    [Fact]
+    public async Task CombinedMetric_InvalidAggregator_LogsErrorAndSkipsCombinedMetric()
+    {
+        var devices = SingleDeviceWithPoll(new PollOptions
+        {
+            MetricNames = ["m1", "m2"],
+            AggregatedMetricName = "combined",
+            Aggregator = "invalid",
+            IntervalSeconds = 10
+        });
+
+        var logger = Substitute.For<ILogger>();
+
+        var result = await DeviceWatcherService.ValidateAndBuildDevicesAsync(
+            devices,
+            CreatePassthroughOidMapService(),
+            logger,
+            CancellationToken.None);
+
+        logger.Received(1).Log(
+            LogLevel.Error,
+            Arg.Any<EventId>(),
+            Arg.Is<object>(o => o.ToString()!.Contains("invalid Aggregator")),
+            null,
+            Arg.Any<Func<object, Exception?, string>>());
+
+        Assert.Single(result);
+        Assert.Single(result[0].PollGroups);
+        Assert.Empty(result[0].PollGroups[0].AggregatedMetrics);
+    }
+
+    [Fact]
+    public async Task CombinedMetric_MissingAggregator_LogsErrorAndSkipsCombinedMetric()
+    {
+        var devices = SingleDeviceWithPoll(new PollOptions
+        {
+            MetricNames = ["m1", "m2"],
+            AggregatedMetricName = "combined",
+            Aggregator = null,
+            IntervalSeconds = 10
+        });
+
+        var logger = Substitute.For<ILogger>();
+
+        var result = await DeviceWatcherService.ValidateAndBuildDevicesAsync(
+            devices,
+            CreatePassthroughOidMapService(),
+            logger,
+            CancellationToken.None);
+
+        logger.Received(1).Log(
+            LogLevel.Error,
+            Arg.Any<EventId>(),
+            Arg.Is<object>(o => o.ToString()!.Contains("Aggregator missing")),
+            null,
+            Arg.Any<Func<object, Exception?, string>>());
+
+        Assert.Empty(result[0].PollGroups[0].AggregatedMetrics);
+    }
+
+    [Fact]
+    public async Task CombinedMetric_MissingName_LogsErrorAndSkipsCombinedMetric()
+    {
+        var devices = SingleDeviceWithPoll(new PollOptions
+        {
+            MetricNames = ["m1", "m2"],
+            AggregatedMetricName = null,
+            Aggregator = "sum",
+            IntervalSeconds = 10
+        });
+
+        var logger = Substitute.For<ILogger>();
+
+        var result = await DeviceWatcherService.ValidateAndBuildDevicesAsync(
+            devices,
+            CreatePassthroughOidMapService(),
+            logger,
+            CancellationToken.None);
+
+        logger.Received(1).Log(
+            LogLevel.Error,
+            Arg.Any<EventId>(),
+            Arg.Is<object>(o => o.ToString()!.Contains("AggregatedMetricName missing")),
+            null,
+            Arg.Any<Func<object, Exception?, string>>());
+
+        Assert.Empty(result[0].PollGroups[0].AggregatedMetrics);
+    }
+
+    [Fact]
+    public async Task CombinedMetric_FewerThan2ResolvedOids_LogsErrorAndSkipsCombinedMetric()
+    {
+        var devices = SingleDeviceWithPoll(new PollOptions
+        {
+            MetricNames = ["m1"],
+            AggregatedMetricName = "combined",
+            Aggregator = "sum",
+            IntervalSeconds = 10
+        });
+
+        var logger = Substitute.For<ILogger>();
+
+        var result = await DeviceWatcherService.ValidateAndBuildDevicesAsync(
+            devices,
+            CreatePassthroughOidMapService(),
+            logger,
+            CancellationToken.None);
+
+        logger.Received(1).Log(
+            LogLevel.Error,
+            Arg.Any<EventId>(),
+            Arg.Is<object>(o => o.ToString()!.Contains("fewer than 2 resolved OIDs")),
+            null,
+            Arg.Any<Func<object, Exception?, string>>());
+
+        Assert.Empty(result[0].PollGroups[0].AggregatedMetrics);
+    }
+
+    [Fact]
+    public async Task CombinedMetric_DuplicateNameOnSameDevice_LogsErrorAndSkipsSecond()
+    {
+        var poll1 = new PollOptions
+        {
+            MetricNames = ["m1", "m2"],
+            AggregatedMetricName = "combined",
+            Aggregator = "sum",
+            IntervalSeconds = 10
+        };
+        var poll2 = new PollOptions
+        {
+            MetricNames = ["m1", "m2"],
+            AggregatedMetricName = "combined",
+            Aggregator = "sum",
+            IntervalSeconds = 10
+        };
+
+        var devices = new List<DeviceOptions>
+        {
+            new()
+            {
+                CommunityString = "Simetra.test-device",
+                IpAddress = "10.0.10.1",
+                Port = 161,
+                Polls = [poll1, poll2]
+            }
+        };
+
+        var logger = Substitute.For<ILogger>();
+
+        var result = await DeviceWatcherService.ValidateAndBuildDevicesAsync(
+            devices,
+            CreatePassthroughOidMapService(),
+            logger,
+            CancellationToken.None);
+
+        logger.Received(1).Log(
+            LogLevel.Error,
+            Arg.Any<EventId>(),
+            Arg.Is<object>(o => o.ToString()!.Contains("duplicate AggregatedMetricName")),
+            null,
+            Arg.Any<Func<object, Exception?, string>>());
+
+        Assert.Equal(2, result[0].PollGroups.Count);
+        Assert.Single(result[0].PollGroups[0].AggregatedMetrics);
+        Assert.Empty(result[0].PollGroups[1].AggregatedMetrics);
+    }
+
+    [Fact]
+    public async Task CombinedMetric_OidMapCollision_LogsErrorAndSkipsCombinedMetric()
+    {
+        var svc = CreatePassthroughOidMapService();
+        svc.ContainsMetricName("colliding_name").Returns(true);
+
+        var devices = SingleDeviceWithPoll(new PollOptions
+        {
+            MetricNames = ["m1", "m2"],
+            AggregatedMetricName = "colliding_name",
+            Aggregator = "sum",
+            IntervalSeconds = 10
+        });
+
+        var logger = Substitute.For<ILogger>();
+
+        var result = await DeviceWatcherService.ValidateAndBuildDevicesAsync(
+            devices,
+            svc,
+            logger,
+            CancellationToken.None);
+
+        logger.Received(1).Log(
+            LogLevel.Error,
+            Arg.Any<EventId>(),
+            Arg.Is<object>(o => o.ToString()!.Contains("collides with existing OID map entry")),
+            null,
+            Arg.Any<Func<object, Exception?, string>>());
+
+        Assert.Empty(result[0].PollGroups[0].AggregatedMetrics);
+    }
+
+    [Fact]
+    public async Task CombinedMetric_NeitherFieldSet_NoCombinedMetricNoError()
+    {
+        var devices = SingleDeviceWithPoll(new PollOptions
+        {
+            MetricNames = ["m1", "m2"],
+            AggregatedMetricName = null,
+            Aggregator = null,
+            IntervalSeconds = 10
+        });
+
+        var logger = Substitute.For<ILogger>();
+
+        var result = await DeviceWatcherService.ValidateAndBuildDevicesAsync(
+            devices,
+            CreatePassthroughOidMapService(),
+            logger,
+            CancellationToken.None);
+
+        Assert.Empty(result[0].PollGroups[0].AggregatedMetrics);
+
+        logger.DidNotReceive().Log(
+            LogLevel.Error,
+            Arg.Any<EventId>(),
+            Arg.Any<object>(),
+            Arg.Any<Exception?>(),
+            Arg.Any<Func<object, Exception?, string>>());
+    }
+
+    [Theory]
+    [InlineData("sum", AggregationKind.Sum)]
+    [InlineData("subtract", AggregationKind.Subtract)]
+    [InlineData("absDiff", AggregationKind.AbsDiff)]
+    [InlineData("mean", AggregationKind.Mean)]
+    public async Task CombinedMetric_AllFourAggregatorValues_ParseCorrectly(string aggregator, AggregationKind expectedKind)
+    {
+        var devices = SingleDeviceWithPoll(new PollOptions
+        {
+            MetricNames = ["m1", "m2"],
+            AggregatedMetricName = "combined",
+            Aggregator = aggregator,
+            IntervalSeconds = 10
+        });
+
+        var result = await BuildAsync(devices);
+
+        Assert.Single(result[0].PollGroups[0].AggregatedMetrics);
+        Assert.Equal(expectedKind, result[0].PollGroups[0].AggregatedMetrics[0].Kind);
+    }
+
+    [Fact]
+    public async Task CombinedMetric_InvalidCombinedMetric_PollGroupStillLoadsIndividualOids()
+    {
+        var devices = SingleDeviceWithPoll(new PollOptions
+        {
+            MetricNames = ["m1", "m2"],
+            AggregatedMetricName = "combined",
+            Aggregator = "invalid",
+            IntervalSeconds = 10
+        });
+
+        var result = await BuildAsync(devices);
+
+        Assert.Single(result);
+        Assert.Single(result[0].PollGroups);
+        Assert.Equal(2, result[0].PollGroups[0].Oids.Count);
+        Assert.Empty(result[0].PollGroups[0].AggregatedMetrics);
+    }
 }
