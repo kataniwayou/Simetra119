@@ -555,4 +555,56 @@ public sealed class TenantVectorWatcherValidationTests
         Assert.Equal(2, result.Tenants[0].Metrics.Count);   // 2 valid metrics
         Assert.Single(result.Tenants[0].Commands);           // 1 valid command
     }
+
+    // ──────────────────────────────────────────────────────
+    // Threshold validation tests (THR-04/THR-05/THR-06)
+    // ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void ValidThreshold_PreservedOnCleanMetric()
+    {
+        var tenant = CreateValidTenant();
+        tenant.Metrics[0].Threshold = new ThresholdOptions { Min = 10.0, Max = 90.0 };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Equal(2, result.Tenants[0].Metrics.Count);
+        var th = result.Tenants[0].Metrics[0].Threshold;
+        Assert.NotNull(th);
+        Assert.Equal(10.0, th.Min);
+        Assert.Equal(90.0, th.Max);
+    }
+
+    [Fact]
+    public void MinGreaterThanMax_ThresholdCleared_MetricStillLoads()
+    {
+        var tenant = CreateValidTenant();
+        tenant.Metrics[0].Threshold = new ThresholdOptions { Min = 100.0, Max = 50.0 };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Equal(2, result.Tenants[0].Metrics.Count);     // metric survives
+        Assert.Null(result.Tenants[0].Metrics[0].Threshold);  // threshold cleared
+    }
+
+    [Fact]
+    public void BothNullThreshold_IsValid_PassesThrough()
+    {
+        var tenant = CreateValidTenant();
+        tenant.Metrics[0].Threshold = new ThresholdOptions { Min = null, Max = null };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Equal(2, result.Tenants[0].Metrics.Count);
+        Assert.NotNull(result.Tenants[0].Metrics[0].Threshold); // threshold object preserved (always-violated)
+    }
 }
