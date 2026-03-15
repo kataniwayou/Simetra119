@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-15)
 
 ## Current Position
 
-Phase: 37 of 40 (Config and Runtime Models)
+Phase: 38 of 40 (DeviceWatcherService Validation)
 Plan: 01 of 1 (complete)
-Status: Phase 37 complete — ready for Phase 38
-Last activity: 2026-03-15 — Completed 37-01-PLAN.md (Config and Runtime Models)
+Status: Phase 38 complete — ready for Phase 39
+Last activity: 2026-03-15 — Completed 38-01-PLAN.md (DeviceWatcherService combined metric validation)
 
-Progress: [####################] v1.0-v1.7 complete | [█░░░░░░░░░] 1/4 v1.8 phases
+Progress: [####################] v1.0-v1.7 complete | [██░░░░░░░░] 2/4 v1.8 phases
 
 ## Performance Metrics
 
@@ -53,6 +53,13 @@ Progress: [####################] v1.0-v1.7 complete | [█░░░░░░░�
 - `AggregationKind` enum does NOT include `Ratio` in v1.8 (excluded per pre-phase decision)
 - Confirmed: `Enum.TryParse<AggregationKind>("absDiff", ignoreCase: true)` = AbsDiff (camelCase preserved)
 
+### Phase 38 Decisions
+
+- **resolvedOids.Count < 2** for minimum-2 check (not MetricNames.Count) — prevents CombinedMetricDefinition with fewer SourceOids than configured names at poll time
+- OID map collision = **Error + skip** combined metric (not Warning) — real metric takes unconditional priority
+- Invalid combined metric **never skips the poll group** — result.Add always executes; only combinedMetric is null
+- `seenAggregatedNames` HashSet uses `StringComparer.Ordinal` — metric names are case-sensitive identifiers, scoped to per-device BuildPollGroups call
+
 ### v1.8 Pre-Phase Decisions (record in plans)
 
 - Phase 39: Name the bypass guard option (Option B: `Source == SnmpSource.Synthetic`) as a named decision
@@ -69,6 +76,6 @@ None. All four phases have HIGH confidence per research summary. Phase 39 must c
 
 ## Session Continuity
 
-Last session: 2026-03-15T08:30:33Z
-Stopped at: Completed 37-01-PLAN.md — AggregationKind, CombinedMetricDefinition, PollOptions fields, MetricPollInfo.AggregatedMetrics
+Last session: 2026-03-15T09:17:55Z
+Stopped at: Completed 38-01-PLAN.md — BuildPollGroups combined metric validation (5 rules), 10 unit tests, 312 total passing
 Resume file: None
