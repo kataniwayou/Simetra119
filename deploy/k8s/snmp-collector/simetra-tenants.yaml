@@ -13,7 +13,9 @@ data:
             { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_status_P1", "Role": "Resolved" },
             { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_rx_octets_P1", "Role": "Evaluate" },
             { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_tx_octets_P1", "Role": "Evaluate" },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_cpu_util", "TimeSeriesSize": 10, "Role": "Evaluate" }
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_cpu_util", "TimeSeriesSize": 10, "Role": "Evaluate" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_total_rx_octets", "Role": "Evaluate" },
+            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_total_tx_octets", "Role": "Evaluate" }
           ],
           "Commands": [
             { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "CommandName": "npb_reset_counters_P1", "Value": "1", "ValueType": "Integer32" }
@@ -38,7 +40,8 @@ data:
             { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L1", "Role": "Resolved" },
             { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r1_power_L1", "TimeSeriesSize": 3, "Role": "Evaluate" },
             { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r2_power_L1", "Role": "Evaluate" },
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L2", "Role": "Resolved" }
+            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L2", "Role": "Resolved" },
+            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_mean_power_L1", "Role": "Evaluate" }
           ],
           "Commands": [
             { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "CommandName": "obp_set_bypass_L1", "Value": "1", "ValueType": "Integer32" }

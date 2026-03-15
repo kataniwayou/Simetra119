@@ -15,6 +15,12 @@
             "Port": 10161,
             "MetricName": "obp_r1_power_L1",
             "Role": "Evaluate"
+          },
+          {
+            "Ip": "127.0.0.1",
+            "Port": 10161,
+            "MetricName": "obp_mean_power_L1",
+            "Role": "Evaluate"
           }
         ],
         "Commands": [
@@ -36,6 +42,18 @@
             "Port": 10162,
             "MetricName": "npb_port_status_P1",
             "Role": "Resolved"
+          },
+          {
+            "Ip": "127.0.0.1",
+            "Port": 10162,
+            "MetricName": "npb_total_rx_octets",
+            "Role": "Evaluate"
+          },
+          {
+            "Ip": "127.0.0.1",
+            "Port": 10162,
+            "MetricName": "npb_total_tx_octets",
+            "Role": "Evaluate"
           }
         ],
         "Commands": [
