@@ -157,7 +157,7 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 39-01: SnmpSource.Synthetic enum member + OidResolutionBehavior bypass guard + ValidationBehavior sentinel pass-through + unit tests
+- [x] 39-01: SnmpSource.Synthetic + OidResolution bypass + sentinel "0.0" + 4 tests (CM-04, CM-05, CM-06)
 
 ---
 
@@ -198,7 +198,7 @@ Plans:
 | 36. Config File Renames | v1.7 | 2/2 | Complete | 2026-03-15 |
 | 37. Config and Runtime Models | v1.8 | 1/1 | Complete | 2026-03-15 |
 | 38. DeviceWatcherService Validation | v1.8 | 1/1 | Complete | 2026-03-15 |
-| 39. Pipeline Bypass Guards | v1.8 | 0/1 | Not started | - |
+| 39. Pipeline Bypass Guards | v1.8 | 1/1 | Complete | 2026-03-15 |
 | 40. MetricPollJob Aggregate Dispatch | v1.8 | 0/1 | Not started | - |
 
 ---

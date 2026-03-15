@@ -58,9 +58,9 @@ Requirements for computing aggregate metrics from SNMP poll group responses and 
 | CM-01 | Phase 37 | Complete |
 | CM-02 | Phase 38 | Complete |
 | CM-03 | Phase 38 | Complete |
-| CM-04 | Phase 39 | Pending |
-| CM-05 | Phase 39 | Pending |
-| CM-06 | Phase 39 | Pending |
+| CM-04 | Phase 39 | Complete |
+| CM-05 | Phase 39 | Complete |
+| CM-06 | Phase 39 | Complete |
 | CM-07 | Phase 40 | Pending |
 | CM-08 | Phase 40 | Pending |
 | CM-09 | Phase 40 | Pending |
