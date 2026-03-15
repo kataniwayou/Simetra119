@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.10 Heartbeat Refactor & Pipeline Liveness — Phase 43 ready to plan
+**Current focus:** v1.10 Heartbeat Refactor & Pipeline Liveness — Phase 43 complete, Phase 44 ready
 
 ## Current Position
 
 Phase: 43 of 44 (Heartbeat Cleanup)
-Plan: — (not started)
-Status: Ready to plan
-Last activity: 2026-03-15 — v1.10 roadmap created; Phase 43 and 44 defined
+Plan: 01 of 01 (complete)
+Status: Phase complete
+Last activity: 2026-03-15 — Completed 43-01-PLAN.md (heartbeat plumbing removal)
 
-Progress: [####################] v1.0-v1.9 complete | [ ] 0/3 v1.10 plans
+Progress: [####################] v1.0-v1.9 complete | [█  ] 1/3 v1.10 plans
 
 ## Performance Metrics
 
@@ -36,8 +36,8 @@ Progress: [####################] v1.0-v1.9 complete | [ ] 0/3 v1.10 plans
 
 ### Key Architectural Facts (v1.10 relevant)
 
-- Heartbeat bypass lives in `TenantVectorFanOutBehavior` as `if (DeviceName == HeartbeatDeviceName)` — Phase 43 deletes this block entirely
-- `TenantVectorRegistry.Reload` contains a hardcoded heartbeat holder + tenant at `int.MinValue` priority — Phase 43 removes all of this
+- Heartbeat bypass DELETED from `TenantVectorFanOutBehavior` (Phase 43 complete) — "Simetra" not in DeviceRegistry → fan-out naturally skipped
+- `TenantVectorRegistry.Reload` heartbeat injection DELETED (Phase 43 complete) — TenantCount = survivingTenantCount (no +1)
 - `ILivenessVectorService` stamps on job completion in `HeartbeatJob.finally` — this is UNCHANGED; it serves scheduler liveness, not pipeline liveness
 - New `IHeartbeatLivenessService` is distinct from `ILivenessVectorService` — stamps when `OtelMetricHandler` processes a heartbeat message (pipeline arrival, not job completion)
 - Staleness window: `HeartbeatJobOptions.DefaultIntervalSeconds` (15) × default `GraceMultiplier` (2.0) = 30s — no hardcoded magic numbers
@@ -56,5 +56,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-15
-Stopped at: v1.10 roadmap created — Phase 43 (Heartbeat Cleanup) and Phase 44 (Pipeline Liveness) defined; ready to plan Phase 43
+Stopped at: Completed 43-01-PLAN.md — heartbeat plumbing removed from registry and fan-out; 332 tests green
 Resume file: None
