@@ -11,7 +11,7 @@
 - ✅ **v1.6 Organization & Command Map Foundation** - Phases 30-32 (shipped 2026-03-13)
 - ✅ **v1.7 Configuration Consistency & Tenant Commands** - Phases 33-36 (shipped 2026-03-15)
 - ✅ **v1.8 Combined Metrics** - Phases 37-40 (shipped 2026-03-15)
-- 🚧 **v1.9 Metric Threshold Structure & Validation** - Phases 41-42 (in progress)
+- ✅ **v1.9 Metric Threshold Structure & Validation** - Phases 41-42 (shipped 2026-03-15)
 
 ## Phases
 
@@ -113,43 +113,12 @@ See `.planning/milestones/v1.8-ROADMAP.md` for details.
 
 ---
 
-### 🚧 v1.9 Metric Threshold Structure & Validation (In Progress)
+<details>
+<summary>✅ v1.9 Metric Threshold Structure & Validation (Phases 41-42) - SHIPPED 2026-03-15</summary>
 
-**Milestone Goal:** Tenant metric entries can carry an optional `Threshold` object with `Min`/`Max` bounds that is stored on `MetricSlotHolder` at load time and validated by the watcher — structural foundation for future runtime evaluation.
+See `.planning/milestones/v1.9-ROADMAP.md` for details.
 
-#### Phase 41: Threshold Model & Holder Storage
-
-**Goal**: A `ThresholdOptions` class exists, is deserializable from JSON, and is stored on `MetricSlotHolder` at load time — existing tenant configs without a `Threshold` field are completely unaffected
-**Depends on**: Nothing (purely additive)
-**Requirements**: THR-01, THR-02, THR-03, THR-08
-**Success Criteria** (what must be TRUE):
-  1. A tenant metric entry with `"Threshold": { "Min": 10.0, "Max": 90.0 }` in JSON deserializes to a `MetricSlotOptions` where `Threshold.Min == 10.0` and `Threshold.Max == 90.0` — no extra code required at the call site
-  2. A tenant metric entry without a `Threshold` field deserializes to a `MetricSlotOptions` where `Threshold` is null — all existing test fixtures and config files continue to deserialize correctly without modification
-  3. After `ValidateAndBuildTenants` runs, the resulting `MetricSlotHolder` exposes the `ThresholdOptions` instance (or null) that was present in the config — callers can read `holder.Threshold` at any point after load
-
-**Plans:** TBD
-
-Plans:
-- [ ] 41-01: ThresholdOptions sealed class + MetricSlotOptions.Threshold property + MetricSlotHolder storage + unit tests
-
----
-
-#### Phase 42: Threshold Validation & Config Files
-
-**Goal**: Invalid threshold configurations (Min > Max) are detected and logged at load time with full context, valid thresholds (including null-null) pass through unchanged, and example thresholds appear in all tenant config files
-**Depends on**: Phase 41 (ThresholdOptions model must exist before it can be validated)
-**Requirements**: THR-04, THR-05, THR-06, THR-07
-**Success Criteria** (what must be TRUE):
-  1. A tenant metric entry with `"Threshold": { "Min": 90.0, "Max": 10.0 }` (Min > Max) produces a structured Error log containing TenantName, MetricIndex, Min, and Max — the metric entry still loads and is accessible; only the threshold is set to null on the holder
-  2. A tenant metric entry with `"Threshold": { }` (both Min and Max absent/null) passes validation without any log warning — the threshold is stored as-is (both null), reflecting always-violated semantics
-  3. Threshold validation runs inside `TenantVectorWatcherService.ValidateAndBuildTenants` alongside existing per-entry checks — no separate validation path
-  4. At least one metric entry in each of the three tenant config locations (local dev tenants.json, K8s simetra-tenants.yaml, production configmap.yaml) carries an example `Threshold` that survives a real config reload without errors
-
-**Plans:** TBD
-
-Plans:
-- [ ] 42-01: Threshold validation in TenantVectorWatcherService.ValidateAndBuildTenants + unit tests
-- [ ] 42-02: Example thresholds in all tenant config files (local dev, K8s standalone, K8s production)
+</details>
 
 ---
 

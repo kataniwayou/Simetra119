@@ -1,5 +1,30 @@
 # Project Milestones: SNMP Monitoring System
 
+## v1.9 Metric Threshold Structure & Validation (Shipped: 2026-03-15)
+
+**Delivered:** Tenant metric entries can carry an optional Threshold (Min/Max) validated at load time, with GraceMultiplier on device poll groups resolved to tenant holders for future staleness detection.
+
+**Phases completed:** 41-42 (3 plans total, 1 quick task)
+
+**Key accomplishments:**
+- ThresholdOptions sealed class with Min (double?) and Max (double?)
+- Min > Max validation in ValidateAndBuildTenants (check 7)
+- GraceMultiplier on PollOptions, resolved from device poll group alongside IntervalSeconds
+- Example thresholds in all 3 tenant config files
+- 6 new unit tests + 4 quick task tests
+
+**Stats:**
+- 16 files changed (416 insertions, 18 deletions)
+- 2 phases, 3 plans, 1 quick task
+- 1 day (2026-03-15)
+- 336 unit tests passing
+
+**Git range:** `e8fa603` → `d5cc6e7`
+
+**What's next:** TBD — runtime threshold evaluation, heartbeat refactor
+
+---
+
 ## v1.8 Combined Metrics (Shipped: 2026-03-15)
 
 **Delivered:** Poll groups can compute aggregate metrics (sum/subtract/absDiff/mean) from individual SNMP GET responses and dispatch them as synthetic gauges through the full MediatR pipeline to Prometheus with `source="synthetic"`.

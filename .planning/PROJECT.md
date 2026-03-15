@@ -90,14 +90,18 @@ See `.planning/milestones/v1.7-REQUIREMENTS.md` for full requirement details.
 
 See `.planning/milestones/v1.8-REQUIREMENTS.md` for full requirement details.
 
+**v1.9 Metric Threshold Structure & Validation (shipped 2026-03-15)**
+
+- ThresholdOptions (Min double?, Max double?) on tenant metric entries with load-time validation
+- Min > Max = Error log, threshold cleared, metric still loads
+- GraceMultiplier on PollOptions (default 2.0), resolved from device poll group
+- IntervalSeconds resolved from device poll group (not operator-set on tenants)
+
+See `.planning/milestones/v1.9-REQUIREMENTS.md` for full requirement details.
+
 ### Active
 
-**v1.9 Metric Threshold Structure & Validation**
-
-- Threshold model on tenant metric entries — optional `Threshold` object with `Min` (double?) and `Max` (double?)
-- Threshold semantics — both set: between range = violated; max only: > max = violated; min only: < min = violated; neither: always violated
-- Structural + validation only — model addition + load-time validation; no runtime evaluation this milestone
-- Validation in TenantVectorWatcherService.ValidateAndBuildTenants (consistent with v1.7 watcher-validates pattern)
+(None — next milestone not yet defined)
 
 ### Out of Scope
 
@@ -168,4 +172,4 @@ See `.planning/milestones/v1.8-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-15 after v1.9 milestone start*
+*Last updated: 2026-03-15 after v1.9 milestone complete*
