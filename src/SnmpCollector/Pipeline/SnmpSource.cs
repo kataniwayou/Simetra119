@@ -3,5 +3,6 @@ namespace SnmpCollector.Pipeline;
 public enum SnmpSource
 {
     Poll,
-    Trap
+    Trap,
+    Synthetic
 }

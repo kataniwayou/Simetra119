@@ -32,6 +32,8 @@ public sealed class OidResolutionBehavior<TNotification, TResponse>
     {
         if (notification is SnmpOidReceived msg)
         {
+            if (msg.Source == SnmpSource.Synthetic) { return await next(); }
+
             msg.MetricName = _oidMapService.Resolve(msg.Oid);
 
             if (msg.MetricName == OidMapService.Unknown)
