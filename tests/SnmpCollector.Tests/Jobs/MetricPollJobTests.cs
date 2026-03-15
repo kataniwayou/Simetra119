@@ -115,6 +115,20 @@ public sealed class MetricPollJobTests : IDisposable
     private long CountPollExecuted()
         => _measurements.Count(m => m.InstrumentName == "snmp.poll.executed");
 
+    private long CountAggregatedComputed()
+        => _measurements.Count(m => m.InstrumentName == "snmp.aggregated.computed");
+
+    private static DeviceInfo MakeDeviceWithAggregates(
+        string[] pollOids,
+        AggregatedMetricDefinition[] aggregates)
+    {
+        var pollGroup = new MetricPollInfo(0, pollOids.ToList(), 30)
+        {
+            AggregatedMetrics = aggregates
+        };
+        return new DeviceInfo(DeviceName, DeviceIp, DeviceIp, DevicePort, [pollGroup], $"Simetra.{DeviceName}");
+    }
+
     // -------------------------------------------------------------------------
     // Test 1: Device not found -- logs warning, returns without incrementing counter
     // -------------------------------------------------------------------------
@@ -365,6 +379,354 @@ public sealed class MetricPollJobTests : IDisposable
     }
 
     // -------------------------------------------------------------------------
+    // Test 10: Sum aggregation dispatches synthetic Gauge32 message
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_AggregatedMetrics_Sum_DispatchesSyntheticGauge32()
+    {
+        // Arrange
+        var combined = new AggregatedMetricDefinition("obp_combined_power", AggregationKind.Sum,
+            [IfInOctetsOid, IfOutOctetsOid]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined]);
+
+        var response = new List<Variable>
+        {
+            new(new ObjectIdentifier(IfInOctetsOid),  new Gauge32(1000)),
+            new(new ObjectIdentifier(IfOutOctetsOid), new Gauge32(2000)),
+        };
+
+        var snmpClient = new StubSnmpClient { Response = response };
+        var sender     = new CapturingSender();
+        var job        = CreateJob(
+            registry:   new StubDeviceRegistry([device]),
+            snmpClient: snmpClient,
+            sender:     sender);
+
+        // Act
+        await job.Execute(MakeContext());
+
+        // Assert: 2 individual + 1 synthetic
+        Assert.Equal(3, sender.Sent.Count);
+        var synthetic = sender.Sent.Single(m => m.Source == SnmpSource.Synthetic);
+        Assert.Equal("obp_combined_power", synthetic.MetricName);
+        Assert.Equal("0.0", synthetic.Oid);
+        Assert.Equal(SnmpType.Gauge32, synthetic.TypeCode);
+        Assert.Equal(DeviceName, synthetic.DeviceName);
+        var gaugeValue = Assert.IsType<Gauge32>(synthetic.Value);
+        Assert.Equal(3000u, gaugeValue.ToUInt32());
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 11: Subtract aggregation dispatches synthetic Integer32 message
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_AggregatedMetrics_Subtract_DispatchesSyntheticInteger32()
+    {
+        // Arrange
+        var combined = new AggregatedMetricDefinition("obp_power_diff", AggregationKind.Subtract,
+            [IfInOctetsOid, IfOutOctetsOid]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined]);
+
+        var response = new List<Variable>
+        {
+            new(new ObjectIdentifier(IfInOctetsOid),  new Gauge32(5000)),
+            new(new ObjectIdentifier(IfOutOctetsOid), new Gauge32(3000)),
+        };
+
+        var snmpClient = new StubSnmpClient { Response = response };
+        var sender     = new CapturingSender();
+        var job        = CreateJob(
+            registry:   new StubDeviceRegistry([device]),
+            snmpClient: snmpClient,
+            sender:     sender);
+
+        // Act
+        await job.Execute(MakeContext());
+
+        // Assert
+        Assert.Equal(3, sender.Sent.Count);
+        var synthetic = sender.Sent.Single(m => m.Source == SnmpSource.Synthetic);
+        Assert.Equal(SnmpType.Integer32, synthetic.TypeCode);
+        var intValue = Assert.IsType<Integer32>(synthetic.Value);
+        Assert.Equal(2000, intValue.ToInt32());
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 12: AbsDiff aggregation dispatches absolute value Integer32
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_AggregatedMetrics_AbsDiff_DispatchesAbsoluteInteger32()
+    {
+        // Arrange: m1=1000, m2=3000 → |1000-3000| = 2000
+        var combined = new AggregatedMetricDefinition("obp_abs_diff", AggregationKind.AbsDiff,
+            [IfInOctetsOid, IfOutOctetsOid]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined]);
+
+        var response = new List<Variable>
+        {
+            new(new ObjectIdentifier(IfInOctetsOid),  new Gauge32(1000)),
+            new(new ObjectIdentifier(IfOutOctetsOid), new Gauge32(3000)),
+        };
+
+        var snmpClient = new StubSnmpClient { Response = response };
+        var sender     = new CapturingSender();
+        var job        = CreateJob(
+            registry:   new StubDeviceRegistry([device]),
+            snmpClient: snmpClient,
+            sender:     sender);
+
+        // Act
+        await job.Execute(MakeContext());
+
+        // Assert: result is |1000 - 3000| = 2000 (positive)
+        var synthetic = sender.Sent.Single(m => m.Source == SnmpSource.Synthetic);
+        Assert.Equal(SnmpType.Integer32, synthetic.TypeCode);
+        var intValue = Assert.IsType<Integer32>(synthetic.Value);
+        Assert.Equal(2000, intValue.ToInt32());
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 13: Mean aggregation dispatches Gauge32 with double division
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_AggregatedMetrics_Mean_DispatchesGauge32WithDoubleDivision()
+    {
+        // Arrange: 3 values (10, 20, 30) → mean = 20
+        const string Oid3 = "1.3.6.1.2.1.2.2.1.99.1";
+        var combined = new AggregatedMetricDefinition("obp_mean_power", AggregationKind.Mean,
+            [IfInOctetsOid, IfOutOctetsOid, Oid3]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid, Oid3], [combined]);
+
+        var response = new List<Variable>
+        {
+            new(new ObjectIdentifier(IfInOctetsOid),  new Gauge32(10)),
+            new(new ObjectIdentifier(IfOutOctetsOid), new Gauge32(20)),
+            new(new ObjectIdentifier(Oid3),           new Gauge32(30)),
+        };
+
+        var snmpClient = new StubSnmpClient { Response = response };
+        var sender     = new CapturingSender();
+        var job        = CreateJob(
+            registry:   new StubDeviceRegistry([device]),
+            snmpClient: snmpClient,
+            sender:     sender);
+
+        // Act
+        await job.Execute(MakeContext());
+
+        // Assert: TypeCode=Gauge32, value=20
+        var synthetic = sender.Sent.Single(m => m.Source == SnmpSource.Synthetic);
+        Assert.Equal(SnmpType.Gauge32, synthetic.TypeCode);
+        var gaugeValue = Assert.IsType<Gauge32>(synthetic.Value);
+        Assert.Equal(20u, gaugeValue.ToUInt32());
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 14: Skip when source OID absent from response
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_AggregatedMetrics_MissingOid_SkipsWithNoSynthetic()
+    {
+        // Arrange: combined needs both OIDs but response only has IfInOctetsOid
+        var combined = new AggregatedMetricDefinition("obp_combined_power", AggregationKind.Sum,
+            [IfInOctetsOid, IfOutOctetsOid]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined]);
+
+        var response = new List<Variable>
+        {
+            new(new ObjectIdentifier(IfInOctetsOid), new Gauge32(1000)),
+            // IfOutOctetsOid intentionally absent
+        };
+
+        var snmpClient = new StubSnmpClient { Response = response };
+        var sender     = new CapturingSender();
+        var job        = CreateJob(
+            registry:   new StubDeviceRegistry([device]),
+            snmpClient: snmpClient,
+            sender:     sender);
+
+        // Act
+        await job.Execute(MakeContext());
+
+        // Assert: only 1 individual varbind dispatched, no synthetic
+        Assert.Single(sender.Sent);
+        Assert.DoesNotContain(sender.Sent, m => m.Source == SnmpSource.Synthetic);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 15: Skip when source OID is non-numeric (OctetString)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_AggregatedMetrics_NonNumericOid_SkipsWithNoSynthetic()
+    {
+        // Arrange: oid1 is Gauge32, oid2 is OctetString (non-numeric)
+        var combined = new AggregatedMetricDefinition("obp_combined_power", AggregationKind.Sum,
+            [IfInOctetsOid, IfOutOctetsOid]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined]);
+
+        var response = new List<Variable>
+        {
+            new(new ObjectIdentifier(IfInOctetsOid),  new Gauge32(100)),
+            new(new ObjectIdentifier(IfOutOctetsOid), new OctetString("hello")),
+        };
+
+        var snmpClient = new StubSnmpClient { Response = response };
+        var sender     = new CapturingSender();
+        var job        = CreateJob(
+            registry:   new StubDeviceRegistry([device]),
+            snmpClient: snmpClient,
+            sender:     sender);
+
+        // Act
+        await job.Execute(MakeContext());
+
+        // Assert: both individual varbinds dispatched (they are valid), no synthetic
+        Assert.Equal(2, sender.Sent.Count);
+        Assert.DoesNotContain(sender.Sent, m => m.Source == SnmpSource.Synthetic);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 16: Multiple AggregatedMetricDefinitions both dispatch
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_AggregatedMetrics_MultipleCombined_DispatchesBoth()
+    {
+        // Arrange: 2 combined definitions using the same source OIDs
+        var combined1 = new AggregatedMetricDefinition("obp_sum_power", AggregationKind.Sum,
+            [IfInOctetsOid, IfOutOctetsOid]);
+        var combined2 = new AggregatedMetricDefinition("obp_diff_power", AggregationKind.Subtract,
+            [IfInOctetsOid, IfOutOctetsOid]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined1, combined2]);
+
+        var response = new List<Variable>
+        {
+            new(new ObjectIdentifier(IfInOctetsOid),  new Gauge32(5000)),
+            new(new ObjectIdentifier(IfOutOctetsOid), new Gauge32(3000)),
+        };
+
+        var snmpClient = new StubSnmpClient { Response = response };
+        var sender     = new CapturingSender();
+        var job        = CreateJob(
+            registry:   new StubDeviceRegistry([device]),
+            snmpClient: snmpClient,
+            sender:     sender);
+
+        // Act
+        await job.Execute(MakeContext());
+
+        // Assert: 2 individual + 2 synthetic
+        Assert.Equal(4, sender.Sent.Count);
+        var synthetics = sender.Sent.Where(m => m.Source == SnmpSource.Synthetic).ToList();
+        Assert.Equal(2, synthetics.Count);
+        Assert.Contains(synthetics, m => m.MetricName == "obp_sum_power");
+        Assert.Contains(synthetics, m => m.MetricName == "obp_diff_power");
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 17: Empty AggregatedMetrics produces no synthetic messages (baseline)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_EmptyAggregatedMetrics_NoSyntheticDispatched()
+    {
+        // Arrange: use existing MakeDevice (default empty AggregatedMetrics)
+        var response = new List<Variable>
+        {
+            new(new ObjectIdentifier(IfInOctetsOid),  new Gauge32(100)),
+            new(new ObjectIdentifier(IfOutOctetsOid), new Gauge32(200)),
+        };
+
+        var snmpClient = new StubSnmpClient { Response = response };
+        var sender     = new CapturingSender();
+        var job        = CreateJob(
+            registry:   new StubDeviceRegistry([MakeDevice(IfInOctetsOid, IfOutOctetsOid)]),
+            snmpClient: snmpClient,
+            sender:     sender);
+
+        // Act
+        await job.Execute(MakeContext());
+
+        // Assert: only individual varbinds, no synthetic messages
+        Assert.Equal(2, sender.Sent.Count);
+        Assert.All(sender.Sent, m => Assert.Equal(SnmpSource.Poll, m.Source));
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 18: snmp.aggregated.computed counter increments on successful dispatch
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_AggregatedMetrics_Success_IncrementsAggregatedComputedCounter()
+    {
+        // Arrange: same as Test 10 (Sum with 2 OIDs)
+        var combined = new AggregatedMetricDefinition("obp_combined_power", AggregationKind.Sum,
+            [IfInOctetsOid, IfOutOctetsOid]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined]);
+
+        var response = new List<Variable>
+        {
+            new(new ObjectIdentifier(IfInOctetsOid),  new Gauge32(1000)),
+            new(new ObjectIdentifier(IfOutOctetsOid), new Gauge32(2000)),
+        };
+
+        var snmpClient = new StubSnmpClient { Response = response };
+        var sender     = new CapturingSender();
+        var job        = CreateJob(
+            registry:   new StubDeviceRegistry([device]),
+            snmpClient: snmpClient,
+            sender:     sender);
+
+        // Act
+        await job.Execute(MakeContext());
+
+        // Assert: counter incremented once for the successful dispatch
+        Assert.Equal(1, CountAggregatedComputed());
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 19: Exception in aggregate block does not trigger unreachability
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_AggregatedMetrics_Exception_DoesNotRecordFailure()
+    {
+        // Arrange: use a sender that throws when it receives a Synthetic message
+        var combined = new AggregatedMetricDefinition("obp_combined_power", AggregationKind.Sum,
+            [IfInOctetsOid, IfOutOctetsOid]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined]);
+
+        var response = new List<Variable>
+        {
+            new(new ObjectIdentifier(IfInOctetsOid),  new Gauge32(1000)),
+            new(new ObjectIdentifier(IfOutOctetsOid), new Gauge32(2000)),
+        };
+
+        var snmpClient = new StubSnmpClient { Response = response };
+        var throwSender = new ThrowOnSyntheticSender();
+        var tracker    = new DeviceUnreachabilityTracker();
+        var job        = CreateJob(
+            registry:   new StubDeviceRegistry([device]),
+            snmpClient: snmpClient,
+            sender:     throwSender,
+            tracker:    tracker);
+
+        // Act
+        await job.Execute(MakeContext());
+
+        // Assert: individual varbinds dispatched, no failure recorded, counter NOT incremented
+        Assert.Equal(2, throwSender.Sent.Count); // 2 Poll messages captured before throw
+        Assert.Equal(0, tracker.GetFailureCount(DeviceName));
+        Assert.Equal(0, CountAggregatedComputed());
+    }
+
+    // -------------------------------------------------------------------------
     // Stubs and helpers
     // -------------------------------------------------------------------------
 
@@ -426,6 +788,58 @@ public sealed class MetricPollJobTests : IDisposable
             => EmptyAsyncEnumerable<object?>.Instance;
 
         // Minimal helper to return an empty IAsyncEnumerable without a dependency on System.Linq.Async.
+        private static class EmptyAsyncEnumerable<T>
+        {
+            public static readonly IAsyncEnumerable<T> Instance = new EmptyImpl();
+
+            private sealed class EmptyImpl : IAsyncEnumerable<T>
+            {
+                public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken ct = default)
+                    => new EmptyEnumerator();
+
+                private sealed class EmptyEnumerator : IAsyncEnumerator<T>
+                {
+                    public T Current => default!;
+                    public ValueTask<bool> MoveNextAsync() => new(false);
+                    public ValueTask DisposeAsync() => default;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// ISender that captures Poll messages but throws InvalidOperationException
+    /// when it receives a Synthetic message, simulating a failure in aggregate dispatch.
+    /// Used to verify that aggregate exceptions do NOT trigger unreachability recording.
+    /// </summary>
+    private sealed class ThrowOnSyntheticSender : ISender
+    {
+        public List<SnmpOidReceived> Sent { get; } = new();
+
+        Task<TResponse> ISender.Send<TResponse>(IRequest<TResponse> request, CancellationToken ct)
+        {
+            if (request is SnmpOidReceived msg)
+            {
+                if (msg.Source == SnmpSource.Synthetic)
+                    throw new InvalidOperationException("Simulated failure in aggregate dispatch");
+                Sent.Add(msg);
+            }
+            return Task.FromResult(default(TResponse)!);
+        }
+
+        Task ISender.Send<TRequest>(TRequest request, CancellationToken ct)
+            => Task.CompletedTask;
+
+        Task<object?> ISender.Send(object request, CancellationToken ct)
+            => Task.FromResult<object?>(null);
+
+        IAsyncEnumerable<TResponse> ISender.CreateStream<TResponse>(
+            IStreamRequest<TResponse> request, CancellationToken ct)
+            => EmptyAsyncEnumerable<TResponse>.Instance;
+
+        IAsyncEnumerable<object?> ISender.CreateStream(object request, CancellationToken ct)
+            => EmptyAsyncEnumerable<object?>.Instance;
+
         private static class EmptyAsyncEnumerable<T>
         {
             public static readonly IAsyncEnumerable<T> Instance = new EmptyImpl();
