@@ -102,6 +102,15 @@ config.add_transport(
 )
 config.add_v1_system(snmpEngine, "my-area", COMMUNITY)
 config.add_vacm_user(snmpEngine, 2, "my-area", "noAuthNoPriv", (1, 3, 6, 1, 4, 1))
+
+# Additional community strings for E2E test scenarios (device-add, recovery tests)
+for extra_community in [
+    "Simetra.E2E-SIM-2",
+    "Simetra.FAKE-UNREACHABLE",
+]:
+    area_name = f"area-{extra_community}"
+    config.add_v1_system(snmpEngine, area_name, extra_community)
+    config.add_vacm_user(snmpEngine, 2, area_name, "noAuthNoPriv", (1, 3, 6, 1, 4, 1))
 snmpContext = context.SnmpContext(snmpEngine)
 cmdrsp.GetCommandResponder(snmpEngine, snmpContext)
 cmdrsp.NextCommandResponder(snmpEngine, snmpContext)
