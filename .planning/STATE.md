@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-15)
 
 ## Current Position
 
-Phase: 43 of 44 (Heartbeat Cleanup)
-Plan: 01 of 01 (complete)
-Status: Phase complete
-Last activity: 2026-03-15 — Completed 43-01-PLAN.md (heartbeat plumbing removal)
+Phase: 44 of 44 (Pipeline Liveness)
+Plan: 01 of 02 (in progress)
+Status: In progress
+Last activity: 2026-03-15 — Completed 44-01-PLAN.md (IHeartbeatLivenessService + OtelMetricHandler stamp)
 
-Progress: [####################] v1.0-v1.9 complete | [█  ] 1/3 v1.10 plans
+Progress: [####################] v1.0-v1.9 complete | [██ ] 2/3 v1.10 plans
 
 ## Performance Metrics
 
@@ -39,7 +39,10 @@ Progress: [####################] v1.0-v1.9 complete | [█  ] 1/3 v1.10 plans
 - Heartbeat bypass DELETED from `TenantVectorFanOutBehavior` (Phase 43 complete) — "Simetra" not in DeviceRegistry → fan-out naturally skipped
 - `TenantVectorRegistry.Reload` heartbeat injection DELETED (Phase 43 complete) — TenantCount = survivingTenantCount (no +1)
 - `ILivenessVectorService` stamps on job completion in `HeartbeatJob.finally` — this is UNCHANGED; it serves scheduler liveness, not pipeline liveness
-- New `IHeartbeatLivenessService` is distinct from `ILivenessVectorService` — stamps when `OtelMetricHandler` processes a heartbeat message (pipeline arrival, not job completion)
+- `IHeartbeatLivenessService` (Phase 44-01 complete) — distinct from `ILivenessVectorService`; stamps when `OtelMetricHandler` processes a heartbeat message (pipeline arrival, not job completion)
+- `HeartbeatLivenessService`: volatile long (UTC ticks), Volatile.Write in Stamp(), Volatile.Read in LastArrival getter
+- Stamp point: AFTER `_pipelineMetrics.IncrementHandled(deviceName)` in numeric case, guarded by `deviceName == HeartbeatJobOptions.HeartbeatDeviceName`
+- DI: `services.AddSingleton<IHeartbeatLivenessService, HeartbeatLivenessService>()` in `AddSnmpPipeline`
 - Staleness window: `HeartbeatJobOptions.DefaultIntervalSeconds` (15) × default `GraceMultiplier` (2.0) = 30s — no hardcoded magic numbers
 - HB-08/09/10 are preserved-behavior requirements — verified in Phase 44, not implemented
 
@@ -55,6 +58,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-15
-Stopped at: Completed 43-01-PLAN.md — heartbeat plumbing removed from registry and fan-out; 332 tests green
+Last session: 2026-03-15T16:13:35Z
+Stopped at: Completed 44-01-PLAN.md — IHeartbeatLivenessService created, OtelMetricHandler stamps heartbeat pipeline arrival; 334 tests green
 Resume file: None
