@@ -9,16 +9,16 @@ Requirements for computing aggregate metrics from SNMP poll group responses and 
 
 ### Config Model
 
-- [ ] **CM-01**: `PollOptions` gains optional `AggregateMetricName` (string) and `Aggregator` (string) properties — both null = disabled, current behavior unchanged
+- [ ] **CM-01**: `PollOptions` gains optional `AggregatedMetricName` (string) and `Aggregator` (string) properties — both null = disabled, current behavior unchanged
 - [ ] **CM-02**: `Aggregator` validated at load time against allowed set `{ "sum", "subtract", "absDiff", "mean" }` — invalid value = skip poll group with Error log
-- [ ] **CM-03**: Cross-field co-presence validation: `AggregateMetricName` and `Aggregator` must both be present or both absent — partial = Error log, skip poll group
+- [ ] **CM-03**: Cross-field co-presence validation: `AggregatedMetricName` and `Aggregator` must both be present or both absent — partial = Error log, skip poll group
 
 ### Pipeline Integration
 
 - [ ] **CM-04**: `SnmpSource` enum gains `Synthetic` member — synthetic dispatches carry `Source = SnmpSource.Synthetic`
 - [ ] **CM-05**: `OidResolutionBehavior` bypasses OID→MetricName resolution when source is Synthetic (MetricName already pre-set)
 - [ ] **CM-06**: `ValidationBehavior` handles synthetic messages — sentinel OID or source-based guard to pass regex validation
-- [ ] **CM-07**: Synthetic metric dispatched as `snmp_gauge` with labels: `metric_name=AggregateMetricName`, `oid=""` or sentinel, `source="synthetic"`, `snmp_type` based on computed result type
+- [ ] **CM-07**: Synthetic metric dispatched as `snmp_gauge` with labels: `metric_name=AggregatedMetricName`, `oid=""` or sentinel, `source="synthetic"`, `snmp_type` based on computed result type
 
 ### Computation
 
@@ -28,7 +28,7 @@ Requirements for computing aggregate metrics from SNMP poll group responses and 
 
 ### Validation at Load Time
 
-- [ ] **CM-11**: `AggregateMetricName` collision with existing OID map entry produces structured Warning log — both metrics load (distinguishable by oid/source labels) but operator warned
+- [ ] **CM-11**: `AggregatedMetricName` collision with existing OID map entry produces structured Warning log — both metrics load (distinguishable by oid/source labels) but operator warned
 - [ ] **CM-12**: Combined metric config validated in `DeviceWatcherService.ValidateAndBuildDevicesAsync` (BuildPollGroups) — invalid = skip combined metric definition, poll group still loads for individual metrics
 
 ### Observability
@@ -38,7 +38,7 @@ Requirements for computing aggregate metrics from SNMP poll group responses and 
 
 ### Tenant Routing
 
-- [ ] **CM-15**: Synthetic combined metrics route to tenant vector slots via (ip, port, metricName) — tenants can register AggregateMetricName in their Metrics[] array
+- [ ] **CM-15**: Synthetic combined metrics route to tenant vector slots via (ip, port, metricName) — tenants can register AggregatedMetricName in their Metrics[] array
 
 ## Out of Scope
 

@@ -6,7 +6,7 @@
 <domain>
 ## Phase Boundary
 
-Add new C# types for aggregate metrics: `AggregateMetricName` + `Aggregator` on PollOptions, `AggregationKind` enum, `CombinedMetricDefinition` runtime record, extend MetricPollInfo with CombinedMetrics collection. Purely additive — no behavior changes, no validation logic.
+Add new C# types for aggregate metrics: `AggregatedMetricName` + `Aggregator` on PollOptions, `AggregationKind` enum, `CombinedMetricDefinition` runtime record, extend MetricPollInfo with AggregatedMetrics collection. Purely additive — no behavior changes, no validation logic.
 
 </domain>
 
@@ -14,7 +14,7 @@ Add new C# types for aggregate metrics: `AggregateMetricName` + `Aggregator` on 
 ## Implementation Decisions
 
 ### Config JSON Shape
-- PollOptions gains two optional string properties: `AggregateMetricName` and `Aggregator`
+- PollOptions gains two optional string properties: `AggregatedMetricName` and `Aggregator`
 - Both null/empty = disabled (current behavior, no regression)
 - Aggregator values: `"sum"`, `"subtract"`, `"absDiff"`, `"mean"` (lowercase in JSON)
 - Config example:
@@ -22,7 +22,7 @@ Add new C# types for aggregate metrics: `AggregateMetricName` + `Aggregator` on 
   {
     "IntervalSeconds": 10,
     "MetricNames": ["npb_port_rx_octets_P1", "npb_port_rx_octets_P2", "npb_port_rx_octets_P3"],
-    "AggregateMetricName": "npb_total_rx_octets",
+    "AggregatedMetricName": "npb_total_rx_octets",
     "Aggregator": "sum"
   }
   ```
@@ -30,10 +30,10 @@ Add new C# types for aggregate metrics: `AggregateMetricName` + `Aggregator` on 
 ### Runtime Types
 - `AggregationKind` enum: `Sum`, `Subtract`, `AbsDiff`, `Mean` (PascalCase C# convention)
 - `CombinedMetricDefinition` runtime record: MetricName (string), Kind (AggregationKind), SourceOids (IReadOnlyList<string>)
-- `MetricPollInfo` gains `CombinedMetrics` (IReadOnlyList<CombinedMetricDefinition>) with default empty list — backward-compatible
+- `MetricPollInfo` gains `AggregatedMetrics` (IReadOnlyList<CombinedMetricDefinition>) with default empty list — backward-compatible
 
 ### Naming Convention
-- Config property: `AggregateMetricName` + `Aggregator` (the naming pair)
+- Config property: `AggregatedMetricName` + `Aggregator` (the naming pair)
 - Runtime record: `CombinedMetricDefinition` (describes the aggregate to compute at poll time)
 - Enum: `AggregationKind` (the type of aggregation)
 

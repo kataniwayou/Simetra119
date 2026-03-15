@@ -113,33 +113,33 @@ See `.planning/milestones/v1.7-ROADMAP.md` for details.
 **Depends on**: Nothing (type-only additions; no behavior change)
 **Requirements**: CM-01
 **Success Criteria** (what must be TRUE):
-  1. A `PollOptions` entry with no `AggregateMetricName` or `Aggregator` fields deserializes and behaves identically to before — no regression to existing poll group behavior
-  2. A `PollOptions` entry with both `AggregateMetricName` and `Aggregator` set deserializes without error and the values are accessible on the model
+  1. A `PollOptions` entry with no `AggregatedMetricName` or `Aggregator` fields deserializes and behaves identically to before — no regression to existing poll group behavior
+  2. A `PollOptions` entry with both `AggregatedMetricName` and `Aggregator` set deserializes without error and the values are accessible on the model
   3. `AggregationKind` enum has `Sum`, `Subtract`, `AbsDiff`, and `Mean` members; `CombinedMetricDefinition` runtime record holds MetricName, AggregationKind, and source OIDs list; both types compile and are referenceable from MetricPollInfo
-  4. `MetricPollInfo` carries a `CombinedMetrics` collection with a default empty value — existing `MetricPollInfo` construction sites require no changes
+  4. `MetricPollInfo` carries a `AggregatedMetrics` collection with a default empty value — existing `MetricPollInfo` construction sites require no changes
 
 **Plans**: TBD
 
 Plans:
-- [ ] 37-01: CombinedMetricOptions config model, AggregationKind enum, CombinedMetricDefinition runtime record, PollOptions extension, MetricPollInfo extension + unit tests
+- [ ] 37-01: AggregatedMetricOptions config model, AggregationKind enum, CombinedMetricDefinition runtime record, PollOptions extension, MetricPollInfo extension + unit tests
 
 ---
 
 #### Phase 38: DeviceWatcherService Validation
 
 **Goal**: Combined metric definitions in devices.json are validated at load time — invalid aggregator values and mismatched field presence are rejected with Error logs, name collisions with the OID map produce Warning logs, and valid definitions are resolved to `CombinedMetricDefinition` records stored on `MetricPollInfo`
-**Depends on**: Phase 37 (CombinedMetricOptions and CombinedMetricDefinition types must exist)
+**Depends on**: Phase 37 (AggregatedMetricOptions and CombinedMetricDefinition types must exist)
 **Requirements**: CM-02, CM-03, CM-11, CM-12
 **Success Criteria** (what must be TRUE):
   1. A poll group with `Aggregator: "invalid"` produces a structured Error log naming the device and poll group, and that poll group's combined metric definition is skipped — its individual OID polling still loads normally
-  2. A poll group with `AggregateMetricName` set but no `Aggregator` (or vice versa) produces a structured Error log — partial configuration is never silently accepted
-  3. A poll group with a valid `AggregateMetricName` that matches an existing OID map metric name produces a structured Warning log — the poll group loads normally and both metrics are distinguishable by their `oid` and `source` labels in Prometheus
+  2. A poll group with `AggregatedMetricName` set but no `Aggregator` (or vice versa) produces a structured Error log — partial configuration is never silently accepted
+  3. A poll group with a valid `AggregatedMetricName` that matches an existing OID map metric name produces a structured Warning log — the poll group loads normally and both metrics are distinguishable by their `oid` and `source` labels in Prometheus
   4. A fully valid combined metric definition results in a populated `CombinedMetricDefinition` on the corresponding `MetricPollInfo`, with resolved source OIDs ready for poll-time use
 
 **Plans**: TBD
 
 Plans:
-- [ ] 38-01: BuildPollGroups extension — Aggregator parsing, co-presence validation, AggregateMetricName collision check, CombinedMetricDefinition construction + unit tests
+- [ ] 38-01: BuildPollGroups extension — Aggregator parsing, co-presence validation, AggregatedMetricName collision check, CombinedMetricDefinition construction + unit tests
 
 ---
 
@@ -167,7 +167,7 @@ Plans:
 **Depends on**: Phase 38 (CombinedMetricDefinition on MetricPollInfo must be populated), Phase 39 (pipeline bypass guards must exist before any synthetic message is dispatched)
 **Requirements**: CM-07, CM-08, CM-09, CM-10, CM-13, CM-14, CM-15
 **Success Criteria** (what must be TRUE):
-  1. A poll group with `AggregateMetricName: "obp_combined_power"` and `Aggregator: "sum"` produces a `snmp_gauge` metric in Prometheus with labels `metric_name="obp_combined_power"`, `source="synthetic"`, `oid="0.0"` (or the chosen sentinel), and a numeric value equal to the sum of the individual OID values from that poll cycle
+  1. A poll group with `AggregatedMetricName: "obp_combined_power"` and `Aggregator: "sum"` produces a `snmp_gauge` metric in Prometheus with labels `metric_name="obp_combined_power"`, `source="synthetic"`, `oid="0.0"` (or the chosen sentinel), and a numeric value equal to the sum of the individual OID values from that poll cycle
   2. When any source OID in a combined group returns an error or a non-numeric (snmp_info) value, no combined metric is emitted for that cycle and a Warning log entry is written naming the device, poll group, and reason — the individual per-OID metrics for that cycle are unaffected
   3. `snmp.combined.computed` counter increments by 1 each time a combined metric is successfully computed and dispatched — a poll cycle with no combined groups or a skipped combined group does not increment this counter
   4. A tenant that has registered `"obp_combined_power"` in its Metrics[] array receives the synthetic metric value in its tenant vector slot — the routing key `(ip, port, metricName)` resolves correctly for synthetic metrics
@@ -176,7 +176,7 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 40-01: DispatchCombinedMetricsAsync in MetricPollJob — computation (sum/subtract/absDiff/mean), all-or-nothing guard, TypeCode selection, SnmpOidReceived construction, ISender.Send dispatch, snmp.combined.computed counter, skip Warning log, dedicated try/catch + unit tests
+- [ ] 40-01: DispatchAggregatedMetricsAsync in MetricPollJob — computation (sum/subtract/absDiff/mean), all-or-nothing guard, TypeCode selection, SnmpOidReceived construction, ISender.Send dispatch, snmp.combined.computed counter, skip Warning log, dedicated try/catch + unit tests
 
 ---
 
