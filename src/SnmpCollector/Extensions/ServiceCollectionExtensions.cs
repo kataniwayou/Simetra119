@@ -359,7 +359,7 @@ public static class ServiceCollectionExtensions
     /// <remarks>
     /// <para><strong>Operator config ordering guidance (CS-07):</strong></para>
     /// <para>
-    /// Each config file (oidmaps, commandmaps, devices, tenants) has an independent
+    /// Each config file (oid_metric_map, oid_command_map, devices, tenants) has an independent
     /// Kubernetes ConfigMap watcher — there is no cross-watcher coupling or guaranteed
     /// load order at runtime. However, because devices reference OID/command maps and
     /// tenants reference devices, the recommended apply order when deploying config
