@@ -1,5 +1,32 @@
 # Project Milestones: SNMP Monitoring System
 
+## v1.7 Configuration Consistency & Tenant Commands (Shipped: 2026-03-15)
+
+**Delivered:** CommunityString as explicit device identifier, self-describing tenant entries with Role and Commands, per-entry validation with TEN-13 completeness gate, architectural consistency refactor (watcher-validates-registry-stores pattern for all 4 watchers), and config file naming convention alignment.
+
+**Phases completed:** 33-36 (8 plans total, 1 quick task)
+
+**Key accomplishments:**
+- DeviceOptions.Name replaced by CommunityString; DeviceInfo.Name derived via TryExtractDeviceName at load time
+- CommandSlotOptions data model (Ip, Port, CommandName, Value, ValueType) for future SNMP SET
+- MetricSlotOptions.Role (Evaluate/Resolved) with TEN-13 tenant completeness gate
+- Per-entry skip validation: CommunityString format, Role, ValueType, MetricName resolution, IP+Port existence, zero-OID poll groups
+- Watcher-validates-registry-stores architecture: all 4 watchers validate, all 4 registries are pure FrozenDictionary stores
+- Config file renames: tenants.json, oid_metric_map.json, oid_command_map.json
+
+**Stats:**
+- 56 files changed (2,175 insertions, 1,017 deletions)
+- 6,920 LOC C# source + 7,785 LOC tests
+- 4 phases, 8 plans, 1 quick task
+- 2 days (2026-03-14 → 2026-03-15)
+- 286 unit tests passing
+
+**Git range:** `95e28b5` → `7e6a53e`
+
+**What's next:** TBD — next milestone planning
+
+---
+
 ## v1.4 E2E System Verification (Shipped: 2026-03-09)
 
 **Delivered:** Full E2E test harness proving the SNMP-to-Prometheus pipeline works correctly under normal operation, configuration mutations, watcher resilience, and edge cases -- 27 scenarios producing 33 test results with a categorized Markdown report.

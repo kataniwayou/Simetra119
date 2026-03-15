@@ -70,17 +70,20 @@ See `.planning/milestones/v1.2-REQUIREMENTS.md` for full requirement details.
 
 See `.planning/milestones/v1.4-REQUIREMENTS.md` for full requirement details.
 
+**v1.7 Configuration Consistency & Tenant Commands (shipped 2026-03-15)**
+
+- CommunityString as explicit device identifier — DeviceOptions.CommunityString holds full value, DeviceInfo.Name derived at load time
+- Tenant Commands data model — CommandSlotOptions (Ip, Port, CommandName, Value, ValueType) for future SNMP SET
+- MetricSlotOptions.Role (Evaluate/Resolved) with TEN-13 tenant completeness gate
+- Per-entry skip validation — CommunityString, Role, ValueType, MetricName, IP+Port, zero-OID poll groups
+- Watcher-validates-registry-stores architecture — all 4 watchers validate, all 4 registries pure stores
+- Config renames — tenants.json, oid_metric_map.json, oid_command_map.json
+
+See `.planning/milestones/v1.7-REQUIREMENTS.md` for full requirement details.
+
 ### Active
 
-**v1.7 Configuration Consistency & Tenant Commands**
-
-- Tenant structure overhaul — Metrics array becomes self-describing objects (Device, Ip, Port, CommunityString, MetricName, TimeSeriesSize). New Commands array (Device, Ip, Port, CommunityString, CommandName, Value, ValueType). No DeviceRegistry dependency for tenant resolution.
-- CommunityString rename — `Name` → `CommunityString` on devices.json and tenants.json. Full value e.g. `"Simetra.NPB-01"`. Validate `Simetra.*` pattern at load time everywhere.
-- Consistent ignore-and-log — Invalid CommunityString = ignore device/metric/command. Unresolvable metric name = ignore entry. All unresolvable in a poll group = skip job registration. Unresolvable command name = ignore entry. All with structured logging.
-- Rename tenantvector.json → tenants.json — File, ConfigMap name (`simetra-tenants`), code references, watcher service.
-- Remove redundant code — DeviceRegistry IP resolution for tenants, dead code from these changes.
-- Hot-reload consistency — Same watcher pattern across all configs.
-- SET command data model — Command entries in tenants carry Value and ValueType for future SNMP SET execution.
+(None — next milestone not yet defined)
 
 ### Out of Scope
 
@@ -96,7 +99,7 @@ See `.planning/milestones/v1.4-REQUIREMENTS.md` for full requirement details.
 
 ## Context
 
-**Current state:** v1.4 shipped. 4,937 LOC source + 4,318 LOC tests across 76 C# files + 783 LOC Python simulators + ~1,848 LOC bash/python E2E test infrastructure. 138 unit tests passing. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. Full E2E test harness with 27 scenarios covering pipeline counters, business metrics, OID mutations, device lifecycle, and watcher resilience. Two Grafana dashboards shipped. Single Prometheus instance serves multiple sites via service_instance_id label.
+**Current state:** v1.7 shipped. 6,920 LOC source + 7,785 LOC tests across C# files + 783 LOC Python simulators + ~1,848 LOC bash/python E2E test infrastructure. 286 unit tests passing. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. Full E2E test harness with 28 scenarios. Two Grafana dashboards shipped. All 4 watchers follow watcher-validates-registry-stores pattern.
 
 **Reference project:** `src/Simetra/` is an existing SNMP monitoring system used as architectural reference. Key patterns adopted: structured logging, OTel setup, console formatter, correlation IDs, leader election, role-gated export. Key patterns replaced: custom middleware -> MediatR, device modules -> flat OID map, channels -> single shared trap channel.
 
@@ -151,4 +154,4 @@ See `.planning/milestones/v1.4-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-14 after v1.7 milestone start*
+*Last updated: 2026-03-15 after v1.7 milestone complete*

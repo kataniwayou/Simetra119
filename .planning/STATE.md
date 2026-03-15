@@ -2,17 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-14)
+See: .planning/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v1.7 Configuration Consistency & Tenant Commands — v1.7 milestone complete
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 36 of 36 (Config File Renames)
+Phase: —
 Plan: —
-Status: v1.7 milestone complete — all 4 phases verified
-Last activity: 2026-03-15 — Phase 36 executed and verified (2 plans, all renames complete)
+Status: Between milestones (v1.7 shipped, next milestone not defined)
+Last activity: 2026-03-15 — v1.7 milestone archived and tagged
 
 Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/11 v1.4 | [##########] 9/9 v1.5 | [##########] 8/8 v1.6 | [##########] 8/8 v1.7
 
@@ -27,6 +27,7 @@ Progress: [####################] 48/48 v1.0, 10/10 v1.1, 8/8 v1.2, 2/2 v1.3, 11/
 | v1.4 E2E System Verification | 20-24 | 11 | 2026-03-09 |
 | v1.5 Priority Vector Data Layer | 25-29 | 9 | 2026-03-10 |
 | v1.6 Organization & Command Map Foundation | 30-32 | 8 | 2026-03-13 |
+| v1.7 Configuration Consistency & Tenant Commands | 33-36 | 8 | 2026-03-15 |
 
 See `.planning/MILESTONES.md` for details.
 
