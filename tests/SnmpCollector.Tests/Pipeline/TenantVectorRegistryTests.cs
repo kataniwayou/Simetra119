@@ -624,6 +624,49 @@ public sealed class TenantVectorRegistryTests
     }
 
     // ──────────────────────────────────────────────────────
+    // 12. Threshold from config (1 test)
+    // ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Reload_ThresholdFromConfig_StoredInHolder()
+    {
+        var registry = CreateRegistry();
+        var options = new TenantVectorOptions
+        {
+            Tenants = new List<TenantOptions>
+            {
+                new()
+                {
+                    Priority = 1,
+                    Metrics = new List<MetricSlotOptions>
+                    {
+                        new()
+                        {
+                            Ip = "10.0.0.1", Port = 161, MetricName = "hrProcessorLoad",
+                            Role = "Evaluate",
+                            Threshold = new ThresholdOptions { Min = 0.0, Max = 100.0 }
+                        },
+                        new() { Ip = "10.0.0.1", Port = 161, MetricName = "auto_resolved", Role = "Resolved" }
+                    },
+                    Commands = new List<CommandSlotOptions>
+                    {
+                        new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd", Value = "1", ValueType = "Integer32" }
+                    }
+                }
+            }
+        };
+
+        registry.Reload(options);
+
+        registry.TryRoute("10.0.0.1", 161, "hrProcessorLoad", out var holders);
+        Assert.NotNull(holders);
+        var threshold = holders[0].Threshold;
+        Assert.NotNull(threshold);
+        Assert.Equal(0.0, threshold.Min);
+        Assert.Equal(100.0, threshold.Max);
+    }
+
+    // ──────────────────────────────────────────────────────
     // Test logger helper
     // ──────────────────────────────────────────────────────
 

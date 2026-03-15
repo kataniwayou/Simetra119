@@ -1,4 +1,5 @@
 using Lextm.SharpSnmpLib;
+using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
 using Xunit;
 
@@ -184,5 +185,23 @@ public sealed class MetricSlotHolderTests
         Assert.Equal(2, series.Length);
         Assert.Equal(2.0, series[0].Value);  // keeps latest 2
         Assert.Equal(3.0, series[1].Value);
+    }
+
+    [Fact]
+    public void Constructor_StoresThreshold()
+    {
+        var threshold = new ThresholdOptions { Min = 10.0, Max = 90.0 };
+        var holder = new MetricSlotHolder("10.0.0.1", 161, "m", 30, threshold: threshold);
+
+        Assert.NotNull(holder.Threshold);
+        Assert.Equal(10.0, holder.Threshold.Min);
+        Assert.Equal(90.0, holder.Threshold.Max);
+    }
+
+    [Fact]
+    public void Constructor_NullThreshold_DefaultsToNull()
+    {
+        var holder = new MetricSlotHolder("10.0.0.1", 161, "m", 30);
+        Assert.Null(holder.Threshold);
     }
 }
