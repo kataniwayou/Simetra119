@@ -4,5 +4,6 @@ public enum SnmpSource
 {
     Poll,
     Trap,
-    Synthetic
+    Synthetic,
+    Command
 }
