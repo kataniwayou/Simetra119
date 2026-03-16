@@ -419,6 +419,9 @@ public static class ServiceCollectionExtensions
         // --- Phase 47: Command channel for SET command dispatch ---
         services.AddSingleton<ICommandChannel, CommandChannel>();
 
+        services.AddSingleton<CommandWorkerService>();
+        services.AddHostedService(sp => sp.GetRequiredService<CommandWorkerService>());
+
         // Phase 8: Liveness vector for job completion timestamp tracking.
         // Singleton stamped by every job's finally block, read by LivenessHealthCheck.
         services.AddSingleton<ILivenessVectorService, LivenessVectorService>();
