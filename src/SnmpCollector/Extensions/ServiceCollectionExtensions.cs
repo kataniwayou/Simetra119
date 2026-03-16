@@ -416,6 +416,9 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<SnmpTrapListenerService>();
         services.AddHostedService<ChannelConsumerService>();
 
+        // --- Phase 47: Command channel for SET command dispatch ---
+        services.AddSingleton<ICommandChannel, CommandChannel>();
+
         // Phase 8: Liveness vector for job completion timestamp tracking.
         // Singleton stamped by every job's finally block, read by LivenessHealthCheck.
         services.AddSingleton<ILivenessVectorService, LivenessVectorService>();
