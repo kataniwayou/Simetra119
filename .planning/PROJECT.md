@@ -110,11 +110,22 @@ See `.planning/milestones/v1.10-REQUIREMENTS.md` for full requirement details.
 
 ### Active
 
-(None — next milestone not yet defined)
+**v2.0 Tenant Evaluation & Control**
+
+- SnapshotJob: periodic Quartz job (15s configurable) that evaluates tenant health by priority order
+- Tier 1: Metric staleness detection (IntervalSeconds × GraceMultiplier, excluding traps)
+- Tier 2: Resolved metrics threshold check (all violated → end, no command)
+- Tier 3: Evaluate metrics threshold check (all violated → command queue)
+- Tier 4: Command queueing with per-tenant suppression window cache (Ip+Port+CommandName key)
+- SNMP SET command execution via background worker (ISnmpClient.SetAsync)
+- SET response dispatched through full MediatR pipeline with source=Command
+- snmp.command.* pipeline counters (sent, failed, suppressed) symmetric to snmp.poll.*
+- Priority group processing: parallel within group, sequential across groups, advance only if all violated
+- SnapshotJob stamps liveness vector same as other scheduled jobs
 
 ### Out of Scope
 
-- SNMP SET execution path — command entries are loaded and validated only, no SET PDU sending
+- ~~SNMP SET execution path~~ — MOVED TO ACTIVE (v2.0)
 - Custom middleware pipeline — using MediatR
 - Device modules (`IDeviceModule`) — device-agnostic, flat OID map only
 - Traces / distributed tracing — no TracerProvider, no ActivitySource
