@@ -419,6 +419,9 @@ public static class ServiceCollectionExtensions
         // Singleton stamped by OtelMetricHandler, read by LivenessHealthCheck.
         services.AddSingleton<IHeartbeatLivenessService, HeartbeatLivenessService>();
 
+        // Phase 46: Suppression cache for deduplicating SET commands within a time window.
+        services.AddSingleton<ISuppressionCache, SuppressionCache>();
+
         return services;
     }
 

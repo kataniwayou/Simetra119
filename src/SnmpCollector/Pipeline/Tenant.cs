@@ -12,13 +12,15 @@ public sealed class Tenant
     public int Priority { get; }
     public IReadOnlyList<MetricSlotHolder> Holders { get; }
     public IReadOnlyList<CommandSlotOptions> Commands { get; }
+    public int SuppressionWindowSeconds { get; }
 
     public Tenant(string id, int priority, IReadOnlyList<MetricSlotHolder> holders,
-        IReadOnlyList<CommandSlotOptions> commands)
+        IReadOnlyList<CommandSlotOptions> commands, int suppressionWindowSeconds)
     {
         Id = id;
         Priority = priority;
         Holders = holders;
         Commands = commands;
+        SuppressionWindowSeconds = suppressionWindowSeconds;
     }
 }
