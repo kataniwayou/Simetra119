@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Planning next milestone
+**Current focus:** Phase 46 — Infrastructure components for SNMP SET command pipeline
 
 ## Current Position
 
-Phase: —
-Plan: —
-Status: Between milestones (v1.10 shipped, next milestone not defined)
-Last activity: 2026-03-15 — v1.10 milestone archived and tagged
+Phase: 46 of 46 (infrastructure-components)
+Plan: 01 of 3
+Status: In progress
+Last activity: 2026-03-16 — Completed 46-01-PLAN.md
 
-Progress: [####################] v1.0-v1.9 complete | [███] 3/3 v1.10 plans — v1.10 COMPLETE
+Progress: [####################] v1.0-v1.10 complete | [█░░] 1/3 v1.11 plans
 
 ## Performance Metrics
 
@@ -24,10 +24,9 @@ Progress: [####################] v1.0-v1.9 complete | [███] 3/3 v1.10 plan
 - Total execution time: ~39 hours
 
 **Recent Trend:**
-- 41-01: ~10 min
-- 42-01: ~10 min
 - 42-02: ~5 min
 - quick/058: ~5 min
+- 46-01: ~10 min
 - Trend: Stable (small surgical plans)
 
 *Updated after each plan completion*
@@ -48,6 +47,10 @@ Progress: [####################] v1.0-v1.9 complete | [███] 3/3 v1.10 plan
 - HB-08/09/10 preserved and verified: HeartbeatJob.cs, OidMapService.cs, ILivenessVectorService untouched
 - LivenessHealthCheck constructor now takes IHeartbeatLivenessService + IOptions<HeartbeatJobOptions> (DI auto-resolves via AddCheck<T>)
 - Null LastArrival → always stale; pipeline-heartbeat key always in diagnostic data dict; 338 tests green
+- `ISuppressionCache` (Phase 46-01 complete) — ConcurrentDictionary-based cache, TrySuppress returns true=suppressed/false=proceed, lazy TTL, no re-stamp on suppressed calls
+- `TenantOptions.SuppressionWindowSeconds` defaults to 60, propagated to immutable `Tenant.SuppressionWindowSeconds`
+- Value+ValueType parse validation at config load time: Integer32 via int.TryParse, IpAddress via IPAddress.TryParse, OctetString any non-empty value
+- DI: `services.AddSingleton<ISuppressionCache, SuppressionCache>()` in `AddSnmpPipeline`
 
 ### Blockers/Concerns
 
@@ -61,6 +64,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-15T16:17:42Z
-Stopped at: Completed 44-02-PLAN.md — LivenessHealthCheck extended with pipeline-arrival staleness; 338 tests green; v1.10 complete
+Last session: 2026-03-16T12:17:00Z
+Stopped at: Completed 46-01-PLAN.md — ISuppressionCache + SuppressionWindowSeconds + Value parse validation; 349 tests green
 Resume file: None
