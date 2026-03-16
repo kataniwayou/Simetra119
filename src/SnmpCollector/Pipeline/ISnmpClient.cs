@@ -19,4 +19,14 @@ public interface ISnmpClient
         OctetString community,
         IList<Variable> variables,
         CancellationToken ct);
+
+    /// <summary>
+    /// Performs an SNMP SET request and returns the response varbinds.
+    /// </summary>
+    Task<IList<Variable>> SetAsync(
+        VersionCode version,
+        IPEndPoint endpoint,
+        OctetString community,
+        Variable variable,
+        CancellationToken ct);
 }

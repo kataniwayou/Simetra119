@@ -208,6 +208,11 @@ public static class ServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<SnapshotJobOptions>()
+            .Bind(configuration.GetSection(SnapshotJobOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         // Custom IValidateOptions for cross-field validation (Phase 1)
         services.AddSingleton<IValidateOptions<PodIdentityOptions>, PodIdentityOptionsValidator>();
         services.AddSingleton<IValidateOptions<OtlpOptions>, OtlpOptionsValidator>();
