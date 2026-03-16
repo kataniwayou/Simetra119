@@ -84,8 +84,8 @@ public sealed class SnapshotJob : IJob
     /// <summary>
     /// Runs the 4-tier evaluation for a single tenant. Returns the tier result
     /// for priority-group advance gate decisions.
-    /// Currently implements Tier 1 (staleness) and Tier 2 (resolved gate).
-    /// Tier 3 (evaluate threshold) and Tier 4 (command dispatch) added in 48-03.
+    /// Tier 1: staleness check. Tier 2: resolved gate. Tier 3: evaluate threshold.
+    /// Tier 4: command dispatch with suppression.
     /// </summary>
     internal TierResult EvaluateTenant(Tenant tenant)
     {
@@ -112,8 +112,52 @@ public sealed class SnapshotJob : IJob
             "Tenant {TenantId} priority={Priority} tier=2 — resolved not all violated, proceeding to evaluate check",
             tenant.Id, tenant.Priority);
 
-        // Tier 3 and Tier 4 will be added in plan 48-03
-        return TierResult.Healthy;
+        // Tier 3: Evaluate gate — are ALL Evaluate metrics violated?
+        if (!AreAllEvaluateViolated(tenant.Holders))
+        {
+            _logger.LogDebug(
+                "Tenant {TenantId} priority={Priority} tier=3 — not all evaluate metrics violated, no action",
+                tenant.Id, tenant.Priority);
+            return TierResult.Healthy;
+        }
+
+        // Tier 4: Command dispatch with suppression
+        var enqueueCount = 0;
+
+        foreach (var cmd in tenant.Commands)
+        {
+            var suppressionKey = $"{tenant.Id}:{cmd.Ip}:{cmd.Port}:{cmd.CommandName}";
+
+            if (_suppressionCache.TrySuppress(suppressionKey, tenant.SuppressionWindowSeconds))
+            {
+                _logger.LogDebug(
+                    "Command {CommandName} suppressed for tenant {TenantId}",
+                    cmd.CommandName, tenant.Id);
+                _pipelineMetrics.IncrementCommandSuppressed(tenant.Id);
+                continue;
+            }
+
+            var request = new CommandRequest(
+                cmd.Ip, cmd.Port, cmd.CommandName, cmd.Value, cmd.ValueType, tenant.Id);
+
+            if (_commandChannel.Writer.TryWrite(request))
+            {
+                enqueueCount++;
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Command channel full, dropping command {CommandName} for tenant {TenantId}",
+                    cmd.CommandName, tenant.Id);
+                _pipelineMetrics.IncrementCommandFailed(tenant.Id);
+            }
+        }
+
+        _logger.LogInformation(
+            "Tenant {TenantId} priority={Priority} tier=4 — commands enqueued, count={CommandCount}",
+            tenant.Id, tenant.Priority, enqueueCount);
+
+        return TierResult.Commanded;
     }
 
     /// <summary>
@@ -171,6 +215,37 @@ public sealed class SnapshotJob : IJob
         // If at least one Resolved holder was checked and ALL were violated → ConfirmedBad
         // If none were checked (all null or no Resolved) → vacuous true (defensive)
         return true;
+    }
+
+    /// <summary>
+    /// Tier 3: Checks whether ALL Evaluate holders with data are violated.
+    /// Returns true if all are violated (proceed to Tier 4 command dispatch).
+    /// Returns false if any Evaluate holder with data is NOT violated (Healthy).
+    /// Holders with null ReadSlot do not participate.
+    /// If no Evaluate holders have data, returns false (vacuous fail — no command).
+    /// </summary>
+    private static bool AreAllEvaluateViolated(IReadOnlyList<MetricSlotHolder> holders)
+    {
+        var checkedCount = 0;
+
+        foreach (var holder in holders)
+        {
+            if (holder.Role != "Evaluate")
+                continue;
+
+            var slot = holder.ReadSlot();
+            if (slot is null)
+                continue; // Does not participate in "all violated" check
+
+            checkedCount++;
+
+            if (!IsViolated(holder, slot))
+                return false; // Not all Evaluate are violated — tenant is Healthy
+        }
+
+        // If at least one Evaluate holder was checked and ALL were violated → proceed to Tier 4
+        // If none were checked (all null or no Evaluate) → vacuous false (no data = no command)
+        return checkedCount > 0;
     }
 
     /// <summary>
