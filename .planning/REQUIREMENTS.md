@@ -25,7 +25,7 @@ Requirements for the Tenant Evaluation & Control milestone. Each maps to roadmap
 - [ ] **SNAP-08**: `ISnmpClient.SetAsync` method added wrapping `Messenger.SetAsync(VersionCode.V2, endpoint, community, variables, ct)` — `SharpSnmpClient` delegates; ValueType dispatch: Integer32 → `new Integer32(int.Parse(value))`, OctetString → `new OctetString(value)`, IpAddress → `new IP(value)`
 - [ ] **SNAP-09**: Suppression cache — `ConcurrentDictionary<string, DateTimeOffset>` singleton keyed by `"{Ip}:{Port}:{CommandName}"`; per-tenant `SuppressionWindowSeconds` config property; lazy TTL expiry (check age on access, no background sweep); `[DisallowConcurrentExecution]` eliminates check-then-suppress race
 - [ ] **SNAP-10**: SET response dispatched through full MediatR pipeline — each response varbind creates `SnmpOidReceived{Source=SnmpSource.Command}`; OID resolved via existing OID map (NOT bypassed); recorded as `snmp_gauge`/`snmp_info` with `source="Command"`
-- [ ] **SNAP-11**: `CommandWorkerService` — `BackgroundService` draining bounded `Channel<CommandRequest>` (DropOldest); resolves community string from `IDeviceRegistry` at execution time (not enqueue time); resolves command OID from `ICommandMapService.ResolveCommandOid`; registered via Singleton-then-HostedService DI pattern
+- [ ] **SNAP-11**: `CommandWorkerService` — `BackgroundService` draining bounded `Channel<CommandRequest>` (DropWrite, TryWrite failure path); resolves community string from `IDeviceRegistry` at execution time (not enqueue time); resolves command OID from `ICommandMapService.ResolveCommandOid`; registered via Singleton-then-HostedService DI pattern
 
 ### Configuration
 
