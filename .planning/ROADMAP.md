@@ -254,10 +254,10 @@ Plans:
   2. Both Grafana dashboards updated with new label name in all PromQL queries
   3. E2E test assertions updated to use `resolved_name`
 
-**Plans:** 2 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] 50-01: Rename metric_name → resolved_name in SnmpMetricFactory + dashboards + E2E tests
+- [ ] 50-01-PLAN.md — Rename metric_name → resolved_name in SnmpMetricFactory + dashboards + E2E tests
 
 ---
 
