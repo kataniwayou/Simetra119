@@ -881,6 +881,20 @@ public sealed class MetricPollJobTests : IDisposable
                 throw ExceptionToThrow;
             return Task.FromResult<IList<Variable>>(Response ?? new List<Variable>());
         }
+
+        public Task<IList<Variable>> SetAsync(
+            VersionCode version,
+            IPEndPoint endpoint,
+            OctetString community,
+            Variable variable,
+            CancellationToken ct)
+        {
+            LastEndpoint = endpoint;
+            LastCommunity = community;
+            if (ExceptionToThrow is not null)
+                throw ExceptionToThrow;
+            return Task.FromResult<IList<Variable>>(Response ?? new List<Variable>());
+        }
     }
 
     /// <summary>
