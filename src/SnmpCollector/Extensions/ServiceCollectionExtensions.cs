@@ -468,6 +468,9 @@ public static class ServiceCollectionExtensions
         var heartbeatOptions = new HeartbeatJobOptions();
         configuration.GetSection(HeartbeatJobOptions.SectionName).Bind(heartbeatOptions);
 
+        var snapshotOptions = new SnapshotJobOptions();
+        configuration.GetSection(SnapshotJobOptions.SectionName).Bind(snapshotOptions);
+
         // Phase 6: Bind DevicesOptions to calculate thread pool size and register poll jobs.
         // CRITICAL: bind directly into .Devices (not the wrapper) -- matches AddSnmpConfiguration pattern.
         // DI container is NOT built yet; IOptions<DevicesOptions> is not available here.
@@ -479,8 +482,8 @@ public static class ServiceCollectionExtensions
         var intervalRegistry = new JobIntervalRegistry();
 
         // Thread pool: generous ceiling to accommodate dynamic device additions at runtime.
-        // Static jobs (CorrelationJob + HeartbeatJob) = 2, plus headroom for poll jobs.
-        var initialJobCount = 2; // CorrelationJob + HeartbeatJob
+        // Static jobs (CorrelationJob + HeartbeatJob + SnapshotJob) = 3, plus headroom for poll jobs.
+        var initialJobCount = 3; // CorrelationJob + HeartbeatJob + SnapshotJob
         foreach (var device in devicesOptions.Devices)
             initialJobCount += device.Polls.Count;
         var threadPoolSize = Math.Max(initialJobCount, 50);
@@ -522,6 +525,20 @@ public static class ServiceCollectionExtensions
                     .WithMisfireHandlingInstructionNextWithRemainingCount()));
 
             intervalRegistry.Register("heartbeat", heartbeatOptions.IntervalSeconds);
+
+            // SnapshotJob: evaluates tenant priority groups on a fixed interval.
+            var snapshotKey = new JobKey("snapshot");
+            q.AddJob<SnapshotJob>(j => j.WithIdentity(snapshotKey));
+            q.AddTrigger(t => t
+                .ForJob(snapshotKey)
+                .WithIdentity("snapshot-trigger")
+                .StartNow()
+                .WithSimpleSchedule(s => s
+                    .WithIntervalInSeconds(snapshotOptions.IntervalSeconds)
+                    .RepeatForever()
+                    .WithMisfireHandlingInstructionNextWithRemainingCount()));
+
+            intervalRegistry.Register("snapshot", snapshotOptions.IntervalSeconds);
 
             // Phase 6: MetricPollJob per device per poll group.
             // Job keys use raw config address (DNS or IP) so operators can correlate to ConfigMap.
