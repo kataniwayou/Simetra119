@@ -12,7 +12,7 @@ namespace SnmpCollector.Pipeline;
 /// </summary>
 public sealed class RotatingCorrelationService : ICorrelationService
 {
-    private volatile string _correlationId = string.Empty;
+    private volatile string _correlationId = Guid.NewGuid().ToString("N");
     private static readonly AsyncLocal<string?> _operationCorrelationId = new();
 
     /// <inheritdoc />
