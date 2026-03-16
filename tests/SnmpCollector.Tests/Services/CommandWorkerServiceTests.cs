@@ -19,7 +19,7 @@ namespace SnmpCollector.Tests.Services;
 
 /// <summary>
 /// Unit tests for <see cref="CommandWorkerService"/> verifying SET execution, ISender.Send dispatch,
-/// Source=Command enforcement, DeviceName propagation from request, MetricName pre-set,
+/// Source=Command enforcement, DeviceName resolution from DeviceRegistry, MetricName pre-set,
 /// error isolation, and counter increments.
 /// </summary>
 [Collection(NonParallelCollection.Name)]
@@ -74,12 +74,11 @@ public sealed class CommandWorkerServiceTests : IDisposable
 
     private static CommandRequest MakeRequest(
         string commandName = TestCommandName,
-        string deviceName = TestDeviceName,
         string ip = TestIp,
         int port = TestPort,
         string value = TestValue,
         string valueType = TestValueType)
-        => new(ip, port, commandName, value, valueType, deviceName);
+        => new(ip, port, commandName, value, valueType);
 
     private CommandWorkerService CreateService(
         ISender sender,
@@ -162,10 +161,10 @@ public sealed class CommandWorkerServiceTests : IDisposable
     // -----------------------------------------------------------------------
 
     [Fact]
-    public async Task SetsDeviceNameFromCommandRequest()
+    public async Task SetsDeviceNameFromDeviceRegistry()
     {
         var sender = new CapturingSender();
-        var channel = CreateCommandChannel([MakeRequest(deviceName: "request-name")]);
+        var channel = CreateCommandChannel([MakeRequest()]);
         var registry = new StubDeviceRegistry(deviceName: "registry-name");
         var service = CreateService(sender, channel, deviceRegistry: registry);
 
@@ -174,7 +173,7 @@ public sealed class CommandWorkerServiceTests : IDisposable
         await service.StopAsync(CancellationToken.None);
 
         Assert.Single(sender.Calls);
-        Assert.Equal("request-name", sender.Calls[0].DeviceName);
+        Assert.Equal("registry-name", sender.Calls[0].DeviceName);
     }
 
     // -----------------------------------------------------------------------
@@ -321,7 +320,7 @@ public sealed class CommandWorkerServiceTests : IDisposable
             .ToList();
         Assert.Single(infoLogs);
         Assert.Contains(TestCommandName, infoLogs[0].Message);
-        Assert.Contains(TestDeviceName, infoLogs[0].Message);
+        Assert.Contains(RegistryDeviceName, infoLogs[0].Message);
         Assert.Contains("ms", infoLogs[0].Message);
     }
 
@@ -346,7 +345,7 @@ public sealed class CommandWorkerServiceTests : IDisposable
             .Where(e => e.Level == LogLevel.Warning && e.Message.Contains(TestCommandName))
             .ToList();
         Assert.Single(warningLogs);
-        Assert.Contains(TestDeviceName, warningLogs[0].Message);
+        Assert.Contains($"{TestIp}:{TestPort}", warningLogs[0].Message);
     }
 
     [Fact]

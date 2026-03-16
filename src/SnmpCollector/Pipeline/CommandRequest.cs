@@ -14,5 +14,4 @@ public sealed record CommandRequest(
     int Port,
     string CommandName,
     string Value,
-    string ValueType,
-    string DeviceName);
+    string ValueType);

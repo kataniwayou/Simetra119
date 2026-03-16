@@ -82,9 +82,9 @@ public sealed class CommandWorkerService : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogWarning(ex,
-                    "Command {CommandName} for {DeviceName} failed",
-                    req.CommandName, req.DeviceName);
-                _pipelineMetrics.IncrementCommandFailed(req.DeviceName);
+                    "Command {CommandName} for {Target} failed",
+                    req.CommandName, $"{req.Ip}:{req.Port}");
+                _pipelineMetrics.IncrementCommandFailed($"{req.Ip}:{req.Port}");
             }
         }
 
@@ -98,9 +98,9 @@ public sealed class CommandWorkerService : BackgroundService
         if (oid is null)
         {
             _logger.LogWarning(
-                "Command {CommandName} not found in command map for {DeviceName} -- skipping",
-                req.CommandName, req.DeviceName);
-            _pipelineMetrics.IncrementCommandFailed(req.DeviceName);
+                "Command {CommandName} not found in command map for {Target} -- skipping",
+                req.CommandName, $"{req.Ip}:{req.Port}");
+            _pipelineMetrics.IncrementCommandFailed($"{req.Ip}:{req.Port}");
             return;
         }
 
@@ -108,9 +108,9 @@ public sealed class CommandWorkerService : BackgroundService
         if (!_deviceRegistry.TryGetByIpPort(req.Ip, req.Port, out var device))
         {
             _logger.LogWarning(
-                "Device {Ip}:{Port} not found in registry for {DeviceName} -- skipping",
-                req.Ip, req.Port, req.DeviceName);
-            _pipelineMetrics.IncrementCommandFailed(req.DeviceName);
+                "Device {Ip}:{Port} not found in registry -- skipping",
+                req.Ip, req.Port);
+            _pipelineMetrics.IncrementCommandFailed($"{req.Ip}:{req.Port}");
             return;
         }
 
@@ -133,7 +133,7 @@ public sealed class CommandWorkerService : BackgroundService
         {
             _logger.LogDebug(
                 "Skipping SET {CommandName} for {DeviceName} — not leader",
-                req.CommandName, req.DeviceName);
+                req.CommandName, device.Name);
             return;
         }
 
@@ -151,8 +151,8 @@ public sealed class CommandWorkerService : BackgroundService
             sw.Stop();
             _logger.LogWarning(
                 "Command {CommandName} timed out for {DeviceName} after {DurationMs:F1}ms",
-                req.CommandName, req.DeviceName, sw.Elapsed.TotalMilliseconds);
-            _pipelineMetrics.IncrementCommandFailed(req.DeviceName);
+                req.CommandName, device.Name, sw.Elapsed.TotalMilliseconds);
+            _pipelineMetrics.IncrementCommandFailed(device.Name);
             return;
         }
 
@@ -165,7 +165,7 @@ public sealed class CommandWorkerService : BackgroundService
             {
                 Oid        = varbind.Id.ToString(),
                 AgentIp    = IPAddress.Parse(device.ResolvedIp),
-                DeviceName = req.DeviceName,           // from CommandRequest, NOT device.Name
+                DeviceName = device.Name,
                 Value      = varbind.Data,
                 Source     = SnmpSource.Command,
                 TypeCode   = varbind.Data.TypeCode,
@@ -176,10 +176,10 @@ public sealed class CommandWorkerService : BackgroundService
         }
 
         // 6. Increment success counter after all varbinds dispatched
-        _pipelineMetrics.IncrementCommandSent(req.DeviceName);
+        _pipelineMetrics.IncrementCommandSent(device.Name);
 
         _logger.LogInformation(
             "Command {CommandName} completed for {DeviceName} in {DurationMs:F1}ms",
-            req.CommandName, req.DeviceName, sw.Elapsed.TotalMilliseconds);
+            req.CommandName, device.Name, sw.Elapsed.TotalMilliseconds);
     }
 }

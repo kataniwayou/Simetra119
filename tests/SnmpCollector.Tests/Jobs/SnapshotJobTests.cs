@@ -463,7 +463,6 @@ public sealed class SnapshotJobTests : IDisposable
         Assert.Equal("set-mode", request.CommandName);
         Assert.Equal("42", request.Value);
         Assert.Equal("Integer32", request.ValueType);
-        Assert.Equal("tenant-abc", request.DeviceName);
     }
 
     [Fact]
@@ -494,7 +493,7 @@ public sealed class SnapshotJobTests : IDisposable
     {
         // Fill the channel to capacity (16)
         for (var i = 0; i < 16; i++)
-            _commandChannel.Writer.TryWrite(new CommandRequest("x", 1, "fill", "0", "Integer32", "filler"));
+            _commandChannel.Writer.TryWrite(new CommandRequest("x", 1, "fill", "0", "Integer32"));
 
         var resolved = MakeHolder(role: "Resolved",
             threshold: new ThresholdOptions { Min = 0, Max = 100 });
@@ -583,7 +582,7 @@ public sealed class SnapshotJobTests : IDisposable
 
         // tenant-a suppressed → no write. tenant-b not suppressed → write
         Assert.True(_commandChannel.Reader.TryRead(out var request));
-        Assert.Equal("tenant-b", request!.DeviceName);
+        Assert.Equal("reset", request!.CommandName);
         Assert.False(_commandChannel.Reader.TryRead(out _)); // Only one
     }
 
