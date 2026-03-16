@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 ## Current Position
 
 Phase: 45 of 49 (Structural Prerequisites)
-Plan: 0 of 2 in current phase
-Status: Ready to plan
-Last activity: 2026-03-16 — v2.0 roadmap created (phases 45-49, 17 requirements mapped)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-03-16 — Completed 45-01-PLAN.md
 
-Progress: [░░░░░░░░░░] v2.0 — 0/12 plans complete
+Progress: [█░░░░░░░░░] v2.0 — 1/12 plans complete
 
 ## Performance Metrics
 
@@ -36,12 +36,13 @@ Progress: [░░░░░░░░░░] v2.0 — 0/12 plans complete
 
 ### Key Facts for v2.0
 
-- `SnmpSource.Synthetic` bypass in `OidResolutionBehavior` must NOT be extended to `Command` — SET response OIDs are real device OIDs requiring resolution
+- `SnmpSource.Synthetic` bypass replaced with data-driven MetricName guard (45-01) — Command messages with pre-set MetricName bypass OID resolution via same guard
 - `CommandWorkerService` must use Singleton-then-HostedService DI pattern — `AddHostedService<CommandWorkerService>()` directly creates a second instance that never processes commands
 - Community string resolved in `CommandWorkerService` at execution time (not at SnapshotJob enqueue time) — hot-reload may change device config between enqueue and execute
 - `[DisallowConcurrentExecution]` on `SnapshotJob` is the only concurrency guard for suppression check-then-suppress — must not be removed
 - SharpSnmpLib IP address type is `Lextm.SharpSnmpLib.IP` (not `IpAddress`) — using wrong name produces CS0246
 - `TryWrite` (non-blocking) for channel enqueue — `WriteAsync` blocks Quartz thread on full channel, cascading into liveness failures
+- OidResolutionBehavior bypass is now data-driven (`MetricName is not null && != Unknown`) — no more Source-specific conditions; any message with pre-set MetricName bypasses OID resolution
 
 ### Blockers/Concerns
 
@@ -58,5 +59,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: v2.0 roadmap created — phases 45-49, 17/17 requirements mapped, ready to plan Phase 45
+Stopped at: Completed 45-01-PLAN.md
 Resume file: None
