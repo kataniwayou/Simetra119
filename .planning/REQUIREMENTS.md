@@ -78,18 +78,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SNAP-01 | Phase 45 | Complete |
 | SNAP-02 | Phase 45 | Complete |
 | SNAP-03 | Phase 45 | Complete |
-| SNAP-04 | Phase 48 | Pending |
-| SNAP-05 | Phase 48 | Pending |
-| SNAP-06 | Phase 48 | Pending |
-| SNAP-07 | Phase 48 | Pending |
+| SNAP-04 | Phase 48 | Complete |
+| SNAP-05 | Phase 48 | Complete |
+| SNAP-06 | Phase 48 | Complete |
+| SNAP-07 | Phase 48 | Complete |
 | SNAP-08 | Phase 46 | Complete |
 | SNAP-09 | Phase 46 | Complete |
 | SNAP-10 | Phase 47 | Complete |
 | SNAP-11 | Phase 47 | Complete |
 | SNAP-12 | Phase 46 | Complete |
 | SNAP-13 | Phase 46 | Complete |
-| SNAP-14 | Phase 48 | Pending |
-| SNAP-15 | Phase 48 | Pending |
+| SNAP-14 | Phase 48 | Complete |
+| SNAP-15 | Phase 48 | Complete |
 | SNAP-16 | Phase 49 | Pending |
 | SNAP-17 | Phase 49 | Pending |
 
