@@ -142,6 +142,7 @@ See `.planning/milestones/v1.10-ROADMAP.md` for details.
 - [ ] **Phase 47: CommandWorkerService** — Channel-backed background worker that executes SET commands and dispatches responses
 - [ ] **Phase 48: SnapshotJob 4-Tier Evaluation** — Quartz job driving full tenant evaluation loop with priority group traversal
 - [ ] **Phase 49: Observability & Dashboard** — Structured evaluation logs, command execution logs, and dashboard panels
+- [ ] **Phase 50: Label Rename** — Rename metric_name → resolved_name across all instruments and dashboards
 
 ---
 
@@ -243,6 +244,23 @@ Plans:
 
 ---
 
+#### Phase 50: Label Rename (metric_name → resolved_name)
+
+**Goal**: Rename the `metric_name` label to `resolved_name` across all snmp_gauge and snmp_info instruments — the label serves both metric names (from oid_metric_map) and command names (from oid_command_map), and the current name is misleading for SET responses
+**Depends on**: Phase 49 (all v2.0 functionality must be stable before breaking label change)
+**Requirements**: SNAP-18
+**Success Criteria** (what must be TRUE):
+  1. All `snmp_gauge` and `snmp_info` time series use `resolved_name` label instead of `metric_name`
+  2. Both Grafana dashboards updated with new label name in all PromQL queries
+  3. E2E test assertions updated to use `resolved_name`
+
+**Plans**: TBD
+
+Plans:
+- [ ] 50-01: Rename metric_name → resolved_name in SnmpMetricFactory + dashboards + E2E tests
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -272,6 +290,7 @@ Plans:
 | 47. CommandWorkerService | v2.0 | 0/2 | Not started | - |
 | 48. SnapshotJob 4-Tier Evaluation | v2.0 | 0/4 | Not started | - |
 | 49. Observability & Dashboard | v2.0 | 0/1 | Not started | - |
+| 50. Label Rename | v2.0 | 0/1 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
