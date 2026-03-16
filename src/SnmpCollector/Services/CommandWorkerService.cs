@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
 using SnmpCollector.Telemetry;
+using System.Diagnostics;
 using System.Net;
 
 namespace SnmpCollector.Services;
@@ -124,17 +125,20 @@ public sealed class CommandWorkerService : BackgroundService
         var community = new OctetString(device.CommunityString);
 
         IList<Variable> response;
+        var sw = Stopwatch.StartNew();
         try
         {
             response = await _snmpClient.SetAsync(
                 VersionCode.V2, endpoint, community, variable, timeoutCts.Token);
+            sw.Stop();
         }
         catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
         {
             // Timeout: the linked CTS fired, but host is not shutting down.
+            sw.Stop();
             _logger.LogWarning(
-                "Command {CommandName} timed out for {DeviceName}",
-                req.CommandName, req.DeviceName);
+                "Command {CommandName} timed out for {DeviceName} after {DurationMs:F1}ms",
+                req.CommandName, req.DeviceName, sw.Elapsed.TotalMilliseconds);
             _pipelineMetrics.IncrementCommandFailed(req.DeviceName);
             return;
         }
@@ -160,5 +164,9 @@ public sealed class CommandWorkerService : BackgroundService
 
         // 6. Increment success counter after all varbinds dispatched
         _pipelineMetrics.IncrementCommandSent(req.DeviceName);
+
+        _logger.LogInformation(
+            "Command {CommandName} completed for {DeviceName} in {DurationMs:F1}ms",
+            req.CommandName, req.DeviceName, sw.Elapsed.TotalMilliseconds);
     }
 }

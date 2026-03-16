@@ -5,6 +5,7 @@ using System.Threading.Channels;
 using Lextm.SharpSnmpLib;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SnmpCollector.Configuration;
@@ -85,7 +86,8 @@ public sealed class CommandWorkerServiceTests : IDisposable
         ICommandChannel commandChannel,
         ISnmpClient? snmpClient = null,
         IDeviceRegistry? deviceRegistry = null,
-        ICommandMapService? commandMapService = null)
+        ICommandMapService? commandMapService = null,
+        ILogger<CommandWorkerService>? logger = null)
     {
         return new CommandWorkerService(
             commandChannel,
@@ -96,7 +98,7 @@ public sealed class CommandWorkerServiceTests : IDisposable
             new RotatingCorrelationService(),
             _metrics,
             Options.Create(new SnapshotJobOptions()),
-            NullLogger<CommandWorkerService>.Instance);
+            logger ?? NullLogger<CommandWorkerService>.Instance);
     }
 
     private static PrimedCommandChannel CreateCommandChannel(IEnumerable<CommandRequest> requests)
@@ -297,6 +299,55 @@ public sealed class CommandWorkerServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
+    // 10. Successful_SET_logs_Information_with_duration
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task Successful_SET_logs_Information_with_duration()
+    {
+        var sender = new CapturingSender();
+        var channel = CreateCommandChannel([MakeRequest()]);
+        var logger = new CapturingLogger();
+        var service = CreateService(sender, channel, logger: logger);
+
+        await service.StartAsync(CancellationToken.None);
+        await WaitForAsync(() => sender.Calls.Count >= 1, TimeSpan.FromSeconds(5));
+        await service.StopAsync(CancellationToken.None);
+
+        var infoLogs = logger.Entries
+            .Where(e => e.Level == LogLevel.Information && e.Message.Contains("completed for"))
+            .ToList();
+        Assert.Single(infoLogs);
+        Assert.Contains(TestCommandName, infoLogs[0].Message);
+        Assert.Contains(TestDeviceName, infoLogs[0].Message);
+        Assert.Contains("ms", infoLogs[0].Message);
+    }
+
+    // -----------------------------------------------------------------------
+    // 11. Failed_SET_logs_Warning_with_duration
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task Failed_SET_logs_Warning_with_duration()
+    {
+        var sender = new CapturingSender();
+        var channel = CreateCommandChannel([MakeRequest()]);
+        var snmpClient = new FaultingSnmpClient(throwOnCallNumber: 1);
+        var logger = new CapturingLogger();
+        var service = CreateService(sender, channel, snmpClient: snmpClient, logger: logger);
+
+        await service.StartAsync(CancellationToken.None);
+        await WaitForAsync(() => snmpClient.CallCount >= 1, TimeSpan.FromSeconds(5));
+        await service.StopAsync(CancellationToken.None);
+
+        var warningLogs = logger.Entries
+            .Where(e => e.Level == LogLevel.Warning && e.Message.Contains(TestCommandName))
+            .ToList();
+        Assert.Single(warningLogs);
+        Assert.Contains(TestDeviceName, warningLogs[0].Message);
+    }
+
+    // -----------------------------------------------------------------------
     // Stubs
     // -----------------------------------------------------------------------
 
@@ -465,5 +516,30 @@ public sealed class CommandWorkerServiceTests : IDisposable
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         public ValueTask<bool> MoveNextAsync() => ValueTask.FromResult(false);
         public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default) => this;
+    }
+
+    /// <summary>Logger that captures log entries for assertion in duration-logging tests.</summary>
+    private sealed class CapturingLogger : ILogger<CommandWorkerService>
+    {
+        private readonly List<(LogLevel Level, string Message)> _entries = new();
+        private readonly object _lock = new();
+
+        public IReadOnlyList<(LogLevel Level, string Message)> Entries
+        {
+            get { lock (_lock) return _entries.ToList(); }
+        }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            lock (_lock) { _entries.Add((logLevel, formatter(state, exception))); }
+        }
     }
 }
