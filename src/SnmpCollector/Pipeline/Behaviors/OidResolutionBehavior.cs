@@ -32,7 +32,12 @@ public sealed class OidResolutionBehavior<TNotification, TResponse>
     {
         if (notification is SnmpOidReceived msg)
         {
-            if (msg.Source == SnmpSource.Synthetic) { return await next(); }
+            // Data-driven guard: MetricName already resolved (Synthetic pre-sets it; Command path will too).
+            // Replaces Source-specific bypass conditions — no Source checks in OidResolutionBehavior.
+            if (msg.MetricName is not null && msg.MetricName != OidMapService.Unknown)
+            {
+                return await next();
+            }
 
             msg.MetricName = _oidMapService.Resolve(msg.Oid);
 

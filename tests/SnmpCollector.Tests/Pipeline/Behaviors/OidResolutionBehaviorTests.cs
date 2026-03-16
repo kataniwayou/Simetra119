@@ -158,6 +158,39 @@ public sealed class OidResolutionBehaviorTests
         Assert.Equal("hrProcessorLoad", notification.MetricName);
     }
 
+    [Fact]
+    public async Task CommandSource_WithPresetMetricName_BypassesOidResolution()
+    {
+        // Command message with pre-set MetricName exits OidResolutionBehavior with MetricName intact
+        var oidMapService = new StubOidMapService(knownOid: "1.3.6.1.2.1.25.3.3.1.2", metricName: "hrProcessorLoad");
+        var behavior = new OidResolutionBehavior<SnmpOidReceived, Unit>(oidMapService, NullLogger<OidResolutionBehavior<SnmpOidReceived, Unit>>.Instance);
+        var notification = MakeNotification("0.0", SnmpSource.Command);
+        notification.MetricName = "setSpeed";
+
+        await behavior.Handle(notification, ct => Task.FromResult(Unit.Value), CancellationToken.None);
+
+        Assert.Equal("setSpeed", notification.MetricName);  // OID resolution was bypassed
+    }
+
+    [Fact]
+    public async Task CommandSource_WithPresetMetricName_StillCallsNext()
+    {
+        // Bypass guard must still call next() so the pipeline continues downstream
+        var oidMapService = new StubOidMapService(knownOid: null, metricName: null);
+        var behavior = new OidResolutionBehavior<SnmpOidReceived, Unit>(oidMapService, NullLogger<OidResolutionBehavior<SnmpOidReceived, Unit>>.Instance);
+        var notification = MakeNotification("0.0", SnmpSource.Command);
+        notification.MetricName = "setSpeed";
+        var nextCalled = false;
+
+        await behavior.Handle(notification, ct =>
+        {
+            nextCalled = true;
+            return Task.FromResult(Unit.Value);
+        }, CancellationToken.None);
+
+        Assert.True(nextCalled);
+    }
+
     // --- Stub IOidMapService ---
 
     private sealed class StubOidMapService : IOidMapService
