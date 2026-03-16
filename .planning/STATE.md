@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 ## Current Position
 
 Phase: 47 of 50 (CommandWorkerService)
-Plan: 1 of N in current phase
-Status: In progress
-Last activity: 2026-03-16 — Completed 47-01-PLAN.md
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-03-16 — Completed 47-02-PLAN.md
 
-Progress: [█████░░░░░] v2.0 — 6/13 plans complete
+Progress: [██████░░░░] v2.0 — 7/13 plans complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 100 (v1.0 through v1.10 + Phases 45-47-01, including quick tasks)
+- Total plans completed: 101 (v1.0 through v1.10 + Phases 45-47, including quick tasks)
 - Average duration: ~25 min
 - Total execution time: ~39 hours
 
@@ -30,6 +30,7 @@ Progress: [█████░░░░░] v2.0 — 6/13 plans complete
 - 46-02: ~5 min
 - 46-03: ~1 min
 - 47-01: ~1 min
+- 47-02: ~2 min
 - Trend: Stable (small surgical plans)
 
 *Updated after each plan completion*
@@ -56,6 +57,9 @@ Progress: [█████░░░░░] v2.0 — 6/13 plans complete
 - ICommandChannel: Writer/Reader only, no Complete/WaitForDrainAsync — immediate stop on cancel (Phase 47-01)
 - CommandChannel: BoundedChannel capacity 16, DropWrite mode, SingleWriter=false, SingleReader=true (Phase 47-01)
 - CommandRequest: sealed record (Ip, Port, CommandName, Value, ValueType, DeviceName) — no CommunityString (Phase 47-01)
+- CommandWorkerService: BackgroundService draining ICommandChannel, SetAsync with timeout, response dispatch via ISender.Send with Source=Command (Phase 47-02)
+- DeviceName on SnmpOidReceived from req.DeviceName, not device.Name — locked decision (Phase 47-02)
+- MetricName pre-set from ICommandMapService.ResolveCommandName on response varbinds (Phase 47-02)
 
 ### Blockers/Concerns
 
@@ -72,5 +76,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Completed 47-01-PLAN.md — CommandRequest, ICommandChannel, CommandChannel, DI registration; 367 tests green
+Stopped at: Completed 47-02-PLAN.md — CommandWorkerService implementation, DI registration, 9 unit tests; 376 tests green
 Resume file: None
