@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-15)
 Phase: —
 Plan: —
 Status: Between milestones (v1.10 shipped, next milestone not defined)
-Last activity: 2026-03-16 — Completed quick task 059: build-deploy-test heartbeat liveness script
+Last activity: 2026-03-16 — Completed quick task 060: pipeline panel layout rows
 
 Progress: [####################] v1.0-v1.9 complete | [███] 3/3 v1.10 plans — v1.10 COMPLETE
 
@@ -58,7 +58,8 @@ None.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 058 | Add GraceMultiplier + resolve IntervalSeconds/GraceMultiplier from device poll group | 2026-03-15 | b2059b6 | [058-gracemultiplier-device-resolved](./quick/058-gracemultiplier-device-resolved/) |
-| 059 | Build, deploy, and test heartbeat liveness E2E script | 2026-03-16 | pending | [059-build-deploy-test-heartbeat-liveness](./quick/059-build-deploy-test-heartbeat-liveness/) |
+| 059 | Build, deploy, and test heartbeat liveness E2E script | 2026-03-16 | 2d2a97a | [059-build-deploy-test-heartbeat-liveness](./quick/059-build-deploy-test-heartbeat-liveness/) |
+| 060 | Pipeline panel layout: 4 semantic rows (events/polls/traps/routing) | 2026-03-16 | pending | [060-pipeline-panel-layout-rows](./quick/060-pipeline-panel-layout-rows/) |
 
 ## Session Continuity
 
