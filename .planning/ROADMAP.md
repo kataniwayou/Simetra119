@@ -157,11 +157,11 @@ See `.planning/milestones/v1.10-ROADMAP.md` for details.
   3. `SnmpSource.Command` exists as an enum value — `OidResolutionBehavior` does NOT bypass resolution for Command source (Synthetic bypass is unchanged and unaffected)
   4. All existing tests remain green after the three property additions
 
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 45-01: SnmpSource.Command enum value + OidResolutionBehavior guard verification
-- [ ] 45-02: MetricSlotHolder.Role + Tenant.Commands propagation in TenantVectorRegistry.Reload + tests
+- [ ] 45-01-PLAN.md — SnmpSource.Command enum value + OidResolutionBehavior MetricName-guard refactor
+- [ ] 45-02-PLAN.md — MetricSlotHolder.Role + Tenant.Commands propagation in TenantVectorRegistry.Reload + tests
 
 ---
 
