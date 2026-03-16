@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 ## Current Position
 
 Phase: 48 of 50 (SnapshotJob 4-Tier Evaluation)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-03-16 — Completed 48-01-PLAN.md
+Last activity: 2026-03-16 — Completed 48-02-PLAN.md
 
-Progress: [██████░░░░] v2.0 — 8/13 plans complete
+Progress: [██████░░░░] v2.0 — 9/13 plans complete
 
 ## Performance Metrics
 
@@ -31,6 +31,7 @@ Progress: [██████░░░░] v2.0 — 8/13 plans complete
 - 47-01: ~1 min
 - 47-02: ~2 min
 - 48-01: ~1 min
+- 48-02: ~5 min
 - Trend: Stable (small surgical plans)
 
 *Updated after each plan completion*
@@ -61,6 +62,7 @@ Progress: [██████░░░░] v2.0 — 8/13 plans complete
 - DeviceName on SnmpOidReceived from req.DeviceName, not device.Name — locked decision (Phase 47-02)
 - MetricName pre-set from ICommandMapService.ResolveCommandName on response varbinds (Phase 47-02)
 - SnapshotJob: skeleton with 8-param DI, placeholder Groups loop, registered in Quartz with intervalRegistry "snapshot" entry (Phase 48-01)
+- SnapshotJob Tier 1+2: HasStaleness (excludes Trap/0-interval/null-slot), AreAllResolvedViolated (ConfirmedBad gate), IsViolated (strict inequality, null=violated), TierResult enum (Phase 48-02)
 
 ### Blockers/Concerns
 
@@ -77,5 +79,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Completed 48-01-PLAN.md — SnapshotJob skeleton registered in Quartz with liveness interval; 376 tests green
+Stopped at: Completed 48-02-PLAN.md — Tier 1 staleness + Tier 2 Resolved gate with 17 tests; 393 tests green
 Resume file: None
