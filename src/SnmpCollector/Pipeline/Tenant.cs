@@ -9,11 +9,13 @@ public sealed class Tenant
     public string Id { get; }
     public int Priority { get; }
     public IReadOnlyList<MetricSlotHolder> Holders { get; }
+    public int SuppressionWindowSeconds { get; }
 
-    public Tenant(string id, int priority, IReadOnlyList<MetricSlotHolder> holders)
+    public Tenant(string id, int priority, IReadOnlyList<MetricSlotHolder> holders, int suppressionWindowSeconds)
     {
         Id = id;
         Priority = priority;
         Holders = holders;
+        SuppressionWindowSeconds = suppressionWindowSeconds;
     }
 }

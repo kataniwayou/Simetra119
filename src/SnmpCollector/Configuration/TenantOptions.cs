@@ -29,4 +29,9 @@ public sealed class TenantOptions
     /// An empty list (or absent from JSON) is valid -- tenant has no command targets.
     /// </summary>
     public List<CommandSlotOptions> Commands { get; set; } = [];
+
+    /// <summary>
+    /// Duration of the command suppression window in seconds. Default: 60.
+    /// </summary>
+    public int SuppressionWindowSeconds { get; set; } = 60;
 }

@@ -276,7 +276,24 @@ public sealed class TenantVectorWatcherService : BackgroundService
                     continue;
                 }
 
-                // 6. IP+Port existence (TEN-07)
+                // 6. Value+ValueType parse validation: ensure Value is parseable for its declared type.
+                if (cmd.ValueType == "Integer32" && !int.TryParse(cmd.Value, out _))
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Commands[{Index}] skipped: Value '{Value}' is not a valid Integer32",
+                        tenantId, k, cmd.Value);
+                    continue;
+                }
+
+                if (cmd.ValueType == "IpAddress" && !System.Net.IPAddress.TryParse(cmd.Value, out _))
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Commands[{Index}] skipped: Value '{Value}' is not a valid IpAddress",
+                        tenantId, k, cmd.Value);
+                    continue;
+                }
+
+                // 7. IP+Port existence (TEN-07)
                 if (!deviceRegistry.TryGetByIpPort(cmd.Ip, cmd.Port, out _))
                 {
                     logger.LogError(

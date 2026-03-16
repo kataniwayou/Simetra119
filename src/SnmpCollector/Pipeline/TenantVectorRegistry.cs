@@ -109,7 +109,7 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                 totalSlots++;
             }
 
-            var tenant = new Tenant(tenantId, tenantOpts.Priority, holders);
+            var tenant = new Tenant(tenantId, tenantOpts.Priority, holders, tenantOpts.SuppressionWindowSeconds);
 
             if (!priorityBuckets.TryGetValue(tenantOpts.Priority, out var bucket))
             {
