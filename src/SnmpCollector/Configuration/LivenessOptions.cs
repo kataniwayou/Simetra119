@@ -16,6 +16,6 @@ public sealed class LivenessOptions
     /// A job is considered stale after (IntervalSeconds * GraceMultiplier) seconds without completion.
     /// Default 2.0: a 30s poll job is stale after 60s.
     /// </summary>
-    [Range(1.0, 100.0)]
+    [Range(2.0, 5.0)]
     public double GraceMultiplier { get; set; } = 2.0;
 }
