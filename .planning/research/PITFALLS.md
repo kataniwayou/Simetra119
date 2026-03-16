@@ -1086,3 +1086,392 @@ All findings derived from direct source inspection (HIGH confidence):
   to `SnmpCollector.Leader` meter; synthetic combined metrics would be subject to same gate
 - `.planning/codebase/CONCERNS.md` — "MetricFactory: Unbounded instrument cache with no eviction"
   (stale instrument reference after hot-reload removal)
+
+
+---
+
+# SnapshotJob & SNMP SET Command Dispatch Pitfalls
+
+**Domain:** Closed-loop SNMP SET control added to existing monitoring agent
+**Researched:** 2026-03-16
+**Confidence:** HIGH (verified against source code: MetricSlotHolder, ThresholdOptions, CommandSlotOptions, ISnmpClient, SharpSnmpClient, TenantVectorRegistry, CommandMapService, ServiceCollectionExtensions, MetricPollJob, SharpSnmpLib 12.5.7 XML docs)
+
+> **Context:** These pitfalls apply to a subsequent milestone that adds periodic tenant evaluation and SNMP SET command dispatch (SnapshotJob) to the existing monitoring agent at v1.10. All source references are verified against the current codebase.
+
+---
+
+## Critical Pitfalls
+
+---
+
+### Pitfall S1: Treating MetricSlotHolder.ReadSlot() Null as Value Zero
+
+**What goes wrong:**
+ReadSlot() returns null before any poll has written to a slot (MetricSlotHolder.cs line 76: `s.Length > 0 ? s[^1] : null`). If SnapshotJob evaluates a threshold immediately after startup, a null-guard-free code path coerces null to 0.0. If ThresholdOptions.Min = 0, a coerced zero satisfies the threshold and an SNMP SET fires against every device on the first cycle.
+
+**Why it happens:**
+The MetricSlotHolder constructor sets `_box = SeriesBox.Empty`. At startup with a 15-second job cycle, the first SnapshotJob execution can precede the first MetricPollJob execution for any given device, especially if DNS resolution or SNMP GET is slow.
+
+**Consequences:**
+- SNMP SET commands fire before any real metric value exists.
+- Suppression cache is populated with entries that were never legitimately triggered, blocking real commands for the full suppression window.
+- Devices may receive SET commands on every restart.
+
+**Prevention:**
+- In SnapshotJob, treat `ReadSlot() == null` as "not yet evaluated" -- skip threshold evaluation entirely and continue to the next slot.
+- Log at Debug: "Skipping threshold evaluation for {TenantId}/{MetricName}: no data yet".
+- Unit tests must include a case where ReadSlot() returns null and assert no SET is dispatched.
+
+**Warning signs:**
+- SNMP SET commands in logs within the first 15 seconds after pod start.
+- Suppression cache entries populated at pod startup before any poll completes.
+
+**Phase that should address it:** SnapshotJob threshold evaluation logic.
+
+---
+
+### Pitfall S2: Concurrent SNMP SET to Same Device from Multiple Tenants
+
+**What goes wrong:**
+Multiple tenants can share the same (Ip, Port). TenantVectorRegistry deliberately allows this via fan-out routing (TenantVectorRegistry.cs lines 130-153). If two tenants both have a CommandSlotOptions targeting the same device and both thresholds are violated in the same SnapshotJob cycle, two SetAsync calls go to the same device with possibly conflicting values.
+
+**Why it happens:**
+Tenant priority controls evaluation order, not exclusion. Nothing in the existing data model prevents two tenants from declaring conflicting commands to the same device.
+
+**Consequences:**
+- Race condition on the device: some embedded firmware processes SET PDUs out of order or returns genErr when a second SET arrives before the first is acknowledged.
+- If the same OID is SET to different values by two tenants, last-writer-wins is non-deterministic.
+
+**Prevention:**
+- SnapshotJob must carry [DisallowConcurrentExecution] -- the same attribute pattern used by MetricPollJob (MetricPollJob.cs line 22).
+- Do not introduce per-tenant Task.WhenAll parallelism inside the job.
+- In TenantVectorWatcherService validation: warn when two tenants share the same (Ip, Port, CommandName) with different Value.
+
+**Warning signs:**
+- Two log entries for the same (Ip, Port, CommandName) within a single SnapshotJob execution cycle.
+- Device firmware returning genErr on alternating cycles.
+
+**Phase that should address it:** SnapshotJob skeleton and scheduling.
+
+---
+
+### Pitfall S3: Suppression Cache Memory Growth Without Bounded Eviction
+
+**What goes wrong:**
+A ConcurrentDictionary suppression cache keyed on (Ip, Port, CommandName) never removes entries for deleted tenants, removed devices, or renamed commands. Entries accumulate indefinitely.
+
+**Why it happens:**
+The cache is checked every SnapshotJob cycle but entries for deleted configurations are never hit again. A renamed CommandName leaves the old (Ip, Port, OldName) entry permanently.
+
+**Consequences:**
+- Long-running pods accumulate thousands of stale entries after repeated config updates.
+- In operator workflows with frequent command renames or tenant removals, the cache is never cleaned.
+
+**Prevention:**
+- After each SnapshotJob cycle, sweep entries whose LastSent + 2x SuppressionWindow is in the past and remove them.
+- Alternatively: use MemoryCache with an absolute expiry of 2x SuppressionWindow per entry.
+- Key must remain (Ip, Port, CommandName) only -- not keyed on tenant ID.
+
+**Warning signs:**
+- Suppression cache entry count growing monotonically over days without plateau.
+- Memory growth correlated with command map hot-reloads.
+
+**Phase that should address it:** Suppression cache implementation.
+
+---
+
+### Pitfall S4: ThresholdOptions Both Null -- Silent Always-Fire
+
+**What goes wrong:**
+ThresholdOptions allows Min = null and Max = null simultaneously. The v1.9 requirements (THR-04) define this as always-violated semantics: a threshold with both bounds null always returns true. The command fires every time the suppression window expires, indefinitely.
+
+**Why it happens:**
+Operators may configure `Threshold: {}` intending "off -- never fire." The model says the opposite: absent Threshold property means no evaluation; a present Threshold object with null bounds means always fire.
+
+**Consequences:**
+- Operators configure a placeholder threshold and get devices hammered with SET commands every suppression period.
+- Hard to diagnose because commands fire on a regular schedule that looks intentional.
+
+**Prevention:**
+- If MetricSlotHolder.Threshold == null, skip evaluation entirely.
+- If Threshold is non-null but both Min and Max are null, log a Warning at load time: "Tenant {TenantId} slot {MetricName}: Threshold present but both Min and Max are null -- command will fire on every suppression expiry".
+- Document the semantics in ThresholdOptions XML comment.
+
+**Warning signs:**
+- SET commands firing at clock-regular intervals equal to the suppression window.
+- Operator confusion: "why is this device being set every N minutes?"
+
+**Phase that should address it:** Threshold evaluation logic and load-time validation.
+
+---
+
+### Pitfall S5: CommandSlotOptions.Value Not Validated Against ValueType at Load Time
+
+**What goes wrong:**
+CommandSlotOptions.Value is always a string. ValueType must be "Integer32", "IpAddress", or "OctetString". Load-time validation checks that ValueType is a known string but does not parse Value against it. If Value = "abc" and ValueType = "Integer32", int.Parse("abc") throws FormatException at dispatch time.
+
+**Why it happens:**
+TenantVectorOptionsValidator is currently a no-op (TenantVectorOptionsValidator.cs line 12 returns Success unconditionally). Command slot value validation must be added explicitly.
+
+**Consequences:**
+- SnapshotJob throws when building the Variable for the SET PDU.
+- If not caught per-slot, one bad slot aborts the entire tenant command list that cycle.
+- Silent skip if caught without logging -- operator never knows the command is broken.
+
+**Prevention:**
+- At load time, dry-run conversion: Integer32 uses int.TryParse; IpAddress uses IPAddress.TryParse. Log Error and skip slot if parse fails.
+- At dispatch time, wrap each command slot in try/catch. Never let one bad slot abort the rest.
+
+**Warning signs:**
+- FormatException in SnapshotJob logs at command build time.
+- Command slot present in config that never appears in dispatch logs.
+
+**Phase that should address it:** CommandSlot validation phase.
+
+---
+
+### Pitfall S6: ISnmpClient.SetAsync Does Not Exist -- SharpSnmpClient Must Be Extended
+
+**What goes wrong:**
+ISnmpClient currently exposes only GetAsync (ISnmpClient.cs lines 16-21). Adding SetAsync to the interface without updating SharpSnmpClient breaks the build. Unit tests that mock the interface hide whether the real implementation was ever wired.
+
+**Why it happens:**
+SharpSnmpClient delegates to Messenger.GetAsync (SharpSnmpClient.cs line 21). The correct extension is Messenger.SetAsync(VersionCode, IPEndPoint, OctetString, IList<Variable>, CancellationToken), confirmed present in SharpSnmpLib 12.5.7 XML docs. The method exists; the delegation is straightforward but must be done explicitly.
+
+**Consequences:**
+- Build failure: CS0535 SharpSnmpClient does not implement interface member ISnmpClient.SetAsync.
+- Or: tests pass with a mock, but no real SET traffic is sent.
+
+**Prevention:**
+- Add SetAsync to ISnmpClient and implement in SharpSnmpClient as `=> Messenger.SetAsync(version, endpoint, community, variables, ct)`.
+- Both changes must land in the same plan -- not split across plans.
+
+**Warning signs:**
+- Build error on SharpSnmpClient.
+- Tests pass but SNMP SET traffic absent from integration captures.
+
+**Phase that should address it:** ISnmpClient extension (first plan touching SET execution).
+
+---
+
+## Moderate Pitfalls
+
+---
+
+### Pitfall S7: Stale Carried-Over Value Evaluated Against New Threshold After Config Reload
+
+**What goes wrong:**
+TenantVectorRegistry.Reload carries over slot values via CopyFrom for matching (Ip, Port, MetricName) keys (lines 99-104). If an operator changes Threshold.Min or Max, the new threshold is applied to the carried-over (pre-reload) value on the very next SnapshotJob cycle -- before the metric has been re-polled.
+
+**Prevention:**
+- Accept as designed: document that evaluation reflects the last known value.
+- If spurious post-reload SETs are a problem: add a ThresholdChanged flag to MetricSlotHolder, set during CopyFrom when the new threshold differs, and skip evaluation until the next fresh poll.
+
+**Warning signs:**
+- A SET fires immediately after a config reload that only changed threshold values (not metric values).
+
+**Phase that should address it:** Threshold evaluation phase; document carry-over behavior.
+
+---
+
+### Pitfall S8: CommandMapService.ResolveCommandOid Returns Null -- Null OID Passed to SET PDU
+
+**What goes wrong:**
+CommandSlotOptions.CommandName is resolved to an OID at execution time via ICommandMapService.ResolveCommandOid (CommandMapService.cs line 45). If the command map has not yet loaded (startup race) or the command name was removed during hot-reload, the result is null. Passing null to new ObjectIdentifier() throws ArgumentNullException.
+
+**Why it happens:**
+CommandMapWatcherService and TenantVectorWatcherService are independent Kubernetes ConfigMap watchers (ServiceCollectionExtensions.cs lines 248-251). The first SnapshotJob cycle can execute before CommandMapWatcherService delivers its first watch event.
+
+**Prevention:**
+- In SnapshotJob: null-check ResolveCommandOid result. If null, log Warning and skip slot.
+- This is a transient startup condition on the first 1-2 cycles; it resolves as watchers catch up.
+
+**Warning signs:**
+- Warning log on first cycle only, then absent = startup race (expected).
+- Warning persists = command name removed or typo in config.
+
+**Phase that should address it:** SnapshotJob command dispatch.
+
+---
+
+### Pitfall S9: Priority Starvation -- High-Priority Tenant SETs Consume Entire Job Budget
+
+**What goes wrong:**
+SnapshotJob evaluates tenants in priority order. A high-priority tenant with many command slots and long per-device timeouts can consume the entire 15-second interval before low-priority tenants are reached.
+
+**Prevention:**
+- Per-command timeout ceiling: 2 seconds maximum. Use CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken) with CancelAfter(2000) per SET call -- same pattern as MetricPollJob.cs lines 92-93.
+- Log at Debug after each cycle: total tenants evaluated, SET count, elapsed ms.
+- Never break out of tenant iteration on a suppression cache hit.
+
+**Warning signs:**
+- Low-priority tenants never appear in dispatch logs even with clearly violated thresholds.
+- Total job elapsed time approaching 15 seconds.
+
+**Phase that should address it:** SnapshotJob timeout design.
+
+---
+
+### Pitfall S10: Long SNMP SET Timeouts Causing Quartz Misfire
+
+**What goes wrong:**
+If SnapshotJob takes longer than its trigger interval, Quartz misfires. With DisallowConcurrentExecution, the job does not pile up but the effective dispatch interval doubles during unreachability events.
+
+**Prevention:**
+- Same mitigation as S9: hard per-command timeout ceiling.
+- Register trigger with WithMisfireHandlingInstructionNextWithRemainingCount (same policy as MetricPollJob).
+- Log Warning if elapsed time exceeds 0.8 x intervalSeconds.
+
+**Warning signs:**
+- Quartz misfire log.
+- SnapshotJob elapsed time approaching intervalSeconds.
+
+**Phase that should address it:** SnapshotJob timeout and Quartz trigger configuration.
+
+---
+
+### Pitfall S11: Threshold Flapping -- Value Oscillates Around Boundary
+
+**What goes wrong:**
+If a metric value oscillates around the threshold boundary, the threshold is violated on alternate cycles. Once the suppression window expires, the next violation triggers another SET. The device receives repeated SET commands for a condition that never stably resolves.
+
+**Prevention:**
+- In current scope: suppression cache is the only flap guard. Accept flapping as a known limitation and document it.
+- Log at Debug when a SET is suppressed: "SET suppressed for {CommandName}@{Ip}:{Port} -- last sent {ElapsedMs}ms ago".
+- Future milestone: add HysteresisDelta to ThresholdOptions.
+
+**Warning signs:**
+- Same (Ip, Port, CommandName) firing at suppression-window intervals in dispatch logs.
+- Metric value in Grafana oscillating near the threshold boundary.
+
+**Phase that should address it:** Threshold evaluation phase; document suppression as the flap guard.
+
+---
+
+### Pitfall S12: SnapshotJob Must Not Dispatch Through the MediatR Pipeline
+
+**What goes wrong:**
+MetricPollJob dispatches SnmpOidReceived via ISender.Send through the full MediatR pipeline. If SnapshotJob cargo-cults this pattern for SET commands using a new IRequest<Unit>, MediatR open behaviors fire for the new type. LoggingBehavior and ExceptionBehavior are harmless, but introducing an unnecessary dispatch creates maintenance confusion and risks unexpected behavior if ValidationBehavior evolves.
+
+**Prevention:**
+- SnapshotJob calls ISnmpClient.SetAsync directly -- evaluate threshold, resolve OID from ICommandMapService, build Variable, call SetAsync. No MediatR dispatch.
+- Add code comment: "// Direct ISnmpClient.SetAsync call -- not via MediatR pipeline (OID already resolved; OtelMetricHandler not needed for SET operations)".
+
+**Warning signs:**
+- A new IRequest<Unit> type appearing unexpectedly in LoggingBehavior log output.
+- ValidationBehavior rejecting a command request due to missing DeviceName or OID format.
+
+**Phase that should address it:** SnapshotJob design phase.
+
+---
+
+### Pitfall S13: Suppression Cache Check-Then-Act Race if Parallelism Is Introduced Later
+
+**What goes wrong:**
+The check-then-act pattern (read not suppressed, evaluate, fire SET, write suppressed) is not atomic. Under the current sequential SnapshotJob this is safe. If a future plan introduces Task.WhenAll across tenants, two concurrent evaluations can both read "not suppressed" for the same (Ip, Port, CommandName) and both fire.
+
+**Prevention:**
+- Sequential evaluation is mandatory. DisallowConcurrentExecution prevents job-level concurrency; never add inner task parallelism.
+- Document in SnapshotJob XML comment: "// Sequential evaluation is intentional -- suppression cache atomicity depends on single-threaded job execution".
+
+**Warning signs:**
+- Duplicate SET commands for the same (Ip, Port, CommandName) within a single job cycle.
+
+**Phase that should address it:** Suppression cache implementation.
+
+---
+
+## Minor Pitfalls
+
+---
+
+### Pitfall S14: SnapshotJob Liveness Stamping Must Follow MetricPollJob Pattern
+
+**What goes wrong:**
+MetricPollJob stamps ILivenessVectorService in a finally block unconditionally (MetricPollJob.cs lines 141-142). If SnapshotJob omits this, LivenessHealthCheck reports the pod as unhealthy after any exception -- even when the pod and pipeline are fully healthy.
+
+**Prevention:**
+- Copy the MetricPollJob finally block exactly: stamp liveness with the job key, clear OperationCorrelationId.
+- Register the SnapshotJob key with IJobIntervalRegistry so LivenessHealthCheck computes the correct staleness threshold (15s x GraceMultiplier = 30s default).
+
+**Warning signs:**
+- Pod reports liveness unhealthy but all polls are succeeding.
+- LivenessHealthCheck log showing SnapshotJob key absent from the liveness vector.
+
+**Phase that should address it:** SnapshotJob liveness integration.
+
+---
+
+### Pitfall S15: Config Apply Order Race -- Command Map Not Loaded at First Cycle
+
+**What goes wrong:**
+CommandMapWatcherService and TenantVectorWatcherService are independent watchers. The first SnapshotJob cycle may execute before CommandMapWatcherService receives its first watch event. All ResolveCommandOid calls return null on the first 1-2 cycles.
+
+**Prevention:**
+- Same mitigation as S8: null-check + Warning log + skip. Transient startup condition.
+- CS-07 guidance in ServiceCollectionExtensions.cs documents recommended apply order for operators.
+
+**Warning signs:**
+- All command slot lookups returning null on the first cycle only.
+
+**Phase that should address it:** SnapshotJob startup tolerance.
+
+---
+
+### Pitfall S16: ValueType Case Sensitivity in JSON Deserialization
+
+**What goes wrong:**
+CommandSlotOptions.ValueType accepts "Integer32", "IpAddress", "OctetString". System.Text.Json default options do not normalize string values. An operator who writes "integer32" or "IPADDRESS" gets a mismatch at dispatch time, causing the slot to be silently skipped or throwing an unhandled switch case.
+
+**Prevention:**
+- At load-time validation, compare ValueType with StringComparison.OrdinalIgnoreCase and normalize to canonical casing before storing.
+- Log an Error for an unrecognized ValueType with the exact received value.
+
+**Warning signs:**
+- Command slot present in config that never appears in dispatch logs, with no Error log from the validator.
+
+**Phase that should address it:** CommandSlot validation phase.
+
+---
+
+## Phase-Specific Warnings (SnapshotJob & SET)
+
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|----------------|------------|
+| ISnmpClient extension | Missing SetAsync on SharpSnmpClient (S6) | Add to interface + implementation in same plan |
+| SnapshotJob skeleton | No [DisallowConcurrentExecution] (S2) | Apply from the first plan; never remove |
+| Threshold evaluation logic | ReadSlot() null coerced to 0.0 (S1) | Explicit null guard + test for unwritten slot |
+| Threshold evaluation logic | Both Min/Max null = silent always-fire (S4) | Warning at load time; document semantics |
+| CommandSlot validation | Value not validated against ValueType (S5) | Dry-run parse at load time; per-slot try/catch at dispatch |
+| Suppression cache | Unbounded growth (S3) | Time-based eviction sweep after each cycle |
+| Suppression cache | Check-then-act race (S13) | Sequential mandate; XML comment in SnapshotJob |
+| SnapshotJob dispatch | Null OID from command map (S8) | Null-check + Warning log + skip slot |
+| SnapshotJob timeout design | Long SETs causing misfire (S10) | Per-command CancellationTokenSource with 2s ceiling |
+| SnapshotJob liveness | Missing finally stamp (S14) | Copy MetricPollJob finally block pattern exactly |
+| MediatR usage | Cargo-culting poll dispatch for SET (S12) | Direct ISnmpClient.SetAsync; document in code comment |
+
+---
+
+## Sources (SnapshotJob & SET Section)
+
+| Claim | Source | Confidence |
+|-------|--------|------------|
+| ReadSlot() returns null before first write | MetricSlotHolder.cs line 76 | HIGH |
+| ThresholdOptions.Min and .Max are double? | ThresholdOptions.cs lines 9-10 | HIGH |
+| CommandSlotOptions.Value is always string | CommandSlotOptions.cs line 28 | HIGH |
+| ISnmpClient exposes only GetAsync | ISnmpClient.cs lines 16-21 | HIGH |
+| SharpSnmpClient delegates to Messenger.GetAsync | SharpSnmpClient.cs line 21 | HIGH |
+| Messenger.SetAsync(VersionCode, IPEndPoint, OctetString, IList<Variable>, CancellationToken) exists | SharpSnmpLib 12.5.7 SharpSnmpLib.xml | HIGH |
+| MetricPollJob uses [DisallowConcurrentExecution] | MetricPollJob.cs line 22 | HIGH |
+| Multiple tenants share same (Ip, Port) via routing index | TenantVectorRegistry.cs lines 130-153 | HIGH |
+| TenantVectorOptionsValidator is a no-op | TenantVectorOptionsValidator.cs line 12 | HIGH |
+| CommandMapWatcherService is independent of TenantVectorWatcherService | ServiceCollectionExtensions.cs lines 248-251 | HIGH |
+| Both-null threshold = always-violated semantics | v1.9 requirements THR-04 | HIGH |
+| MetricPollJob liveness stamp in finally block | MetricPollJob.cs lines 141-142 | HIGH |
+| Open behaviors fire for all IRequest<T> types dispatched via ISender.Send | ServiceCollectionExtensions.cs lines 384-396 | HIGH |
+| CommandMapService.ResolveCommandOid returns null for missing name | CommandMapService.cs lines 44-46 | HIGH |
+| Carry-over logic copies last sample on reload | TenantVectorRegistry.cs lines 99-104 | HIGH |
+
+---
+
+*SnapshotJob & SET section added: 2026-03-16*

@@ -1,17 +1,18 @@
-# Technology Stack — Combined / Synthetic Metrics Milestone
+# Technology Stack — SnapshotJob & SNMP SET Command Execution Milestone
 
 **Project:** Simetra119 SNMP Collector
-**Researched:** 2026-03-15
-**Milestone scope:** Adding combined (synthetic) numeric metrics computed from poll responses
-**Out of scope:** Any new NuGet packages; changes to existing behaviors unrelated to synthesis
+**Researched:** 2026-03-16
+**Milestone scope:** Tenant evaluation (threshold-based) + SNMP SET control loop via SnapshotJob
+**Out of scope:** Re-researching existing MediatR pipeline, Quartz scheduling, OTel, leader election
 
 ---
 
 ## Executive Decision
 
-**Zero new NuGet packages.** Every type needed for synthetic metric dispatch is already present in the
-existing codebase. The feature requires targeted additions to three existing files and one new enum
-member — no new classes, no new services, no new infrastructure.
+**Zero new NuGet packages.** Every API needed for SNMP SET, command worker queuing, suppression
+caching, and priority-based SnapshotJob execution is present in the existing stack:
+`Lextm.SharpSnmpLib 12.5.7`, `System.Threading.Channels` (BCL), `System.Collections.Concurrent` (BCL),
+and `Quartz.Extensions.Hosting 3.15.1`.
 
 ---
 
@@ -20,309 +21,362 @@ member — no new classes, no new services, no new infrastructure.
 | Technology | Version | Role |
 |------------|---------|------|
 | .NET / C# | 9.0 | Runtime |
-| Lextm.SharpSnmpLib | 12.5.7 | SNMP types — `SnmpType` enum, `ISnmpData` hierarchy |
-| MediatR | 12.5.0 | Pipeline dispatch via `ISender.Send` |
-| OpenTelemetry SDK | 1.15.0 | `Gauge<double>.Record` / `TagList` |
-| Quartz.Extensions.Hosting | 3.15.1 | `[DisallowConcurrentExecution]` on `MetricPollJob` |
-| System.Diagnostics.Metrics | BCL (.NET 9) | `TagList`, `Gauge<double>` |
+| Lextm.SharpSnmpLib | 12.5.7 | SNMP GET + **SET** via `Messenger` |
+| MediatR | 12.5.0 | Pipeline dispatch (unchanged) |
+| Quartz.Extensions.Hosting | 3.15.1 | `SnapshotJob` scheduling |
+| System.Threading.Channels | BCL (.NET 9) | Already used by trap pipeline; reused for command worker queue |
+| System.Collections.Concurrent | BCL (.NET 9) | `ConcurrentDictionary<K,V>` for suppression cache |
+| OpenTelemetry SDK | 1.15.0 | Counter increments for SET outcomes |
 
 ---
 
-## Question 1: Does the MediatR pipeline need changes for synthetic dispatch?
+## Question 1: How to call `Messenger.SetAsync` — exact API
 
-**Answer: No behavioral changes. One guard needed in `ValidationBehavior`.**
+**Verified directly from `SharpSnmpLib.dll` 12.5.7 via reflection. Not guessed.**
 
-The existing `ISender.Send` path works without modification. The synthetic message is constructed by
-`MetricPollJob.DispatchResponseAsync` after the varbind loop completes, then sent through the same
-`_sender.Send(msg, ct)` call. MediatR routes all `SnmpOidReceived` messages through the same behavior
-chain: Logging → Exception → Validation → OidResolution → ValueExtraction → TenantVectorFanOut →
-OtelMetricHandler.
-
-However, `ValidationBehavior` currently rejects any message whose `Oid` does not match the pattern
-`^\d+(\.\d+){1,}$` (verified in `ValidationBehavior.cs` line 23). A synthetic message with `Oid = ""`
-will be rejected at this gate and dropped with a Warning log and `IncrementRejected`. This is a
-hard blocker.
-
-**Required change to `ValidationBehavior`:** Allow the empty OID when `Source == SnmpSource.Synthetic`.
-The guard should be:
+### Overloads
 
 ```csharp
-// Allow synthetic messages to bypass OID format check
-if (msg.Source != SnmpSource.Synthetic && !OidPattern.IsMatch(msg.Oid))
+// Without cancellation token
+Task<IList<Variable>> Messenger.SetAsync(
+    VersionCode version,
+    IPEndPoint endpoint,
+    OctetString community,
+    IList<Variable> variables)
+
+// With cancellation token (USE THIS ONE)
+Task<IList<Variable>> Messenger.SetAsync(
+    VersionCode version,
+    IPEndPoint endpoint,
+    OctetString community,
+    IList<Variable> variables,
+    CancellationToken token)
+```
+
+The return type is `Task<IList<Variable>>` — the response varbinds echoed back by the agent.
+For a SET, the returned list contains the same OID/value pairs from the request if the agent
+accepted the operation. This return value is informational; most callers discard it or log it.
+
+### Variable construction for SET
+
+`Variable` has two constructors. For SET use:
+
+```csharp
+new Variable(ObjectIdentifier id, ISnmpData data)
+```
+
+The `id` is built from the OID string resolved via `ICommandMapService.ResolveCommandOid`.
+The `data` is the value to write — type must match the target OID's SNMP MIB type:
+
+| `CommandSlotOptions.ValueType` | `ISnmpData` constructor |
+|-------------------------------|------------------------|
+| `"Integer32"` | `new Integer32(int value)` |
+| `"OctetString"` | `new OctetString(string content)` |
+| `"IpAddress"` | `new IP(string ip)` — **NOTE: type is `Lextm.SharpSnmpLib.IP`, not `IpAddress`** |
+
+```csharp
+// Building the variable list from a CommandSlotOptions entry:
+ISnmpData snmpValue = slot.ValueType switch
 {
-    // existing rejection path
+    "Integer32"  => new Integer32(int.Parse(slot.Value)),
+    "OctetString" => new OctetString(slot.Value),
+    "IpAddress"  => new IP(slot.Value),
+    _            => throw new InvalidOperationException($"Unknown ValueType: {slot.ValueType}")
+};
+
+var oid = new ObjectIdentifier(_commandMapService.ResolveCommandOid(slot.CommandName)
+    ?? throw new InvalidOperationException($"Command {slot.CommandName} not in map"));
+
+var variables = new List<Variable> { new Variable(oid, snmpValue) };
+
+var response = await Messenger.SetAsync(
+    VersionCode.V2,
+    new IPEndPoint(IPAddress.Parse(slot.Ip), slot.Port),
+    new OctetString(communityString),
+    variables,
+    cancellationToken);
+```
+
+### Exception handling for SET
+
+SharpSnmpLib throws these on SET failure (verified via reflection):
+
+| Exception | Meaning |
+|-----------|---------|
+| `Lextm.SharpSnmpLib.Messaging.TimeoutException` | Agent did not respond within timeout. Has `Timeout` (int ms) and `Agent` (IPAddress) properties. Extends `OperationException`. |
+| `Lextm.SharpSnmpLib.Messaging.ErrorException` | Agent responded with SNMP error PDU (e.g. `noAccess`, `notWritable`). Has `Body` (ISnmpMessage) and `Agent` (IPAddress) properties. |
+| `Lextm.SharpSnmpLib.SnmpException` | Encoding or protocol error. Base class for library exceptions. |
+| `OperationCanceledException` | `CancellationToken` was cancelled (host shutdown or linked timeout CTS). |
+
+**Important naming collision:** `Lextm.SharpSnmpLib.Messaging.TimeoutException` and
+`System.TimeoutException` share the name. Use a `using` alias or fully-qualified name to avoid
+CS0104 ambiguity:
+
+```csharp
+using SnmpTimeout = Lextm.SharpSnmpLib.Messaging.TimeoutException;
+```
+
+### Extending `ISnmpClient` for SET
+
+Add `SetAsync` to the interface following the same pattern as `GetAsync`:
+
+```csharp
+public interface ISnmpClient
+{
+    Task<IList<Variable>> GetAsync(
+        VersionCode version, IPEndPoint endpoint, OctetString community,
+        IList<Variable> variables, CancellationToken ct);
+
+    Task<IList<Variable>> SetAsync(
+        VersionCode version, IPEndPoint endpoint, OctetString community,
+        IList<Variable> variables, CancellationToken ct);
 }
 ```
 
-**Required change to `OidResolutionBehavior`:** The behavior calls
-`_oidMapService.Resolve(msg.Oid)` for every `SnmpOidReceived`. For a synthetic message, `Oid`
-is `""` and `MetricName` is already pre-set by the caller. The OID map will return `Unknown` for
-an empty string, overwriting the pre-set `MetricName` with `"unknown"`. This is a second hard blocker.
-
-The guard should be:
+`SharpSnmpClient` implementation:
 
 ```csharp
-// Skip OID resolution when MetricName is already set (synthetic messages)
-if (msg.Source != SnmpSource.Synthetic)
+public Task<IList<Variable>> SetAsync(
+    VersionCode version, IPEndPoint endpoint, OctetString community,
+    IList<Variable> variables, CancellationToken ct)
+    => Messenger.SetAsync(version, endpoint, community, variables, ct);
+```
+
+This is the only change to the SNMP client abstraction.
+
+---
+
+## Question 2: Queue pattern for command worker
+
+**Recommendation: `Channel<CommandRequest>` (bounded, DropOldest), single consumer service.**
+
+### Why `Channel<T>` over alternatives
+
+The project already uses `Channel<VarbindEnvelope>` in `TrapChannel` for exactly this pattern:
+bounded buffer, single reader, multiple potential writers, drop-on-full backpressure. Reusing
+the same primitive keeps the codebase consistent and avoids new concepts.
+
+| Pattern | Thread-safe writes | Backpressure | Cancellation | Used in project | Verdict |
+|---------|-------------------|--------------|--------------|----------------|---------|
+| `Channel<T>` (bounded) | Yes | DropOldest | Native `CancellationToken` | YES (TrapChannel) | **USE THIS** |
+| `BlockingCollection<T>` | Yes | Bounded block | Manual token threading | No | Avoid — blocking semantics, no async drain |
+| `ConcurrentQueue<T>` | Yes | None | Manual | No | Avoid — no built-in backpressure |
+| Custom lock-based queue | Yes | Manual | Manual | No | Avoid — unnecessary complexity |
+
+### Configuration
+
+```csharp
+var options = new BoundedChannelOptions(capacity: 256)
 {
-    msg.MetricName = _oidMapService.Resolve(msg.Oid);
-    ...
+    FullMode = BoundedChannelFullMode.DropOldest,
+    SingleWriter = false,   // SnapshotJob (multiple Quartz threads) writes
+    SingleReader = true,    // CommandWorkerService single consumer
+    AllowSynchronousContinuations = false,
+};
+_channel = Channel.CreateBounded<CommandRequest>(options, itemDropped: cmd =>
+{
+    // Increment snmp.command.dropped counter
+    _metrics.IncrementCommandDropped(cmd.TenantId);
+});
+```
+
+### `CommandRequest` record
+
+```csharp
+public sealed record CommandRequest(
+    string TenantId,
+    string CommandName,
+    string Ip,
+    int Port,
+    string CommunityString,
+    string Value,
+    string ValueType,
+    DateTimeOffset EnqueuedAt);
+```
+
+Immutable record — safe to pass across channel without copying.
+
+### Consumer service
+
+`CommandWorkerService : BackgroundService` (or `IHostedService`) drains the channel
+using `await foreach` over `_channel.Reader.ReadAllAsync(stoppingToken)`, calling
+`ISnmpClient.SetAsync` per item. This mirrors `ChannelConsumerService` exactly.
+
+---
+
+## Question 3: Suppression cache — thread-safe time-based deduplication
+
+**Recommendation: `ConcurrentDictionary<string, DateTimeOffset>` with TTL check.**
+
+No `IMemoryCache`, no `Microsoft.Extensions.Caching.Memory` — those are already in the
+`Microsoft.AspNetCore.App` framework reference but add unnecessary abstraction for a
+single-purpose TTL map. `ConcurrentDictionary` is simpler, has no eviction background thread,
+and the access pattern here is write-heavy at trigger time and read-heavy during evaluation.
+
+### Pattern
+
+```csharp
+private readonly ConcurrentDictionary<string, DateTimeOffset> _suppressedUntil = new();
+
+/// <summary>
+/// Returns true if the command is currently suppressed (a SET was fired recently).
+/// </summary>
+public bool IsSuppressed(string tenantId, string commandName)
+{
+    var key = $"{tenantId}:{commandName}";
+    return _suppressedUntil.TryGetValue(key, out var until)
+        && DateTimeOffset.UtcNow < until;
+}
+
+/// <summary>
+/// Marks the command as suppressed for the given duration.
+/// </summary>
+public void Suppress(string tenantId, string commandName, TimeSpan duration)
+{
+    var key = $"{tenantId}:{commandName}";
+    _suppressedUntil[key] = DateTimeOffset.UtcNow + duration;
 }
 ```
 
-`ValueExtractionBehavior` does not need changes: synthetic messages arrive with `ExtractedValue`
-already set (the computed aggregate). The behavior's `switch (msg.TypeCode)` will match `Integer32`
-(the recommended type, see Question 4) and set `ExtractedValue` from `msg.Value`. This means the
-caller must also populate `msg.Value` with an `Integer32` wrapping the computed double. Alternatively,
-the synthetic message can set `ExtractedValue` directly and the `ValueExtractionBehavior` will
-overwrite it with the same value from the `Integer32` wrapper — redundant but harmless.
+### Thread-safety analysis
 
-`TenantVectorFanOutBehavior` does not need changes. It routes by `(ip, port, metricName)`. A
-synthetic message with a pre-set `MetricName` will route correctly to any tenant slot configured
-with that metric name, provided the `AgentIp` and port match a device in the registry. If no slot
-is configured for the synthetic metric, fan-out simply finds nothing and moves on.
-
-`OtelMetricHandler` does not need changes. It reads `MetricName`, `Oid`, `DeviceName`,
-`AgentIp`, `Source`, `TypeCode`, and `ExtractedValue` — all of which the synthetic message provides.
-
----
-
-## Question 2: How should numeric aggregation (sum/diff/mean) be implemented?
-
-**Answer: Inline LINQ inside `DispatchResponseAsync`. No new service or class needed.**
-
-The aggregation computes a single `double` from a local `IList<Variable>` that is fully resolved
-before `DispatchResponseAsync` is called. The variables are held in a local variable on the call
-stack. There is no shared mutable state — the list is created fresh per poll execution. Aggregation
-is therefore a pure local computation.
-
-Recommended implementation pattern:
+- `ConcurrentDictionary` indexer write (`[key] = value`) is atomic (lock-free on the bucket).
+- `TryGetValue` is lock-free read — safe to call from multiple Quartz threads simultaneously.
+- No compound read-modify-write is needed: each evaluation either reads (check) or writes
+  (set after fire). There is no "check then conditionally update" race that requires a
+  transaction — if two Quartz threads simultaneously evaluate the same command slot, both
+  may fire. To prevent double-firing use `AddOrUpdate` with a condition:
 
 ```csharp
-// Inside DispatchResponseAsync, after the varbind foreach loop:
-// 1. Collect the numeric values that were dispatched for the named components.
-// 2. Compute the aggregate.
-// 3. Dispatch a synthetic SnmpOidReceived.
-
-var componentValues = response
-    .Where(v => v.Data.TypeCode is SnmpType.Integer32 or SnmpType.Gauge32
-                               or SnmpType.Counter32 or SnmpType.Counter64
-                               or SnmpType.TimeTicks)
-    .Select(v => ExtractDouble(v.Data))   // local static helper, same logic as ValueExtractionBehavior
-    .ToList();
-
-if (componentValues.Count > 0)
+public bool TrySuppress(string tenantId, string commandName, TimeSpan duration)
 {
-    var aggregate = componentValues.Sum();  // or .Average(), or pair-wise diff
+    var key = $"{tenantId}:{commandName}";
+    var until = DateTimeOffset.UtcNow + duration;
 
-    await _sender.Send(new SnmpOidReceived
-    {
-        Oid            = string.Empty,
-        AgentIp        = IPAddress.Parse(device.ResolvedIp),
-        DeviceName     = device.Name,
-        Value          = new Integer32((int)aggregate),
-        Source         = SnmpSource.Synthetic,
-        TypeCode       = SnmpType.Integer32,
-        MetricName     = "<configured synthetic metric name>",
-        ExtractedValue = aggregate,
-        PollDurationMs = null   // no round-trip concept for synthetic
-    }, ct);
+    // Attempt to add. If key already exists with a future expiry, do not overwrite.
+    var added = _suppressedUntil.TryAdd(key, until);
+    if (added) return true;
+
+    // Key exists — check if it is already active
+    if (_suppressedUntil.TryGetValue(key, out var existing) && DateTimeOffset.UtcNow < existing)
+        return false; // still suppressed, do not fire
+
+    // Expired — overwrite
+    _suppressedUntil[key] = until;
+    return true;
 }
 ```
 
-**Why LINQ, not a new service:**
-- The computation is local to one poll group response. It accesses no shared state.
-- A `SyntheticMetricEngine` service would require injecting a new dependency into `MetricPollJob`,
-  complicate DI registration, and provide no benefit for what is a two-line numeric operation.
-- The `[DisallowConcurrentExecution]` attribute on `MetricPollJob` means only one execution per
-  job instance runs at a time. The aggregate computation is therefore single-threaded within a
-  given poll group (see Question 5).
+This `TrySuppress` pattern returns `true` if the caller should fire the SET (either fresh
+suppression or expired prior suppression). Returns `false` if still within TTL — skip the SET.
 
-**Helper method:** A `private static double ExtractDouble(ISnmpData data)` method in
-`MetricPollJob` (or `DispatchResponseAsync`) mirrors the numeric cases of `ValueExtractionBehavior`
-without the MediatR message overhead. It should not call back into MediatR or any service.
+**Eviction:** Entries are never physically removed, only expire logically. For a fleet of
+N tenants × M commands, the dictionary never exceeds N×M entries. This is bounded by config
+size (validated at load time), not by runtime data volume. No background eviction needed.
 
-**Difference (A - B) pattern:** For rate-like synthetics (e.g., `ifInOctets - ifOutOctets`),
-the poll group config must declare which OIDs are "A" and which are "B". This requires a new config
-field (see Question on `PollOptions` below). If the OID order is guaranteed stable in the SNMP
-response (it is, for a well-behaved agent), ordered index lookup works. The safer approach is OID
-keying: build a `Dictionary<string, double>` from the response, then perform named subtraction.
+### Suppression duration source
 
----
-
-## Question 3: Does OTel handle empty OID labels correctly?
-
-**Answer: Yes, empty string is safe. The risk is null, not empty string.**
-
-Verified from multiple sources:
-
-1. The OTel specification explicitly states: "Empty string should be a valid attribute value" and
-   empty-string values are "considered meaningful and MUST be stored and passed on to processors /
-   exporters." (opentelemetry-specification issue #5501 for Java; same spec applies to .NET.)
-
-2. The problematic case for OTel .NET was **null** tag values, not empty strings. Issues #3451 and
-   #3846 in `opentelemetry-dotnet` document that null values caused silent metric drops or
-   NullReferenceExceptions in `Tags.GetHashCode()`. These were fixed in SDK 1.4.0. The project
-   uses OTel SDK 1.15.0 (confirmed in `SnmpCollector.csproj`), so the null bug is irrelevant.
-
-3. `SnmpMetricFactory.RecordGauge` passes `oid` directly as a `TagList` value (line 44 of
-   `SnmpMetricFactory.cs`). An empty string there is a valid `string` value — `TagList` accepts
-   `object?` per the BCL API, and `string.Empty` boxes to a non-null object.
-
-**Conclusion:** Set `Oid = string.Empty` on synthetic messages. The `oid` label in Prometheus will
-show as an empty string. This is the intended behavior — it signals "no source OID" to dashboards.
-Do not use `null`; that would break the current `TagList` composition.
-
-**Cardinality note:** The `oid` label is currently the highest-cardinality label (one unique value
-per polled OID per device). For a synthetic metric, `oid = ""` creates exactly one label
-combination per `(metric_name, device_name, ip)` tuple — lower cardinality than real OIDs.
-
----
-
-## Question 4: Does the existing `SnmpType` enum cover synthetic needs?
-
-**Answer: A new `SnmpSource.Synthetic` member is needed. `SnmpType` does not need a new member.**
-
-**`SnmpSource` — add `Synthetic` member:**
-
-`SnmpSource.cs` currently defines:
-```csharp
-public enum SnmpSource { Poll, Trap }
-```
-
-A `Synthetic` member is necessary for the two pipeline bypasses described in Question 1
-(ValidationBehavior OID regex guard, OidResolutionBehavior MetricName preservation). Without it,
-there is no clean way for behaviors to distinguish "this OID is intentionally empty" from
-"this message is malformed."
-
-Change to:
-```csharp
-public enum SnmpSource { Poll, Trap, Synthetic }
-```
-
-This is a one-line change. All existing `switch` statements and `if`/`is` checks on `SnmpSource`
-do not enumerate it exhaustively — they check for specific values — so no existing code breaks.
-`TenantVectorFanOutBehavior` has no `SnmpSource` check at all. `OtelMetricHandler` formats source
-as `notification.Source.ToString().ToLowerInvariant()` — the synthetic label will appear as
-`"synthetic"` in the `source` Prometheus label, which is correct and useful.
-
-**`SnmpType` — no new member needed:**
-
-The existing `SnmpType.Integer32` from SharpSnmpLib covers synthetic numeric values. The
-`ValueExtractionBehavior` switch already handles `Integer32` correctly. `OtelMetricHandler`
-dispatches `Integer32` to `RecordGauge`. The computed aggregate (sum/diff/mean as `double`)
-must be wrapped in a `new Integer32((int)aggregate)` to satisfy the `required ISnmpData Value`
-field on `SnmpOidReceived`. Precision loss from the `double → int` cast is acceptable for
-integer network metrics. For sub-integer precision (e.g., percentage averages), `Gauge32` is
-equivalent — it also maps to `RecordGauge` via the same case in `OtelMetricHandler`.
-
-**The `ExtractedValue` shortcut:** Because `ValueExtractionBehavior` runs in the pipeline, the
-caller can set `ExtractedValue = aggregate` directly and also set `Value = new Integer32((int)aggregate)`.
-The behavior will overwrite `ExtractedValue` with the same integer, creating harmless redundancy.
-This is preferable to adding a skip-extraction path because it keeps the behavior's contract intact
-(it always sets `ExtractedValue` from `Value` for numeric types).
-
----
-
-## Question 5: Thread-safety of aggregate computation in `MetricPollJob`
-
-**Answer: No threading concern. `[DisallowConcurrentExecution]` already provides the guarantee.**
-
-`MetricPollJob` is annotated `[DisallowConcurrentExecution]` (verified in `MetricPollJob.cs` line 22).
-Quartz's contract for this attribute: if the trigger fires while the previous execution is still
-running for that job key, Quartz skips the fire. There is at most one active `Execute(...)` call
-per job key at any moment.
-
-The poll response `IList<Variable>` is created fresh per `Execute` call by `_snmpClient.GetAsync`.
-It is local to the call stack and never shared across calls or stored in any field. The aggregate
-computation over this list happens entirely within `DispatchResponseAsync`, which is called once
-per `Execute`. There are no shared mutable fields involved in the aggregation.
-
-`_sender.Send` is the only external call during aggregation. `ISender` (MediatR) is thread-safe
-by design (it is a factory for pipeline invocations). Each `Send` call creates its own pipeline
-instance.
-
-**Conclusion:** No lock, `Interlocked`, or `ConcurrentDictionary` is needed for the aggregation.
-LINQ `Sum()` / `Average()` on a local `List<double>` is sufficient.
-
----
-
-## Required Type Changes Summary
-
-### 1. `SnmpSource.cs` — Add enum member
+Suppression TTL must come from configuration. The natural location is `CommandSlotOptions`
+or a per-tenant `SnapshotOptions`. Recommend a top-level `SnapshotJobOptions` with a default:
 
 ```csharp
-public enum SnmpSource { Poll, Trap, Synthetic }
-```
-
-**Why:** Required by ValidationBehavior and OidResolutionBehavior to distinguish intentional
-synthetic messages from malformed ones. Without this, synthetic messages are either rejected by
-the OID regex check or have their MetricName overwritten by OID resolution.
-
-### 2. `ValidationBehavior.cs` — Guard the OID regex check
-
-```csharp
-if (msg.Source != SnmpSource.Synthetic && !OidPattern.IsMatch(msg.Oid))
-{ /* existing rejection */ }
-```
-
-**Why:** Synthetic messages have `Oid = ""` by design. The existing regex `^\d+(\.\d+){1,}$`
-rejects empty strings. Without this guard, all synthetic messages are dropped.
-
-### 3. `OidResolutionBehavior.cs` — Guard MetricName overwrite
-
-```csharp
-if (msg.Source != SnmpSource.Synthetic)
+public sealed class SnapshotJobOptions
 {
-    msg.MetricName = _oidMapService.Resolve(msg.Oid);
-    ...
+    public const string SectionName = "SnapshotJob";
+
+    /// <summary>
+    /// How long to suppress repeat SETs after one fires. Default 60s.
+    /// </summary>
+    [Range(1, 3600)]
+    public int SuppressionSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// Interval for the SnapshotJob trigger in seconds. Default 30s.
+    /// </summary>
+    [Range(5, 3600)]
+    public int IntervalSeconds { get; set; } = 30;
 }
 ```
 
-**Why:** Synthetic messages have MetricName pre-set by the caller. `_oidMapService.Resolve("")`
-returns `OidMapService.Unknown`, which would overwrite the correct pre-set name.
+---
 
-### 4. `MetricPollJob.cs` — Inline aggregate + synthetic dispatch
+## Question 4: SnapshotJob Quartz configuration
 
-No new field or dependency injection. `DispatchResponseAsync` gains post-loop code that:
-- Extracts numeric values from the response into a local `List<double>`
-- Computes the aggregate with LINQ
-- Constructs and sends a synthetic `SnmpOidReceived`
+**Recommendation: `[DisallowConcurrentExecution]`, single job key, simple interval trigger.**
 
-The synthetic metric name and aggregation function (sum/diff/mean) must come from configuration.
-Whether those live on `PollOptions` or elsewhere is a design decision for the roadmap, but the
-data must flow into `MetricPollJob` via its existing `IJobExecutionContext.MergedJobDataMap`
-(the established pattern for per-job configuration).
+### Why a new job instead of extending `MetricPollJob`
 
-### 5. `PollOptions.cs` — New optional fields for synthetic definition
+`MetricPollJob` is bound 1:1 to a device/poll-group pair and is focused on SNMP GET dispatch.
+`SnapshotJob` reads tenant vectors (all tenants, all slots) and evaluates thresholds across
+all of them in one pass. These are orthogonal concerns and different scheduling requirements.
 
-`PollOptions` currently holds `MetricNames`, `IntervalSeconds`, and `TimeoutMultiplier`. To
-express "after polling these OIDs, compute this aggregate and emit it as a synthetic metric,"
-the poll group needs:
+### Job declaration
 
 ```csharp
-/// Optional. When non-null, a synthetic metric is computed from the poll response
-/// and dispatched after individual varbinds.
-public SyntheticMetricOptions? Synthetic { get; set; }
-```
-
-New supporting type:
-
-```csharp
-public sealed class SyntheticMetricOptions
+[DisallowConcurrentExecution]
+public sealed class SnapshotJob : IJob
 {
-    /// The metric name for the synthetic result. Must exist in the OID map is NOT required —
-    /// it is a user-assigned name for the computed metric.
-    public string MetricName { get; set; } = string.Empty;
-
-    /// Aggregation function. Allowed: "Sum", "Mean", "Diff".
-    /// "Diff" expects exactly 2 MetricNames in the enclosing PollOptions: result = A - B.
-    public string Aggregation { get; set; } = string.Empty;
+    // Inject: ITenantVectorRegistry, ISnmpClient, ICommandMapService,
+    //         ISuppressionCache, PipelineMetricService, ICorrelationService,
+    //         ILivenessVectorService, ILogger<SnapshotJob>
 }
 ```
 
-This follows the existing pattern of `PollOptions` holding polling behavior config, and avoids
-coupling synthetic logic to tenant vectors or OID maps.
+`[DisallowConcurrentExecution]` is required. SnapshotJob walks the full tenant registry and
+may fire multiple SET commands. If a previous execution is still running (e.g. blocked on a
+slow SNMP agent), a new execution would double-evaluate and double-fire suppressed commands.
+The `[DisallowConcurrentExecution]` guarantee from Quartz prevents pile-up on the same job key.
+
+### Quartz registration (inside `AddSnmpScheduling`)
+
+```csharp
+// SnapshotJob: evaluates tenant vectors and fires SNMP SET commands.
+// Registered inside AddQuartz(...) alongside CorrelationJob and MetricPollJob.
+var snapshotKey = new JobKey("snapshot");
+q.AddJob<SnapshotJob>(j => j.WithIdentity(snapshotKey));
+q.AddTrigger(t => t
+    .ForJob(snapshotKey)
+    .WithIdentity("snapshot-trigger")
+    .StartNow()
+    .WithSimpleSchedule(s => s
+        .WithIntervalInSeconds(snapshotOptions.IntervalSeconds)
+        .RepeatForever()
+        .WithMisfireHandlingInstructionNextWithRemainingCount()));
+
+intervalRegistry.Register("snapshot", snapshotOptions.IntervalSeconds);
+```
+
+`WithMisfireHandlingInstructionNextWithRemainingCount` is the established pattern in this
+codebase for all jobs — it skips stale fires rather than catching up.
+
+### Priority-based evaluation pass
+
+The tenant registry exposes `ITenantVectorRegistry.Groups` as `IReadOnlyList<PriorityGroup>`,
+already sorted ascending by priority integer (lowest value = highest priority = evaluated first).
+SnapshotJob iterates `Groups` in order:
+
+```csharp
+foreach (var group in _registry.Groups)         // priority 1 before priority 2
+    foreach (var tenant in group.Tenants)
+        foreach (var holder in tenant.Holders)
+            EvaluateSlot(tenant, holder, ct);
+```
+
+No additional sorting or external priority service is needed — the registry already provides
+the ordered structure from when it was loaded by `TenantVectorRegistry.Reload`.
+
+### Thread pool sizing
+
+Add 1 to `initialJobCount` in `AddSnmpScheduling` for the SnapshotJob:
+
+```csharp
+var initialJobCount = 3; // CorrelationJob + HeartbeatJob + SnapshotJob
+foreach (var device in devicesOptions.Devices)
+    initialJobCount += device.Polls.Count;
+var threadPoolSize = Math.Max(initialJobCount, 50);
+```
+
+The existing `Math.Max(..., 50)` floor means this change only matters for very small fleets.
 
 ---
 
@@ -330,26 +384,58 @@ coupling synthetic logic to tenant vectors or OID maps.
 
 | Omission | Rationale |
 |----------|-----------|
-| New `SyntheticMetricEngine` service | Aggregation is a local two-line LINQ operation; a service adds DI complexity for zero benefit |
-| New `SnmpType` enum member (e.g., `Synthetic`) | `Integer32` or `Gauge32` covers synthetic numeric values; both route to `RecordGauge` |
-| `null` for `Oid` on synthetic messages | OTel .NET had a null-tag-value bug (fixed in 1.4.0, but `string.Empty` is safer and explicit) |
-| Separate MediatR request type for synthetic | Reusing `SnmpOidReceived` with `Source = Synthetic` reuses the full behavior chain; a second type doubles the behavior registration surface |
-| `[AllowConcurrentExecution]` on `MetricPollJob` | Current concurrency guard is correct; relaxing it would require locking the aggregate computation |
-| Pre-resolution of synthetic MetricName to OID | Synthetic metrics have no source OID; OID resolution is irrelevant and should be skipped (see OidResolutionBehavior guard above) |
-| New NuGet packages | Every required type exists in SharpSnmpLib 12.5.7, .NET 9 BCL, and existing OTel 1.15.0 |
+| New NuGet packages | Every required API exists in SharpSnmpLib 12.5.7 + .NET 9 BCL |
+| `IMemoryCache` for suppression | `ConcurrentDictionary<string, DateTimeOffset>` is simpler, no background thread, bounded by config size |
+| `BlockingCollection<T>` for command queue | `Channel<T>` already used in codebase; blocking semantics are inferior for async drain |
+| `[AllowConcurrentExecution]` on `SnapshotJob` | Would require locking the suppression cache write path; `[DisallowConcurrentExecution]` makes locking unnecessary |
+| Separate MediatR message for SET dispatch | SNMP SET is a side effect, not an observable metric; routing through MediatR pipeline adds unnecessary overhead and behavior overhead |
+| `IpAddress` as the SharpSnmpLib IP type name | The actual type is `Lextm.SharpSnmpLib.IP`; using `IpAddress` will produce CS0246 |
+| `System.TimeoutException` catch for SNMP timeout | SharpSnmpLib throws `Lextm.SharpSnmpLib.Messaging.TimeoutException` (extends `OperationException`), not BCL `System.TimeoutException` |
 
 ---
 
-## Integration Fit
+## Required Changes Summary
 
-| Concern | Existing pattern | Synthetic fit |
-|---------|-----------------|---------------|
-| Source label in Prometheus | `"poll"` or `"trap"` | `"synthetic"` (from `SnmpSource.Synthetic.ToString().ToLowerInvariant()`) |
-| OID label in Prometheus | The source OID string | `""` (empty string, valid OTel tag value) |
-| MetricName routing | Set by OidResolutionBehavior | Pre-set by caller; OidResolutionBehavior bypassed via Source guard |
-| Tenant vector fan-out | Routes by (ip, port, metricName) | Works unchanged if a tenant slot is configured with the synthetic MetricName |
-| `MetricSlotHolder.WriteValue` | Called by TenantVectorFanOutBehavior | Called unchanged; synthetic `TypeCode = Integer32`, `Source = Synthetic` stored on holder |
-| Duration recording in OtelMetricHandler | `PollDurationMs.HasValue` guard | `PollDurationMs = null` on synthetic — no duration recorded (correct: no round-trip) |
+### 1. `ISnmpClient.cs` — Add `SetAsync`
+
+Add one method to the existing interface. `SharpSnmpClient.cs` delegates directly to
+`Messenger.SetAsync`. No other files change for this addition.
+
+### 2. New `ISuppressionCache.cs` + `SuppressionCache.cs`
+
+Singleton. Internal state: `ConcurrentDictionary<string, DateTimeOffset>`. No DI dependencies.
+Registered as `AddSingleton<ISuppressionCache, SuppressionCache>()` in `AddSnmpPipeline` or
+`AddSnmpScheduling`.
+
+### 3. New `ICommandChannel.cs` + `CommandChannel.cs`
+
+Mirrors `ITrapChannel` / `TrapChannel` exactly. `BoundedChannelOptions` with `DropOldest`.
+Registered as `AddSingleton<ICommandChannel, CommandChannel>()`.
+
+### 4. New `CommandWorkerService.cs`
+
+`BackgroundService`. Drains `ICommandChannel.Reader` via `ReadAllAsync`. Calls
+`ISnmpClient.SetAsync` per `CommandRequest`. Increments OTel counters on success/failure.
+
+### 5. New `SnapshotJob.cs`
+
+`[DisallowConcurrentExecution] IJob`. Iterates `ITenantVectorRegistry.Groups`, evaluates
+`MetricSlotHolder.Threshold` against `ReadSlot().Value`, checks `ISuppressionCache.TrySuppress`,
+enqueues `CommandRequest` to `ICommandChannel.Writer`. Does NOT call `SetAsync` directly —
+that is the worker's concern.
+
+### 6. New `SnapshotJobOptions.cs`
+
+Two fields: `IntervalSeconds` (default 30), `SuppressionSeconds` (default 60). Bound and
+validated in `AddSnmpScheduling` following the existing `CorrelationJobOptions` pattern.
+
+### 7. `ServiceCollectionExtensions.cs` — Registration additions
+
+- `AddSingleton<ISuppressionCache, SuppressionCache>()` in `AddSnmpPipeline`
+- `AddSingleton<ICommandChannel, CommandChannel>()` in `AddSnmpPipeline`
+- `AddHostedService<CommandWorkerService>()` in `AddSnmpPipeline`
+- SnapshotJob + trigger in `AddSnmpScheduling` inside `AddQuartz(...)`
+- Bump `initialJobCount` by 1
 
 ---
 
@@ -357,35 +443,38 @@ coupling synthetic logic to tenant vectors or OID maps.
 
 | Area | Confidence | Source |
 |------|------------|--------|
-| MediatR pipeline behavior chain order | HIGH | Read `ValidationBehavior.cs`, `OidResolutionBehavior.cs`, `ValueExtractionBehavior.cs`, `TenantVectorFanOutBehavior.cs`, `OtelMetricHandler.cs` directly |
-| ValidationBehavior OID regex rejects `""` | HIGH | Read regex pattern directly from `ValidationBehavior.cs` line 23 |
-| OidResolutionBehavior overwrites MetricName unconditionally | HIGH | Read behavior code directly; no existing guard |
-| OTel empty string tag safety | MEDIUM | OTel specification states empty strings are meaningful and must be preserved; .NET SDK null-tag bug is fixed in 1.4.0; project uses 1.15.0. Direct SDK code read was rate-limited, so not personally verified at source level |
-| `[DisallowConcurrentExecution]` thread-safety guarantee | HIGH | Read annotation directly in `MetricPollJob.cs` line 22; Quartz contract is well-documented |
-| `SnmpType.Integer32` covers synthetic numeric values | HIGH | Read `OtelMetricHandler.cs` and `ValueExtractionBehavior.cs` — Integer32 case exists and routes to `RecordGauge` |
-| No new NuGet packages needed | HIGH | All required types identified in existing source files |
+| `Messenger.SetAsync` exact signatures | HIGH | Reflected from `SharpSnmpLib.dll` 12.5.7 at runtime via `dotnet run` |
+| `Lextm.SharpSnmpLib.IP` type name (not `IpAddress`) | HIGH | Reflected from DLL; `IP.TypeCode` returns `SnmpType.IPAddress` |
+| `Variable(ObjectIdentifier, ISnmpData)` constructor | HIGH | Reflected from DLL |
+| `ErrorException`, `TimeoutException` hierarchy | HIGH | Reflected from DLL; both extend `OperationException` |
+| `Channel<T>` as command queue | HIGH | Read `TrapChannel.cs` directly; same pattern |
+| `ConcurrentDictionary` suppression cache thread safety | HIGH | BCL documentation; `TryAdd`/indexer are atomic per bucket |
+| `[DisallowConcurrentExecution]` guarantee from Quartz | HIGH | Read in `MetricPollJob.cs`, `CorrelationJob.cs`; Quartz 3.x contract |
+| `ITenantVectorRegistry.Groups` already priority-sorted | HIGH | Read `TenantVectorRegistry.Reload` — uses `SortedDictionary<int, List<Tenant>>` ascending |
+| No new NuGet packages needed | HIGH | All required types identified in existing source + BCL |
 
 ---
 
 ## Sources
 
-All sources read directly from repository (no hypothesis):
+All authoritative sources read directly:
 
-- `src/SnmpCollector/Pipeline/SnmpOidReceived.cs` — field inventory, `required ISnmpData Value`, `Source` type
-- `src/SnmpCollector/Pipeline/SnmpSource.cs` — confirmed only `Poll` and `Trap` exist; `Synthetic` is missing
-- `src/SnmpCollector/Pipeline/Behaviors/ValidationBehavior.cs` — OID regex pattern, rejection path
-- `src/SnmpCollector/Pipeline/Behaviors/OidResolutionBehavior.cs` — unconditional `msg.MetricName =` assignment
-- `src/SnmpCollector/Pipeline/Behaviors/ValueExtractionBehavior.cs` — numeric TypeCode switch, `ExtractedValue` assignment
-- `src/SnmpCollector/Pipeline/Behaviors/TenantVectorFanOutBehavior.cs` — routing logic, no SnmpSource check
-- `src/SnmpCollector/Pipeline/Handlers/OtelMetricHandler.cs` — `source` label, `Integer32` → `RecordGauge` path
-- `src/SnmpCollector/Jobs/MetricPollJob.cs` — `[DisallowConcurrentExecution]`, `DispatchResponseAsync` structure
-- `src/SnmpCollector/Configuration/PollOptions.cs` — current fields, extension point for `SyntheticMetricOptions`
-- `src/SnmpCollector/Telemetry/SnmpMetricFactory.cs` — `TagList` composition, `oid` tag, empty string safety
-- `src/SnmpCollector/SnmpCollector.csproj` — OpenTelemetry SDK 1.15.0 version confirmed
-- OTel specification (via WebSearch): empty string is a valid, meaningful attribute value
-- opentelemetry-dotnet issues #3451 and #3846 (via WebSearch): null tag bug fixed in SDK 1.4.0; empty string is not the problematic case
+- `src/SnmpCollector/Pipeline/ISnmpClient.cs` — existing interface, extension point
+- `src/SnmpCollector/Pipeline/SharpSnmpClient.cs` — `Messenger.GetAsync` delegation pattern
+- `src/SnmpCollector/Pipeline/TrapChannel.cs` — `Channel<T>` bounded channel pattern
+- `src/SnmpCollector/Pipeline/TenantVectorRegistry.cs` — `SortedDictionary` priority ordering
+- `src/SnmpCollector/Pipeline/MetricSlotHolder.cs` — `ThresholdOptions`, `ReadSlot()`
+- `src/SnmpCollector/Configuration/CommandSlotOptions.cs` — `Ip`, `Port`, `CommandName`, `Value`, `ValueType`
+- `src/SnmpCollector/Configuration/ThresholdOptions.cs` — `Min`/`Max` fields
+- `src/SnmpCollector/Jobs/MetricPollJob.cs` — `[DisallowConcurrentExecution]`, Quartz `Execute` pattern
+- `src/SnmpCollector/Extensions/ServiceCollectionExtensions.cs` — full registration flow
+- `SharpSnmpLib.dll` 12.5.7 via reflection (`dotnet run` against NuGet cache):
+  - `Messenger.SetAsync` overloads and return types
+  - `Variable` constructors
+  - `IP`, `Integer32`, `OctetString`, `Gauge32` constructors
+  - `ErrorException`, `TimeoutException`, `SnmpException` hierarchy
 
 ---
 
-*Stack research for: Combined / Synthetic Metrics milestone*
-*Researched: 2026-03-15*
+*Stack research for: SnapshotJob & SNMP SET Command Execution milestone*
+*Researched: 2026-03-16*
