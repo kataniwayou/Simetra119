@@ -319,6 +319,275 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     // -------------------------------------------------------------------------
+    // Tier 3: Evaluate gate tests
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void Execute_AllEvaluateViolated_ProceedsToTier4()
+    {
+        // Resolved NOT all violated (prerequisite for reaching Tier 3)
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0); // In range → not violated
+
+        // Evaluate holder violated (value below Min)
+        var eval1 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 });
+        WriteValue(eval1, 5.0); // Below Min → violated
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
+        var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmd });
+
+        _job.EvaluateTenant(tenant);
+
+        // Tier 4 reached → command should be enqueued
+        Assert.True(_commandChannel.Reader.TryRead(out var request));
+        Assert.Equal("reset", request!.CommandName);
+    }
+
+    [Fact]
+    public void Execute_OneEvaluateInRange_Healthy()
+    {
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0);
+
+        var eval1 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 });
+        WriteValue(eval1, 5.0); // Violated
+
+        var eval2 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(eval2, 50.0); // In range → NOT violated
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
+        var tenant = MakeTenant(new[] { resolved, eval1, eval2 }, new[] { cmd });
+        var result = _job.EvaluateTenant(tenant);
+
+        Assert.Equal(SnapshotJob.TierResult.Healthy, result);
+        Assert.False(_commandChannel.Reader.TryRead(out _)); // No commands
+    }
+
+    [Fact]
+    public void Execute_EvaluateNullReadSlot_ExcludedFromCheck()
+    {
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0);
+
+        // Evaluate holder with data → violated
+        var eval1 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 });
+        WriteValue(eval1, 5.0);
+
+        // Evaluate holder with null ReadSlot → excluded, does not prevent commanding
+        var eval2 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        // No value written → null ReadSlot
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
+        var tenant = MakeTenant(new[] { resolved, eval1, eval2 }, new[] { cmd });
+
+        _job.EvaluateTenant(tenant);
+
+        // eval2 excluded, eval1 violated → all checked are violated → Tier 4
+        Assert.True(_commandChannel.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public void Execute_EvaluateNoThreshold_TreatedAsViolated()
+    {
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0);
+
+        // Evaluate with null threshold → treated as violated
+        var eval1 = MakeHolder(role: "Evaluate", threshold: null);
+        WriteValue(eval1, 50.0);
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
+        var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmd });
+
+        _job.EvaluateTenant(tenant);
+
+        // null threshold = violated → Tier 4
+        Assert.True(_commandChannel.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public void Execute_EvaluateAtExactBoundary_NotViolated_Healthy()
+    {
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0);
+
+        // Value exactly at Max → in range (strict inequality) → NOT violated
+        var eval1 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 0, Max = 10 });
+        WriteValue(eval1, 10.0); // Exactly at Max → NOT violated
+
+        var tenant = MakeTenant(new[] { resolved, eval1 });
+        var result = _job.EvaluateTenant(tenant);
+
+        Assert.Equal(SnapshotJob.TierResult.Healthy, result);
+    }
+
+    // -------------------------------------------------------------------------
+    // Tier 4: Command dispatch tests
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void Execute_CommandNotSuppressed_TryWriteWithCorrectFields()
+    {
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0);
+
+        var eval1 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 });
+        WriteValue(eval1, 5.0); // Violated
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.5", Port = 162, CommandName = "set-mode", Value = "42", ValueType = "Integer32" };
+        var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmd }, id: "tenant-abc");
+
+        _job.EvaluateTenant(tenant);
+
+        Assert.True(_commandChannel.Reader.TryRead(out var request));
+        Assert.Equal("10.0.0.5", request!.Ip);
+        Assert.Equal(162, request.Port);
+        Assert.Equal("set-mode", request.CommandName);
+        Assert.Equal("42", request.Value);
+        Assert.Equal("Integer32", request.ValueType);
+        Assert.Equal("tenant-abc", request.DeviceName);
+    }
+
+    [Fact]
+    public void Execute_CommandSuppressed_NoTryWrite_IncrementSuppressed()
+    {
+        _suppressionCache.SuppressResult = true; // All commands suppressed
+
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0);
+
+        var eval1 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 });
+        WriteValue(eval1, 5.0);
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
+        var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmd });
+        var result = _job.EvaluateTenant(tenant);
+
+        // Suppressed → no TryWrite
+        Assert.False(_commandChannel.Reader.TryRead(out _));
+        Assert.Equal(SnapshotJob.TierResult.Commanded, result);
+    }
+
+    [Fact]
+    public void Execute_ChannelFull_IncrementFailed_NoException()
+    {
+        // Fill the channel to capacity (16)
+        for (var i = 0; i < 16; i++)
+            _commandChannel.Writer.TryWrite(new CommandRequest("x", 1, "fill", "0", "Integer32", "filler"));
+
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0);
+
+        var eval1 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 });
+        WriteValue(eval1, 5.0);
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
+        var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmd });
+
+        // Should not throw
+        var result = _job.EvaluateTenant(tenant);
+
+        Assert.Equal(SnapshotJob.TierResult.Commanded, result);
+    }
+
+    [Fact]
+    public void Execute_MultipleCommands_EachCheckedIndependently()
+    {
+        // First command suppressed, second not
+        _suppressionCache.SuppressResults = new Dictionary<string, bool>
+        {
+            { "test-tenant:10.0.0.2:161:cmd-a", true },
+            { "test-tenant:10.0.0.2:161:cmd-b", false }
+        };
+
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0);
+
+        var eval1 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 });
+        WriteValue(eval1, 5.0);
+
+        var cmdA = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "cmd-a", Value = "1", ValueType = "Integer32" };
+        var cmdB = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "cmd-b", Value = "2", ValueType = "Integer32" };
+        var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmdA, cmdB });
+
+        _job.EvaluateTenant(tenant);
+
+        // Only cmd-b should be enqueued (cmd-a suppressed)
+        Assert.True(_commandChannel.Reader.TryRead(out var request));
+        Assert.Equal("cmd-b", request!.CommandName);
+        Assert.False(_commandChannel.Reader.TryRead(out _)); // No more
+    }
+
+    [Fact]
+    public void Execute_SuppressionKeyIncludesTenantId_IndependentSuppression()
+    {
+        // Tenant A suppressed, Tenant B not — same command target
+        _suppressionCache.SuppressResults = new Dictionary<string, bool>
+        {
+            { "tenant-a:10.0.0.2:161:reset", true },
+            { "tenant-b:10.0.0.2:161:reset", false }
+        };
+
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0);
+
+        var eval1 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 });
+        WriteValue(eval1, 5.0);
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
+
+        // Need separate holders per tenant (each tenant has its own holders)
+        var resolvedB = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolvedB, 50.0);
+        var evalB = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 });
+        WriteValue(evalB, 5.0);
+
+        var tenantA = MakeTenant(new[] { resolved, eval1 }, new[] { cmd }, id: "tenant-a");
+        var tenantB = MakeTenant(new[] { resolvedB, evalB }, new[] { cmd }, id: "tenant-b");
+
+        _job.EvaluateTenant(tenantA);
+        _job.EvaluateTenant(tenantB);
+
+        // tenant-a suppressed → no write. tenant-b not suppressed → write
+        Assert.True(_commandChannel.Reader.TryRead(out var request));
+        Assert.Equal("tenant-b", request!.DeviceName);
+        Assert.False(_commandChannel.Reader.TryRead(out _)); // Only one
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
@@ -348,11 +617,17 @@ public sealed class SnapshotJobTests : IDisposable
 
     private static Tenant MakeTenant(params MetricSlotHolder[] holders)
     {
+        return MakeTenant(holders, Array.Empty<CommandSlotOptions>());
+    }
+
+    private static Tenant MakeTenant(MetricSlotHolder[] holders,
+        CommandSlotOptions[] commands, string id = "test-tenant")
+    {
         return new Tenant(
-            id: "test-tenant",
+            id: id,
             priority: 1,
             holders: holders,
-            commands: Array.Empty<CommandSlotOptions>(),
+            commands: commands,
             suppressionWindowSeconds: 60);
     }
 
@@ -419,9 +694,15 @@ public sealed class SnapshotJobTests : IDisposable
     private sealed class StubSuppressionCache : ISuppressionCache
     {
         public bool SuppressResult { get; set; }
+        public Dictionary<string, bool>? SuppressResults { get; set; }
         public int Count => 0;
 
-        public bool TrySuppress(string key, int windowSeconds) => SuppressResult;
+        public bool TrySuppress(string key, int windowSeconds)
+        {
+            if (SuppressResults is not null && SuppressResults.TryGetValue(key, out var result))
+                return result;
+            return SuppressResult;
+        }
     }
 
     private sealed class StubCommandChannel : ICommandChannel
