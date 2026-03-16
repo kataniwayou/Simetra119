@@ -362,6 +362,116 @@ public sealed class TenantVectorWatcherValidationTests
     }
 
     // ──────────────────────────────────────────────────────
+    // Value+ValueType parse validation tests
+    // ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Command_Integer32_InvalidValue_Skipped()
+    {
+        var tenant = new TenantOptions
+        {
+            Priority = 1,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m1", Role = "Evaluate" },
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m2", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "bad-int", Value = "not-a-number", ValueType = "Integer32" },  // invalid
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "good-cmd", Value = "42", ValueType = "Integer32" }            // valid
+            }
+        };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Single(result.Tenants[0].Commands);
+        Assert.Equal("good-cmd", result.Tenants[0].Commands[0].CommandName);
+    }
+
+    [Fact]
+    public void Command_IpAddress_InvalidValue_Skipped()
+    {
+        var tenant = new TenantOptions
+        {
+            Priority = 1,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m1", Role = "Evaluate" },
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m2", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "bad-ip", Value = "not-an-ip", ValueType = "IpAddress" },     // invalid
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "good-cmd", Value = "42", ValueType = "Integer32" }           // valid
+            }
+        };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Single(result.Tenants[0].Commands);
+        Assert.Equal("good-cmd", result.Tenants[0].Commands[0].CommandName);
+    }
+
+    [Fact]
+    public void Command_OctetString_AnyValue_Accepted()
+    {
+        var tenant = new TenantOptions
+        {
+            Priority = 1,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m1", Role = "Evaluate" },
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m2", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "octet-cmd", Value = "anything goes here!", ValueType = "OctetString" }
+            }
+        };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Single(result.Tenants[0].Commands);
+        Assert.Equal("octet-cmd", result.Tenants[0].Commands[0].CommandName);
+    }
+
+    [Fact]
+    public void Command_Integer32_ValidValue_Accepted()
+    {
+        var tenant = new TenantOptions
+        {
+            Priority = 1,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m1", Role = "Evaluate" },
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m2", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "int-cmd", Value = "42", ValueType = "Integer32" }
+            }
+        };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Single(result.Tenants[0].Commands);
+        Assert.Equal("int-cmd", result.Tenants[0].Commands[0].CommandName);
+    }
+
+    // ──────────────────────────────────────────────────────
     // TEN-06: CommandName pass-through
     // ──────────────────────────────────────────────────────
 
