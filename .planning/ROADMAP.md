@@ -176,12 +176,12 @@ Plans:
   3. `SnapshotJobOptions` loads from the `"SnapshotJob"` config section and fails startup with a validation error if `IntervalSeconds` is below its minimum — `ValidateOnStart` is active
   4. `PipelineMetricService` exposes `IncrementCommandSent`, `IncrementCommandFailed`, and `IncrementCommandSuppressed` methods with `device_name` tag — all three counters are registered in the OTel meter
 
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 46-01: ISuppressionCache + SuppressionCache with TTL tests
-- [ ] 46-02: SnapshotJobOptions + ISnmpClient.SetAsync + SharpSnmpClient delegation
-- [ ] 46-03: PipelineMetricService command counters (snmp.command.sent/failed/suppressed)
+- [ ] 46-01-PLAN.md — ISuppressionCache + SuppressionCache + TenantOptions.SuppressionWindowSeconds + Value+ValueType validation
+- [ ] 46-02-PLAN.md — SnapshotJobOptions + ISnmpClient.SetAsync + SharpSnmpClient.SetAsync + ParseSnmpData
+- [ ] 46-03-PLAN.md — PipelineMetricService command counters (snmp.command.sent/failed/suppressed)
 
 ---
 
