@@ -29,7 +29,7 @@ Requirements for the Tenant Evaluation & Control milestone. Each maps to roadmap
 
 ### Configuration
 
-- [ ] **SNAP-12**: `SnapshotJobOptions` — `IntervalSeconds` (default 15), `SuppressionWindowSeconds` (default 60), `TimeoutMultiplier` (default 0.5); bound from `"SnapshotJob"` config section; validated with `ValidateDataAnnotations` + `ValidateOnStart`
+- [ ] **SNAP-12**: `SnapshotJobOptions` — `IntervalSeconds` (default 15), `TimeoutMultiplier` (default 0.8); bound from `"SnapshotJob"` config section; validated with `ValidateDataAnnotations` + `ValidateOnStart`. Note: `SuppressionWindowSeconds` is per-tenant on `TenantOptions` (default 60s), not on SnapshotJobOptions.
 
 ### Observability
 
