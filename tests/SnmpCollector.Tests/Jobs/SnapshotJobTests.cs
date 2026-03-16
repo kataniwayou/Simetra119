@@ -80,18 +80,18 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     [Fact]
-    public void EvaluateTenant_NullReadSlot_NotStale()
+    public void EvaluateTenant_SentinelReadSlot_NotStaleWithinGrace()
     {
-        // Holder with no value written — ReadSlot returns null, should not be stale
-        var holder = MakeHolder(intervalSeconds: 1, graceMultiplier: 1.0, role: "Resolved",
+        // Holder with only sentinel (no real write). Sentinel timestamp is from construction.
+        // With intervalSeconds=3600 and graceMultiplier=2.0, grace window is 7200s — sentinel is fresh.
+        var holder = MakeHolder(intervalSeconds: 3600, graceMultiplier: 2.0, role: "Resolved",
             threshold: new ThresholdOptions { Min = 0, Max = 100 });
-        // Do NOT write any value
+        // Do NOT write any value — sentinel has Value=0, in range [0,100] → not violated
 
         var tenant = MakeTenant(holder);
         var result = _job.EvaluateTenant(tenant);
 
-        // Null ReadSlot means not stale (skipped), but also no Resolved data
-        // so AreAllResolvedViolated returns vacuous true → ConfirmedBad
+        // Sentinel within grace → not stale. Sentinel Value=0 in range → not violated → Healthy
         Assert.NotEqual(SnapshotJob.TierResult.Stale, result);
     }
 
@@ -186,21 +186,21 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     [Fact]
-    public void EvaluateTenant_ResolvedNullReadSlot_ExcludedFromGate()
+    public void EvaluateTenant_ResolvedSentinelReadSlot_ParticipatesInGate()
     {
-        // One Resolved with data (violated), one with null ReadSlot (excluded)
+        // One Resolved with data (violated), one with sentinel only
         var h1 = MakeHolder(intervalSeconds: 3600, role: "Resolved",
             threshold: new ThresholdOptions { Min = 10 });
-        WriteValue(h1, 5.0); // Violated
+        WriteValue(h1, 5.0); // Below Min=10 → violated
 
         var h2 = MakeHolder(intervalSeconds: 3600, role: "Resolved",
             threshold: new ThresholdOptions { Min = 10 });
-        // h2 has no value written → null ReadSlot → excluded from check
+        // h2 has sentinel Value=0. 0 < 10 → violated
 
         var tenant = MakeTenant(h1, h2);
         var result = _job.EvaluateTenant(tenant);
 
-        // h2 excluded, h1 violated → all checked Resolved are violated → ConfirmedBad
+        // h1 violated, h2 sentinel (Value=0 < Min=10) violated → all Resolved violated → ConfirmedBad
         Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
     }
 
@@ -371,7 +371,7 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     [Fact]
-    public void Execute_EvaluateNullReadSlot_ExcludedFromCheck()
+    public void Execute_EvaluateSentinelReadSlot_ParticipatesInCheck()
     {
         var resolved = MakeHolder(role: "Resolved",
             threshold: new ThresholdOptions { Min = 0, Max = 100 });
@@ -382,10 +382,10 @@ public sealed class SnapshotJobTests : IDisposable
             threshold: new ThresholdOptions { Min = 10 });
         WriteValue(eval1, 5.0);
 
-        // Evaluate holder with null ReadSlot → excluded, does not prevent commanding
+        // Evaluate holder with sentinel only. Sentinel Value=0, threshold Min=10 → 0 < 10 → violated
         var eval2 = MakeHolder(role: "Evaluate",
-            threshold: new ThresholdOptions { Min = 0, Max = 100 });
-        // No value written → null ReadSlot
+            threshold: new ThresholdOptions { Min = 10 });
+        // No real write — sentinel (Value=0) participates
 
         var cmd = new CommandSlotOptions
             { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
@@ -393,7 +393,7 @@ public sealed class SnapshotJobTests : IDisposable
 
         _job.EvaluateTenant(tenant);
 
-        // eval2 excluded, eval1 violated → all checked are violated → Tier 4
+        // eval1 violated, eval2 sentinel (Value=0 < Min=10) violated → all Evaluate violated → Tier 4
         Assert.True(_commandChannel.Reader.TryRead(out _));
     }
 

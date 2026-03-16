@@ -7,7 +7,7 @@ namespace SnmpCollector.Pipeline;
 /// <summary>
 /// Volatile wrapper around an ImmutableArray of MetricSlot samples (cyclic time series).
 /// WriteValue/ReadSlot encapsulate atomic field swaps so callers never touch the field directly.
-/// ReadSlot returns null before any write has occurred (no value yet).
+/// ReadSlot returns a sentinel (Value=0, Timestamp=construction time) before any real write.
 /// ReadSeries returns the full ImmutableArray of samples.
 /// TypeCode and Source are promoted to holder-level mutable properties.
 /// </summary>
@@ -50,6 +50,10 @@ public sealed class MetricSlotHolder
         TimeSeriesSize = timeSeriesSize;
         GraceMultiplier = graceMultiplier;
         Threshold = threshold;
+
+        // Start staleness clock from construction — first real WriteValue overwrites this.
+        var sentinel = new MetricSlot(0, null, DateTimeOffset.UtcNow);
+        Volatile.Write(ref _box, new SeriesBox(ImmutableArray.Create(sentinel)));
     }
 
     /// <summary>
@@ -72,7 +76,7 @@ public sealed class MetricSlotHolder
     }
 
     /// <summary>
-    /// Returns the most recently written MetricSlot, or null if no value has been written yet.
+    /// Returns the most recently written MetricSlot (sentinel if no real write has occurred).
     /// </summary>
     public MetricSlot? ReadSlot()
     {

@@ -17,10 +17,16 @@ public sealed class MetricSlotHolderTests
         => new(ip, port, metricName, intervalSeconds, role);
 
     [Fact]
-    public void ReadSlot_BeforeAnyWrite_ReturnsNull()
+    public void ReadSlot_BeforeAnyWrite_ReturnsSentinel()
     {
+        var before = DateTimeOffset.UtcNow;
         var holder = CreateHolder();
-        Assert.Null(holder.ReadSlot());
+        var slot = holder.ReadSlot();
+        Assert.NotNull(slot);
+        Assert.Equal(0, slot.Value);
+        Assert.Null(slot.StringValue);
+        Assert.True(slot.Timestamp >= before);
+        Assert.True(slot.Timestamp <= DateTimeOffset.UtcNow);
     }
 
     [Fact]
@@ -108,10 +114,12 @@ public sealed class MetricSlotHolderTests
     }
 
     [Fact]
-    public void ReadSeries_BeforeAnyWrite_ReturnsEmpty()
+    public void ReadSeries_BeforeAnyWrite_ReturnsSentinel()
     {
         var holder = CreateHolder();
-        Assert.True(holder.ReadSeries().IsEmpty);
+        var series = holder.ReadSeries();
+        Assert.Single(series);
+        Assert.Equal(0, series[0].Value);
     }
 
     [Fact]
@@ -165,7 +173,8 @@ public sealed class MetricSlotHolderTests
         var fresh = new MetricSlotHolder("10.0.0.1", 161, "test", 30, "Evaluate", timeSeriesSize: 3);
         fresh.CopyFrom(old);
 
-        Assert.Equal(2, fresh.ReadSeries().Length);
+        // Old has sentinel + 2 writes = 3 entries (at capacity)
+        Assert.Equal(3, fresh.ReadSeries().Length);
         Assert.Equal(2.0, fresh.ReadSlot()!.Value);
         Assert.Equal(SnmpType.Gauge32, fresh.TypeCode);
         Assert.Equal(SnmpSource.Poll, fresh.Source);
