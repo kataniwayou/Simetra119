@@ -68,6 +68,8 @@ Progress: [██████████] v2.0 — 13/13 plans complete
 - SnapshotJob Tier 1+2: HasStaleness (excludes Trap/0-interval/null-slot), AreAllResolvedViolated (ConfirmedBad gate), IsViolated (strict inequality, null=violated), TierResult enum (Phase 48-02)
 - SnapshotJob Tier 3+4: AreAllEvaluateViolated (vacuous false — no data = no command), Tier 4 command dispatch with suppression key {TenantId}:{Ip}:{Port}:{CommandName}, channel-full handled gracefully (Phase 48-03)
 - SnapshotJob priority group traversal: Task.WhenAll parallel within-group, sequential across groups, advance gate blocks on Stale/Commanded, advances on Healthy/ConfirmedBad, Tier 4 zero-enqueue returns ConfirmedBad (Phase 48-04)
+- CommandRequest: 5 fields (Ip, Port, CommandName, Value, ValueType) — DeviceName removed, resolved from DeviceRegistry at execution time (quick-061)
+- CommandWorkerService: uses device.Name from registry for all labels/logs/counters, consistent with MetricPollJob pattern (quick-061)
 - CommandWorkerService: Stopwatch-based duration logging — Information on SET success, Warning on timeout, both with DurationMs:F1 (Phase 49-01)
 - Operations dashboard: 3 command panels (sent/failed/suppressed) at y=39 w=8 each, .NET Runtime row shifted to y=47 (Phase 49-01)
 - Prometheus label renamed: metric_name -> resolved_name on all 4 SNMP instruments (Phase 50-01)
@@ -83,6 +85,7 @@ None.
 | 058 | Add GraceMultiplier + resolve IntervalSeconds/GraceMultiplier from device poll group | 2026-03-15 | b2059b6 | [058-gracemultiplier-device-resolved](./quick/058-gracemultiplier-device-resolved/) |
 | 059 | Build, deploy, and test heartbeat liveness E2E script | 2026-03-16 | 2d2a97a | [059-build-deploy-test-heartbeat-liveness](./quick/059-build-deploy-test-heartbeat-liveness/) |
 | 060 | Pipeline panel layout: 4 semantic rows (events/polls/traps/routing) | 2026-03-16 | 142e5a0 | [060-pipeline-panel-layout-rows](./quick/060-pipeline-panel-layout-rows/) |
+| 061 | Remove DeviceName from CommandRequest, resolve from DeviceRegistry | 2026-03-16 | 88e2f8c | [061-remove-devicename-from-commandrequest](./quick/061-remove-devicename-from-commandrequest/) |
 
 ## Session Continuity
 
