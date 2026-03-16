@@ -31,6 +31,7 @@ public sealed class CommandWorkerService : BackgroundService
     private readonly IDeviceRegistry _deviceRegistry;
     private readonly ICommandMapService _commandMapService;
     private readonly ICorrelationService _correlation;
+    private readonly ILeaderElection _leaderElection;
     private readonly PipelineMetricService _pipelineMetrics;
     private readonly IOptions<SnapshotJobOptions> _snapshotJobOptions;
     private readonly ILogger<CommandWorkerService> _logger;
@@ -42,6 +43,7 @@ public sealed class CommandWorkerService : BackgroundService
         IDeviceRegistry deviceRegistry,
         ICommandMapService commandMapService,
         ICorrelationService correlation,
+        ILeaderElection leaderElection,
         PipelineMetricService pipelineMetrics,
         IOptions<SnapshotJobOptions> snapshotJobOptions,
         ILogger<CommandWorkerService> logger)
@@ -52,6 +54,7 @@ public sealed class CommandWorkerService : BackgroundService
         _deviceRegistry = deviceRegistry;
         _commandMapService = commandMapService;
         _correlation = correlation;
+        _leaderElection = leaderElection;
         _pipelineMetrics = pipelineMetrics;
         _snapshotJobOptions = snapshotJobOptions;
         _logger = logger;
@@ -115,7 +118,18 @@ public sealed class CommandWorkerService : BackgroundService
         var snmpData = SharpSnmpClient.ParseSnmpData(req.Value, req.ValueType);
         var variable = new Variable(new ObjectIdentifier(oid), snmpData);
 
-        // 4. SET with timeout (mirrors MetricPollJob lines 92-93)
+        // 4. Leader gate — only the leader sends SET commands to devices.
+        // All replicas evaluate tenants (keeping state warm), but only the leader acts.
+        // Checked right before SET (not at enqueue time) so leadership changes mid-cycle are respected.
+        if (!_leaderElection.IsLeader)
+        {
+            _logger.LogDebug(
+                "Skipping SET {CommandName} for {DeviceName} — not leader",
+                req.CommandName, req.DeviceName);
+            return;
+        }
+
+        // 5. SET with timeout (mirrors MetricPollJob lines 92-93)
         var intervalSeconds = _snapshotJobOptions.Value.IntervalSeconds;
         var timeoutMultiplier = _snapshotJobOptions.Value.TimeoutMultiplier;
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);

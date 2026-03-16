@@ -87,6 +87,7 @@ public sealed class CommandWorkerServiceTests : IDisposable
         ISnmpClient? snmpClient = null,
         IDeviceRegistry? deviceRegistry = null,
         ICommandMapService? commandMapService = null,
+        ILeaderElection? leaderElection = null,
         ILogger<CommandWorkerService>? logger = null)
     {
         return new CommandWorkerService(
@@ -96,6 +97,7 @@ public sealed class CommandWorkerServiceTests : IDisposable
             deviceRegistry ?? new StubDeviceRegistry(),
             commandMapService ?? new StubCommandMapService(),
             new RotatingCorrelationService(),
+            leaderElection ?? new AlwaysLeaderElection(),
             _metrics,
             Options.Create(new SnapshotJobOptions()),
             logger ?? NullLogger<CommandWorkerService>.Instance);
@@ -347,6 +349,22 @@ public sealed class CommandWorkerServiceTests : IDisposable
         Assert.Contains(TestDeviceName, warningLogs[0].Message);
     }
 
+    [Fact]
+    public async Task NonLeader_skips_SET_without_calling_SetAsync()
+    {
+        var sender = new CapturingSender();
+        var channel = CreateCommandChannel([MakeRequest()]);
+        var snmpClient = new StubSnmpClient();
+        var service = CreateService(sender, channel, snmpClient: snmpClient, leaderElection: new NeverLeaderElection());
+
+        await service.StartAsync(CancellationToken.None);
+        await Task.Delay(200); // give drain loop time to process
+        await service.StopAsync(CancellationToken.None);
+
+        Assert.Equal(0, snmpClient.SetCallCount);
+        Assert.Empty(sender.Calls);
+    }
+
     // -----------------------------------------------------------------------
     // Stubs
     // -----------------------------------------------------------------------
@@ -403,6 +421,9 @@ public sealed class CommandWorkerServiceTests : IDisposable
     private sealed class StubSnmpClient : ISnmpClient
     {
         private readonly IList<Variable> _setResponse;
+        private int _setCallCount;
+
+        public int SetCallCount => Volatile.Read(ref _setCallCount);
 
         public StubSnmpClient(IList<Variable>? setResponse = null)
         {
@@ -415,7 +436,10 @@ public sealed class CommandWorkerServiceTests : IDisposable
         public Task<IList<Variable>> SetAsync(
             VersionCode version, IPEndPoint endpoint, OctetString community,
             Variable variable, CancellationToken ct)
-            => Task.FromResult(_setResponse);
+        {
+            Interlocked.Increment(ref _setCallCount);
+            return Task.FromResult(_setResponse);
+        }
 
         public Task<IList<Variable>> GetAsync(
             VersionCode version, IPEndPoint endpoint, OctetString community,
@@ -541,5 +565,11 @@ public sealed class CommandWorkerServiceTests : IDisposable
         {
             lock (_lock) { _entries.Add((logLevel, formatter(state, exception))); }
         }
+    }
+
+    private sealed class NeverLeaderElection : ILeaderElection
+    {
+        public bool IsLeader => false;
+        public string CurrentRole => "follower";
     }
 }
