@@ -133,7 +133,7 @@ See `.planning/milestones/v1.10-ROADMAP.md` for details.
 
 ---
 
-### 🚧 v2.0 Tenant Evaluation & Control (In Progress)
+### v2.0 Tenant Evaluation & Control (In Progress)
 
 **Milestone Goal:** SnapshotJob evaluates all tenants by priority on a 15s cycle, detects stale metrics, checks thresholds via a 4-tier logic tree, and issues SNMP SET commands through a Channel-backed worker — with suppression cache, 3 new pipeline counters, and full observability.
 
@@ -237,10 +237,10 @@ Plans:
   2. Pod logs for a successful SET contain an Information-level entry with device name, command name, and round-trip duration in milliseconds
   3. Pod logs for a failed SET contain a Warning-level entry with device name, command name, the error, and round-trip duration in milliseconds
 
-**Plans:** 2 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] 49-01: Command execution logs (Stopwatch around SetAsync, Information/Warning level) + dashboard panels
+- [ ] 49-01-PLAN.md — Command execution duration logs (Stopwatch around SetAsync) + 3 dashboard panels (sent/failed/suppressed)
 
 ---
 
@@ -294,4 +294,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-16 after v2.0 milestone roadmap created*
+*Last updated: 2026-03-16 after Phase 49 planned*
