@@ -104,4 +104,58 @@ public sealed class PipelineMetricServiceTests : IDisposable
         Assert.DoesNotContain("host_name", tags.Keys);
         Assert.DoesNotContain("pod_name", tags.Keys);
     }
+
+    // -----------------------------------------------------------------------
+    // 5. IncrementCommandSent records with device_name tag (PMET-13)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void IncrementCommandSent_RecordsWithDeviceNameTag()
+    {
+        _service.IncrementCommandSent("device-01");
+
+        var match = _measurements.Single(m => m.InstrumentName == "snmp.command.sent");
+
+        Assert.Equal(1L, match.Value);
+        var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
+        Assert.Equal("device-01", tags["device_name"]);
+        Assert.DoesNotContain("host_name", tags.Keys);
+        Assert.DoesNotContain("pod_name", tags.Keys);
+    }
+
+    // -----------------------------------------------------------------------
+    // 6. IncrementCommandFailed records with device_name tag (PMET-14)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void IncrementCommandFailed_RecordsWithDeviceNameTag()
+    {
+        _service.IncrementCommandFailed("device-01");
+
+        var match = _measurements.Single(m => m.InstrumentName == "snmp.command.failed");
+
+        Assert.Equal(1L, match.Value);
+        var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
+        Assert.Equal("device-01", tags["device_name"]);
+        Assert.DoesNotContain("host_name", tags.Keys);
+        Assert.DoesNotContain("pod_name", tags.Keys);
+    }
+
+    // -----------------------------------------------------------------------
+    // 7. IncrementCommandSuppressed records with device_name tag (PMET-15)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void IncrementCommandSuppressed_RecordsWithDeviceNameTag()
+    {
+        _service.IncrementCommandSuppressed("device-01");
+
+        var match = _measurements.Single(m => m.InstrumentName == "snmp.command.suppressed");
+
+        Assert.Equal(1L, match.Value);
+        var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
+        Assert.Equal("device-01", tags["device_name"]);
+        Assert.DoesNotContain("host_name", tags.Keys);
+        Assert.DoesNotContain("pod_name", tags.Keys);
+    }
 }
