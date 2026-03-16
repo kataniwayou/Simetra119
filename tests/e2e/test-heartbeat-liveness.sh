@@ -81,6 +81,9 @@ fi
 if [ "$SKIP_DEPLOY" = "true" ]; then
     log_info "Skipping deploy (SKIP_DEPLOY=true)"
 else
+    log_info "Ensuring deployment uses image $IMAGE_NAME"
+    kubectl set image "deployment/$DEPLOYMENT" "snmp-collector=$IMAGE_NAME" -n "$NAMESPACE"
+
     log_info "Rolling restart deployment/$DEPLOYMENT in namespace $NAMESPACE"
     if ! kubectl rollout restart "deployment/$DEPLOYMENT" -n "$NAMESPACE"; then
         log_error "Rollout restart failed"
@@ -191,7 +194,7 @@ else
 fi
 
 # Test C - pipeline-heartbeat is not stale
-PIPELINE_STALE=$(echo "$LIVENESS_DATA" | jq -r '.["pipeline-heartbeat"].stale // "missing"')
+PIPELINE_STALE=$(echo "$LIVENESS_DATA" | jq -r 'if .["pipeline-heartbeat"].stale == null then "missing" else (.["pipeline-heartbeat"].stale | tostring) end')
 PIPELINE_AGE=$(echo "$LIVENESS_DATA" | jq -r '.["pipeline-heartbeat"].ageSeconds // "null"')
 PIPELINE_THRESHOLD=$(echo "$LIVENESS_DATA" | jq -r '.["pipeline-heartbeat"].thresholdSeconds // "null"')
 
