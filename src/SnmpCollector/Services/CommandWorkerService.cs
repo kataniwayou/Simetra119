@@ -86,6 +86,10 @@ public sealed class CommandWorkerService : BackgroundService
                     req.CommandName, $"{req.Ip}:{req.Port}");
                 _pipelineMetrics.IncrementCommandFailed($"{req.Ip}:{req.Port}");
             }
+            finally
+            {
+                _correlation.OperationCorrelationId = null;
+            }
         }
 
         _logger.LogInformation("Command channel worker completed");

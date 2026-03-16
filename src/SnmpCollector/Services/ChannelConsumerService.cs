@@ -78,6 +78,10 @@ public sealed class ChannelConsumerService : BackgroundService
                     "Error processing varbind {Oid} for {DeviceName}",
                     envelope.Oid, envelope.DeviceName);
             }
+            finally
+            {
+                _correlation.OperationCorrelationId = null;
+            }
         }
 
         _logger.LogInformation("Trap channel consumer completed");
