@@ -75,9 +75,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SNAP-01 | Phase 45 | Pending |
-| SNAP-02 | Phase 45 | Pending |
-| SNAP-03 | Phase 45 | Pending |
+| SNAP-01 | Phase 45 | Complete |
+| SNAP-02 | Phase 45 | Complete |
+| SNAP-03 | Phase 45 | Complete |
 | SNAP-04 | Phase 48 | Pending |
 | SNAP-05 | Phase 48 | Pending |
 | SNAP-06 | Phase 48 | Pending |
