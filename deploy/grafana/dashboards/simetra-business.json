@@ -256,7 +256,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "metric_name"
+              "options": "resolved_name"
             },
             "properties": [
               {
@@ -496,7 +496,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "label_replace(label_join(snmp_gauge{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\", ip=~\"$ip\"}, \"__tmp\", \"~\", \"metric_name\", \"device_name\", \"k8s_pod_name\", \"service_instance_id\"), \"promql\", `snmp_gauge{metric_name=\"$1\", device_name=\"$2\", k8s_pod_name=\"$3\", service_instance_id=\"$4\"}`, \"__tmp\", \"([^~]*)~([^~]*)~([^~]*)~([^~]*)\")",
+          "expr": "label_replace(label_join(snmp_gauge{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\", ip=~\"$ip\"}, \"__tmp\", \"~\", \"resolved_name\", \"device_name\", \"k8s_pod_name\", \"service_instance_id\"), \"promql\", `snmp_gauge{resolved_name=\"$1\", device_name=\"$2\", k8s_pod_name=\"$3\", service_instance_id=\"$4\"}`, \"__tmp\", \"([^~]*)~([^~]*)~([^~]*)~([^~]*)\")",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -516,7 +516,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.99, sum by (le, metric_name, oid, device_name, ip, source, snmp_type) (rate(snmp_gauge_duration_milliseconds_bucket{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\", ip=~\"$ip\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le, resolved_name, oid, device_name, ip, source, snmp_type) (rate(snmp_gauge_duration_milliseconds_bucket{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\", ip=~\"$ip\"}[$__rate_interval])))",
           "format": "table",
           "instant": true,
           "refId": "C"
@@ -537,7 +537,7 @@
               "ip": 2,
               "device_name": 3,
               "source": 4,
-              "metric_name": 5,
+              "resolved_name": 5,
               "oid": 6,
               "snmp_type": 7,
               "Value #A": 8,
@@ -799,7 +799,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "metric_name"
+              "options": "resolved_name"
             },
             "properties": [
               {
@@ -900,7 +900,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "label_replace(label_join(snmp_info{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\", ip=~\"$ip\"}, \"__tmp\", \"~\", \"metric_name\", \"device_name\", \"k8s_pod_name\", \"service_instance_id\"), \"promql\", `snmp_info{metric_name=\"$1\", device_name=\"$2\", k8s_pod_name=\"$3\", service_instance_id=\"$4\"}`, \"__tmp\", \"([^~]*)~([^~]*)~([^~]*)~([^~]*)\")",
+          "expr": "label_replace(label_join(snmp_info{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\", ip=~\"$ip\"}, \"__tmp\", \"~\", \"resolved_name\", \"device_name\", \"k8s_pod_name\", \"service_instance_id\"), \"promql\", `snmp_info{resolved_name=\"$1\", device_name=\"$2\", k8s_pod_name=\"$3\", service_instance_id=\"$4\"}`, \"__tmp\", \"([^~]*)~([^~]*)~([^~]*)~([^~]*)\")",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -910,7 +910,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.99, sum by (le, metric_name, oid, device_name, ip, source, snmp_type, value) (rate(snmp_info_duration_milliseconds_bucket{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\", ip=~\"$ip\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le, resolved_name, oid, device_name, ip, source, snmp_type, value) (rate(snmp_info_duration_milliseconds_bucket{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\", ip=~\"$ip\"}[$__rate_interval])))",
           "format": "table",
           "instant": true,
           "refId": "B"
@@ -931,7 +931,7 @@
               "ip": 2,
               "device_name": 3,
               "source": 4,
-              "metric_name": 5,
+              "resolved_name": 5,
               "oid": 6,
               "snmp_type": 7,
               "value": 8,
@@ -1211,7 +1211,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "count({metric_name=\"Unknown\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "count({resolved_name=\"Unknown\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "legendFormat": "Unknown",
           "instant": true,
           "refId": "A"
@@ -1221,7 +1221,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "count({metric_name!=\"Unknown\", metric_name!=\"\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "count({resolved_name!=\"Unknown\", resolved_name!=\"\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "legendFormat": "Resolved",
           "instant": true,
           "refId": "B"

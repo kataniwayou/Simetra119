@@ -10,19 +10,19 @@ SNMP_TYPE_CHECKS=(
 )
 
 for CHECK in "${SNMP_TYPE_CHECKS[@]}"; do
-    METRIC_NAME="${CHECK%%:*}"
+    RESOLVED_NAME="${CHECK%%:*}"
     EXPECTED_TYPE="${CHECK##*:}"
-    SCENARIO_NAME="snmp_type=${EXPECTED_TYPE} for ${METRIC_NAME}"
+    SCENARIO_NAME="snmp_type=${EXPECTED_TYPE} for ${RESOLVED_NAME}"
 
-    RESPONSE=$(query_prometheus "snmp_gauge{device_name=\"E2E-SIM\",metric_name=\"${METRIC_NAME}\"}")
+    RESPONSE=$(query_prometheus "snmp_gauge{device_name=\"E2E-SIM\",resolved_name=\"${RESOLVED_NAME}\"}")
     RESULT_COUNT=$(echo "$RESPONSE" | jq -r '.data.result | length')
 
     if [ "$RESULT_COUNT" -eq 0 ]; then
-        record_fail "$SCENARIO_NAME" "no snmp_gauge series found for E2E-SIM ${METRIC_NAME}"
+        record_fail "$SCENARIO_NAME" "no snmp_gauge series found for E2E-SIM ${RESOLVED_NAME}"
     else
         ACTUAL_TYPE=$(echo "$RESPONSE" | jq -r '.data.result[0].metric.snmp_type')
         VALUE=$(echo "$RESPONSE" | jq -r '.data.result[0].value[1]')
-        EVIDENCE="metric_name=${METRIC_NAME} expected_type=${EXPECTED_TYPE} actual_type=${ACTUAL_TYPE} value=${VALUE}"
+        EVIDENCE="resolved_name=${RESOLVED_NAME} expected_type=${EXPECTED_TYPE} actual_type=${ACTUAL_TYPE} value=${VALUE}"
 
         if [ "$ACTUAL_TYPE" = "$EXPECTED_TYPE" ] && \
            echo "$VALUE" | grep -qE '^[0-9]+(\.[0-9]+)?$'; then

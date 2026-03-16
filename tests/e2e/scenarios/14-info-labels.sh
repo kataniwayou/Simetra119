@@ -4,7 +4,7 @@
 # --- Sub-scenario 14a: e2e_info_test (octetstring) ---
 SCENARIO_NAME="snmp_info labels for E2E-SIM (e2e_info_test)"
 
-RESPONSE=$(query_prometheus 'snmp_info{device_name="E2E-SIM",metric_name="e2e_info_test"}')
+RESPONSE=$(query_prometheus 'snmp_info{device_name="E2E-SIM",resolved_name="e2e_info_test"}')
 RESULT_COUNT=$(echo "$RESPONSE" | jq -r '.data.result | length')
 
 if [ "$RESULT_COUNT" -eq 0 ]; then
@@ -30,7 +30,7 @@ fi
 # --- Sub-scenario 14b: e2e_ip_test (ipaddress) ---
 SCENARIO_NAME="snmp_info labels for E2E-SIM (e2e_ip_test)"
 
-RESPONSE=$(query_prometheus 'snmp_info{device_name="E2E-SIM",metric_name="e2e_ip_test"}')
+RESPONSE=$(query_prometheus 'snmp_info{device_name="E2E-SIM",resolved_name="e2e_ip_test"}')
 RESULT_COUNT=$(echo "$RESPONSE" | jq -r '.data.result | length')
 
 if [ "$RESULT_COUNT" -eq 0 ]; then

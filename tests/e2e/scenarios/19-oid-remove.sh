@@ -1,7 +1,7 @@
-# Scenario 19: OID removal causes metric_name="Unknown" (MUT-02)
+# Scenario 19: OID removal causes resolved_name="Unknown" (MUT-02)
 # Removes .999.1.1.0 from oidmaps ConfigMap so the polled OID has no mapping,
-# verifies it appears as metric_name="Unknown" in Prometheus, then restores.
-SCENARIO_NAME="OID removal causes metric_name=Unknown in Prometheus"
+# verifies it appears as resolved_name="Unknown" in Prometheus, then restores.
+SCENARIO_NAME="OID removal causes resolved_name=Unknown in Prometheus"
 
 # Snapshot current ConfigMaps for safe restoration
 snapshot_configmaps
@@ -15,7 +15,7 @@ log_info "Waiting for .999.1.1.0 to appear as Unknown in Prometheus (up to 60s).
 DEADLINE=$(( $(date +%s) + 60 ))
 FOUND=0
 while [ "$(date +%s)" -lt "$DEADLINE" ]; do
-    RESULT=$(query_prometheus 'snmp_gauge{device_name="E2E-SIM",metric_name="Unknown",oid="1.3.6.1.4.1.47477.999.1.1.0"}') || true
+    RESULT=$(query_prometheus 'snmp_gauge{device_name="E2E-SIM",resolved_name="Unknown",oid="1.3.6.1.4.1.47477.999.1.1.0"}') || true
     COUNT=$(echo "$RESULT" | jq -r '.data.result | length' 2>/dev/null) || COUNT=0
     if [ "$COUNT" -gt 0 ]; then
         FOUND=1
@@ -26,20 +26,20 @@ done
 
 if [ "$FOUND" -eq 1 ]; then
     DEVICE=$(echo "$RESULT" | jq -r '.data.result[0].metric.device_name')
-    METRIC_NAME=$(echo "$RESULT" | jq -r '.data.result[0].metric.metric_name')
+    RESOLVED_NAME=$(echo "$RESULT" | jq -r '.data.result[0].metric.resolved_name')
     OID=$(echo "$RESULT" | jq -r '.data.result[0].metric.oid')
 
-    EVIDENCE="device_name=${DEVICE} metric_name=${METRIC_NAME} oid=${OID}"
+    EVIDENCE="device_name=${DEVICE} resolved_name=${RESOLVED_NAME} oid=${OID}"
 
     if [ "$DEVICE" = "E2E-SIM" ] && \
-       [ "$METRIC_NAME" = "Unknown" ] && \
+       [ "$RESOLVED_NAME" = "Unknown" ] && \
        [ "$OID" = "1.3.6.1.4.1.47477.999.1.1.0" ]; then
         record_pass "$SCENARIO_NAME" "$EVIDENCE"
     else
         record_fail "$SCENARIO_NAME" "label mismatch: $EVIDENCE"
     fi
 else
-    record_fail "$SCENARIO_NAME" "metric_name=Unknown for OID .999.1.1.0 not found within 60s timeout"
+    record_fail "$SCENARIO_NAME" "resolved_name=Unknown for OID .999.1.1.0 not found within 60s timeout"
 fi
 
 # Restore original ConfigMaps
@@ -50,7 +50,7 @@ restore_configmaps
 log_info "Waiting for e2e_gauge_test to reappear after restore (up to 60s)..."
 DEADLINE=$(( $(date +%s) + 60 ))
 while [ "$(date +%s)" -lt "$DEADLINE" ]; do
-    RESTORE_RESULT=$(query_prometheus 'snmp_gauge{device_name="E2E-SIM",metric_name="e2e_gauge_test"}') || true
+    RESTORE_RESULT=$(query_prometheus 'snmp_gauge{device_name="E2E-SIM",resolved_name="e2e_gauge_test"}') || true
     RESTORE_COUNT=$(echo "$RESTORE_RESULT" | jq -r '.data.result | length' 2>/dev/null) || RESTORE_COUNT=0
     if [ "$RESTORE_COUNT" -gt 0 ]; then
         log_info "Restoration confirmed: e2e_gauge_test reappeared in Prometheus"
