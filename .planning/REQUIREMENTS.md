@@ -15,8 +15,8 @@ Requirements for the Tenant Evaluation & Control milestone. Each maps to roadmap
 
 ### Evaluation Engine
 
-- [ ] **SNAP-04**: SnapshotJob Tier 1 — metric staleness detection: for each MetricSlotHolder (excluding Source=Trap and IntervalSeconds=0), staleness = `(Now - ReadSlot().Timestamp) > IntervalSeconds × GraceMultiplier`; if ANY metric stale → skip to Tier 4 (command queue); ReadSlot() null (never written) treated as "no data yet", not stale
-- [ ] **SNAP-05**: SnapshotJob Tier 2 — Resolved metrics threshold check: check ALL Role=Resolved holders against Threshold (Min/Max); if ALL Resolved violated → END (no command); vacuous pass if no Resolved holders with thresholds
+- [ ] **SNAP-04**: SnapshotJob Tier 1 — metric staleness detection: for each MetricSlotHolder (excluding Source=Trap and IntervalSeconds=0), staleness = `(Now - ReadSlot().Timestamp) > IntervalSeconds × GraceMultiplier`; if ANY metric stale → skip threshold checks, no command dispatched, tenant counts as uncertain for advance gate; ReadSlot() null (never written) treated as "no data yet" (skip holder)
+- [ ] **SNAP-05**: SnapshotJob Tier 2 — Resolved metrics threshold check: check ALL Role=Resolved holders against Threshold (Min/Max); if ALL Resolved violated → END (device already in resolved state, no command needed); if NOT all violated → continue to Tier 3 (Evaluate check)
 - [ ] **SNAP-06**: SnapshotJob Tier 3 — Evaluate metrics threshold check: check ALL Role=Evaluate holders against Threshold; if ALL Evaluate violated → continue to Tier 4 (commands); if NOT all violated → END (no command); vacuous fail if no Evaluate holders with thresholds (log Warning on startup)
 - [ ] **SNAP-07**: Priority group traversal — same-priority tenants visited in parallel (Task.WhenAll); sequential across priority groups (lower value = higher priority); advance to next lower priority group ONLY if ALL tenants in current group reached Tier 4; stale tenants count as NOT violated for the advance gate
 
