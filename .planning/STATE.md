@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Planning next milestone
+**Current focus:** Phase 45 — Structural Prerequisites
 
 ## Current Position
 
-Phase: —
-Plan: —
-Status: Between milestones (v1.10 shipped, next milestone not defined)
-Last activity: 2026-03-15 — v1.10 milestone archived and tagged
+Phase: 45 (structural-prerequisites)
+Plan: 02 of 2
+Status: In progress (45-02 complete)
+Last activity: 2026-03-16 — Completed 45-02-PLAN.md
 
-Progress: [####################] v1.0-v1.9 complete | [███] 3/3 v1.10 plans — v1.10 COMPLETE
+Progress: [####################] v1.0-v1.9 complete | [███] 3/3 v1.10 plans | [█░] 1/2 Phase 45 plans
 
 ## Performance Metrics
 
@@ -24,10 +24,9 @@ Progress: [####################] v1.0-v1.9 complete | [███] 3/3 v1.10 plan
 - Total execution time: ~39 hours
 
 **Recent Trend:**
-- 41-01: ~10 min
-- 42-01: ~10 min
 - 42-02: ~5 min
 - quick/058: ~5 min
+- 45-02: ~3 min
 - Trend: Stable (small surgical plans)
 
 *Updated after each plan completion*
@@ -48,6 +47,9 @@ Progress: [####################] v1.0-v1.9 complete | [███] 3/3 v1.10 plan
 - HB-08/09/10 preserved and verified: HeartbeatJob.cs, OidMapService.cs, ILivenessVectorService untouched
 - LivenessHealthCheck constructor now takes IHeartbeatLivenessService + IOptions<HeartbeatJobOptions> (DI auto-resolves via AddCheck<T>)
 - Null LastArrival → always stale; pipeline-heartbeat key always in diagnostic data dict; 338 tests green
+- MetricSlotHolder.Role: immutable string property set from MetricSlotOptions.Role in constructor (Phase 45-02) — NOT in CopyFrom
+- Tenant.Commands: IReadOnlyList<CommandSlotOptions> set from TenantOptions.Commands in constructor (Phase 45-02)
+- TenantVectorRegistry.Reload passes metric.Role and tenantOpts.Commands to runtime models (Phase 45-02); 342 tests green
 
 ### Blockers/Concerns
 
@@ -61,6 +63,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-15T16:17:42Z
-Stopped at: Completed 44-02-PLAN.md — LivenessHealthCheck extended with pipeline-arrival staleness; 338 tests green; v1.10 complete
+Last session: 2026-03-16T11:25:18Z
+Stopped at: Completed 45-02-PLAN.md — MetricSlotHolder.Role and Tenant.Commands propagated from config; 342 tests green
 Resume file: None
