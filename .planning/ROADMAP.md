@@ -217,7 +217,7 @@ Plans:
   5. SnapshotJob stamps `ILivenessVectorService` with key `"snapshot"` in its `finally` block — `LivenessHealthCheck` detects staleness if the job stops running
   6. Structured evaluation logs appear at Debug level for stale/resolved-gate/no-violation outcomes and at Information level for command-dispatched outcomes — each log includes tenant ID, priority, and tier reached
 
-**Plans:** 2 plans
+**Plans:** 4 plans
 
 Plans:
 - [ ] 48-01: SnapshotJob skeleton — Quartz registration, liveness stamp, correlation ID, [DisallowConcurrentExecution]
