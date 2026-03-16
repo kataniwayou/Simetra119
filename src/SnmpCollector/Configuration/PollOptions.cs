@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace SnmpCollector.Configuration;
 
 /// <summary>
@@ -22,6 +24,7 @@ public sealed class PollOptions
     /// SNMP GET response timeout as a multiplier of IntervalSeconds (0.1–0.9).
     /// Defaults to 0.8 (80% of interval). Leaves headroom before next trigger fires.
     /// </summary>
+    [Range(0.1, 0.9)]
     public double TimeoutMultiplier { get; set; } = 0.8;
 
     /// <summary>
@@ -39,5 +42,6 @@ public sealed class PollOptions
     /// <summary>
     /// Grace multiplier for stale detection. Stale threshold = IntervalSeconds * GraceMultiplier. Defaults to 2.0.
     /// </summary>
+    [Range(2.0, 5.0)]
     public double GraceMultiplier { get; set; } = 2.0;
 }
