@@ -141,7 +141,7 @@ See `.planning/milestones/v1.10-ROADMAP.md` for details.
 - [x] **Phase 46: Infrastructure Components** — Build suppression cache, options model, SetAsync extension, and command counters
 - [x] **Phase 47: CommandWorkerService** — Channel-backed background worker that executes SET commands and dispatches responses
 - [x] **Phase 48: SnapshotJob 4-Tier Evaluation** — Quartz job driving full tenant evaluation loop with priority group traversal
-- [ ] **Phase 49: Observability & Dashboard** — Structured evaluation logs, command execution logs, and dashboard panels
+- [x] **Phase 49: Observability & Dashboard** — Structured evaluation logs, command execution logs, and dashboard panels
 - [ ] **Phase 50: Label Rename** — Rename metric_name → resolved_name across all instruments and dashboards
 
 ---
@@ -289,7 +289,7 @@ Plans:
 | 46. Infrastructure Components | v2.0 | 3/3 | Complete | 2026-03-16 |
 | 47. CommandWorkerService | v2.0 | 2/2 | Complete | 2026-03-16 |
 | 48. SnapshotJob 4-Tier Evaluation | v2.0 | 4/4 | Complete | 2026-03-16 |
-| 49. Observability & Dashboard | v2.0 | 0/1 | Not started | - |
+| 49. Observability & Dashboard | v2.0 | 1/1 | Complete | 2026-03-16 |
 | 50. Label Rename | v2.0 | 0/1 | Not started | - |
 
 ---

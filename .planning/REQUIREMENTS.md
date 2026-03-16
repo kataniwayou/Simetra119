@@ -90,8 +90,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SNAP-13 | Phase 46 | Complete |
 | SNAP-14 | Phase 48 | Complete |
 | SNAP-15 | Phase 48 | Complete |
-| SNAP-16 | Phase 49 | Pending |
-| SNAP-17 | Phase 49 | Pending |
+| SNAP-16 | Phase 49 | Complete |
+| SNAP-17 | Phase 49 | Complete |
 
 **Coverage:**
 - v2.0 requirements: 17 total
