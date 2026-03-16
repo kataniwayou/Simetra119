@@ -588,6 +588,186 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     // -------------------------------------------------------------------------
+    // Integration: Priority group traversal and advance gate
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_SingleGroupAllHealthy_NoCommands()
+    {
+        // Resolved NOT all violated, Evaluate NOT all violated → Healthy
+        var t1 = MakeHealthyTenant("t1");
+        var t2 = MakeHealthyTenant("t2");
+
+        _registry.SetGroups(new PriorityGroup(1, new[] { t1, t2 }));
+        await _job.Execute(MakeContext("snapshot"));
+
+        Assert.False(_commandChannel.Reader.TryRead(out _));
+        Assert.True(_liveness.StampCalled);
+    }
+
+    [Fact]
+    public async Task Execute_SingleGroupOneStale_StaleDetected()
+    {
+        // One stale tenant in the group
+        var staleHolder = MakeHolder(intervalSeconds: 1, graceMultiplier: 0.001, role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(staleHolder, 50.0);
+        // Force staleness by writing a value with an old timestamp
+        // Instead, use a very small interval so the value is immediately stale
+        // IntervalSeconds=1, GraceMultiplier=0.001 → grace window = 0.001s (1ms)
+        // The WriteValue call just happened, so we need to wait briefly
+        await Task.Delay(TimeSpan.FromMilliseconds(50));
+
+        var staleTenant = MakeTenant(new[] { staleHolder }, Array.Empty<CommandSlotOptions>(), id: "stale-t");
+        var healthyTenant = MakeHealthyTenant("healthy-t");
+
+        _registry.SetGroups(new PriorityGroup(1, new[] { staleTenant, healthyTenant }));
+        await _job.Execute(MakeContext("snapshot"));
+
+        // Stale tenant detected, no commands
+        Assert.False(_commandChannel.Reader.TryRead(out _));
+        Assert.True(_liveness.StampCalled);
+    }
+
+    [Fact]
+    public async Task Execute_TwoGroups_FirstAllConfirmedBad_SecondGroupEvaluated()
+    {
+        // Group 1: ALL Resolved violated → ConfirmedBad (Tier 2 stop). Advance gate passes.
+        var confirmedBadTenant = MakeConfirmedBadTenant("cb-t");
+        // Group 2: Healthy tenant (should be evaluated since group 1 advances)
+        var healthyTenant = MakeHealthyTenant("healthy-t");
+
+        _registry.SetGroups(
+            new PriorityGroup(1, new[] { confirmedBadTenant }),
+            new PriorityGroup(2, new[] { healthyTenant }));
+
+        await _job.Execute(MakeContext("snapshot"));
+
+        // No commands from either group (ConfirmedBad stops at Tier 2, Healthy stops at Tier 3)
+        Assert.False(_commandChannel.Reader.TryRead(out _));
+        Assert.True(_liveness.StampCalled);
+    }
+
+    [Fact]
+    public async Task Execute_TwoGroups_FirstGroupCommanded_SecondGroupNotEvaluated()
+    {
+        // Group 1: Commanded tenant (Resolved NOT all violated, ALL Evaluate violated, command enqueued)
+        var commandedTenant = MakeCommandingTenant("cmd-t1", "cmd-group1");
+        // Group 2: Commanding tenant — if evaluated would enqueue commands
+        var group2Tenant = MakeCommandingTenant("cmd-t2", "cmd-group2");
+
+        _registry.SetGroups(
+            new PriorityGroup(1, new[] { commandedTenant }),
+            new PriorityGroup(2, new[] { group2Tenant }));
+
+        await _job.Execute(MakeContext("snapshot"));
+
+        // Only group 1 command should be enqueued (advance gate blocked)
+        Assert.True(_commandChannel.Reader.TryRead(out var req));
+        Assert.Equal("cmd-group1", req!.CommandName);
+        Assert.False(_commandChannel.Reader.TryRead(out _)); // No group 2 commands
+    }
+
+    [Fact]
+    public async Task Execute_TwoGroups_FirstGroupStale_SecondGroupNotEvaluated()
+    {
+        // Group 1: Stale tenant → advance gate blocks
+        var staleHolder = MakeHolder(intervalSeconds: 1, graceMultiplier: 0.001, role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(staleHolder, 50.0);
+        await Task.Delay(TimeSpan.FromMilliseconds(50));
+        var staleTenant = MakeTenant(new[] { staleHolder }, Array.Empty<CommandSlotOptions>(), id: "stale-t");
+
+        // Group 2: Commanding tenant — would enqueue if evaluated
+        var group2Tenant = MakeCommandingTenant("cmd-t2", "cmd-group2");
+
+        _registry.SetGroups(
+            new PriorityGroup(1, new[] { staleTenant }),
+            new PriorityGroup(2, new[] { group2Tenant }));
+
+        await _job.Execute(MakeContext("snapshot"));
+
+        // No commands — group 1 blocked, group 2 not evaluated
+        Assert.False(_commandChannel.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task Execute_TwoGroups_FirstAllHealthy_SecondGroupEvaluated()
+    {
+        // Group 1: All healthy → advance gate passes
+        var healthy1 = MakeHealthyTenant("h1");
+        var healthy2 = MakeHealthyTenant("h2");
+        // Group 2: Commanding tenant — should be evaluated
+        var group2Tenant = MakeCommandingTenant("cmd-t", "cmd-group2");
+
+        _registry.SetGroups(
+            new PriorityGroup(1, new[] { healthy1, healthy2 }),
+            new PriorityGroup(2, new[] { group2Tenant }));
+
+        await _job.Execute(MakeContext("snapshot"));
+
+        // Group 2 was evaluated — command from group 2 tenant should be enqueued
+        Assert.True(_commandChannel.Reader.TryRead(out var req));
+        Assert.Equal("cmd-group2", req!.CommandName);
+    }
+
+    [Fact]
+    public async Task Execute_TwoGroups_FirstMixedHealthyAndConfirmedBad_SecondGroupEvaluated()
+    {
+        // Group 1: Mixed Healthy + ConfirmedBad → both are advance-allowing states
+        var healthyTenant = MakeHealthyTenant("h1");
+        var confirmedBadTenant = MakeConfirmedBadTenant("cb1");
+        // Group 2: Commanding tenant — should be evaluated
+        var group2Tenant = MakeCommandingTenant("cmd-t", "cmd-group2");
+
+        _registry.SetGroups(
+            new PriorityGroup(1, new[] { healthyTenant, confirmedBadTenant }),
+            new PriorityGroup(2, new[] { group2Tenant }));
+
+        await _job.Execute(MakeContext("snapshot"));
+
+        // Group 2 was evaluated
+        Assert.True(_commandChannel.Reader.TryRead(out var req));
+        Assert.Equal("cmd-group2", req!.CommandName);
+    }
+
+    [Fact]
+    public async Task Execute_ThreeGroups_FirstAdvances_SecondBlocks_ThirdNotEvaluated()
+    {
+        // Group 1: Healthy → advance
+        var healthy = MakeHealthyTenant("h1");
+        // Group 2: Commanded → blocks
+        var commanded = MakeCommandingTenant("cmd-t", "cmd-group2");
+        // Group 3: Commanding — should NOT be evaluated
+        var group3Tenant = MakeCommandingTenant("cmd-t3", "cmd-group3");
+
+        _registry.SetGroups(
+            new PriorityGroup(1, new[] { healthy }),
+            new PriorityGroup(2, new[] { commanded }),
+            new PriorityGroup(3, new[] { group3Tenant }));
+
+        await _job.Execute(MakeContext("snapshot"));
+
+        // Group 2 command enqueued, group 3 NOT
+        Assert.True(_commandChannel.Reader.TryRead(out var req));
+        Assert.Equal("cmd-group2", req!.CommandName);
+        Assert.False(_commandChannel.Reader.TryRead(out _)); // No group 3
+    }
+
+    [Fact]
+    public async Task Execute_EmptyGroupsList_LivenessStillStamped()
+    {
+        // No groups at all
+        _registry.SetGroups();
+
+        await _job.Execute(MakeContext("snapshot"));
+
+        Assert.True(_liveness.StampCalled);
+        Assert.Equal("snapshot", _liveness.LastStampedKey);
+        Assert.Null(_correlation.OperationCorrelationId);
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
@@ -629,6 +809,56 @@ public sealed class SnapshotJobTests : IDisposable
             holders: holders,
             commands: commands,
             suppressionWindowSeconds: 60);
+    }
+
+    /// <summary>
+    /// Creates a tenant that evaluates as Healthy:
+    /// Resolved NOT all violated → Evaluate NOT all violated → Healthy.
+    /// </summary>
+    private static Tenant MakeHealthyTenant(string id)
+    {
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0); // In range → not violated
+
+        var evaluate = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(evaluate, 50.0); // In range → not violated
+
+        return MakeTenant(new[] { resolved, evaluate }, Array.Empty<CommandSlotOptions>(), id: id);
+    }
+
+    /// <summary>
+    /// Creates a tenant that evaluates as ConfirmedBad (Tier 2 stop):
+    /// ALL Resolved violated → ConfirmedBad.
+    /// </summary>
+    private static Tenant MakeConfirmedBadTenant(string id)
+    {
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 10 });
+        WriteValue(resolved, 5.0); // Below Min → violated
+
+        return MakeTenant(new[] { resolved }, Array.Empty<CommandSlotOptions>(), id: id);
+    }
+
+    /// <summary>
+    /// Creates a tenant that evaluates as Commanded:
+    /// Resolved NOT all violated → ALL Evaluate violated → Tier 4 enqueues command.
+    /// </summary>
+    private static Tenant MakeCommandingTenant(string id, string commandName)
+    {
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0); // In range → not violated
+
+        var evaluate = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 });
+        WriteValue(evaluate, 5.0); // Below Min → violated
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = commandName, Value = "1", ValueType = "Integer32" };
+
+        return MakeTenant(new[] { resolved, evaluate }, new[] { cmd }, id: id);
     }
 
     private static IJobExecutionContext MakeContext(string jobKeyName)
