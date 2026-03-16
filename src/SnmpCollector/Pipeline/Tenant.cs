@@ -1,3 +1,5 @@
+using SnmpCollector.Configuration;
+
 namespace SnmpCollector.Pipeline;
 
 /// <summary>
@@ -9,11 +11,14 @@ public sealed class Tenant
     public string Id { get; }
     public int Priority { get; }
     public IReadOnlyList<MetricSlotHolder> Holders { get; }
+    public IReadOnlyList<CommandSlotOptions> Commands { get; }
 
-    public Tenant(string id, int priority, IReadOnlyList<MetricSlotHolder> holders)
+    public Tenant(string id, int priority, IReadOnlyList<MetricSlotHolder> holders,
+        IReadOnlyList<CommandSlotOptions> commands)
     {
         Id = id;
         Priority = priority;
         Holders = holders;
+        Commands = commands;
     }
 }

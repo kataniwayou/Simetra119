@@ -90,6 +90,7 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                     metric.Port,
                     metric.MetricName,
                     metric.IntervalSeconds,
+                    metric.Role,
                     metric.TimeSeriesSize,
                     metric.GraceMultiplier,
                     metric.Threshold);
@@ -109,7 +110,7 @@ public sealed class TenantVectorRegistry : ITenantVectorRegistry
                 totalSlots++;
             }
 
-            var tenant = new Tenant(tenantId, tenantOpts.Priority, holders);
+            var tenant = new Tenant(tenantId, tenantOpts.Priority, holders, tenantOpts.Commands);
 
             if (!priorityBuckets.TryGetValue(tenantOpts.Priority, out var bucket))
             {
