@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.0 Tenant Evaluation & Control — Phase 48 complete
+**Current focus:** v2.0 Observability & Dashboard — Phase 49 in progress
 
 ## Current Position
 
-Phase: 48 of 50 (SnapshotJob 4-Tier Evaluation)
-Plan: 4 of 4 in current phase
-Status: Complete (verified 12/12 must-haves)
-Last activity: 2026-03-16 — Phase 48 complete
+Phase: 49 of 50 (Observability and Dashboard)
+Plan: 1 of ? in current phase
+Status: In progress
+Last activity: 2026-03-16 — Completed 49-01-PLAN.md
 
-Progress: [████████░░] v2.0 — 11/13 plans complete
+Progress: [█████████░] v2.0 — 12/13 plans complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 104 (v1.0 through v1.10 + Phases 45-48-04, including quick tasks)
+- Total plans completed: 105 (v1.0 through v1.10 + Phases 45-49-01, including quick tasks)
 - Average duration: ~25 min
 - Total execution time: ~39 hours
 
@@ -33,6 +33,7 @@ Progress: [████████░░] v2.0 — 11/13 plans complete
 - 48-02: ~5 min
 - 48-03: ~3 min
 - 48-04: ~5 min
+- 49-01: ~4 min
 - Trend: Stable (small surgical plans)
 
 *Updated after each plan completion*
@@ -66,6 +67,8 @@ Progress: [████████░░] v2.0 — 11/13 plans complete
 - SnapshotJob Tier 1+2: HasStaleness (excludes Trap/0-interval/null-slot), AreAllResolvedViolated (ConfirmedBad gate), IsViolated (strict inequality, null=violated), TierResult enum (Phase 48-02)
 - SnapshotJob Tier 3+4: AreAllEvaluateViolated (vacuous false — no data = no command), Tier 4 command dispatch with suppression key {TenantId}:{Ip}:{Port}:{CommandName}, channel-full handled gracefully (Phase 48-03)
 - SnapshotJob priority group traversal: Task.WhenAll parallel within-group, sequential across groups, advance gate blocks on Stale/Commanded, advances on Healthy/ConfirmedBad, Tier 4 zero-enqueue returns ConfirmedBad (Phase 48-04)
+- CommandWorkerService: Stopwatch-based duration logging — Information on SET success, Warning on timeout, both with DurationMs:F1 (Phase 49-01)
+- Operations dashboard: 3 command panels (sent/failed/suppressed) at y=39 w=8 each, .NET Runtime row shifted to y=47 (Phase 49-01)
 
 ### Blockers/Concerns
 
@@ -82,5 +85,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Completed 48-04-PLAN.md — Priority group traversal with advance gate + 9 integration tests; 412 tests green; Phase 48 complete
+Stopped at: Completed 49-01-PLAN.md — Stopwatch duration logging + 3 command dashboard panels; 414 tests green
 Resume file: None
