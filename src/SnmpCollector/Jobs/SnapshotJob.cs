@@ -58,13 +58,42 @@ public sealed class SnapshotJob : IJob
 
         try
         {
+            var totalEvaluated = 0;
+            var totalCommanded = 0;
+            var totalStale = 0;
+
             foreach (var group in _registry.Groups)
             {
-                foreach (var tenant in group.Tenants)
+                var results = new TierResult[group.Tenants.Count];
+                await Task.WhenAll(group.Tenants.Select((tenant, index) =>
+                    Task.Run(() => results[index] = EvaluateTenant(tenant))));
+
+                // Aggregate counters for cycle summary
+                for (var i = 0; i < results.Length; i++)
                 {
-                    EvaluateTenant(tenant);
+                    totalEvaluated++;
+                    if (results[i] == TierResult.Commanded) totalCommanded++;
+                    if (results[i] == TierResult.Stale) totalStale++;
                 }
+
+                // Advance gate: block if ANY tenant is Stale or Commanded
+                var shouldAdvance = true;
+                for (var i = 0; i < results.Length; i++)
+                {
+                    if (results[i] == TierResult.Stale || results[i] == TierResult.Commanded)
+                    {
+                        shouldAdvance = false;
+                        break;
+                    }
+                }
+
+                if (!shouldAdvance)
+                    break;
             }
+
+            _logger.LogDebug(
+                "Snapshot cycle complete: {TenantsEvaluated} evaluated, {Commanded} commanded, {Stale} stale",
+                totalEvaluated, totalCommanded, totalStale);
         }
         catch (OperationCanceledException)
         {
@@ -157,7 +186,9 @@ public sealed class SnapshotJob : IJob
             "Tenant {TenantId} priority={Priority} tier=4 — commands enqueued, count={CommandCount}",
             tenant.Id, tenant.Priority, enqueueCount);
 
-        return TierResult.Commanded;
+        // If no commands were actually enqueued (all suppressed or channel full),
+        // treat as ConfirmedBad — no active commands firing, safe to cascade
+        return enqueueCount > 0 ? TierResult.Commanded : TierResult.ConfirmedBad;
     }
 
     /// <summary>

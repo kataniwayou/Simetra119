@@ -484,9 +484,9 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmd });
         var result = _job.EvaluateTenant(tenant);
 
-        // Suppressed → no TryWrite
+        // Suppressed → no TryWrite, zero enqueued → ConfirmedBad (safe to cascade)
         Assert.False(_commandChannel.Reader.TryRead(out _));
-        Assert.Equal(SnapshotJob.TierResult.Commanded, result);
+        Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
     }
 
     [Fact]
@@ -508,10 +508,10 @@ public sealed class SnapshotJobTests : IDisposable
             { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
         var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmd });
 
-        // Should not throw
+        // Should not throw — channel full means zero enqueued → ConfirmedBad
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.Commanded, result);
+        Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
     }
 
     [Fact]
