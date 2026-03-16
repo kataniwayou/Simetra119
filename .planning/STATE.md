@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.0 Tenant Evaluation & Control — Phase 46 complete
+**Current focus:** v2.0 Tenant Evaluation & Control — Phase 47 in progress
 
 ## Current Position
 
-Phase: 46 of 50 (Infrastructure Components)
-Plan: 3 of 3 in current phase
-Status: Complete (all plans executed, verified)
-Last activity: 2026-03-16 — Phase 46 complete
+Phase: 47 of 50 (CommandWorkerService)
+Plan: 1 of N in current phase
+Status: In progress
+Last activity: 2026-03-16 — Completed 47-01-PLAN.md
 
-Progress: [████░░░░░░] v2.0 — 5/13 plans complete
+Progress: [█████░░░░░] v2.0 — 6/13 plans complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 99 (v1.0 through v1.10 + Phases 45-46, including quick tasks)
+- Total plans completed: 100 (v1.0 through v1.10 + Phases 45-47-01, including quick tasks)
 - Average duration: ~25 min
 - Total execution time: ~39 hours
 
@@ -29,6 +29,7 @@ Progress: [████░░░░░░] v2.0 — 5/13 plans complete
 - 46-01: ~10 min
 - 46-02: ~5 min
 - 46-03: ~1 min
+- 47-01: ~1 min
 - Trend: Stable (small surgical plans)
 
 *Updated after each plan completion*
@@ -52,6 +53,9 @@ Progress: [████░░░░░░] v2.0 — 5/13 plans complete
 - `[DisallowConcurrentExecution]` on `SnapshotJob` is the only concurrency guard for suppression
 - SharpSnmpLib IP type is `Lextm.SharpSnmpLib.IP` (not `IpAddress`)
 - `TryWrite` (non-blocking) for channel enqueue
+- ICommandChannel: Writer/Reader only, no Complete/WaitForDrainAsync — immediate stop on cancel (Phase 47-01)
+- CommandChannel: BoundedChannel capacity 16, DropWrite mode, SingleWriter=false, SingleReader=true (Phase 47-01)
+- CommandRequest: sealed record (Ip, Port, CommandName, Value, ValueType, DeviceName) — no CommunityString (Phase 47-01)
 
 ### Blockers/Concerns
 
@@ -68,5 +72,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Phase 46 complete — ISuppressionCache, SetAsync, SnapshotJobOptions, command counters; 367 tests green
+Stopped at: Completed 47-01-PLAN.md — CommandRequest, ICommandChannel, CommandChannel, DI registration; 367 tests green
 Resume file: None
