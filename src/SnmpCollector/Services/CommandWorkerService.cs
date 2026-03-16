@@ -118,18 +118,7 @@ public sealed class CommandWorkerService : BackgroundService
         var snmpData = SharpSnmpClient.ParseSnmpData(req.Value, req.ValueType);
         var variable = new Variable(new ObjectIdentifier(oid), snmpData);
 
-        // 4. Leader gate — only the leader sends SET commands to devices.
-        // All replicas evaluate tenants (keeping state warm), but only the leader acts.
-        // Checked right before SET (not at enqueue time) so leadership changes mid-cycle are respected.
-        if (!_leaderElection.IsLeader)
-        {
-            _logger.LogDebug(
-                "Skipping SET {CommandName} for {DeviceName} — not leader",
-                req.CommandName, req.DeviceName);
-            return;
-        }
-
-        // 5. SET with timeout (mirrors MetricPollJob lines 92-93)
+        // 4. SET with timeout (mirrors MetricPollJob lines 92-93)
         var intervalSeconds = _snapshotJobOptions.Value.IntervalSeconds;
         var timeoutMultiplier = _snapshotJobOptions.Value.TimeoutMultiplier;
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
@@ -137,6 +126,16 @@ public sealed class CommandWorkerService : BackgroundService
 
         var endpoint = new IPEndPoint(IPAddress.Parse(device.ResolvedIp), device.Port);
         var community = new OctetString(device.CommunityString);
+
+        // 5. Leader gate — only the leader sends SET commands to devices.
+        // Checked as close to SetAsync as possible so leadership changes mid-cycle are respected.
+        if (!_leaderElection.IsLeader)
+        {
+            _logger.LogDebug(
+                "Skipping SET {CommandName} for {DeviceName} — not leader",
+                req.CommandName, req.DeviceName);
+            return;
+        }
 
         IList<Variable> response;
         var sw = Stopwatch.StartNew();
