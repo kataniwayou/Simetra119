@@ -26,6 +26,9 @@ Requirements for the Tenant Evaluation & Control milestone. Each maps to roadmap
 - [ ] **SNAP-09**: Suppression cache — `ConcurrentDictionary<string, DateTimeOffset>` singleton keyed by `"{Ip}:{Port}:{CommandName}"`; per-tenant `SuppressionWindowSeconds` config property; lazy TTL expiry (check age on access, no background sweep); `[DisallowConcurrentExecution]` eliminates check-then-suppress race
 - [ ] **SNAP-10**: SET response dispatched through full MediatR pipeline — each response varbind creates `SnmpOidReceived{Source=SnmpSource.Command}`; OID resolved via existing OID map (NOT bypassed); recorded as `snmp_gauge`/`snmp_info` with `source="Command"`
 - [ ] **SNAP-11**: `CommandWorkerService` — `BackgroundService` draining bounded `Channel<CommandRequest>` (DropOldest); resolves community string from `IDeviceRegistry` at execution time (not enqueue time); resolves command OID from `ICommandMapService.ResolveCommandOid`; registered via Singleton-then-HostedService DI pattern
+
+### Configuration
+
 - [ ] **SNAP-12**: `SnapshotJobOptions` — `IntervalSeconds` (default 15), `SuppressionWindowSeconds` (default 60), `TimeoutMultiplier` (default 0.5); bound from `"SnapshotJob"` config section; validated with `ValidateDataAnnotations` + `ValidateOnStart`
 
 ### Observability
@@ -72,29 +75,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SNAP-01 | TBD | Pending |
-| SNAP-02 | TBD | Pending |
-| SNAP-03 | TBD | Pending |
-| SNAP-04 | TBD | Pending |
-| SNAP-05 | TBD | Pending |
-| SNAP-06 | TBD | Pending |
-| SNAP-07 | TBD | Pending |
-| SNAP-08 | TBD | Pending |
-| SNAP-09 | TBD | Pending |
-| SNAP-10 | TBD | Pending |
-| SNAP-11 | TBD | Pending |
-| SNAP-12 | TBD | Pending |
-| SNAP-13 | TBD | Pending |
-| SNAP-14 | TBD | Pending |
-| SNAP-15 | TBD | Pending |
-| SNAP-16 | TBD | Pending |
-| SNAP-17 | TBD | Pending |
+| SNAP-01 | Phase 45 | Pending |
+| SNAP-02 | Phase 45 | Pending |
+| SNAP-03 | Phase 45 | Pending |
+| SNAP-04 | Phase 48 | Pending |
+| SNAP-05 | Phase 48 | Pending |
+| SNAP-06 | Phase 48 | Pending |
+| SNAP-07 | Phase 48 | Pending |
+| SNAP-08 | Phase 46 | Pending |
+| SNAP-09 | Phase 46 | Pending |
+| SNAP-10 | Phase 47 | Pending |
+| SNAP-11 | Phase 47 | Pending |
+| SNAP-12 | Phase 46 | Pending |
+| SNAP-13 | Phase 46 | Pending |
+| SNAP-14 | Phase 48 | Pending |
+| SNAP-15 | Phase 48 | Pending |
+| SNAP-16 | Phase 49 | Pending |
+| SNAP-17 | Phase 49 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 17 total
-- Mapped to phases: 0
-- Unmapped: 17 ⚠️
+- Mapped to phases: 17
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-16*
-*Last updated: 2026-03-16 after initial definition*
+*Last updated: 2026-03-16 after v2.0 roadmap created — all 17 requirements mapped*

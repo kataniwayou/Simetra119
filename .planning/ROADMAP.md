@@ -13,6 +13,7 @@
 - ✅ **v1.8 Combined Metrics** - Phases 37-40 (shipped 2026-03-15)
 - ✅ **v1.9 Metric Threshold Structure & Validation** - Phases 41-42 (shipped 2026-03-15)
 - ✅ **v1.10 Heartbeat Refactor & Pipeline Liveness** - Phases 43-44 (shipped 2026-03-15)
+- 🚧 **v2.0 Tenant Evaluation & Control** - Phases 45-49 (in progress)
 
 ## Phases
 
@@ -132,6 +133,116 @@ See `.planning/milestones/v1.10-ROADMAP.md` for details.
 
 ---
 
+### 🚧 v2.0 Tenant Evaluation & Control (In Progress)
+
+**Milestone Goal:** SnapshotJob evaluates all tenants by priority on a 15s cycle, detects stale metrics, checks thresholds via a 4-tier logic tree, and issues SNMP SET commands through a Channel-backed worker — with suppression cache, 3 new pipeline counters, and full observability.
+
+- [ ] **Phase 45: Structural Prerequisites** — Close data propagation gaps so SnapshotJob evaluation logic is buildable
+- [ ] **Phase 46: Infrastructure Components** — Build suppression cache, options model, SetAsync extension, and command counters
+- [ ] **Phase 47: CommandWorkerService** — Channel-backed background worker that executes SET commands and dispatches responses
+- [ ] **Phase 48: SnapshotJob 4-Tier Evaluation** — Quartz job driving full tenant evaluation loop with priority group traversal
+- [ ] **Phase 49: Observability & Dashboard** — Structured evaluation logs, command execution logs, and dashboard panels
+
+---
+
+#### Phase 45: Structural Prerequisites
+
+**Goal**: The runtime data model is complete — MetricSlotHolder carries Role, Tenant carries Commands, and SnmpSource.Command exists — so all SnapshotJob evaluation logic can be written without placeholder stubs
+**Depends on**: Nothing (closes gaps in existing model; no new components required)
+**Requirements**: SNAP-01, SNAP-02, SNAP-03
+**Success Criteria** (what must be TRUE):
+  1. `MetricSlotHolder.Role` is populated at `TenantVectorRegistry.Reload` time — unit tests confirm that a holder built from a `MetricSlotOptions` with `Role="Evaluate"` reports `Role="Evaluate"` at runtime
+  2. `Tenant.Commands` returns the `IReadOnlyList<CommandSlotOptions>` populated from `TenantOptions.Commands` at reload time — unit tests confirm Commands list is non-null and contains the correct entries
+  3. `SnmpSource.Command` exists as an enum value — `OidResolutionBehavior` does NOT bypass resolution for Command source (Synthetic bypass is unchanged and unaffected)
+  4. All existing tests remain green after the three property additions
+
+**Plans**: TBD
+
+Plans:
+- [ ] 45-01: SnmpSource.Command enum value + OidResolutionBehavior guard verification
+- [ ] 45-02: MetricSlotHolder.Role + Tenant.Commands propagation in TenantVectorRegistry.Reload + tests
+
+---
+
+#### Phase 46: Infrastructure Components
+
+**Goal**: The suppression cache, job options, SetAsync capability, and command pipeline counters all exist as independently testable components with clean interfaces — SnapshotJob and CommandWorkerService can inject and test against them without being built yet
+**Depends on**: Phase 45 (SnmpSource.Command must exist for PipelineMetricService counter wiring)
+**Requirements**: SNAP-08, SNAP-09, SNAP-12, SNAP-13
+**Success Criteria** (what must be TRUE):
+  1. `ISuppressionCache.TrySuppress(key, windowSeconds)` returns false on first call and true on a second call within the window — cache entries expire correctly after the window elapses (lazy TTL)
+  2. `ISnmpClient.SetAsync` exists on the interface and `SharpSnmpClient.SetAsync` delegates to `Messenger.SetAsync` — ValueType dispatch covers Integer32, OctetString, and IpAddress (using `Lextm.SharpSnmpLib.IP`)
+  3. `SnapshotJobOptions` loads from the `"SnapshotJob"` config section and fails startup with a validation error if `IntervalSeconds` is below its minimum — `ValidateOnStart` is active
+  4. `PipelineMetricService` exposes `IncrementCommandSent`, `IncrementCommandFailed`, and `IncrementCommandSuppressed` methods with `device_name` tag — all three counters are registered in the OTel meter
+
+**Plans**: TBD
+
+Plans:
+- [ ] 46-01: ISuppressionCache + SuppressionCache with TTL tests
+- [ ] 46-02: SnapshotJobOptions + ISnmpClient.SetAsync + SharpSnmpClient delegation
+- [ ] 46-03: PipelineMetricService command counters (snmp.command.sent/failed/suppressed)
+
+---
+
+#### Phase 47: CommandWorkerService
+
+**Goal**: SNMP SET commands flow from enqueue to execution to MediatR pipeline — CommandWorkerService drains the channel, resolves community string at execution time, calls SetAsync, and dispatches each SET response varbind as SnmpOidReceived with source=Command through the full pipeline
+**Depends on**: Phase 46 (ISnmpClient.SetAsync, ISuppressionCache, PipelineMetricService counters, SnapshotJobOptions must exist)
+**Requirements**: SNAP-10, SNAP-11
+**Success Criteria** (what must be TRUE):
+  1. A `CommandRequest` enqueued into `ICommandChannel` is executed by `CommandWorkerService` — `ISnmpClient.SetAsync` is called with the correct endpoint, community string (resolved from IDeviceRegistry at execution time), and OID (resolved from ICommandMapService)
+  2. Each varbind in the SET response becomes an `SnmpOidReceived` dispatched through the full MediatR pipeline with `Source=SnmpSource.Command` — the metric appears in Prometheus with `source="Command"`
+  3. A SET failure increments `snmp.command.failed` and logs a Warning — the worker continues processing subsequent commands
+  4. `CommandWorkerService` is registered via the Singleton-then-HostedService DI pattern — only one instance exists; the instance that runs as a hosted service is the same instance that SnapshotJob enqueues to
+
+**Plans**: TBD
+
+Plans:
+- [ ] 47-01: CommandRequest record + ICommandChannel + CommandChannel (bounded, DropOldest)
+- [ ] 47-02: CommandWorkerService + DI registration + unit tests (success, failure, OID resolution, SET response dispatch)
+
+---
+
+#### Phase 48: SnapshotJob 4-Tier Evaluation
+
+**Goal**: SnapshotJob runs on a Quartz schedule, evaluates all tenant priority groups through the complete 4-tier logic tree, enqueues commands for tenants that reach Tier 4, and stamps liveness — the full closed-loop evaluation path is operational
+**Depends on**: Phases 45, 46, 47 (all prerequisite components must exist)
+**Requirements**: SNAP-04, SNAP-05, SNAP-06, SNAP-07, SNAP-14, SNAP-15
+**Success Criteria** (what must be TRUE):
+  1. A tenant with a stale metric (any holder past IntervalSeconds × GraceMultiplier, excluding Trap/IntervalSeconds=0) is skipped to Tier 4 — no threshold check occurs and no command is dispatched for that cycle
+  2. A tenant with all Resolved metrics in violation proceeds past Tier 2 — a tenant with at least one Resolved metric in range stops at Tier 2 with no command
+  3. A tenant with all Evaluate metrics in violation reaches Tier 4 and a `CommandRequest` is enqueued — a tenant with any Evaluate metric in range stops at Tier 3 with no command
+  4. Priority group traversal is sequential across groups — a group where NOT all tenants reached Tier 4 stops execution and lower-priority groups are not evaluated that cycle
+  5. SnapshotJob stamps `ILivenessVectorService` with key `"snapshot"` in its `finally` block — `LivenessHealthCheck` detects staleness if the job stops running
+  6. Structured evaluation logs appear at Debug level for stale/resolved-gate/no-violation outcomes and at Information level for command-dispatched outcomes — each log includes tenant ID, priority, and tier reached
+
+**Plans**: TBD
+
+Plans:
+- [ ] 48-01: SnapshotJob skeleton — Quartz registration, liveness stamp, correlation ID, [DisallowConcurrentExecution]
+- [ ] 48-02: Tier 1 staleness detection + Tier 2 Resolved gate + unit tests
+- [ ] 48-03: Tier 3 Evaluate check + Tier 4 command enqueue + suppression check + unit tests
+- [ ] 48-04: Priority group traversal (parallel within group, sequential across groups, advance gate) + integration tests
+
+---
+
+#### Phase 49: Observability & Dashboard
+
+**Goal**: Operators can see command execution activity in Grafana — three snmp.command.* panels are visible on the operations dashboard, and pod logs contain structured per-tenant evaluation records and per-command round-trip durations
+**Depends on**: Phase 48 (core loop must be stable before observability add-ons)
+**Requirements**: SNAP-16, SNAP-17
+**Success Criteria** (what must be TRUE):
+  1. The operations dashboard shows three new panels in the Pipeline Counters group (Row 5) — `snmp.command.sent`, `snmp.command.failed`, and `snmp.command.suppressed` — each 8 units wide on a single row
+  2. Pod logs for a successful SET contain an Information-level entry with device name, command name, and round-trip duration in milliseconds
+  3. Pod logs for a failed SET contain a Warning-level entry with device name, command name, the error, and round-trip duration in milliseconds
+
+**Plans**: TBD
+
+Plans:
+- [ ] 49-01: Command execution logs (Stopwatch around SetAsync, Information/Warning level) + dashboard panels
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -156,7 +267,12 @@ See `.planning/milestones/v1.10-ROADMAP.md` for details.
 | 42. Threshold Validation & Config Files | v1.9 | 2/2 | Complete | 2026-03-15 |
 | 43. Heartbeat Cleanup | v1.10 | 1/1 | Complete | 2026-03-15 |
 | 44. Pipeline Liveness | v1.10 | 2/2 | Complete | 2026-03-15 |
+| 45. Structural Prerequisites | v2.0 | 0/2 | Not started | - |
+| 46. Infrastructure Components | v2.0 | 0/3 | Not started | - |
+| 47. CommandWorkerService | v2.0 | 0/2 | Not started | - |
+| 48. SnapshotJob 4-Tier Evaluation | v2.0 | 0/4 | Not started | - |
+| 49. Observability & Dashboard | v2.0 | 0/1 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-15 after v1.10 milestone phases added*
+*Last updated: 2026-03-16 after v2.0 milestone roadmap created*
