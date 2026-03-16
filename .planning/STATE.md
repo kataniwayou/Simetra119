@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 Phase: 50 of 50 (Label Rename)
 Plan: 1 of 1 in current phase
 Status: v2.0 milestone complete
-Last activity: 2026-03-16 — Completed quick/061 (Remove DeviceName from CommandRequest)
+Last activity: 2026-03-16 — Completed quick/064 (Staleness Sentinel + Range Validation + SnapshotJob Config)
 
 Progress: [██████████] v2.0 — 13/13 plans complete
 
@@ -65,7 +65,10 @@ Progress: [██████████] v2.0 — 13/13 plans complete
 - DeviceName on SnmpOidReceived from req.DeviceName, not device.Name — locked decision (Phase 47-02)
 - MetricName pre-set from ICommandMapService.ResolveCommandName on response varbinds (Phase 47-02)
 - SnapshotJob: skeleton with 8-param DI, placeholder Groups loop, registered in Quartz with intervalRegistry "snapshot" entry (Phase 48-01)
-- SnapshotJob Tier 1+2: HasStaleness (excludes Trap/0-interval/null-slot), AreAllResolvedViolated (ConfirmedBad gate), IsViolated (strict inequality, null=violated), TierResult enum (Phase 48-02)
+- SnapshotJob Tier 1+2: HasStaleness (excludes Trap/0-interval), AreAllResolvedViolated (ConfirmedBad gate), IsViolated (strict inequality, null=violated), TierResult enum (Phase 48-02)
+- MetricSlotHolder sentinel: constructor seeds ImmutableArray with MetricSlot(0, null, UtcNow) — ReadSlot never returns null, staleness clock starts at construction (quick-064)
+- GraceMultiplier Range [2.0, 5.0] on PollOptions, LivenessOptions; TimeoutMultiplier Range [0.1, 0.9] on PollOptions (quick-064)
+- SnapshotJob section in appsettings.json: IntervalSeconds=15, TimeoutMultiplier=0.8 (quick-064)
 - SnapshotJob Tier 3+4: AreAllEvaluateViolated (vacuous false — no data = no command), Tier 4 command dispatch with suppression key {TenantId}:{Ip}:{Port}:{CommandName}, channel-full handled gracefully (Phase 48-03)
 - SnapshotJob priority group traversal: Task.WhenAll parallel within-group, sequential across groups, advance gate blocks on Stale/Commanded, advances on Healthy/ConfirmedBad, Tier 4 zero-enqueue returns ConfirmedBad (Phase 48-04)
 - CommandRequest: 5 fields (Ip, Port, CommandName, Value, ValueType) — DeviceName removed, resolved from DeviceRegistry at execution time (quick-061)
@@ -88,9 +91,10 @@ None.
 | 061 | Remove DeviceName from CommandRequest, resolve from DeviceRegistry | 2026-03-16 | 88e2f8c | [061-remove-devicename-from-commandrequest](./quick/061-remove-devicename-from-commandrequest/) |
 | 062 | Add finally block cleanup for OperationCorrelationId in services | 2026-03-16 | f9c73c7 | [062-add-correlation-finally-cleanup](./quick/062-add-correlation-finally-cleanup/) |
 | 063 | Initialize CurrentCorrelationId with Guid at construction | 2026-03-16 | 223b454 | — |
+| 064 | Staleness sentinel timestamp + Range validation + SnapshotJob config | 2026-03-16 | 6738f73 | [064-staleness-sentinel-range-validation](./quick/064-staleness-sentinel-range-validation/) |
 
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Phase 50 complete — v2.0 milestone complete; 414 tests green; metric_name renamed to resolved_name
+Stopped at: Completed quick/064 — sentinel timestamp, range validation, SnapshotJob config; 415 tests green
 Resume file: None
