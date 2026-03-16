@@ -2,7 +2,7 @@ namespace SnmpCollector.Configuration;
 
 /// <summary>
 /// Configuration for a single metric slot within a tenant.
-/// Identifies a specific (ip, port, metric_name) tuple for tenant vector routing.
+/// Identifies a specific (ip, port, resolved_name) tuple for tenant vector routing.
 /// </summary>
 public sealed class MetricSlotOptions
 {

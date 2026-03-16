@@ -20,13 +20,13 @@ public interface ISnmpMetricFactory
 
     /// <summary>
     /// Records poll duration on the <c>snmp_gauge_duration</c> histogram.
-    /// Same 6 labels as RecordGauge (metric_name, oid, device_name, ip, source, snmp_type).
+    /// Same 6 labels as RecordGauge (resolved_name, oid, device_name, ip, source, snmp_type).
     /// </summary>
     void RecordGaugeDuration(string metricName, string oid, string deviceName, string ip, string source, string snmpType, double durationMs);
 
     /// <summary>
     /// Records poll duration on the <c>snmp_info_duration</c> histogram.
-    /// Same 7 labels as RecordInfo (metric_name, oid, device_name, ip, source, snmp_type, value).
+    /// Same 7 labels as RecordInfo (resolved_name, oid, device_name, ip, source, snmp_type, value).
     /// </summary>
     void RecordInfoDuration(string metricName, string oid, string deviceName, string ip, string source, string snmpType, string value, double durationMs);
 }

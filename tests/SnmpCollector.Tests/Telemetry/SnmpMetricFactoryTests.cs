@@ -59,7 +59,7 @@ public sealed class SnmpMetricFactoryTests : IDisposable
 
         Assert.DoesNotContain("host_name", tags.Keys);
         Assert.DoesNotContain("pod_name", tags.Keys);
-        Assert.Equal("hrProcessorLoad", tags["metric_name"]);
+        Assert.Equal("hrProcessorLoad", tags["resolved_name"]);
         Assert.Equal("1.3.6.1.2.1.25.3.3.1.2", tags["oid"]);
         Assert.Equal("core-router", tags["device_name"]);
         Assert.Equal("10.0.0.1", tags["ip"]);
@@ -78,7 +78,7 @@ public sealed class SnmpMetricFactoryTests : IDisposable
 
         Assert.DoesNotContain("host_name", tags.Keys);
         Assert.DoesNotContain("pod_name", tags.Keys);
-        Assert.Equal("sysDescr", tags["metric_name"]);
+        Assert.Equal("sysDescr", tags["resolved_name"]);
         Assert.Equal("1.3.6.1.2.1.1.1.0", tags["oid"]);
         Assert.Equal("test-device", tags["device_name"]);
         Assert.Equal("10.0.0.2", tags["ip"]);
@@ -96,7 +96,7 @@ public sealed class SnmpMetricFactoryTests : IDisposable
         Assert.Single(_recordedTags);
         var tags = _recordedTags[0].ToDictionary(t => t.Key, t => t.Value);
 
-        Assert.Equal("hrProcessorLoad", tags["metric_name"]);
+        Assert.Equal("hrProcessorLoad", tags["resolved_name"]);
         Assert.Equal("1.3.6.1.2.1.25.3.3.1.2", tags["oid"]);
         Assert.Equal("core-router", tags["device_name"]);
         Assert.Equal("10.0.0.1", tags["ip"]);
@@ -113,7 +113,7 @@ public sealed class SnmpMetricFactoryTests : IDisposable
         Assert.Single(_recordedTags);
         var tags = _recordedTags[0].ToDictionary(t => t.Key, t => t.Value);
 
-        Assert.Equal("sysDescr", tags["metric_name"]);
+        Assert.Equal("sysDescr", tags["resolved_name"]);
         Assert.Equal("1.3.6.1.2.1.1.1.0", tags["oid"]);
         Assert.Equal("test-device", tags["device_name"]);
         Assert.Equal("10.0.0.2", tags["ip"]);

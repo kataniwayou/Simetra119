@@ -17,7 +17,7 @@ namespace SnmpCollector.Pipeline;
 /// Label taxonomy (bounded by design):
 ///   host_name   -- 1 per node (from PHYSICAL_HOSTNAME env var or Environment.MachineName)
 ///   pod_name    -- 1 per pod (from HOSTNAME env var or Environment.MachineName)
-///   metric_name -- bounded by OID map size + 1 for Unknown
+///   resolved_name -- bounded by OID map size + 1 for Unknown
 ///   oid         -- bounded by OID map size
 ///   device_name -- bounded by device count (community string convention)
 ///   ip          -- bounded by device count
@@ -93,7 +93,7 @@ public sealed class CardinalityAuditService : IHostedLifecycleService
         _logger.LogInformation(
             "Label taxonomy: host_name (1 per node, from PHYSICAL_HOSTNAME env var), " +
             "pod_name (1 per pod, from HOSTNAME env var), " +
-            "metric_name (bounded by OID map: {OidMapSize} entries + Unknown), " +
+            "resolved_name (bounded by OID map: {OidMapSize} entries + Unknown), " +
             "oid (bounded by OID map), " +
             "device_name (bounded by device count: {DeviceCount}), ip (bounded by device count), " +
             "source (2: poll/trap), " +

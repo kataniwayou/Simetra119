@@ -38,7 +38,7 @@ public sealed class SnmpMetricFactory : ISnmpMetricFactory, IDisposable
         var gauge = GetOrCreateGauge("snmp_gauge");
         gauge.Record(value, new TagList
         {
-            { "metric_name", metricName },
+            { "resolved_name", metricName },
             { "oid", oid },
             { "device_name", deviceName },
             { "ip", ip },
@@ -57,7 +57,7 @@ public sealed class SnmpMetricFactory : ISnmpMetricFactory, IDisposable
         var gauge = GetOrCreateGauge("snmp_info");
         gauge.Record(1.0, new TagList
         {
-            { "metric_name", metricName },
+            { "resolved_name", metricName },
             { "oid", oid },
             { "device_name", deviceName },
             { "ip", ip },
@@ -73,7 +73,7 @@ public sealed class SnmpMetricFactory : ISnmpMetricFactory, IDisposable
         var histogram = GetOrCreateHistogram("snmp_gauge_duration");
         histogram.Record(durationMs, new TagList
         {
-            { "metric_name", metricName },
+            { "resolved_name", metricName },
             { "oid", oid },
             { "device_name", deviceName },
             { "ip", ip },
@@ -92,7 +92,7 @@ public sealed class SnmpMetricFactory : ISnmpMetricFactory, IDisposable
         var histogram = GetOrCreateHistogram("snmp_info_duration");
         histogram.Record(durationMs, new TagList
         {
-            { "metric_name", metricName },
+            { "resolved_name", metricName },
             { "oid", oid },
             { "device_name", deviceName },
             { "ip", ip },
