@@ -87,6 +87,7 @@ None.
 | 060 | Pipeline panel layout: 4 semantic rows (events/polls/traps/routing) | 2026-03-16 | 142e5a0 | [060-pipeline-panel-layout-rows](./quick/060-pipeline-panel-layout-rows/) |
 | 061 | Remove DeviceName from CommandRequest, resolve from DeviceRegistry | 2026-03-16 | 88e2f8c | [061-remove-devicename-from-commandrequest](./quick/061-remove-devicename-from-commandrequest/) |
 | 062 | Add finally block cleanup for OperationCorrelationId in services | 2026-03-16 | f9c73c7 | [062-add-correlation-finally-cleanup](./quick/062-add-correlation-finally-cleanup/) |
+| 063 | Initialize CurrentCorrelationId with Guid at construction | 2026-03-16 | 223b454 | — |
 
 ## Session Continuity
 
