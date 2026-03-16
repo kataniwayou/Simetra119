@@ -82,12 +82,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SNAP-05 | Phase 48 | Pending |
 | SNAP-06 | Phase 48 | Pending |
 | SNAP-07 | Phase 48 | Pending |
-| SNAP-08 | Phase 46 | Pending |
-| SNAP-09 | Phase 46 | Pending |
+| SNAP-08 | Phase 46 | Complete |
+| SNAP-09 | Phase 46 | Complete |
 | SNAP-10 | Phase 47 | Pending |
 | SNAP-11 | Phase 47 | Pending |
-| SNAP-12 | Phase 46 | Pending |
-| SNAP-13 | Phase 46 | Pending |
+| SNAP-12 | Phase 46 | Complete |
+| SNAP-13 | Phase 46 | Complete |
 | SNAP-14 | Phase 48 | Pending |
 | SNAP-15 | Phase 48 | Pending |
 | SNAP-16 | Phase 49 | Pending |

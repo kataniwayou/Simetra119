@@ -2,55 +2,56 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-15)
+See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 46 — Infrastructure components for SNMP SET command pipeline
+**Current focus:** v2.0 Tenant Evaluation & Control — Phase 46 complete
 
 ## Current Position
 
-Phase: 46 of 46 (infrastructure-components)
-Plan: 01 of 3
-Status: In progress
-Last activity: 2026-03-16 — Completed 46-01-PLAN.md
+Phase: 46 of 50 (Infrastructure Components)
+Plan: 3 of 3 in current phase
+Status: Complete (all plans executed, verified)
+Last activity: 2026-03-16 — Phase 46 complete
 
-Progress: [####################] v1.0-v1.10 complete | [█░░] 1/3 v1.11 plans
+Progress: [████░░░░░░] v2.0 — 5/13 plans complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 94 (v1.0 through v1.9, including quick tasks)
+- Total plans completed: 99 (v1.0 through v1.10 + Phases 45-46, including quick tasks)
 - Average duration: ~25 min
 - Total execution time: ~39 hours
 
 **Recent Trend:**
-- 42-02: ~5 min
-- quick/058: ~5 min
+- 45-01: ~1 min
+- 45-02: ~3 min
 - 46-01: ~10 min
+- 46-02: ~5 min
+- 46-03: ~1 min
 - Trend: Stable (small surgical plans)
 
 *Updated after each plan completion*
 
 ## Accumulated Context
 
-### Key Architectural Facts (v1.10 relevant)
+### Key Facts for v2.0
 
-- Heartbeat bypass DELETED from `TenantVectorFanOutBehavior` (Phase 43 complete) — "Simetra" not in DeviceRegistry → fan-out naturally skipped
-- `TenantVectorRegistry.Reload` heartbeat injection DELETED (Phase 43 complete) — TenantCount = survivingTenantCount (no +1)
-- `ILivenessVectorService` stamps on job completion in `HeartbeatJob.finally` — this is UNCHANGED; it serves scheduler liveness, not pipeline liveness
-- `IHeartbeatLivenessService` (Phase 44-01 complete) — distinct from `ILivenessVectorService`; stamps when `OtelMetricHandler` processes a heartbeat message (pipeline arrival, not job completion)
-- `HeartbeatLivenessService`: volatile long (UTC ticks), Volatile.Write in Stamp(), Volatile.Read in LastArrival getter
-- Stamp point: AFTER `_pipelineMetrics.IncrementHandled(deviceName)` in numeric case, guarded by `deviceName == HeartbeatJobOptions.HeartbeatDeviceName`
-- DI: `services.AddSingleton<IHeartbeatLivenessService, HeartbeatLivenessService>()` in `AddSnmpPipeline`
-- Staleness window: `IOptions<HeartbeatJobOptions>.Value.IntervalSeconds` (runtime-configured) × `GraceMultiplier` = threshold — no hardcoded values
-- HB-06, HB-07 satisfied by Phase 44-02: LivenessHealthCheck reads IHeartbeatLivenessService.LastArrival, reports pipeline-heartbeat stale in K8s liveness probe
-- HB-08/09/10 preserved and verified: HeartbeatJob.cs, OidMapService.cs, ILivenessVectorService untouched
-- LivenessHealthCheck constructor now takes IHeartbeatLivenessService + IOptions<HeartbeatJobOptions> (DI auto-resolves via AddCheck<T>)
-- Null LastArrival → always stale; pipeline-heartbeat key always in diagnostic data dict; 338 tests green
-- `ISuppressionCache` (Phase 46-01 complete) — ConcurrentDictionary-based cache, TrySuppress returns true=suppressed/false=proceed, lazy TTL, no re-stamp on suppressed calls
-- `TenantOptions.SuppressionWindowSeconds` defaults to 60, propagated to immutable `Tenant.SuppressionWindowSeconds`
-- Value+ValueType parse validation at config load time: Integer32 via int.TryParse, IpAddress via IPAddress.TryParse, OctetString any non-empty value
-- DI: `services.AddSingleton<ISuppressionCache, SuppressionCache>()` in `AddSnmpPipeline`
+- OidResolutionBehavior bypass is now data-driven (`MetricName is not null && != Unknown`) — no Source-specific conditions (Phase 45-01)
+- MetricSlotHolder.Role: immutable string property from MetricSlotOptions.Role (Phase 45-02)
+- Tenant.Commands: IReadOnlyList<CommandSlotOptions> from TenantOptions.Commands (Phase 45-02)
+- Tenant.SuppressionWindowSeconds: int property (default 60) from TenantOptions (Phase 46-01)
+- ISuppressionCache: singleton, TrySuppress(key, windowSeconds) returns true=suppressed/false=proceed, lazy TTL, stamps on allowed calls only (Phase 46-01)
+- Value+ValueType parse validation at tenant config load time (Phase 46-01)
+- ISnmpClient.SetAsync: single Variable, returns IList<Variable>, delegates to Messenger.SetAsync (Phase 46-02)
+- SharpSnmpClient.ParseSnmpData: static helper for Integer32/OctetString/IP dispatch (Phase 46-02)
+- SnapshotJobOptions: IntervalSeconds=15, TimeoutMultiplier=0.8, ValidateOnStart (Phase 46-02)
+- PipelineMetricService: 15 counters incl. snmp.command.sent/failed/suppressed (Phase 46-03)
+- `CommandWorkerService` must use Singleton-then-HostedService DI pattern
+- Community string resolved in `CommandWorkerService` at execution time (not at enqueue time)
+- `[DisallowConcurrentExecution]` on `SnapshotJob` is the only concurrency guard for suppression
+- SharpSnmpLib IP type is `Lextm.SharpSnmpLib.IP` (not `IpAddress`)
+- `TryWrite` (non-blocking) for channel enqueue
 
 ### Blockers/Concerns
 
@@ -61,9 +62,11 @@ None.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 058 | Add GraceMultiplier + resolve IntervalSeconds/GraceMultiplier from device poll group | 2026-03-15 | b2059b6 | [058-gracemultiplier-device-resolved](./quick/058-gracemultiplier-device-resolved/) |
+| 059 | Build, deploy, and test heartbeat liveness E2E script | 2026-03-16 | 2d2a97a | [059-build-deploy-test-heartbeat-liveness](./quick/059-build-deploy-test-heartbeat-liveness/) |
+| 060 | Pipeline panel layout: 4 semantic rows (events/polls/traps/routing) | 2026-03-16 | 142e5a0 | [060-pipeline-panel-layout-rows](./quick/060-pipeline-panel-layout-rows/) |
 
 ## Session Continuity
 
-Last session: 2026-03-16T12:17:00Z
-Stopped at: Completed 46-01-PLAN.md — ISuppressionCache + SuppressionWindowSeconds + Value parse validation; 349 tests green
+Last session: 2026-03-16
+Stopped at: Phase 46 complete — ISuppressionCache, SetAsync, SnapshotJobOptions, command counters; 367 tests green
 Resume file: None

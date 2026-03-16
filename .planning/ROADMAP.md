@@ -138,7 +138,7 @@ See `.planning/milestones/v1.10-ROADMAP.md` for details.
 **Milestone Goal:** SnapshotJob evaluates all tenants by priority on a 15s cycle, detects stale metrics, checks thresholds via a 4-tier logic tree, and issues SNMP SET commands through a Channel-backed worker — with suppression cache, 3 new pipeline counters, and full observability.
 
 - [x] **Phase 45: Structural Prerequisites** — Close data propagation gaps so SnapshotJob evaluation logic is buildable
-- [ ] **Phase 46: Infrastructure Components** — Build suppression cache, options model, SetAsync extension, and command counters
+- [x] **Phase 46: Infrastructure Components** — Build suppression cache, options model, SetAsync extension, and command counters
 - [ ] **Phase 47: CommandWorkerService** — Channel-backed background worker that executes SET commands and dispatches responses
 - [ ] **Phase 48: SnapshotJob 4-Tier Evaluation** — Quartz job driving full tenant evaluation loop with priority group traversal
 - [ ] **Phase 49: Observability & Dashboard** — Structured evaluation logs, command execution logs, and dashboard panels
@@ -286,7 +286,7 @@ Plans:
 | 43. Heartbeat Cleanup | v1.10 | 1/1 | Complete | 2026-03-15 |
 | 44. Pipeline Liveness | v1.10 | 2/2 | Complete | 2026-03-15 |
 | 45. Structural Prerequisites | v2.0 | 2/2 | Complete | 2026-03-16 |
-| 46. Infrastructure Components | v2.0 | 0/3 | Not started | - |
+| 46. Infrastructure Components | v2.0 | 3/3 | Complete | 2026-03-16 |
 | 47. CommandWorkerService | v2.0 | 0/2 | Not started | - |
 | 48. SnapshotJob 4-Tier Evaluation | v2.0 | 0/4 | Not started | - |
 | 49. Observability & Dashboard | v2.0 | 0/1 | Not started | - |
