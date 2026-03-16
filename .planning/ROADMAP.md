@@ -196,10 +196,10 @@ Plans:
   3. A SET failure increments `snmp.command.failed` and logs a Warning — the worker continues processing subsequent commands
   4. `CommandWorkerService` is registered via the Singleton-then-HostedService DI pattern — only one instance exists; the instance that runs as a hosted service is the same instance that SnapshotJob enqueues to
 
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 47-01: CommandRequest record + ICommandChannel + CommandChannel (bounded, DropOldest)
+- [ ] 47-01: CommandRequest record + ICommandChannel + CommandChannel (bounded, DropWrite)
 - [ ] 47-02: CommandWorkerService + DI registration + unit tests (success, failure, OID resolution, SET response dispatch)
 
 ---
@@ -217,7 +217,7 @@ Plans:
   5. SnapshotJob stamps `ILivenessVectorService` with key `"snapshot"` in its `finally` block — `LivenessHealthCheck` detects staleness if the job stops running
   6. Structured evaluation logs appear at Debug level for stale/resolved-gate/no-violation outcomes and at Information level for command-dispatched outcomes — each log includes tenant ID, priority, and tier reached
 
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
 - [ ] 48-01: SnapshotJob skeleton — Quartz registration, liveness stamp, correlation ID, [DisallowConcurrentExecution]
@@ -237,7 +237,7 @@ Plans:
   2. Pod logs for a successful SET contain an Information-level entry with device name, command name, and round-trip duration in milliseconds
   3. Pod logs for a failed SET contain a Warning-level entry with device name, command name, the error, and round-trip duration in milliseconds
 
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
 - [ ] 49-01: Command execution logs (Stopwatch around SetAsync, Information/Warning level) + dashboard panels
@@ -254,7 +254,7 @@ Plans:
   2. Both Grafana dashboards updated with new label name in all PromQL queries
   3. E2E test assertions updated to use `resolved_name`
 
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
 - [ ] 50-01: Rename metric_name → resolved_name in SnmpMetricFactory + dashboards + E2E tests
