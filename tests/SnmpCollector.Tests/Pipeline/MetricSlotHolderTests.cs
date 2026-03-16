@@ -12,8 +12,9 @@ public sealed class MetricSlotHolderTests
         string ip = "10.0.0.1",
         int port = 161,
         string metricName = "hrProcessorLoad",
-        int intervalSeconds = 30)
-        => new(ip, port, metricName, intervalSeconds);
+        int intervalSeconds = 30,
+        string role = "Evaluate")
+        => new(ip, port, metricName, intervalSeconds, role);
 
     [Fact]
     public void ReadSlot_BeforeAnyWrite_ReturnsNull()
@@ -88,7 +89,7 @@ public sealed class MetricSlotHolderTests
     [Fact]
     public void Constructor_SetsMetadataProperties()
     {
-        var holder = new MetricSlotHolder("192.168.1.1", 162, "sysUpTime", 60);
+        var holder = new MetricSlotHolder("192.168.1.1", 162, "sysUpTime", 60, "Evaluate");
 
         Assert.Equal("192.168.1.1", holder.Ip);
         Assert.Equal(162, holder.Port);
@@ -116,7 +117,7 @@ public sealed class MetricSlotHolderTests
     [Fact]
     public void WriteValue_TimeSeriesSize3_AccumulatesSamples()
     {
-        var holder = new MetricSlotHolder("10.0.0.1", 161, "hrProcessorLoad", 30, timeSeriesSize: 3);
+        var holder = new MetricSlotHolder("10.0.0.1", 161, "hrProcessorLoad", 30, "Evaluate", timeSeriesSize: 3);
         holder.WriteValue(1.0, null, SnmpType.Integer32, SnmpSource.Poll);
         holder.WriteValue(2.0, null, SnmpType.Integer32, SnmpSource.Poll);
         holder.WriteValue(3.0, null, SnmpType.Integer32, SnmpSource.Poll);
@@ -129,7 +130,7 @@ public sealed class MetricSlotHolderTests
     [Fact]
     public void WriteValue_ExceedsTimeSeriesSize_EvictsOldest()
     {
-        var holder = new MetricSlotHolder("10.0.0.1", 161, "hrProcessorLoad", 30, timeSeriesSize: 2);
+        var holder = new MetricSlotHolder("10.0.0.1", 161, "hrProcessorLoad", 30, "Evaluate", timeSeriesSize: 2);
         holder.WriteValue(1.0, null, SnmpType.Integer32, SnmpSource.Poll);
         holder.WriteValue(2.0, null, SnmpType.Integer32, SnmpSource.Poll);
         holder.WriteValue(3.0, null, SnmpType.Integer32, SnmpSource.Poll);
@@ -157,11 +158,11 @@ public sealed class MetricSlotHolderTests
     [Fact]
     public void CopyFrom_CopiesSeriesAndMetadata()
     {
-        var old = new MetricSlotHolder("10.0.0.1", 161, "test", 30, timeSeriesSize: 3);
+        var old = new MetricSlotHolder("10.0.0.1", 161, "test", 30, "Evaluate", timeSeriesSize: 3);
         old.WriteValue(1.0, "a", SnmpType.Gauge32, SnmpSource.Poll);
         old.WriteValue(2.0, "b", SnmpType.Gauge32, SnmpSource.Poll);
 
-        var fresh = new MetricSlotHolder("10.0.0.1", 161, "test", 30, timeSeriesSize: 3);
+        var fresh = new MetricSlotHolder("10.0.0.1", 161, "test", 30, "Evaluate", timeSeriesSize: 3);
         fresh.CopyFrom(old);
 
         Assert.Equal(2, fresh.ReadSeries().Length);
@@ -173,12 +174,12 @@ public sealed class MetricSlotHolderTests
     [Fact]
     public void CopyFrom_TruncatesWhenNewHolderHasSmallerSize()
     {
-        var old = new MetricSlotHolder("10.0.0.1", 161, "test", 30, timeSeriesSize: 5);
+        var old = new MetricSlotHolder("10.0.0.1", 161, "test", 30, "Evaluate", timeSeriesSize: 5);
         old.WriteValue(1.0, null, SnmpType.Integer32, SnmpSource.Poll);
         old.WriteValue(2.0, null, SnmpType.Integer32, SnmpSource.Poll);
         old.WriteValue(3.0, null, SnmpType.Integer32, SnmpSource.Poll);
 
-        var fresh = new MetricSlotHolder("10.0.0.1", 161, "test", 30, timeSeriesSize: 2);
+        var fresh = new MetricSlotHolder("10.0.0.1", 161, "test", 30, "Evaluate", timeSeriesSize: 2);
         fresh.CopyFrom(old);
 
         var series = fresh.ReadSeries();
@@ -191,7 +192,7 @@ public sealed class MetricSlotHolderTests
     public void Constructor_StoresThreshold()
     {
         var threshold = new ThresholdOptions { Min = 10.0, Max = 90.0 };
-        var holder = new MetricSlotHolder("10.0.0.1", 161, "m", 30, threshold: threshold);
+        var holder = new MetricSlotHolder("10.0.0.1", 161, "m", 30, "Evaluate", threshold: threshold);
 
         Assert.NotNull(holder.Threshold);
         Assert.Equal(10.0, holder.Threshold.Min);
@@ -201,7 +202,7 @@ public sealed class MetricSlotHolderTests
     [Fact]
     public void Constructor_NullThreshold_DefaultsToNull()
     {
-        var holder = new MetricSlotHolder("10.0.0.1", 161, "m", 30);
+        var holder = new MetricSlotHolder("10.0.0.1", 161, "m", 30, "Evaluate");
         Assert.Null(holder.Threshold);
     }
 }

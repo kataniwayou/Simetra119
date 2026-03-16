@@ -583,6 +583,139 @@ public sealed class TenantVectorRegistryTests
     }
 
     // ──────────────────────────────────────────────────────
+    // 13. Role propagation (2 tests)
+    // ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Reload_RoleFromConfig_StoredInHolder()
+    {
+        var registry = CreateRegistry();
+        var options = new TenantVectorOptions
+        {
+            Tenants =
+            [
+                new TenantOptions
+                {
+                    Priority = 1,
+                    Metrics =
+                    [
+                        new MetricSlotOptions { Ip = "10.0.0.1", Port = 161, MetricName = "cpu", Role = "Evaluate" },
+                        new MetricSlotOptions { Ip = "10.0.0.1", Port = 161, MetricName = "linkState", Role = "Resolved" }
+                    ],
+                    Commands = []
+                }
+            ]
+        };
+
+        registry.Reload(options);
+
+        registry.TryRoute("10.0.0.1", 161, "cpu", out var evaluateHolders);
+        Assert.Equal("Evaluate", evaluateHolders![0].Role);
+
+        registry.TryRoute("10.0.0.1", 161, "linkState", out var resolvedHolders);
+        Assert.Equal("Resolved", resolvedHolders![0].Role);
+    }
+
+    [Fact]
+    public void Reload_RolePreservedAcrossReload()
+    {
+        var registry = CreateRegistry();
+        var options = new TenantVectorOptions
+        {
+            Tenants =
+            [
+                new TenantOptions
+                {
+                    Priority = 1,
+                    Metrics =
+                    [
+                        new MetricSlotOptions { Ip = "10.0.0.1", Port = 161, MetricName = "cpu", Role = "Evaluate" },
+                        new MetricSlotOptions { Ip = "10.0.0.1", Port = 161, MetricName = "linkState", Role = "Resolved" }
+                    ],
+                    Commands = []
+                }
+            ]
+        };
+
+        registry.Reload(options);
+
+        // Write a value to the holder to trigger CopyFrom on reload.
+        registry.TryRoute("10.0.0.1", 161, "cpu", out var holders);
+        holders![0].WriteValue(42.0, null, SnmpType.Integer32, SnmpSource.Poll);
+
+        // Reload with same config — Role should come from config, not CopyFrom.
+        registry.Reload(options);
+
+        registry.TryRoute("10.0.0.1", 161, "cpu", out var newHolders);
+        Assert.Equal("Evaluate", newHolders![0].Role);
+        // Value should carry over via CopyFrom.
+        Assert.Equal(42.0, newHolders[0].ReadSlot()!.Value);
+    }
+
+    // ──────────────────────────────────────────────────────
+    // 14. Commands propagation (2 tests)
+    // ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Reload_CommandsFromConfig_StoredOnTenant()
+    {
+        var registry = CreateRegistry();
+        var options = new TenantVectorOptions
+        {
+            Tenants =
+            [
+                new TenantOptions
+                {
+                    Priority = 1,
+                    Metrics =
+                    [
+                        new MetricSlotOptions { Ip = "10.0.0.1", Port = 161, MetricName = "cpu", Role = "Evaluate" },
+                        new MetricSlotOptions { Ip = "10.0.0.1", Port = 161, MetricName = "linkState", Role = "Resolved" }
+                    ],
+                    Commands =
+                    [
+                        new CommandSlotOptions { Ip = "10.0.0.2", Port = 161, CommandName = "setSpeed", Value = "100", ValueType = "Integer32" }
+                    ]
+                }
+            ]
+        };
+
+        registry.Reload(options);
+
+        var tenant = registry.Groups[0].Tenants[0];
+        Assert.Single(tenant.Commands);
+        Assert.Equal("setSpeed", tenant.Commands[0].CommandName);
+        Assert.Equal("10.0.0.2", tenant.Commands[0].Ip);
+    }
+
+    [Fact]
+    public void Reload_NoCommands_TenantCommandsIsEmpty()
+    {
+        var registry = CreateRegistry();
+        var options = new TenantVectorOptions
+        {
+            Tenants =
+            [
+                new TenantOptions
+                {
+                    Priority = 1,
+                    Metrics =
+                    [
+                        new MetricSlotOptions { Ip = "10.0.0.1", Port = 161, MetricName = "cpu", Role = "Evaluate" },
+                        new MetricSlotOptions { Ip = "10.0.0.1", Port = 161, MetricName = "linkState", Role = "Resolved" }
+                    ],
+                    Commands = []
+                }
+            ]
+        };
+
+        registry.Reload(options);
+
+        var tenant = registry.Groups[0].Tenants[0];
+        Assert.Empty(tenant.Commands);
+    }
+
+    // ──────────────────────────────────────────────────────
     // Test logger helper
     // ──────────────────────────────────────────────────────
 
