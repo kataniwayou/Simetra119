@@ -31,18 +31,22 @@ public sealed class MetricSlotHolder
     public int Port { get; }
     public string MetricName { get; }
     public int IntervalSeconds { get; }
+    public string Role { get; }
     public int TimeSeriesSize { get; }
     public double GraceMultiplier { get; }
     public SnmpType TypeCode { get; private set; }
     public SnmpSource Source { get; private set; }
     public ThresholdOptions? Threshold { get; }
 
-    public MetricSlotHolder(string ip, int port, string metricName, int intervalSeconds, int timeSeriesSize = 1, double graceMultiplier = 2.0, ThresholdOptions? threshold = null)
+    public MetricSlotHolder(string ip, int port, string metricName, int intervalSeconds,
+        string role, int timeSeriesSize = 1, double graceMultiplier = 2.0,
+        ThresholdOptions? threshold = null)
     {
         Ip = ip;
         Port = port;
         MetricName = metricName;
         IntervalSeconds = intervalSeconds;
+        Role = role;
         TimeSeriesSize = timeSeriesSize;
         GraceMultiplier = graceMultiplier;
         Threshold = threshold;
