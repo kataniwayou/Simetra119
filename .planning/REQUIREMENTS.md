@@ -18,13 +18,13 @@ Requirements for E2E Tenant Evaluation Tests milestone. Each maps to roadmap pha
 
 ### Test Config Artifacts
 
-- [ ] **CFG-01**: OID metric map entries for E2E simulator test OIDs (evaluate, resolved, command response)
-- [ ] **CFG-02**: OID command map entry for E2E bypass command targeting simulator
-- [ ] **CFG-03**: Device config entry for E2E simulator with test poll OIDs
-- [ ] **CFG-04**: Tenant config — single tenant (priority 1) with 1 evaluate, 2 resolved, 1 command
-- [ ] **CFG-05**: Tenant config — two tenants same priority
-- [ ] **CFG-06**: Tenant config — two tenants different priority
-- [ ] **CFG-07**: Tenant config variants with aggregate metric as evaluate
+- [x] **CFG-01**: OID metric map entries for E2E simulator test OIDs (evaluate, resolved, command response)
+- [x] **CFG-02**: OID command map entry for E2E bypass command targeting simulator
+- [x] **CFG-03**: Device config entry for E2E simulator with test poll OIDs
+- [x] **CFG-04**: Tenant config — single tenant (priority 1) with 1 evaluate, 2 resolved, 1 command
+- [x] **CFG-05**: Tenant config — two tenants same priority
+- [x] **CFG-06**: Tenant config — two tenants different priority
+- [x] **CFG-07**: Tenant config variants with aggregate metric as evaluate
 
 ### Single-Tenant Scenarios
 
@@ -46,9 +46,9 @@ Requirements for E2E Tenant Evaluation Tests milestone. Each maps to roadmap pha
 
 ### Test Infrastructure
 
-- [ ] **INF-01**: Bash test library with `sim_set_scenario` helper and `poll_until_log` function
-- [ ] **INF-02**: Test runner orchestration with port-forward setup, per-scenario cleanup (`trap _cleanup EXIT`)
-- [ ] **INF-03**: Validation via pod logs (tier debug lines) and Prometheus metrics (command counters with `sum()`)
+- [x] **INF-01**: Bash test library with `sim_set_scenario` helper and `poll_until_log` function
+- [x] **INF-02**: Test runner orchestration with port-forward setup, per-scenario cleanup (`trap _cleanup EXIT`)
+- [x] **INF-03**: Validation via pod logs (tier debug lines) and Prometheus metrics (command counters with `sum()`)
 
 ## Future Requirements
 
@@ -76,13 +76,13 @@ Requirements for E2E Tenant Evaluation Tests milestone. Each maps to roadmap pha
 | SIM-04 | Phase 51 | Complete |
 | SIM-05 | Phase 51 | Complete |
 | SIM-06 | Phase 51 | Complete |
-| CFG-01 | Phase 52 | Pending |
-| CFG-02 | Phase 52 | Pending |
-| CFG-03 | Phase 52 | Pending |
-| CFG-04 | Phase 52 | Pending |
-| CFG-05 | Phase 52 | Pending |
-| CFG-06 | Phase 52 | Pending |
-| CFG-07 | Phase 52 | Pending |
+| CFG-01 | Phase 52 | Complete |
+| CFG-02 | Phase 52 | Complete |
+| CFG-03 | Phase 52 | Complete |
+| CFG-04 | Phase 52 | Complete |
+| CFG-05 | Phase 52 | Complete |
+| CFG-06 | Phase 52 | Complete |
+| CFG-07 | Phase 52 | Complete |
 | STS-01 | Phase 53 | Pending |
 | STS-02 | Phase 53 | Pending |
 | STS-03 | Phase 53 | Pending |
@@ -92,9 +92,9 @@ Requirements for E2E Tenant Evaluation Tests milestone. Each maps to roadmap pha
 | MTS-02 | Phase 54 | Pending |
 | ADV-01 | Phase 55 | Pending |
 | ADV-02 | Phase 55 | Pending |
-| INF-01 | Phase 52 | Pending |
-| INF-02 | Phase 52 | Pending |
-| INF-03 | Phase 52 | Pending |
+| INF-01 | Phase 52 | Complete |
+| INF-02 | Phase 52 | Complete |
+| INF-03 | Phase 52 | Complete |
 
 **Coverage:**
 - v2.1 requirements: 25 total

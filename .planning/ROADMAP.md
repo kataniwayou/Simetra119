@@ -179,9 +179,9 @@ See `.planning/milestones/v2.0-ROADMAP.md` for details.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 52-01-PLAN.md — OID metric map, command map, device config entries, command_trigger simulator scenario
-- [ ] 52-02-PLAN.md — sim.sh bash library and run-all.sh port-forward integration
-- [ ] 52-03-PLAN.md — Tenant fixture YAML files (4 topologies: single, two-same-prio, two-diff-prio, aggregate)
+- [x] 52-01-PLAN.md — OID metric map, command map, device config entries, command_trigger simulator scenario
+- [x] 52-02-PLAN.md — sim.sh bash library and run-all.sh port-forward integration
+- [x] 52-03-PLAN.md — Tenant fixture YAML files (4 topologies: single, two-same-prio, two-diff-prio, aggregate)
 
 ---
 
@@ -268,7 +268,7 @@ Plans:
 | 49. Observability & Dashboard | v2.0 | 1/1 | Complete | 2026-03-16 |
 | 50. Label Rename | v2.0 | 1/1 | Complete | 2026-03-16 |
 | 51. Simulator HTTP Control Endpoint | v2.1 | 2/2 | Complete | 2026-03-17 |
-| 52. Test Library and Config Artifacts | v2.1 | 0/3 | Not started | - |
+| 52. Test Library and Config Artifacts | v2.1 | 3/3 | Complete | 2026-03-17 |
 | 53. Single-Tenant Scenarios | v2.1 | 0/TBD | Not started | - |
 | 54. Multi-Tenant Scenarios | v2.1 | 0/TBD | Not started | - |
 | 55. Advanced Scenarios | v2.1 | 0/TBD | Not started | - |
