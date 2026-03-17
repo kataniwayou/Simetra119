@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 55 of 55 (Advanced Scenarios)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-03-17 — Phase 54 complete and verified (7/7 must-haves)
+Plan: 01 of 1
+Status: Plan 01 complete
+Last activity: 2026-03-17 — Completed 55-01-PLAN.md — ADV-01 aggregate evaluate scenario (scenario 36)
 
-Progress: [████████░░] 80% (v2.1)
+Progress: [█████████░] 90% (v2.1)
 
 ## Performance Metrics
 
@@ -55,6 +55,8 @@ Progress: [████████░░] 80% (v2.1)
 | 54-02 | --since=120s in MTS-02A negative P2 log assertion | poll_until_log for P1 can take up to 90s; --since=30s would miss early P2 lines before P1 confirmed |
 | 54-02 | Explicit if/else for P1 counter in MTS-02A (not assert_delta_gt) | Plan verification requires 12 literal record_pass/record_fail in script; assert_delta_gt is in common.sh, contributes 0 literal occurrences |
 | 54-02 | No scenario reset between MTS-02A and MTS-02B | P1 suppression window (30s) must remain active from 02A for gate-pass to occur in 02B; reset would destroy state |
+| 55-01 | agg_breach sets .4.2=2 and .4.3=2 explicitly | Default value 0 keeps Resolved metrics violated; must be in-range so tier-2 passes and tier-4 fires on sum(100) > Max:80 |
+| 55-01 | sleep 30 before source=synthetic Prometheus assertion | OTel export + Prometheus scrape require time after tier=4 fires; 30s accommodates 15s scrape interval + export latency |
 
 ### Blockers/Concerns
 
@@ -62,6 +64,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T14:08:07Z
-Stopped at: Completed 54-02-PLAN.md — MTS-02 advance gate scenario (scenario 35); Phase 54 complete
+Last session: 2026-03-17T14:38:01Z
+Stopped at: Completed 55-01-PLAN.md — ADV-01 aggregate evaluate scenario (scenario 36); Phase 55 plan 01 complete
 Resume file: None
