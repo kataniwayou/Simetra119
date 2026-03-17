@@ -1,645 +1,612 @@
-# Architecture Patterns: SnapshotJob Integration
+# Architecture Patterns: HTTP-Controllable E2E Simulator
 
-**Domain:** SNMP monitoring — scheduled tenant evaluation with SNMP SET command execution
-**Researched:** 2026-03-16
-**Source:** Direct codebase analysis (all claims derived from actual source files in src/SnmpCollector)
+**Domain:** E2E tenant evaluation test infrastructure
+**Researched:** 2026-03-17
+**Scope:** HTTP scenario control endpoint + test script orchestration for tenant evaluation testing
 
 ---
 
-## Existing Architecture Baseline
+## Existing Architecture (Baseline)
 
-### Current Quartz Job Registration Pattern
+All claims in this section derive from direct reading of source files.
 
-Three jobs are registered in `AddSnmpScheduling` inside `ServiceCollectionExtensions.cs`:
+### Simulator process (`simulators/e2e-sim/e2e_simulator.py`)
 
-- `CorrelationJob` — static key `"correlation"`, stamped interval, `[DisallowConcurrentExecution]`
-- `HeartbeatJob` — static key `"heartbeat"`, configurable via `HeartbeatJobOptions`, `[DisallowConcurrentExecution]`
-- `MetricPollJob` — dynamic key `"metric-poll-{addr}_{port}-{index}"`, one per device/poll-group pair
-
-Thread pool ceiling: `Math.Max(initialJobCount, 50)`. Each job's interval is registered in `JobIntervalRegistry` for staleness threshold calculation in `LivenessHealthCheck`.
-
-**SnapshotJob follows the HeartbeatJob pattern exactly**: static key, configurable interval via options POCO, `[DisallowConcurrentExecution]`, `intervalRegistry.Register("snapshot", ...)`, thread pool += 1.
-
-### Current ISender.Send Dispatch Pattern
-
-`MetricPollJob.DispatchResponseAsync` constructs `SnmpOidReceived` per varbind and calls `await _sender.Send(msg, ct)`. The full pipeline executes synchronously on the calling thread (MediatR `ISender.Send` is sequential, not fire-and-forget).
+The simulator is a single Python 3.12 process. Its runtime topology is:
 
 ```
-ISender.Send(SnmpOidReceived)
-  0. LoggingBehavior          — outermost; increments snmp.event.published
-  1. ExceptionBehavior        — wraps next() in try/catch
-  2. ValidationBehavior       — OID regex + DeviceName null check; short-circuits on fail
-  3. OidResolutionBehavior    — msg.MetricName = _oidMapService.Resolve(msg.Oid)
-                                 BYPASS: if msg.Source == SnmpSource.Synthetic → skip lookup
-  4. ValueExtractionBehavior  — sets msg.ExtractedValue / msg.ExtractedStringValue
-  5. TenantVectorFanOutBehavior — routes by (ip, port, metricName); always calls next()
-  6. OtelMetricHandler        — records snmp_gauge or snmp_info; stamps heartbeat liveness
+Process
+  asyncio event loop  (driven by snmpEngine.open_dispatcher())
+    SNMP engine          UDP/161, driven by open_dispatcher() — blocking call
+    supervised_task: valid_trap_loop           (asyncio task)
+    supervised_task: bad_community_trap_loop   (asyncio task)
 ```
 
-### Current TenantVectorRegistry Access Pattern
+Key facts:
+- `snmpEngine.open_dispatcher()` is the last call in `main()`. It is a **blocking
+  call** that hands control to pysnmp's asyncio transport and does not return until
+  `snmpEngine.close_dispatcher()` is called via the shutdown signal handler.
+- OID values are fixed at module load time. Each of the 9 OIDs gets a
+  `DynamicInstance` whose `_get_value_fn` is a frozen closure:
+  `lambda v=static_value: v`. The SNMP engine calls `getValue()` on every
+  GET/GETNEXT/GETBULK request.
+- There is no existing HTTP server, no scenario concept, and no runtime-mutable
+  state other than the trap interval counters.
+- The only Python dependency is `pysnmp==7.1.22`.
 
-`TenantVectorRegistry.Groups` returns a `volatile IReadOnlyList<PriorityGroup>`. Accessing `.Groups` is a single volatile read that returns the current snapshot. The returned list is immutable for its lifetime (a reload builds a new list and swaps the volatile field). SnapshotJob reads `.Groups` at job start and iterates the snapshot without holding a lock.
+### OID surface served
 
-`MetricSlotHolder.ReadSlot()` performs a `Volatile.Read` of the internal `SeriesBox` and returns `series[^1]` or null. Thread-safe for concurrent reads from SnapshotJob (evaluation) and writes from `TenantVectorFanOutBehavior` (poll ingestion). No lock needed.
-
-### Current SnmpSource Enum
-
-```csharp
-public enum SnmpSource { Poll, Trap, Synthetic }
+```
+Prefix: 1.3.6.1.4.1.47477.999
+  .1.1.0  gauge_test       Gauge32       42
+  .1.2.0  integer_test     Integer32     100
+  .1.3.0  counter32_test   Counter32     5000
+  .1.4.0  counter64_test   Counter64     1000000
+  .1.5.0  timeticks_test   TimeTicks     360000
+  .1.6.0  info_test        OctetString   "E2E-TEST-VALUE"
+  .1.7.0  ip_test          IpAddress     "10.0.0.1"
+  .2.1.0  unmapped_gauge   Gauge32       99         (not in oid map)
+  .2.2.0  unmapped_info    OctetString   "UNMAPPED"  (not in oid map)
 ```
 
-`Synthetic` was added for aggregate metrics dispatched by `MetricPollJob.DispatchAggregatedMetricAsync`. `OidResolutionBehavior` has an explicit bypass: `if (msg.Source == SnmpSource.Synthetic) { return await next(); }`. `OtelMetricHandler` passes `source` as a lowercase string label on every instrument (`source="poll"`, `source="trap"`, `source="synthetic"`).
+All 7 mapped OIDs are registered in `simetra-oid-metric-map` ConfigMap
+(`e2e_gauge_test` ... `e2e_ip_test`) and the e2e device in `simetra-devices`
+ConfigMap uses community `Simetra.E2E-SIM`, polls at 10s, and requests all 7.
 
-### Current ISnmpClient Contract
+### K8s deployment
 
-```csharp
-public interface ISnmpClient
-{
-    Task<IList<Variable>> GetAsync(VersionCode version, IPEndPoint endpoint,
-        OctetString community, IList<Variable> variables, CancellationToken ct);
+- Pod: `e2e-simulator`, namespace `simetra`
+- Exposes UDP/161 only. No TCP port exposed today.
+- Liveness and readiness probes: SNMP GET to `127.0.0.1:161` for OID `.999.1.1.0`.
+
+### Test runner (`tests/e2e/`)
+
+```
+run-all.sh
+  sources: lib/common.sh  lib/prometheus.sh  lib/kubectl.sh  lib/report.sh
+  for each scenarios/NN-*.sh:
+    source scenario   (runs in the same bash shell, sharing all variables)
+```
+
+All scenario scripts share a single shell session. Each script is responsible
+for its own setup and cleanup. Currently there is no HTTP contact with the
+simulator — all scenario variation is done by mutating K8s ConfigMaps.
+
+The runner has two live integration points:
+1. **Prometheus** — queried via `curl` to `localhost:9090` (port-forwarded by
+   `start_port_forward prometheus 9090 9090` in `run-all.sh`)
+2. **kubectl** — applied directly against the `simetra` namespace
+
+---
+
+## Recommended Architecture for HTTP Control
+
+### Core integration decision: aiohttp on the shared asyncio event loop
+
+The blocking constraint is `snmpEngine.open_dispatcher()`. Any HTTP server
+must share the same asyncio event loop. Use **aiohttp.web** with `AppRunner`.
+
+Do not use:
+- Flask, FastAPI, or any WSGI/ASGI framework — they require a separate server
+  process or threads, adding synchronization complexity that is not needed here.
+- `asyncio.start_server` (raw streams) — aiohttp.web provides cleaner routing
+  and JSON handling with no additional conceptual overhead.
+
+Rationale for aiohttp:
+- aiohttp.web's `AppRunner` + `TCPSite.start()` are coroutines that integrate
+  with an existing event loop before handing it to pysnmp.
+- HTTP handlers and `DynamicInstance.getValue()` run on the same event loop
+  thread (asyncio is single-threaded). A plain Python module-level variable
+  for scenario state is safe — no locking needed because concurrent mutation
+  from the HTTP handler and concurrent reads from `getValue()` cannot interleave
+  within a single-threaded event loop.
+- `aiohttp` is the standard asyncio HTTP library in the Python ecosystem and
+  has no transitive dependency conflicts with pysnmp.
+
+---
+
+## Component Map: New vs Modified
+
+| Component | File | Status | Nature of Change |
+|-----------|------|--------|-----------------|
+| `SCENARIOS` dict | `e2e_simulator.py` | New (inline) | Module-level dict: name → per-OID values |
+| `_active_scenario` | `e2e_simulator.py` | New (inline) | Module-level string variable |
+| `DynamicInstance` callbacks | `e2e_simulator.py` | Modified | Closures read `_active_scenario` instead of frozen value |
+| HTTP server coroutine | `e2e_simulator.py` | New | `start_http_server()` using aiohttp AppRunner |
+| HTTP request handlers | `e2e_simulator.py` | New | `handle_set_scenario`, `handle_get_scenario`, `handle_reset_scenario` |
+| `requirements.txt` | `simulators/e2e-sim/requirements.txt` | Modified | Add `aiohttp` |
+| K8s Deployment (HTTP port) | `deploy/k8s/simulators/e2e-sim-deployment.yaml` | Modified | Add `containerPort: 8080` |
+| K8s Service (HTTP port) | `deploy/k8s/simulators/e2e-sim-deployment.yaml` | Modified | Add TCP/8080 port to Service |
+| `lib/simulator.sh` | `tests/e2e/lib/simulator.sh` | New | `curl` wrappers: `set_scenario`, `reset_scenario`, `get_active_scenario` |
+| `run-all.sh` | `tests/e2e/run-all.sh` | Modified | Source `simulator.sh`; add `start_port_forward e2e-simulator 8080 8080` |
+| Tenant fixture files | `tests/e2e/fixtures/tenant-eval-*.yaml` | New | Per-test-scenario `simetra-tenants` ConfigMaps |
+| Scenario scripts | `tests/e2e/scenarios/29-*.sh` and higher | New | Tenant evaluation test scenarios |
+| OID map ConfigMap | `deploy/k8s/snmp-collector/simetra-oid-metric-map.yaml` | Possibly extended | Only if new scenarios need OIDs beyond existing 7 mapped |
+
+---
+
+## Scenario Registry Data Model
+
+The registry lives in `e2e_simulator.py` as a plain Python dict. Every scenario
+defines the return value for all 7 mapped OIDs. Unmapped OIDs are excluded
+because they are intentionally constant for the "unmapped OID" test
+(scenario 15).
+
+```python
+# Conceptual structure — lives in e2e_simulator.py
+
+SCENARIOS = {
+    "default": {
+        "gauge_test":     42,
+        "integer_test":   100,
+        "counter32_test": 5000,
+        "counter64_test": 1_000_000,
+        "timeticks_test": 360_000,
+        "info_test":      "E2E-TEST-VALUE",
+        "ip_test":        "10.0.0.1",
+    },
+    # Tenant evaluation scenarios define values that exercise specific
+    # threshold / routing paths. Example:
+    "tenant-eval-threshold-breach": {
+        "gauge_test":     0,       # triggers configured threshold
+        "integer_test":   100,
+        "counter32_test": 5000,
+        "counter64_test": 1_000_000,
+        "timeticks_test": 360_000,
+        "info_test":      "E2E-TEST-VALUE",
+        "ip_test":        "10.0.0.1",
+    },
+}
+
+_active_scenario = "default"
+```
+
+Design rules:
+1. Every scenario must define all 7 mapped OID labels. A missing key causes a
+   `KeyError` in `getValue()` at poll time, which the SNMP engine converts to a
+   `noSuchObject` response — indistinguishable from a genuine OID resolution
+   failure in collector logs.
+2. The `"default"` scenario must reproduce the current static values exactly so
+   existing scenarios 01–28 pass without modification.
+3. Scenario definitions are code, not config. Adding a new scenario requires a
+   Dockerfile rebuild and image push, which is intentional — test scenarios are
+   versioned with the code.
+
+### DynamicInstance callback rewiring
+
+Currently frozen:
+
+```python
+DynamicInstance(oid_tuple, (0,), syntax_cls(), lambda v=static_value: v)
+```
+
+Replace with a factory function that reads the active scenario at call time:
+
+```python
+def make_getter(label):
+    def getter():
+        return SCENARIOS[_active_scenario][label]
+    return getter
+
+# In the OID registration loop:
+symbols[f"instance_{safe_label}"] = DynamicInstance(
+    oid_tuple, (0,), syntax_cls(), make_getter(label)
+)
+```
+
+`make_getter` captures `label` (a string) by value at registration time. At GET
+time, `getter()` reads `_active_scenario` from the module's global namespace and
+looks up the current scenario dict. This is safe because the asyncio event loop
+is single-threaded: `getter()` (called by the SNMP engine) and the HTTP handler
+(which writes `_active_scenario`) cannot execute concurrently.
+
+---
+
+## HTTP Server Integration
+
+### Startup sequence
+
+The critical constraint: `open_dispatcher()` blocks the event loop. The HTTP
+server must be started and bound before that call.
+
+```python
+async def start_http_server():
+    app = aiohttp.web.Application()
+    app.router.add_get("/scenario", handle_get_scenario)
+    app.router.add_post("/scenario", handle_set_scenario)
+    app.router.add_post("/scenario/reset", handle_reset_scenario)
+    runner = aiohttp.web.AppRunner(app)
+    await runner.setup()
+    site = aiohttp.web.TCPSite(runner, "0.0.0.0", 8080)
+    await site.start()
+    log.info("HTTP control server listening on 0.0.0.0:8080")
+
+def main():
+    loop = asyncio.get_event_loop()
+
+    # Start HTTP before handing loop to pysnmp
+    loop.run_until_complete(start_http_server())
+
+    tasks = [
+        loop.create_task(supervised_task("valid_trap_loop", valid_trap_loop)),
+        loop.create_task(supervised_task("bad_community_trap_loop", bad_community_trap_loop)),
+    ]
+
+    # ... signal handler setup unchanged ...
+
+    snmpEngine.open_dispatcher()   # blocking; HTTP server is live inside this loop
+```
+
+### HTTP API
+
+All endpoints return JSON. Authentication is not needed — the API is
+cluster-internal and only reachable via port-forward during tests.
+
+**GET /scenario**
+```
+Response 200: {"active": "default", "available": ["default", "tenant-eval-..."]}
+```
+
+**POST /scenario**
+```
+Request:  {"name": "tenant-eval-threshold-breach"}
+Response 200: {"active": "tenant-eval-threshold-breach"}
+Response 404: {"error": "unknown scenario", "available": [...]}
+```
+
+**POST /scenario/reset**
+```
+Response 200: {"active": "default"}
+```
+
+`reset` is a dedicated endpoint rather than `POST /scenario {"name":"default"}`
+to allow test cleanup scripts to reset without knowing the scenario name and
+without risk of a typo in the default name constant.
+
+### Kubernetes changes
+
+Add a TCP port to both the Deployment and the Service in
+`deploy/k8s/simulators/e2e-sim-deployment.yaml`:
+
+```yaml
+# In container spec:
+ports:
+- containerPort: 161
+  name: snmp
+  protocol: UDP
+- containerPort: 8080
+  name: http
+  protocol: TCP
+
+# In Service spec:
+ports:
+- name: snmp
+  port: 161
+  targetPort: snmp
+  protocol: UDP
+- name: http
+  port: 8080
+  targetPort: http
+  protocol: TCP
+```
+
+The test runner reaches this via port-forward (same pattern as Prometheus):
+
+```bash
+start_port_forward e2e-simulator 8080 8080
+```
+
+---
+
+## Test Script Orchestration Flow
+
+### New library: `tests/e2e/lib/simulator.sh`
+
+Follows the same sourced-library pattern as `kubectl.sh` and `prometheus.sh`.
+The runner sources it once; all scenario scripts call its functions directly.
+
+```bash
+SIM_URL="http://localhost:8080"
+
+set_scenario() {
+    local name="$1"
+    curl -sf -X POST "${SIM_URL}/scenario" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\": \"${name}\"}" > /dev/null || {
+        log_error "Failed to set scenario: ${name}"
+        return 1
+    }
+    log_info "Simulator scenario: ${name}"
+}
+
+reset_scenario() {
+    curl -sf -X POST "${SIM_URL}/scenario/reset" > /dev/null || true
+    log_info "Simulator scenario reset to default"
+}
+
+get_active_scenario() {
+    curl -sf "${SIM_URL}/scenario" | jq -r '.active'
 }
 ```
 
-`SharpSnmpClient` delegates to `Messenger.GetAsync`. No SET method exists today.
+### Five-phase scenario pattern
 
-### Current CommandSlotOptions (loaded but not executed)
-
-`TenantOptions.Commands` is `List<CommandSlotOptions>`. Bound from `tenants.json`. Each entry carries: `Ip`, `Port`, `CommandName` (resolves to OID via `ICommandMapService`), `Value` (string), `ValueType` (`"Integer32"` / `"IpAddress"` / `"OctetString"`). This data exists in memory but nothing calls it.
-
-### Current MetricSlotHolder Properties Relevant to Evaluation
+New tenant evaluation scenario scripts follow this structure:
 
 ```
-Ip, Port, MetricName  — routing key (set at construction)
-IntervalSeconds       — from MetricSlotOptions.IntervalSeconds (device poll group value)
-GraceMultiplier       — from MetricSlotOptions.GraceMultiplier (device poll group value)
-Threshold             — ThresholdOptions? (Min double?, Max double?)
-Source                — SnmpSource (last write source, not config role)
-TypeCode              — SnmpType (last write type)
-ReadSlot()            — MetricSlot? (Value, StringValue, Timestamp) or null
+Phase 1: SETUP
+  - Snapshot ConfigMaps that will be mutated
+    (simetra-tenants, possibly simetra-devices)
+  - Apply test-specific fixture YAML
+  - Call set_scenario for the simulator value set under test
+  - If tenant config change requires deployment restart:
+      kubectl rollout restart deployment/snmp-collector -n simetra
+      kubectl rollout status deployment/snmp-collector -n simetra --timeout=90s
+
+Phase 2: STABILIZE
+  - SnapshotJob fires every 15s by default.
+    Wait at minimum 2 × 15s = 30s for the evaluation cycle to run.
+  - Prometheus scrapes every 15s; add ~15s for metric propagation.
+  - Recommended minimum: poll_until for any detectable signal, plus
+    sleep 15 for the scrape propagation gap.
+  - Total practical wait without restart: ~45s
+  - Total practical wait with deployment restart: ~90s rollout + 45s
+
+Phase 3: ASSERT
+  - Query Prometheus for expected metric values and labels
+  - Check collector pod logs for expected log lines
+  - Use existing assert_delta_gt / assert_exists helpers from common.sh
+
+Phase 4: TEARDOWN
+  - reset_scenario (HTTP POST /scenario/reset)
+  - restore_configmap for each mutated ConfigMap
+  - kubectl rollout restart if the deployment was touched
+  - These run unconditionally (not gated on pass/fail)
+
+Phase 5: VERIFY CLEAN (optional but recommended)
+  - Confirm Prometheus metrics return to pre-test baseline
+  - Prevents scenario state from contaminating subsequent scenarios
+  - Skip if the cost of waiting is not justified by isolation risk
 ```
 
-Missing today: the config-time **Role** (`"Evaluate"` / `"Resolved"` from `MetricSlotOptions.Role`) is validated at load time but is NOT stored on `MetricSlotHolder`. SnapshotJob needs to distinguish role at evaluation time.
+### Cleanup on early exit
 
----
+The sourced-script pattern means an exit from a scenario script exits the entire
+runner (`set -euo pipefail` propagates). The simulator is left in whatever
+scenario was active. Add a `trap` at the top of every scenario that calls
+`set_scenario`:
 
-## New Components Needed
-
-### 1. `SnapshotJob` — `Jobs/SnapshotJob.cs`
-
-**Responsibility:** Periodic `[DisallowConcurrentExecution]` Quartz `IJob` that drives the 4-tier tenant evaluation loop across all priority groups.
-
-**Constructor dependencies:**
-```csharp
-ITenantVectorRegistry         // reads Groups + holder slots
-ICommandWorker                // enqueues validated commands
-ISuppressionCache             // checks/sets per-tenant suppression
-ILivenessVectorService        // Stamp(jobKey) in finally
-ICorrelationService           // operation correlation ID
-PipelineMetricService         // new command counters
-IOptions<SnapshotJobOptions>  // interval + suppression window config
-ILogger<SnapshotJob>
+```bash
+# At top of scenario file
+_sim_cleanup() { reset_scenario || true; }
+trap _sim_cleanup EXIT
 ```
 
-**4-tier evaluation logic per tenant (executed for all tenants within a priority group, parallelisable within a group):**
+This fires on both normal completion and early exit. ConfigMap restore is
+handled by the same pattern already used in scenarios 18–28 (they save on entry
+and restore on exit or failure).
 
-```
-Tier 1 — Staleness gate (Evaluate-role holders only):
-  For each holder where Role == "Evaluate":
-    if ReadSlot() is null: tenant is stale → skip this tenant
-    if (UtcNow - slot.Timestamp) > (holder.IntervalSeconds * holder.GraceMultiplier):
-      tenant is stale → skip this tenant
-  If no Evaluate-role holders exist: tenant is not stale (no data to go stale)
+### Concrete example: single-tenant evaluation scenario
 
-Tier 2 — Resolved threshold check (gate: if any Resolved metric is healthy, no trigger):
-  For each holder where Role == "Resolved":
-    if ReadSlot() is null: skip tenant (missing data = cannot evaluate)
-    if holder.Threshold is null: continue (no constraint)
-    slot = ReadSlot()
-    if slot.Value >= threshold.Min AND slot.Value <= threshold.Max: tenant healthy → skip tenant
-  (If all Resolved slots are violated, or no Resolved slots exist, continue to Tier 3)
+```bash
+# 29-tenant-eval-single.sh
 
-Tier 3 — Evaluate threshold check (trigger condition):
-  For each holder where Role == "Evaluate":
-    if ReadSlot() is null: skip tenant
-    if holder.Threshold is null: skip (no threshold = cannot evaluate trigger)
-    slot = ReadSlot()
-    if slot.Value is in threshold range: tenant healthy → skip tenant
-  (Only proceed to Tier 4 if ALL Evaluate-role thresholds are violated)
+FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
-Tier 4 — Command queueing:
-  For each CommandSlotOptions cmd in tenant.Commands:
-    oid = _commandMap.ResolveCommandOid(cmd.CommandName)
-    if oid is null: log Warning, skip
-    if _suppressionCache.IsSuppressed(cmd.Ip, cmd.Port, cmd.CommandName):
-      _pipelineMetrics.IncrementCommandSuppressed(deviceName)
-    else:
-      _commandWorker.Enqueue(new CommandExecution(cmd.Ip, cmd.Port,
-          communityString, oid, cmd.Value, cmd.ValueType, deviceName, cmd.CommandName))
-      _suppressionCache.Suppress(cmd.Ip, cmd.Port, cmd.CommandName,
-          TimeSpan.FromSeconds(_options.SuppressionWindowSeconds))
-      _pipelineMetrics.IncrementCommandQueued(deviceName)
-```
-
-**Priority group loop:**
-
-```csharp
-var groups = _registry.Groups; // single volatile read → snapshot
-bool anyGroupFullyViolated = true;
-
-foreach (var group in groups) // ascending priority value = highest priority first
-{
-    bool allTenantsViolated = true;
-
-    await Parallel.ForEachAsync(group.Tenants, ct, async (tenant, token) =>
-    {
-        bool thisViolated = await EvaluateTenantAsync(tenant, token);
-        if (!thisViolated) Interlocked.Exchange(ref allTenantsViolated, false); // see thread-safety below
-    });
-
-    if (!allTenantsViolated) break; // do not advance to lower-priority groups
+# Cleanup trap
+_cleanup() {
+    reset_scenario || true
+    if [ -f "$FIXTURES_DIR/.original-tenants-configmap.yaml" ]; then
+        restore_configmap "$FIXTURES_DIR/.original-tenants-configmap.yaml" || true
+    fi
 }
-```
+trap _cleanup EXIT
 
-Note: `bool` is not safely set via `Interlocked.Exchange`. Use a `volatile bool` field or `Interlocked.CompareExchange(ref intFlag, 0, 1)` pattern. Alternatively, collect bool results from parallel tasks and `All()` them — this avoids shared mutable state entirely.
+# Phase 1: Setup
+save_configmap "simetra-tenants" "simetra" \
+    "$FIXTURES_DIR/.original-tenants-configmap.yaml"
+kubectl apply -f "$FIXTURES_DIR/tenant-eval-single.yaml"
+set_scenario "tenant-eval-threshold-breach"
 
-**Job registration (in `AddSnmpScheduling`):**
+# Phase 2: Stabilize — 2 SnapshotJob cycles + scrape window
+log_info "Waiting 45s for SnapshotJob cycles and Prometheus scrape..."
+sleep 45
 
-```csharp
-var snapshotOptions = new SnapshotJobOptions();
-configuration.GetSection(SnapshotJobOptions.SectionName).Bind(snapshotOptions);
-
-var snapshotKey = new JobKey("snapshot");
-q.AddJob<SnapshotJob>(j => j.WithIdentity(snapshotKey));
-q.AddTrigger(t => t
-    .ForJob(snapshotKey)
-    .WithIdentity("snapshot-trigger")
-    .StartNow()
-    .WithSimpleSchedule(s => s
-        .WithIntervalInSeconds(snapshotOptions.IntervalSeconds)
-        .RepeatForever()
-        .WithMisfireHandlingInstructionNextWithRemainingCount()));
-
-intervalRegistry.Register("snapshot", snapshotOptions.IntervalSeconds);
-threadPoolSize += 1;
-```
-
----
-
-### 2. `SnapshotJobOptions` — `Configuration/SnapshotJobOptions.cs`
-
-```csharp
-public sealed class SnapshotJobOptions
-{
-    public const string SectionName = "SnapshotJob";
-
-    [Range(1, 3600)]
-    public int IntervalSeconds { get; set; } = 15;
-
-    [Range(1, 86400)]
-    public int SuppressionWindowSeconds { get; set; } = 300; // 5 minutes
-}
-```
-
-Registered in `AddSnmpConfiguration` with `ValidateDataAnnotations().ValidateOnStart()`.
-
----
-
-### 3. `ICommandWorker` / `CommandWorker` — `Pipeline/ICommandWorker.cs`, `Services/CommandWorker.cs`
-
-**Responsibility:** Receives enqueued SNMP SET commands from SnapshotJob and executes them asynchronously. Dispatches the SET response through the full MediatR pipeline with `Source = SnmpSource.Command`.
-
-**Interface:**
-
-```csharp
-public interface ICommandWorker
-{
-    void Enqueue(CommandExecution command);
-}
-```
-
-**CommandExecution record (`Pipeline/CommandExecution.cs`):**
-
-```csharp
-public sealed record CommandExecution(
-    string Ip,
-    int Port,
-    string CommunityString,
-    string Oid,
-    string Value,
-    string ValueType,
-    string DeviceName,
-    string CommandName);
-```
-
-**`CommandWorker` implementation:**
-- `IHostedService` backed by `Channel<CommandExecution>` (bounded, capacity from `ChannelsOptions`)
-- `ExecuteAsync` loops `await foreach (var cmd in _channel.Reader.ReadAllAsync(stoppingToken))`
-- For each command:
-  1. Construct typed `ISnmpData` from `(cmd.Value, cmd.ValueType)` — see ValueType encoding below
-  2. Call `await _snmpClient.SetAsync(VersionCode.V2, endpoint, community, [new Variable(oid, typed)], ct)`
-  3. Success: dispatch each response varbind as `SnmpOidReceived { Source = SnmpSource.Command }` via `ISender.Send`; increment `snmp.command.sent`
-  4. Failure: log Warning + increment `snmp.command.failed`; no re-enqueue
-
-**ValueType encoding (new private method):**
-
-```csharp
-private static ISnmpData BuildSnmpData(string value, string valueType) => valueType switch
-{
-    "Integer32"   => new Integer32(int.Parse(value)),
-    "IpAddress"   => new IP(IPAddress.Parse(value)),
-    "OctetString" => new OctetString(value),
-    _             => throw new InvalidOperationException($"Unknown ValueType: {valueType}")
-};
-```
-
-**Registration in `AddSnmpPipeline`:**
-
-```csharp
-// CRITICAL: Register concrete type FIRST, then resolve same instance for both interfaces.
-// See K8sLeaseElection registration pattern in AddSnmpConfiguration.
-services.AddSingleton<CommandWorker>();
-services.AddSingleton<ICommandWorker>(sp => sp.GetRequiredService<CommandWorker>());
-services.AddHostedService(sp => sp.GetRequiredService<CommandWorker>());
+# Phase 3: Assert
+METRIC="snmp_tenantvector_routed_total"
+BEFORE=$(snapshot_counter "$METRIC" "")
+poll_until 60 5 "$METRIC" "" "$BEFORE" || true
+AFTER=$(query_counter "$METRIC" "")
+DELTA=$((AFTER - BEFORE))
+assert_delta_gt "$DELTA" 0 \
+    "Routing counter increments with single tenant" \
+    "$(get_evidence "$METRIC" "")"
 ```
 
 ---
 
-### 4. `ISuppressionCache` / `SuppressionCache` — `Pipeline/`
+## Config Artifact Organization
 
-**Responsibility:** Per-command suppression to prevent rapid repeated SET commands for the same target. Key is `(Ip, Port, CommandName)`. Suppressed entries expire after the configured window.
+### Tenant fixture files
 
-**Interface:**
-
-```csharp
-public interface ISuppressionCache
-{
-    bool IsSuppressed(string ip, int port, string commandName);
-    void Suppress(string ip, int port, string commandName, TimeSpan window);
-    void Clear(string ip, int port, string commandName);
-}
-```
-
-**Implementation:** `ConcurrentDictionary<SuppressionKey, DateTimeOffset>` where the value is the expiry time. `IsSuppressed` checks `_dict.TryGetValue(key, out expiry) && expiry > DateTimeOffset.UtcNow`. No background cleanup thread — lazy expiry on read is correct given small key space (bounded by tenant × command count).
-
-**Registration:** `AddSingleton<ISuppressionCache, SuppressionCache>()` in `AddSnmpPipeline`.
-
-**SuppressionKey:**
-
-```csharp
-private readonly record struct SuppressionKey(string Ip, int Port, string CommandName);
-```
-
----
-
-## Modified Components
-
-### `SnmpSource` — add `Command`
-
-```csharp
-public enum SnmpSource { Poll, Trap, Synthetic, Command }
-```
-
-`Command` identifies SET response varbinds dispatched by `CommandWorker`. It flows through the **full pipeline with no bypasses**. `OidResolutionBehavior` resolves SET response OIDs to metric names exactly like poll OIDs. `OtelMetricHandler` records `source="command"` on the instrument labels.
-
-The `Synthetic` bypass in `OidResolutionBehavior` (`if (msg.Source == SnmpSource.Synthetic)`) is unchanged — `Command` is a distinct value and does not trigger this guard.
-
----
-
-### `ISnmpClient` — add `SetAsync`
-
-```csharp
-public interface ISnmpClient
-{
-    Task<IList<Variable>> GetAsync(...);  // existing
-    Task<IList<Variable>> SetAsync(      // new
-        VersionCode version,
-        IPEndPoint endpoint,
-        OctetString community,
-        IList<Variable> variables,
-        CancellationToken ct);
-}
-```
-
-`SharpSnmpClient` delegates to `Messenger.SetAsync` (SharpSnmpLib exposes this method with the same signature pattern as `GetAsync`, using a SET PDU type internally).
-
----
-
-### `MetricSlotHolder` — add `Role` property
-
-`MetricSlotOptions.Role` (`"Evaluate"` or `"Resolved"`) is validated at load time but is NOT stored on `MetricSlotHolder`. SnapshotJob reads this at evaluation time.
-
-**Change:**
-1. Add `public string Role { get; }` to `MetricSlotHolder`.
-2. Add `string role` parameter to the `MetricSlotHolder` constructor (after `threshold`).
-3. In `TenantVectorRegistry.Reload`, pass `metric.Role` when constructing each holder.
-
-This is additive — no existing callers of `MetricSlotHolder` are broken. `CopyFrom` already copies `TypeCode` and `Source`; add `Role` copy too (though Role is immutable, CopyFrom should copy it for consistency).
-
-Default value for `role` can be `string.Empty` for backward compatibility in tests that construct holders without a role.
-
----
-
-### `PipelineMetricService` — add 4 command counters
-
-Four new counters symmetric to the poll counters:
-
-| Counter Name | When Fired | Who Fires It |
-|---|---|---|
-| `snmp.command.queued` | Command enqueued by SnapshotJob | `SnapshotJob` (Tier 4, non-suppressed path) |
-| `snmp.command.suppressed` | Command skipped due to suppression window | `SnapshotJob` (Tier 4, suppressed path) |
-| `snmp.command.sent` | SET request completed successfully | `CommandWorker` (after `SetAsync` success) |
-| `snmp.command.failed` | SET request failed | `CommandWorker` (catch block) |
-
-All four use the `device_name` tag, matching existing counter tag conventions.
-
----
-
-### `ServiceCollectionExtensions` — registration additions
-
-**`AddSnmpConfiguration`:**
-```csharp
-services.AddOptions<SnapshotJobOptions>()
-    .Bind(configuration.GetSection(SnapshotJobOptions.SectionName))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
-```
-
-**`AddSnmpPipeline`:**
-```csharp
-services.AddSingleton<ISuppressionCache, SuppressionCache>();
-services.AddSingleton<CommandWorker>();
-services.AddSingleton<ICommandWorker>(sp => sp.GetRequiredService<CommandWorker>());
-services.AddHostedService(sp => sp.GetRequiredService<CommandWorker>());
-```
-
-**`AddSnmpScheduling`:**
-- Bind `SnapshotJobOptions` at registration time (same pattern as `HeartbeatJobOptions`)
-- Register `SnapshotJob` with Quartz
-- `intervalRegistry.Register("snapshot", snapshotOptions.IntervalSeconds)`
-- `threadPoolSize += 1`
-
----
-
-## Data Flow Diagram
+New fixtures use a `tenant-eval-` prefix to distinguish them from the existing
+device/OID mutation fixtures:
 
 ```
-Quartz Scheduler (every 15s default)
-         │
-         ▼
-  SnapshotJob.Execute()
-         │
-         ├─ _correlation.OperationCorrelationId = CurrentCorrelationId
-         │
-         ├─ groups = _registry.Groups  [single volatile read → immutable snapshot]
-         │
-         ├─ foreach PriorityGroup in groups (ascending priority value):
-         │     │
-         │     ├─ await Parallel.ForEachAsync(group.Tenants):
-         │     │     │
-         │     │     ├─ TIER 1: staleness check (Evaluate-role holders)
-         │     │     │   ReadSlot() null OR age > IntervalSeconds × GraceMultiplier
-         │     │     │   → stale: this tenant is NOT violated → mark group not-all-violated
-         │     │     │
-         │     │     ├─ TIER 2: Resolved-role threshold check
-         │     │     │   ReadSlot() null → skip tenant (cannot evaluate)
-         │     │     │   value in threshold range → tenant healthy → mark not-violated
-         │     │     │
-         │     │     ├─ TIER 3: Evaluate-role threshold check
-         │     │     │   any Evaluate-role holder value in threshold range → not violated
-         │     │     │
-         │     │     └─ TIER 4: if tenant fully violated:
-         │     │           foreach cmd in tenant.Commands:
-         │     │             oid = _commandMap.ResolveCommandOid(cmd.CommandName)
-         │     │             if suppressed → IncrementCommandSuppressed
-         │     │             else → _commandWorker.Enqueue(CommandExecution{...})
-         │     │                    _suppressionCache.Suppress(...)
-         │     │                    IncrementCommandQueued
-         │     │
-         │     └─ if any tenant was NOT violated → break (stop iterating groups)
-         │
-         └─ finally:
-               _liveness.Stamp("snapshot")
-               _correlation.OperationCorrelationId = null
-               _pipelineMetrics.IncrementSnapshotExecuted()  [optional]
-
-                    │  [fire-and-forget into channel]
-                    ▼
-         CommandWorker (IHostedService, background loop)
-                    │
-                    ├─ Dequeue CommandExecution from Channel<CommandExecution>
-                    │
-                    ├─ BuildSnmpData(cmd.Value, cmd.ValueType) → ISnmpData typed value
-                    │
-                    ├─ ISnmpClient.SetAsync(endpoint, community, [Variable(oid, typed)], ct)
-                    │     │
-                    │     ├─ SUCCESS:
-                    │     │   foreach varbind in SET response:
-                    │     │     new SnmpOidReceived
-                    │     │     {
-                    │     │       Oid        = varbind.Id.ToString()
-                    │     │       AgentIp    = IPAddress.Parse(cmd.Ip)
-                    │     │       DeviceName = cmd.DeviceName
-                    │     │       Value      = varbind.Data
-                    │     │       Source     = SnmpSource.Command   ← new enum value
-                    │     │       TypeCode   = varbind.Data.TypeCode
-                    │     │     }
-                    │     │     ISender.Send(msg, ct)
-                    │     │           │
-                    │     │           ▼  FULL MediatR pipeline:
-                    │     │     LoggingBehavior
-                    │     │     ExceptionBehavior
-                    │     │     ValidationBehavior      (OID format + DeviceName)
-                    │     │     OidResolutionBehavior   (resolves SET OID → MetricName; no bypass)
-                    │     │     ValueExtractionBehavior (extracts numeric/string value)
-                    │     │     TenantVectorFanOutBehavior (routes to matching slots)
-                    │     │     OtelMetricHandler       (records snmp_gauge, source="command")
-                    │     │
-                    │     │   IncrementCommandSent(cmd.DeviceName)
-                    │     │
-                    │     └─ FAILURE:
-                    │         LogWarning
-                    │         IncrementCommandFailed(cmd.DeviceName)
-                    │         (no re-enqueue)
+tests/e2e/fixtures/
+  tenant-eval-single.yaml        # 1 tenant, minimal metric set
+  tenant-eval-two-priority.yaml  # 2 tenants at different priorities
+  tenant-eval-high-count.yaml    # 3+ tenants, stress test for group ordering
 ```
 
----
+Each fixture is a **complete** `simetra-tenants` ConfigMap with all required
+fields. Do not use partial overrides — the watcher replaces the full tenant list
+on any ConfigMap change.
 
-## Integration Points with Existing Pipeline Behaviors
+The tenants in these fixtures must reference device IPs and metric names that
+are resolvable with the existing `simetra-devices` and `simetra-oid-metric-map`
+ConfigMaps, or provide matching fixture overrides for those too.
 
-### ValidationBehavior
+### Simulator scenario definitions
 
-No changes. `SnmpOidReceived{Source=Command}` from `CommandWorker` provides:
-- `Oid`: the SET OID string from `ICommandMapService.ResolveCommandOid` — a valid numeric OID
-- `DeviceName`: set from `CommandExecution.DeviceName`
+Scenarios are defined inline in `e2e_simulator.py`, not in external files. This
+is deliberate: test scenarios are code. The `SCENARIOS` dict is versioned in git
+alongside the simulator source. Adding a new scenario requires a rebuild of the
+simulator image and a pod restart (same as any other simulator code change).
 
-Both validation checks pass unchanged.
+### OID map extensions
 
-### OidResolutionBehavior
+If new tenant evaluation scenarios require OID values beyond the existing 7
+mapped e2e OIDs, extend `simetra-oid-metric-map.yaml` with additional entries
+under `1.3.6.1.4.1.47477.999.1.x.0` and add corresponding entries to the
+device's poll list in `simetra-devices.yaml`. The simulator's `SCENARIOS` dict
+must define values for those labels in every scenario entry.
 
-No changes. The `Source == Synthetic` bypass does NOT apply to `Command`. SET response OIDs flow through `IOidMapService.Resolve()` exactly like poll OIDs. If the OID is in the OID map (likely, since the same OID is used for polling), `MetricName` resolves to the known name and fan-out + recording proceed correctly. If the OID is absent, it resolves to `"Unknown"` — same behavior as an unmapped poll OID.
-
-### TenantVectorFanOutBehavior
-
-No changes. Routing key is `(ip, port, metricName)`. A SET response from the same device+OID combination will match the same routing key as the poll response. This is the intended behavior — the SET confirmation updates the same tenant slot that poll data updates.
-
-### OtelMetricHandler
-
-No changes. The `source` label will be `"command"` for SET response dispatches. Prometheus and Grafana can filter or group by `source` label to distinguish command-originated samples from poll-originated samples.
+Do not add OIDs outside the `.999.` subtree to e2e scenarios — the e2e device
+community string `Simetra.E2E-SIM` routes only to that device, and mixing
+with real NPB/OBP OIDs under `.100.` or `.10.` would pollute existing tests.
 
 ---
 
 ## Suggested Build Order
 
-Dependencies flow upward. Each step must compile and be tested before the next begins.
+Dependencies are explicit. Each step must be complete and validated before the
+next begins to avoid blocked work.
 
-| Step | Component | What Changes | Why This Order |
-|------|-----------|-------------|---------------|
-| 1 | `SnmpSource.Command` | Enum: add `Command` value | All new components reference this value; must exist first |
-| 2 | `MetricSlotHolder.Role` | Add `string Role` property + constructor parameter | SnapshotJob reads it; TenantVectorRegistry sets it |
-| 3 | `TenantVectorRegistry.Reload` | Pass `metric.Role` to `MetricSlotHolder` constructor | Depends on Step 2 |
-| 4 | `SnapshotJobOptions` | New configuration POCO | SnapshotJob and AddSnmpScheduling depend on it |
-| 5 | `ISuppressionCache` + `SuppressionCache` | New interface + implementation | No external deps; SnapshotJob depends on it |
-| 6 | `ISnmpClient.SetAsync` + `SharpSnmpClient` | Interface extension + implementation | CommandWorker depends on it |
-| 7 | `PipelineMetricService` new counters | 4 new Counter fields | SnapshotJob and CommandWorker both inject it |
-| 8 | `CommandExecution` record | New data carrier | CommandWorker queue type; ICommandWorker interface uses it |
-| 9 | `ICommandWorker` interface | New interface | SnapshotJob depends on the interface, not the implementation |
-| 10 | `CommandWorker` hosted service | Full implementation | Requires Steps 6, 7, 8, 9 |
-| 11 | `SnapshotJob` | Full implementation | Requires Steps 1–5, 7, 9 |
-| 12 | `ServiceCollectionExtensions` updates | 3 registration additions | Wires all components into DI; final integration point |
-| 13 | Unit tests | — | Cover suppression logic, tier evaluation, command dispatch, SET pipeline flow |
+**Step 1 — Simulator: Add scenario state and callback rewiring**
 
----
+Modify `simulators/e2e-sim/e2e_simulator.py`:
+1. Define `SCENARIOS` dict with a `"default"` entry that matches current static
+   values exactly.
+2. Add `_active_scenario = "default"` module variable.
+3. Replace frozen `lambda v=static_value: v` closures with `make_getter(label)`
+   factory function.
 
-## Thread-Safety Analysis
+This step is zero-risk: the behavior is identical unless `_active_scenario` is
+changed. Verify by running scenario 11 (`gauge-labels-e2e-sim`) — it asserts
+exact OID values that must still be `42`, `100`, etc.
 
-| Component | Shared State | Access Pattern | Safety Mechanism |
-|-----------|-------------|---------------|-----------------|
-| `TenantVectorRegistry._groups` | `volatile IReadOnlyList<PriorityGroup>` | SnapshotJob reads; watcher writes (reload) | `volatile` field — readers see either old or new list, never partial |
-| `MetricSlotHolder._box` | `volatile SeriesBox` | SnapshotJob reads via `ReadSlot()`; `TenantVectorFanOutBehavior` writes via `WriteValue()` | `Volatile.Read/Write` — acquire/release semantics |
-| `SuppressionCache._dict` | `ConcurrentDictionary<key, expiry>` | SnapshotJob reads and writes | `ConcurrentDictionary` — inherently thread-safe |
-| `CommandWorker._channel` | `Channel<CommandExecution>` | SnapshotJob writes (Enqueue); CommandWorker reads | `System.Threading.Channels` — designed for producer/consumer |
-| `PipelineMetricService` counters | OTel `Counter<long>` | SnapshotJob + CommandWorker + behaviors all write | OTel SDK thread-safe by specification |
-| `SnapshotJob` allViolated flag | Local to each parallel eval | `Parallel.ForEachAsync` tasks write | Use task-returning pattern (return bool per task, aggregate with `.All()`) to avoid shared mutable state |
+**Step 2 — Simulator: Add HTTP server**
 
-**Key design observation:** SnapshotJob is a **pure reader** of `TenantVectorRegistry` and `MetricSlotHolder`. It never calls `WriteValue()`. Concurrent execution of `MetricPollJob` (writing via fan-out) and `SnapshotJob` (reading via `ReadSlot()`) is thread-safe by design.
+Continue in `e2e_simulator.py`:
+4. Add `aiohttp` to `requirements.txt`.
+5. Implement `start_http_server()` coroutine.
+6. Implement the three HTTP handlers.
+7. Call `loop.run_until_complete(start_http_server())` in `main()` before
+   `open_dispatcher()`.
 
-**`[DisallowConcurrentExecution]` on SnapshotJob:** Prevents overlapping evaluations from double-queuing commands within the same suppression window check. If a prior SnapshotJob execution is still running when the trigger fires, Quartz skips the fire — exactly the same as `MetricPollJob` and `HeartbeatJob`.
+Modify `deploy/k8s/simulators/e2e-sim-deployment.yaml`:
+8. Add `containerPort: 8080` and TCP/8080 Service port.
 
-**Suppression check-then-suppress is not atomic:** Two SnapshotJob executions could theoretically both see `IsSuppressed = false` and both enqueue a command before either sets the suppression entry. However, because `[DisallowConcurrentExecution]` guarantees only one SnapshotJob runs at a time, this race condition cannot occur in practice.
+Rebuild the image, push, and restart the e2e-simulator pod. Verify:
+- `curl -sf http://localhost:8080/scenario` (via port-forward) returns
+  `{"active": "default", ...}`.
+- Scenario 11 still passes (default OID values unchanged).
 
-**CommandWorker channel backpressure:** The channel is bounded (capacity from `ChannelsOptions`). If `CommandWorker` is processing slowly and the channel is full, `ICommandWorker.Enqueue` should use `TryWrite` rather than a blocking `WriteAsync`. A failed `TryWrite` (channel full) should increment `snmp.command.failed` and log a Warning — same treatment as a SET network failure. Do not block SnapshotJob on channel capacity.
+**Step 3 — Test library: `simulator.sh`**
 
----
+New file: `tests/e2e/lib/simulator.sh`
+9. Implement `set_scenario`, `reset_scenario`, `get_active_scenario`.
 
-## Architecture Patterns to Follow
+Modify `tests/e2e/run-all.sh`:
+10. Add `source "$SCRIPT_DIR/lib/simulator.sh"` after existing lib sources.
+11. Add `start_port_forward e2e-simulator 8080 8080` after the Prometheus
+    port-forward.
 
-### Pattern: Singleton-then-HostedService (CommandWorker)
+Verify: `run-all.sh` still passes all 28 existing scenarios unchanged.
 
-The existing `K8sLeaseElection` registration in `ServiceCollectionExtensions.cs` carries an explicit comment explaining why two `AddSingleton` calls are needed before `AddHostedService`. `CommandWorker` must follow this pattern precisely:
+**Step 4 — Tenant fixtures**
 
-```csharp
-services.AddSingleton<CommandWorker>();
-services.AddSingleton<ICommandWorker>(sp => sp.GetRequiredService<CommandWorker>());
-services.AddHostedService(sp => sp.GetRequiredService<CommandWorker>());
-```
+New YAML files in `tests/e2e/fixtures/`:
+12. Create one fixture per distinct tenant topology needed by planned scenarios.
+13. Verify each fixture parses correctly with `kubectl apply --dry-run=client`.
 
-If `AddSingleton<ICommandWorker, CommandWorker>()` and `AddHostedService<CommandWorker>()` are called separately, DI creates two instances. The hosted service drains commands but `SnapshotJob` enqueues to the non-running instance's channel.
+This step can be done in parallel with Step 3.
 
-### Pattern: Channel-backed Background Worker (CommandWorker)
+**Step 5 — Scenario scripts**
 
-`CommandWorker` should follow `ChannelConsumerService`'s implementation:
-- `Channel<T>` created in constructor with `BoundedChannelOptions`
-- `ExecuteAsync` loops `await foreach (var cmd in _channel.Reader.ReadAllAsync(stoppingToken))`
-- On cancellation: the `ReadAllAsync` loop exits cleanly on `OperationCanceledException`; no additional drain needed
+New files `tests/e2e/scenarios/29-*.sh` and higher:
+14. One script per E2E scenario.
+15. Each script follows the five-phase pattern (setup, stabilize, assert,
+    teardown, verify-clean).
+16. Each script that calls `set_scenario` includes a `trap _cleanup EXIT`.
 
-### Pattern: Job Liveness Stamp (SnapshotJob)
-
-All three existing jobs call `_liveness.Stamp(jobKey)` in `finally`. SnapshotJob must follow this exactly. The `"snapshot"` key must be registered in `intervalRegistry` so `LivenessHealthCheck.CheckHealthAsync` knows the expected staleness threshold.
-
-### Pattern: Operation Correlation ID (SnapshotJob)
-
-```csharp
-_correlation.OperationCorrelationId = _correlation.CurrentCorrelationId;
-// ... evaluation ...
-finally
-{
-    _liveness.Stamp(jobKey);
-    _correlation.OperationCorrelationId = null;
-}
-```
-
-This is identical to `MetricPollJob.Execute`, `HeartbeatJob.Execute`, and `CorrelationJob.Execute`.
+Run `tests/e2e/run-all.sh` end-to-end after each new scenario is added to
+catch interference with existing scenarios before accumulation.
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Blocking SNMP SET Inside SnapshotJob
+### Threading the HTTP server
 
-**What goes wrong:** Calling `ISnmpClient.SetAsync` directly in the evaluation loop (Tier 4) instead of via `CommandWorker` channel.
-**Why bad:** Blocks the evaluation loop on network I/O. If a device is slow (100ms–1s per SET), and there are multiple commands to issue, a 15s SnapshotJob interval with `[DisallowConcurrentExecution]` will miss triggers entirely. The entire evaluation is delayed until all SETs complete.
-**Instead:** Enqueue into `CommandWorker` channel. Evaluation is non-blocking (channel write is O(1)). `CommandWorker` processes SETs at its own pace independently.
+Do not use `threading.Thread` to run Flask or any WSGI framework alongside
+pysnmp. The SNMP engine's asyncio event loop is not thread-safe. Writing
+`_active_scenario` from a Flask thread while `getValue()` is executing in the
+asyncio thread would be a data race (even though CPython's GIL reduces the
+practical risk, relying on GIL behavior for correctness is fragile). Use
+aiohttp.web on the existing event loop.
 
-### Anti-Pattern 2: Suppression State as SnapshotJob Instance Field
+### Using `sleep` as the sole wait mechanism
 
-**What goes wrong:** Storing suppression timestamps as a `Dictionary` field on `SnapshotJob` itself.
-**Why bad:** Quartz uses DI to resolve job instances. Even with `[DisallowConcurrentExecution]`, each execution goes through the DI lifecycle. If `SnapshotJob` is registered as a transient or scoped service, a new instance is created each execution and the suppression state is lost. Even if registered as singleton, the pattern is unclear and the suppression service has no testable interface.
-**Instead:** `ISuppressionCache` registered as a DI singleton, injected into `SnapshotJob`. Clear lifecycle, easily mockable in tests.
+`sleep 30` passes today because the cluster is healthy and timings are
+predictable. A slow node or a rescheduled pod can make a fixed sleep produce
+false failures. Use `poll_until` for any condition that Prometheus can signal,
+and reserve `sleep` for the scrape propagation gap (which has no queryable
+signal).
 
-### Anti-Pattern 3: Bypassing OID Resolution for Source == Command
+### Leaving the simulator in a non-default scenario on test failure
 
-**What goes wrong:** Adding `if (msg.Source == SnmpSource.Command) { return await next(); }` in `OidResolutionBehavior`, mirroring the `Synthetic` bypass.
-**Why bad:** SET response OIDs are real device OIDs that appear in the OID map. Bypassing resolution means `MetricName` is null, `TenantVectorFanOutBehavior` skips fan-out (the fan-out behavior checks `metricName is not null && metricName != Unknown`), and `OtelMetricHandler` records `"Unknown"` for a named metric. The `Synthetic` bypass is for the `"0.0"` sentinel OID which cannot resolve — Command uses real OIDs.
-**Instead:** Let `Source = Command` flow through OID resolution identically to `Source = Poll`.
+If a scenario script exits early via `set -e`, the simulator retains the active
+scenario. The next scenario runs against wrong OID values and fails for an
+unrelated reason. Always add `trap _cleanup EXIT` in every scenario that calls
+`set_scenario`.
 
-### Anti-Pattern 4: CommunityString Lookup During SnapshotJob Evaluation
+### Partial scenario definitions
 
-**What goes wrong:** Looking up the CommunityString from `IDeviceRegistry` inside `SnapshotJob` during the evaluation loop (Tier 4).
-**Why bad:** `CommandSlotOptions` has `Ip` and `Port` but no `CommunityString`. Looking it up in Tier 4 adds a registry lookup inside a hot evaluation loop that's running parallel tenants. More importantly, mixing evaluation concerns with execution concerns in one method makes the evaluation harder to test.
-**Instead:** Pass the Ip and Port in `CommandExecution`. `CommandWorker` resolves the `CommunityString` from `IDeviceRegistry.TryGetByIpPort` just before calling `ISnmpClient.SetAsync`. If the device is not found at execution time (was removed from registry after enqueue), log a Warning and drop the command.
+If `SCENARIOS["my-scenario"]` omits a key, `make_getter(label)()` raises
+`KeyError`. The SNMP engine converts this to `noSuchObject` in the GET response.
+The collector logs an OID resolution failure with no indication that the
+simulator is misconfigured. Always define all 7 mapped OID labels in every
+scenario entry.
 
-### Anti-Pattern 5: Enum Ordinal Comparisons on SnmpSource
+### Modifying ConfigMaps without saving first
 
-**What goes wrong:** Using `msg.Source > SnmpSource.Synthetic` or hardcoded integer comparisons to detect the new `Command` value.
-**Why bad:** Breaks if enum values are reordered. All existing source checks use `== SnmpSource.Synthetic` or `!= X` pattern.
-**Instead:** Always use named enum value comparisons.
+Scenarios 18–27 all follow the `save_configmap` / `restore_configmap` pattern.
+Tenant evaluation scenarios must do the same for `simetra-tenants`. A missing
+restore leaves all subsequent scenarios running against the test tenant topology,
+which changes routing behavior and invalidates all later counter assertions.
 
----
+### Defining test OIDs outside the `.999.` subtree
 
-## Open Questions for Phase Design
-
-1. **"All violated" semantics for groups:** Does "advance to next group only if all tenants in the group are violated" mean: (a) all tenants whose evaluation completed without staleness, OR (b) all tenants including stale ones? Stale tenants indicate missing data, which could mean the device is down — treat as "not violated" (i.e., stale = healthy assumption) to avoid sending commands to unreachable devices.
-
-2. **Tier 2 "all Resolved violated" vs "any Resolved violated":** PROJECT.md states "all violated → end, no command". The logical inverse is: if ANY Resolved metric is healthy (in range), stop and do not trigger commands. This matches a safety gate pattern — the monitored system state is OK on at least one metric, so do not intervene.
-
-3. **CommunityString in CommandExecution:** `CommandSlotOptions` has `Ip` + `Port` but no CommunityString. Two approaches: (A) resolve in SnapshotJob from DeviceRegistry before enqueue — simpler CommandWorker but more coupling in SnapshotJob. (B) resolve in CommandWorker at execution time — evaluation is cleaner, but CommandWorker must handle "device not found" gracefully. Approach B is recommended (see Anti-Pattern 4 above).
-
-4. **SnapshotJob and leader gating:** PROJECT.md says all instances poll; leader controls export only. Recommendation: SnapshotJob runs on all replicas (no leader gate). Multiple replicas may issue the same SET command to a device, but for idempotent SET operations (e.g., set a register to a fixed value) this is harmless. The `SuppressionCache` is per-pod (not distributed), so each replica maintains its own suppression window. This is acceptable for the current use cases.
-
-5. **CommandWorker TryWrite vs WriteAsync:** If the channel is full at enqueue time, `TryWrite` returns false immediately (non-blocking). `WriteAsync` blocks until space is available or cancellation fires. For SnapshotJob's evaluation loop, `TryWrite` is preferred — a full channel indicates CommandWorker is overwhelmed, and logging + incrementing `snmp.command.failed` is the correct response. Blocking SnapshotJob's Quartz thread on channel backpressure would cascade into liveness probe failures.
+The e2e device community string `Simetra.E2E-SIM` and its device entry in
+`simetra-devices` point to `e2e-simulator.simetra.svc.cluster.local`. Using
+OIDs from the NPB (`.100.`) or OBP (`.10.`) prefixes in e2e simulator scenarios
+would require that the e2e device poll those OIDs — contaminating the poll log
+and metric export for all NPB/OBP assertions.
 
 ---
 
 ## Sources
 
-All findings derived from direct reading of source files (no training-data speculation):
-- `src/SnmpCollector/Jobs/MetricPollJob.cs` — ISender.Send pattern, SnmpSource.Poll usage, liveness stamp
-- `src/SnmpCollector/Jobs/HeartbeatJob.cs` — Messenger.SendTrapV2, liveness stamp, correlation pattern
-- `src/SnmpCollector/Jobs/CorrelationJob.cs` — correlation ID pattern, liveness stamp
-- `src/SnmpCollector/Extensions/ServiceCollectionExtensions.cs` — 6-phase DI, Quartz registration, thread pool, singleton-then-hosted pattern, operator config ordering guidance (CS-07)
-- `src/SnmpCollector/Pipeline/TenantVectorRegistry.cs` — volatile Groups field, priority ordering, slot construction
-- `src/SnmpCollector/Pipeline/MetricSlotHolder.cs` — ReadSlot(), WriteValue(), Volatile.Read/Write, Role gap
-- `src/SnmpCollector/Pipeline/ISnmpClient.cs` + `SharpSnmpClient.cs` — GetAsync-only today
-- `src/SnmpCollector/Pipeline/SnmpSource.cs` — Poll/Trap/Synthetic; Command is absent today
-- `src/SnmpCollector/Pipeline/Behaviors/ValidationBehavior.cs` — OID regex, DeviceName check
-- `src/SnmpCollector/Pipeline/Behaviors/OidResolutionBehavior.cs` — Synthetic bypass at Source check
-- `src/SnmpCollector/Pipeline/Behaviors/TenantVectorFanOutBehavior.cs` — routing by (ip, port, metricName)
-- `src/SnmpCollector/Pipeline/Behaviors/ValueExtractionBehavior.cs` — TypeCode switch, ExtractedValue set
-- `src/SnmpCollector/Pipeline/Handlers/OtelMetricHandler.cs` — source label, heartbeat stamp
-- `src/SnmpCollector/Pipeline/CommandMapService.cs` — ResolveCommandOid bidirectional map
-- `src/SnmpCollector/Telemetry/PipelineMetricService.cs` — 12 counter pattern, IMeterFactory, device_name tag
-- `src/SnmpCollector/Configuration/TenantOptions.cs` — Commands list exists but unused at runtime
-- `src/SnmpCollector/Configuration/CommandSlotOptions.cs` — Ip/Port/CommandName/Value/ValueType
-- `src/SnmpCollector/Configuration/MetricSlotOptions.cs` — Role field, GraceMultiplier, Threshold
-- `src/SnmpCollector/Pipeline/MetricSlotHolder.cs` — Role absent; Threshold present
-- `.planning/PROJECT.md` — v2.0 requirements, 4-tier evaluation semantics, priority group rules
+All findings are from direct inspection of:
+- `simulators/e2e-sim/e2e_simulator.py` (full file read)
+- `simulators/e2e-sim/requirements.txt`
+- `simulators/e2e-sim/Dockerfile`
+- `deploy/k8s/simulators/e2e-sim-deployment.yaml`
+- `deploy/k8s/snmp-collector/simetra-devices.yaml`
+- `deploy/k8s/snmp-collector/simetra-tenants.yaml`
+- `deploy/k8s/snmp-collector/simetra-oid-metric-map.yaml`
+- `tests/e2e/run-all.sh`
+- `tests/e2e/lib/common.sh`, `kubectl.sh`, `prometheus.sh`
+- `tests/e2e/scenarios/01-poll-executed.sh`, `11-gauge-labels-e2e-sim.sh`,
+  `28-tenantvector-routing.sh`
+
+Confidence: HIGH for all integration points — derived from code, not inference.
+
+The aiohttp `AppRunner` + `TCPSite` pattern for integrating with an existing
+event loop is the documented approach in the aiohttp library. The specific
+aiohttp version should be determined at implementation time by checking current
+aiohttp release compatibility with Python 3.12 — the API has been stable since
+aiohttp 3.x and no breaking changes are expected, but the version pin in
+`requirements.txt` should be explicit.

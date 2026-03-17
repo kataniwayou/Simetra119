@@ -1,382 +1,296 @@
-# Technology Stack — SnapshotJob & SNMP SET Command Execution Milestone
+# Technology Stack — E2E Simulator HTTP Control + Bash Test Scripts Milestone
 
 **Project:** Simetra119 SNMP Collector
-**Researched:** 2026-03-16
-**Milestone scope:** Tenant evaluation (threshold-based) + SNMP SET control loop via SnapshotJob
-**Out of scope:** Re-researching existing MediatR pipeline, Quartz scheduling, OTel, leader election
+**Researched:** 2026-03-17
+**Milestone scope:** HTTP scenario control endpoint for pysnmp E2E simulator + bash E2E test
+scripts for SnapshotJob tenant evaluation
+**Out of scope:** Re-researching pysnmp 7.1.22, Prometheus/PromQL querying, kubectl ConfigMap
+management, SharpSnmpLib SET execution, Quartz SnapshotJob — all validated in prior milestones
 
 ---
 
 ## Executive Decision
 
-**Zero new NuGet packages.** Every API needed for SNMP SET, command worker queuing, suppression
-caching, and priority-based SnapshotJob execution is present in the existing stack:
-`Lextm.SharpSnmpLib 12.5.7`, `System.Threading.Channels` (BCL), `System.Collections.Concurrent` (BCL),
-and `Quartz.Extensions.Hosting 3.15.1`.
+**One new Python package: `aiohttp==3.13.3`.**
+
+The HTTP control endpoint must coexist with pysnmp's asyncio event loop. aiohttp's
+`AppRunner`/`TCPSite` API starts the HTTP server as a non-blocking background task inside
+the same event loop before `snmpEngine.open_dispatcher()` takes over the loop. No threading,
+no subprocess, no second process.
+
+For bash test scripts: zero new tools. `curl`, `kubectl`, and `jq` already present in the
+test environment cover all needed operations. A `poll_until_log` function is the only
+structural addition required to `lib/`.
 
 ---
 
-## Existing Stack (Unchanged)
+## The Central Constraint: open_dispatcher Is a Blocking Loop Entry
 
-| Technology | Version | Role |
-|------------|---------|------|
-| .NET / C# | 9.0 | Runtime |
-| Lextm.SharpSnmpLib | 12.5.7 | SNMP GET + **SET** via `Messenger` |
-| MediatR | 12.5.0 | Pipeline dispatch (unchanged) |
-| Quartz.Extensions.Hosting | 3.15.1 | `SnapshotJob` scheduling |
-| System.Threading.Channels | BCL (.NET 9) | Already used by trap pipeline; reused for command worker queue |
-| System.Collections.Concurrent | BCL (.NET 9) | `ConcurrentDictionary<K,V>` for suppression cache |
-| OpenTelemetry SDK | 1.15.0 | Counter increments for SET outcomes |
+`snmpEngine.open_dispatcher()` is the existing simulator's final call. It calls
+`loop.run_forever()` on the asyncio event loop internally. All asyncio tasks registered
+before this call — including the trap loops via `loop.create_task()` — execute inside that
+loop run. The SNMP agent itself is a transport registered with the same loop.
 
----
+**Consequence:** The HTTP server must be started as an asyncio coroutine task before
+`open_dispatcher()` is called. Once the loop is running, the HTTP server serves requests
+concurrently with SNMP GET responses and trap loops, all on the same single-threaded loop.
 
-## Question 1: How to call `Messenger.SetAsync` — exact API
-
-**Verified directly from `SharpSnmpLib.dll` 12.5.7 via reflection. Not guessed.**
-
-### Overloads
-
-```csharp
-// Without cancellation token
-Task<IList<Variable>> Messenger.SetAsync(
-    VersionCode version,
-    IPEndPoint endpoint,
-    OctetString community,
-    IList<Variable> variables)
-
-// With cancellation token (USE THIS ONE)
-Task<IList<Variable>> Messenger.SetAsync(
-    VersionCode version,
-    IPEndPoint endpoint,
-    OctetString community,
-    IList<Variable> variables,
-    CancellationToken token)
-```
-
-The return type is `Task<IList<Variable>>` — the response varbinds echoed back by the agent.
-For a SET, the returned list contains the same OID/value pairs from the request if the agent
-accepted the operation. This return value is informational; most callers discard it or log it.
-
-### Variable construction for SET
-
-`Variable` has two constructors. For SET use:
-
-```csharp
-new Variable(ObjectIdentifier id, ISnmpData data)
-```
-
-The `id` is built from the OID string resolved via `ICommandMapService.ResolveCommandOid`.
-The `data` is the value to write — type must match the target OID's SNMP MIB type:
-
-| `CommandSlotOptions.ValueType` | `ISnmpData` constructor |
-|-------------------------------|------------------------|
-| `"Integer32"` | `new Integer32(int value)` |
-| `"OctetString"` | `new OctetString(string content)` |
-| `"IpAddress"` | `new IP(string ip)` — **NOTE: type is `Lextm.SharpSnmpLib.IP`, not `IpAddress`** |
-
-```csharp
-// Building the variable list from a CommandSlotOptions entry:
-ISnmpData snmpValue = slot.ValueType switch
-{
-    "Integer32"  => new Integer32(int.Parse(slot.Value)),
-    "OctetString" => new OctetString(slot.Value),
-    "IpAddress"  => new IP(slot.Value),
-    _            => throw new InvalidOperationException($"Unknown ValueType: {slot.ValueType}")
-};
-
-var oid = new ObjectIdentifier(_commandMapService.ResolveCommandOid(slot.CommandName)
-    ?? throw new InvalidOperationException($"Command {slot.CommandName} not in map"));
-
-var variables = new List<Variable> { new Variable(oid, snmpValue) };
-
-var response = await Messenger.SetAsync(
-    VersionCode.V2,
-    new IPEndPoint(IPAddress.Parse(slot.Ip), slot.Port),
-    new OctetString(communityString),
-    variables,
-    cancellationToken);
-```
-
-### Exception handling for SET
-
-SharpSnmpLib throws these on SET failure (verified via reflection):
-
-| Exception | Meaning |
-|-----------|---------|
-| `Lextm.SharpSnmpLib.Messaging.TimeoutException` | Agent did not respond within timeout. Has `Timeout` (int ms) and `Agent` (IPAddress) properties. Extends `OperationException`. |
-| `Lextm.SharpSnmpLib.Messaging.ErrorException` | Agent responded with SNMP error PDU (e.g. `noAccess`, `notWritable`). Has `Body` (ISnmpMessage) and `Agent` (IPAddress) properties. |
-| `Lextm.SharpSnmpLib.SnmpException` | Encoding or protocol error. Base class for library exceptions. |
-| `OperationCanceledException` | `CancellationToken` was cancelled (host shutdown or linked timeout CTS). |
-
-**Important naming collision:** `Lextm.SharpSnmpLib.Messaging.TimeoutException` and
-`System.TimeoutException` share the name. Use a `using` alias or fully-qualified name to avoid
-CS0104 ambiguity:
-
-```csharp
-using SnmpTimeout = Lextm.SharpSnmpLib.Messaging.TimeoutException;
-```
-
-### Extending `ISnmpClient` for SET
-
-Add `SetAsync` to the interface following the same pattern as `GetAsync`:
-
-```csharp
-public interface ISnmpClient
-{
-    Task<IList<Variable>> GetAsync(
-        VersionCode version, IPEndPoint endpoint, OctetString community,
-        IList<Variable> variables, CancellationToken ct);
-
-    Task<IList<Variable>> SetAsync(
-        VersionCode version, IPEndPoint endpoint, OctetString community,
-        IList<Variable> variables, CancellationToken ct);
-}
-```
-
-`SharpSnmpClient` implementation:
-
-```csharp
-public Task<IList<Variable>> SetAsync(
-    VersionCode version, IPEndPoint endpoint, OctetString community,
-    IList<Variable> variables, CancellationToken ct)
-    => Messenger.SetAsync(version, endpoint, community, variables, ct);
-```
-
-This is the only change to the SNMP client abstraction.
+**What does NOT work:**
+- `web.run_app(app)` — this would call `loop.run_forever()` itself, conflicting with
+  `open_dispatcher()`
+- Running HTTP in a thread with `run_in_executor` — pysnmp's MibScalarInstance callbacks
+  (`getValue`) execute on the asyncio loop thread; mutating the OID value dict from a thread
+  requires a lock or thread-safe handoff that adds complexity for no gain
+- A second process with `subprocess` — adds inter-process communication overhead and
+  container complexity for an internal test tool
 
 ---
 
-## Question 2: Queue pattern for command worker
+## Python Stack Additions
 
-**Recommendation: `Channel<CommandRequest>` (bounded, DropOldest), single consumer service.**
+### New Package
 
-### Why `Channel<T>` over alternatives
+| Package | Version | Purpose | Why |
+|---------|---------|---------|-----|
+| aiohttp | 3.13.3 | HTTP server for scenario control endpoint | Only asyncio-native Python HTTP server library with a non-blocking startup API (`AppRunner`/`TCPSite`) that integrates cleanly into an existing asyncio loop without `run_forever()` |
 
-The project already uses `Channel<VarbindEnvelope>` in `TrapChannel` for exactly this pattern:
-bounded buffer, single reader, multiple potential writers, drop-on-full backpressure. Reusing
-the same primitive keeps the codebase consistent and avoids new concepts.
+**aiohttp version verified:** 3.13.3 released 2026-01-03. Requires Python >=3.9. Supports
+Python 3.12 (the simulator's runtime). Source: [pypi.org/project/aiohttp](https://pypi.org/project/aiohttp/)
 
-| Pattern | Thread-safe writes | Backpressure | Cancellation | Used in project | Verdict |
-|---------|-------------------|--------------|--------------|----------------|---------|
-| `Channel<T>` (bounded) | Yes | DropOldest | Native `CancellationToken` | YES (TrapChannel) | **USE THIS** |
-| `BlockingCollection<T>` | Yes | Bounded block | Manual token threading | No | Avoid — blocking semantics, no async drain |
-| `ConcurrentQueue<T>` | Yes | None | Manual | No | Avoid — no built-in backpressure |
-| Custom lock-based queue | Yes | Manual | Manual | No | Avoid — unnecessary complexity |
+**pysnmp version confirmed unchanged:** 7.1.22, released 2025-10-26, still current. No
+version change required. Source: [pypi.org/project/pysnmp](https://pypi.org/project/pysnmp/)
 
-### Configuration
+### Alternatives Considered and Rejected
 
-```csharp
-var options = new BoundedChannelOptions(capacity: 256)
-{
-    FullMode = BoundedChannelFullMode.DropOldest,
-    SingleWriter = false,   // SnapshotJob (multiple Quartz threads) writes
-    SingleReader = true,    // CommandWorkerService single consumer
-    AllowSynchronousContinuations = false,
-};
-_channel = Channel.CreateBounded<CommandRequest>(options, itemDropped: cmd =>
-{
-    // Increment snmp.command.dropped counter
-    _metrics.IncrementCommandDropped(cmd.TenantId);
-});
+| Option | Why Rejected |
+|--------|--------------|
+| FastAPI (+ uvicorn) | Two packages (FastAPI + uvicorn ASGI server) for a two-endpoint internal test tool; uvicorn runs its own event loop which conflicts with `open_dispatcher()` |
+| Flask (+ threading) | Blocking WSGI server; thread-safety of `getValue` callbacks requires locks; inconsistent with existing asyncio-only architecture |
+| `http.server.ThreadingHTTPServer` in executor | stdlib `http.server` is explicitly not for production; requires `loop.run_in_executor()`; thread-to-asyncio value mutation needs explicit thread-safe coordination |
+| Sanic | Also manages its own event loop; same conflict as uvicorn |
+| Tornado | Heavy; tornado's loop management conflicts with pysnmp's dispatcher owning the loop |
+
+aiohttp's `AppRunner`/`TCPSite` is the only mainstream option that hands loop control back
+to the caller after setup. All others either block on their own `run_forever()` call or
+require threading.
+
+### Integration Pattern
+
+The integration requires a single async setup function called before `snmpEngine.open_dispatcher()`:
+
+```python
+import aiohttp.web as web
+
+# Scenario state — mutated by HTTP handler, read by DynamicInstance.getValue callbacks
+_current_scenario: dict[str, Any] = {}   # keyed by OID string, value is the Python value
+
+async def start_http_control(port: int = 8080) -> web.AppRunner:
+    app = web.Application()
+    app.router.add_post("/scenario", handle_set_scenario)
+    app.router.add_get("/scenario", handle_get_scenario)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    log.info("HTTP control endpoint listening on :%d", port)
+    return runner  # caller holds reference for cleanup
 ```
 
-### `CommandRequest` record
+`AppRunner.setup()` and `TCPSite.start()` are coroutines that complete without blocking.
+The site is registered as a socket on the existing event loop. Because `open_dispatcher()`
+calls `loop.run_forever()`, the HTTP server will process requests in the same loop
+concurrently with SNMP traffic.
 
-```csharp
-public sealed record CommandRequest(
-    string TenantId,
-    string CommandName,
-    string Ip,
-    int Port,
-    string CommunityString,
-    string Value,
-    string ValueType,
-    DateTimeOffset EnqueuedAt);
+Source: [aiohttp web_advanced docs](https://docs.aiohttp.org/en/stable/web_advanced.html) —
+AppRunner described as: "for starting the application asynchronously... AppRunner exists."
+
+### Scenario State Safety
+
+The `DynamicInstance.getValue` callback and the aiohttp HTTP handler both execute on
+the asyncio event loop thread (single-threaded). There is no concurrent mutation. A plain
+`dict` is safe as scenario state — no locks needed.
+
+This is the core correctness argument for same-loop over threading.
+
+### requirements.txt After Change
+
+```
+pysnmp==7.1.22
+aiohttp==3.13.3
 ```
 
-Immutable record — safe to pass across channel without copying.
+### Dockerfile Change
 
-### Consumer service
+`EXPOSE 161/udp` remains. Add `EXPOSE 8080` for the HTTP control port:
 
-`CommandWorkerService : BackgroundService` (or `IHostedService`) drains the channel
-using `await foreach` over `_channel.Reader.ReadAllAsync(stoppingToken)`, calling
-`ISnmpClient.SetAsync` per item. This mirrors `ChannelConsumerService` exactly.
+```dockerfile
+EXPOSE 161/udp
+EXPOSE 8080
+```
+
+No base image change. `python:3.12-slim` ships all aiohttp C extension build dependencies
+via pip wheels (pre-built; no compiler needed).
 
 ---
 
-## Question 3: Suppression cache — thread-safe time-based deduplication
+## Scenario Registry Pattern (Python)
 
-**Recommendation: `ConcurrentDictionary<string, DateTimeOffset>` with TTL check.**
+The scenario registry defines named scenarios as dicts mapping OID strings to return values.
+This is pure Python — no new library needed.
 
-No `IMemoryCache`, no `Microsoft.Extensions.Caching.Memory` — those are already in the
-`Microsoft.AspNetCore.App` framework reference but add unnecessary abstraction for a
-single-purpose TTL map. `ConcurrentDictionary` is simpler, has no eviction background thread,
-and the access pattern here is write-heavy at trigger time and read-heavy during evaluation.
-
-### Pattern
-
-```csharp
-private readonly ConcurrentDictionary<string, DateTimeOffset> _suppressedUntil = new();
-
-/// <summary>
-/// Returns true if the command is currently suppressed (a SET was fired recently).
-/// </summary>
-public bool IsSuppressed(string tenantId, string commandName)
-{
-    var key = $"{tenantId}:{commandName}";
-    return _suppressedUntil.TryGetValue(key, out var until)
-        && DateTimeOffset.UtcNow < until;
-}
-
-/// <summary>
-/// Marks the command as suppressed for the given duration.
-/// </summary>
-public void Suppress(string tenantId, string commandName, TimeSpan duration)
-{
-    var key = $"{tenantId}:{commandName}";
-    _suppressedUntil[key] = DateTimeOffset.UtcNow + duration;
+```python
+# Scenario definitions: name -> {oid_str: value, ...}
+SCENARIOS: dict[str, dict[str, Any]] = {
+    "baseline": {
+        f"{E2E_PREFIX}.1.1": 42,      # gauge_test — below threshold
+        f"{E2E_PREFIX}.1.2": 100,     # integer_test — nominal
+        # ... all 9 OIDs
+    },
+    "tier2_trigger": {
+        f"{E2E_PREFIX}.1.1": 999,     # gauge_test — violates threshold
+        # remaining OIDs unchanged from baseline
+        # ...
+    },
+    # further scenarios as needed
 }
 ```
 
-### Thread-safety analysis
+The `DynamicInstance` callbacks already use `lambda v=static_value: v`. To make them
+scenario-aware, change to `lambda oid=oid_str: _current_scenario.get(oid, SCENARIOS["baseline"][oid])`.
 
-- `ConcurrentDictionary` indexer write (`[key] = value`) is atomic (lock-free on the bucket).
-- `TryGetValue` is lock-free read — safe to call from multiple Quartz threads simultaneously.
-- No compound read-modify-write is needed: each evaluation either reads (check) or writes
-  (set after fire). There is no "check then conditionally update" race that requires a
-  transaction — if two Quartz threads simultaneously evaluate the same command slot, both
-  may fire. To prevent double-firing use `AddOrUpdate` with a condition:
-
-```csharp
-public bool TrySuppress(string tenantId, string commandName, TimeSpan duration)
-{
-    var key = $"{tenantId}:{commandName}";
-    var until = DateTimeOffset.UtcNow + duration;
-
-    // Attempt to add. If key already exists with a future expiry, do not overwrite.
-    var added = _suppressedUntil.TryAdd(key, until);
-    if (added) return true;
-
-    // Key exists — check if it is already active
-    if (_suppressedUntil.TryGetValue(key, out var existing) && DateTimeOffset.UtcNow < existing)
-        return false; // still suppressed, do not fire
-
-    // Expired — overwrite
-    _suppressedUntil[key] = until;
-    return true;
-}
-```
-
-This `TrySuppress` pattern returns `true` if the caller should fire the SET (either fresh
-suppression or expired prior suppression). Returns `false` if still within TTL — skip the SET.
-
-**Eviction:** Entries are never physically removed, only expire logically. For a fleet of
-N tenants × M commands, the dictionary never exceeds N×M entries. This is bounded by config
-size (validated at load time), not by runtime data volume. No background eviction needed.
-
-### Suppression duration source
-
-Suppression TTL must come from configuration. The natural location is `CommandSlotOptions`
-or a per-tenant `SnapshotOptions`. Recommend a top-level `SnapshotJobOptions` with a default:
-
-```csharp
-public sealed class SnapshotJobOptions
-{
-    public const string SectionName = "SnapshotJob";
-
-    /// <summary>
-    /// How long to suppress repeat SETs after one fires. Default 60s.
-    /// </summary>
-    [Range(1, 3600)]
-    public int SuppressionSeconds { get; set; } = 60;
-
-    /// <summary>
-    /// Interval for the SnapshotJob trigger in seconds. Default 30s.
-    /// </summary>
-    [Range(5, 3600)]
-    public int IntervalSeconds { get; set; } = 30;
-}
-```
+The HTTP handler validates the scenario name against `SCENARIOS.keys()` and returns HTTP 400
+for unknown names. No external schema validation library needed.
 
 ---
 
-## Question 4: SnapshotJob Quartz configuration
+## Bash Test Script Additions
 
-**Recommendation: `[DisallowConcurrentExecution]`, single job key, simple interval trigger.**
+### New Library Function: poll_until_log
 
-### Why a new job instead of extending `MetricPollJob`
+The existing `lib/prometheus.sh` has `poll_until` for metric counters. Log-based assertions
+(tier flow, scenario transitions) need an analogous function in `lib/kubectl.sh`:
 
-`MetricPollJob` is bound 1:1 to a device/poll-group pair and is focused on SNMP GET dispatch.
-`SnapshotJob` reads tenant vectors (all tenants, all slots) and evaluates thresholds across
-all of them in one pass. These are orthogonal concerns and different scheduling requirements.
+```bash
+# Poll until a pattern appears in pod logs, or timeout.
+# Usage: poll_until_log <timeout_s> <interval_s> <pod_label> <namespace> <since> <pattern>
+# Returns 0 on match, 1 on timeout.
+poll_until_log() {
+    local timeout="$1" interval="$2" label="$3" ns="$4" since="$5" pattern="$6"
+    local deadline
+    deadline=$(( $(date +%s) + timeout ))
 
-### Job declaration
-
-```csharp
-[DisallowConcurrentExecution]
-public sealed class SnapshotJob : IJob
-{
-    // Inject: ITenantVectorRegistry, ISnmpClient, ICommandMapService,
-    //         ISuppressionCache, PipelineMetricService, ICorrelationService,
-    //         ILivenessVectorService, ILogger<SnapshotJob>
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+        local pods
+        pods=$(kubectl get pods -n "$ns" -l "$label" \
+            -o jsonpath='{.items[*].metadata.name}' 2>/dev/null) || true
+        for pod in $pods; do
+            if kubectl logs "$pod" -n "$ns" --since="${since}s" 2>/dev/null \
+                | grep -F "$pattern" > /dev/null 2>&1; then
+                return 0
+            fi
+        done
+        sleep "$interval"
+    done
+    return 1
 }
 ```
 
-`[DisallowConcurrentExecution]` is required. SnapshotJob walks the full tenant registry and
-may fire multiple SET commands. If a previous execution is still running (e.g. blocked on a
-slow SNMP agent), a new execution would double-evaluate and double-fire suppressed commands.
-The `[DisallowConcurrentExecution]` guarantee from Quartz prevents pile-up on the same job key.
+Key detail: `grep -F` (fixed string, not regex) avoids escaping issues with the bracket
+characters in log lines like `"Tenant {TenantId} priority=1 tier=2 — all resolved violated"`.
+Use `-F` for exact log message fragments, regex only when needed.
 
-### Quartz registration (inside `AddSnmpScheduling`)
+### New Helper: sim_set_scenario
 
-```csharp
-// SnapshotJob: evaluates tenant vectors and fires SNMP SET commands.
-// Registered inside AddQuartz(...) alongside CorrelationJob and MetricPollJob.
-var snapshotKey = new JobKey("snapshot");
-q.AddJob<SnapshotJob>(j => j.WithIdentity(snapshotKey));
-q.AddTrigger(t => t
-    .ForJob(snapshotKey)
-    .WithIdentity("snapshot-trigger")
-    .StartNow()
-    .WithSimpleSchedule(s => s
-        .WithIntervalInSeconds(snapshotOptions.IntervalSeconds)
-        .RepeatForever()
-        .WithMisfireHandlingInstructionNextWithRemainingCount()));
+HTTP call to the simulator's control endpoint, used at the start of each tenant evaluation
+scenario script:
 
-intervalRegistry.Register("snapshot", snapshotOptions.IntervalSeconds);
+```bash
+SIM_HTTP_URL="${SIM_HTTP_URL:-http://localhost:8080}"
+
+sim_set_scenario() {
+    local scenario_name="$1"
+    local response http_code
+    response=$(curl -sf -w '\n%{http_code}' -X POST \
+        -H "Content-Type: application/json" \
+        -d "{\"scenario\": \"${scenario_name}\"}" \
+        "${SIM_HTTP_URL}/scenario" 2>&1) || true
+    http_code=$(echo "$response" | tail -1)
+    if [ "$http_code" != "200" ]; then
+        log_error "sim_set_scenario failed: scenario=${scenario_name} http=${http_code}"
+        return 1
+    fi
+    log_info "Simulator scenario set: ${scenario_name}"
+}
 ```
 
-`WithMisfireHandlingInstructionNextWithRemainingCount` is the established pattern in this
-codebase for all jobs — it skips stale fires rather than catching up.
+`SIM_HTTP_URL` is an environment variable so `run-all.sh` can set it via port-forward
+(`kubectl port-forward svc/e2e-simulator 8080:8080`) alongside the existing Prometheus
+port-forward.
 
-### Priority-based evaluation pass
+### Bash Tools Used (no additions to install)
 
-The tenant registry exposes `ITenantVectorRegistry.Groups` as `IReadOnlyList<PriorityGroup>`,
-already sorted ascending by priority integer (lowest value = highest priority = evaluated first).
-SnapshotJob iterates `Groups` in order:
+| Tool | Already Used | New Usage |
+|------|-------------|-----------|
+| `curl` | Prometheus queries | Simulator HTTP control (`sim_set_scenario`) |
+| `kubectl` | Pod management, ConfigMaps, logs | Same; `poll_until_log` uses `kubectl logs` |
+| `jq` | Prometheus response parsing | Scenario response body parsing (optional) |
+| `grep -F` | Existing log grep patterns | Log polling in `poll_until_log` |
+| `date +%s` | Timeout loops in `poll_until` | Same pattern in `poll_until_log` |
 
-```csharp
-foreach (var group in _registry.Groups)         // priority 1 before priority 2
-    foreach (var tenant in group.Tenants)
-        foreach (var holder in tenant.Holders)
-            EvaluateSlot(tenant, holder, ct);
+No `timeout`, `watch`, `stern`, or `kail` needed. Plain `kubectl logs --since` with a bash
+polling loop is sufficient and consistent with the existing test framework.
+
+### Scenario Script Structure for Tenant Evaluation Tests
+
+Each new scenario script (e.g. `29-snapshot-tier2.sh`) follows this four-step structure:
+
+```bash
+# Step 1: Set simulator to trigger state
+sim_set_scenario "tier2_trigger"
+sleep 2   # allow one SnapshotJob cycle (15s interval) + small buffer
+
+# Step 2: Wait for tier log evidence
+SCENARIO_NAME="SnapshotJob evaluates tier-2 when resolved violated"
+if poll_until_log 60 5 "app=snmp-collector" "simetra" 60 \
+    "tier=2 — all resolved violated"; then
+    record_pass "$SCENARIO_NAME" "tier=2 log found within 60s"
+else
+    record_fail "$SCENARIO_NAME" "tier=2 log not found within 60s"
+fi
+
+# Step 3: Validate counter via Prometheus
+METRIC="snmp_snapshot_tier2_evaluated_total"
+BEFORE=$(snapshot_counter "$METRIC" "")
+# (counter increment already validated in step 2 via log; Prometheus confirms metric path)
+assert_delta_gt "$(($(query_counter "$METRIC" "") - BEFORE))" 0 \
+    "tier-2 counter increments" "$(get_evidence "$METRIC" "")"
+
+# Step 4: Reset simulator to baseline
+sim_set_scenario "baseline"
 ```
 
-No additional sorting or external priority service is needed — the registry already provides
-the ordered structure from when it was loaded by `TenantVectorRegistry.Reload`.
+The `sleep 2` after `sim_set_scenario` is intentional: the SnapshotJob polls every 15s, so
+the test must account for up to one full cycle before logs appear. `poll_until_log 60 5`
+covers this with a 60s outer timeout.
 
-### Thread pool sizing
+---
 
-Add 1 to `initialJobCount` in `AddSnmpScheduling` for the SnapshotJob:
+## K8s Deployment Change
 
-```csharp
-var initialJobCount = 3; // CorrelationJob + HeartbeatJob + SnapshotJob
-foreach (var device in devicesOptions.Devices)
-    initialJobCount += device.Polls.Count;
-var threadPoolSize = Math.Max(initialJobCount, 50);
+The `e2e-sim` Kubernetes Service currently exposes only UDP 161. A ClusterIP port for TCP
+8080 must be added so test scripts can reach the HTTP endpoint via port-forward:
+
+```yaml
+# Add to e2e-simulator Service spec.ports:
+- name: http-control
+  port: 8080
+  targetPort: 8080
+  protocol: TCP
 ```
 
-The existing `Math.Max(..., 50)` floor means this change only matters for very small fleets.
+This is a manifest change only — no image rebuild beyond the `requirements.txt` and Python
+code changes.
 
 ---
 
@@ -384,58 +298,14 @@ The existing `Math.Max(..., 50)` floor means this change only matters for very s
 
 | Omission | Rationale |
 |----------|-----------|
-| New NuGet packages | Every required API exists in SharpSnmpLib 12.5.7 + .NET 9 BCL |
-| `IMemoryCache` for suppression | `ConcurrentDictionary<string, DateTimeOffset>` is simpler, no background thread, bounded by config size |
-| `BlockingCollection<T>` for command queue | `Channel<T>` already used in codebase; blocking semantics are inferior for async drain |
-| `[AllowConcurrentExecution]` on `SnapshotJob` | Would require locking the suppression cache write path; `[DisallowConcurrentExecution]` makes locking unnecessary |
-| Separate MediatR message for SET dispatch | SNMP SET is a side effect, not an observable metric; routing through MediatR pipeline adds unnecessary overhead and behavior overhead |
-| `IpAddress` as the SharpSnmpLib IP type name | The actual type is `Lextm.SharpSnmpLib.IP`; using `IpAddress` will produce CS0246 |
-| `System.TimeoutException` catch for SNMP timeout | SharpSnmpLib throws `Lextm.SharpSnmpLib.Messaging.TimeoutException` (extends `OperationException`), not BCL `System.TimeoutException` |
-
----
-
-## Required Changes Summary
-
-### 1. `ISnmpClient.cs` — Add `SetAsync`
-
-Add one method to the existing interface. `SharpSnmpClient.cs` delegates directly to
-`Messenger.SetAsync`. No other files change for this addition.
-
-### 2. New `ISuppressionCache.cs` + `SuppressionCache.cs`
-
-Singleton. Internal state: `ConcurrentDictionary<string, DateTimeOffset>`. No DI dependencies.
-Registered as `AddSingleton<ISuppressionCache, SuppressionCache>()` in `AddSnmpPipeline` or
-`AddSnmpScheduling`.
-
-### 3. New `ICommandChannel.cs` + `CommandChannel.cs`
-
-Mirrors `ITrapChannel` / `TrapChannel` exactly. `BoundedChannelOptions` with `DropOldest`.
-Registered as `AddSingleton<ICommandChannel, CommandChannel>()`.
-
-### 4. New `CommandWorkerService.cs`
-
-`BackgroundService`. Drains `ICommandChannel.Reader` via `ReadAllAsync`. Calls
-`ISnmpClient.SetAsync` per `CommandRequest`. Increments OTel counters on success/failure.
-
-### 5. New `SnapshotJob.cs`
-
-`[DisallowConcurrentExecution] IJob`. Iterates `ITenantVectorRegistry.Groups`, evaluates
-`MetricSlotHolder.Threshold` against `ReadSlot().Value`, checks `ISuppressionCache.TrySuppress`,
-enqueues `CommandRequest` to `ICommandChannel.Writer`. Does NOT call `SetAsync` directly —
-that is the worker's concern.
-
-### 6. New `SnapshotJobOptions.cs`
-
-Two fields: `IntervalSeconds` (default 30), `SuppressionSeconds` (default 60). Bound and
-validated in `AddSnmpScheduling` following the existing `CorrelationJobOptions` pattern.
-
-### 7. `ServiceCollectionExtensions.cs` — Registration additions
-
-- `AddSingleton<ISuppressionCache, SuppressionCache>()` in `AddSnmpPipeline`
-- `AddSingleton<ICommandChannel, CommandChannel>()` in `AddSnmpPipeline`
-- `AddHostedService<CommandWorkerService>()` in `AddSnmpPipeline`
-- SnapshotJob + trigger in `AddSnmpScheduling` inside `AddQuartz(...)`
-- Bump `initialJobCount` by 1
+| FastAPI / uvicorn | Two packages; uvicorn owns event loop, conflicts with `open_dispatcher()` |
+| Flask | WSGI (blocking); thread-safety of MIB callbacks requires extra coordination |
+| `pytest` / `unittest` for scenario tests | Bash scripts already established as the test framework; adding Python test runner for E2E orchestration creates dual-framework complexity |
+| `httpx` or `requests` in simulator | Not needed; aiohttp.web is both server and (if needed) client |
+| `asyncio.run_in_executor` for HTTP | Same-loop via aiohttp avoids all thread-safety questions for OID state mutation |
+| Log scraping via `stern` or `kail` | Not available in all CI environments; plain `kubectl logs` is portable |
+| `timeout` command wrapper | `deadline=$(( $(date +%s) + N ))` loop already established in codebase |
+| `pydantic` for scenario schema validation | Dict key lookup against `SCENARIOS.keys()` is sufficient for a controlled test tool |
 
 ---
 
@@ -443,38 +313,31 @@ validated in `AddSnmpScheduling` following the existing `CorrelationJobOptions` 
 
 | Area | Confidence | Source |
 |------|------------|--------|
-| `Messenger.SetAsync` exact signatures | HIGH | Reflected from `SharpSnmpLib.dll` 12.5.7 at runtime via `dotnet run` |
-| `Lextm.SharpSnmpLib.IP` type name (not `IpAddress`) | HIGH | Reflected from DLL; `IP.TypeCode` returns `SnmpType.IPAddress` |
-| `Variable(ObjectIdentifier, ISnmpData)` constructor | HIGH | Reflected from DLL |
-| `ErrorException`, `TimeoutException` hierarchy | HIGH | Reflected from DLL; both extend `OperationException` |
-| `Channel<T>` as command queue | HIGH | Read `TrapChannel.cs` directly; same pattern |
-| `ConcurrentDictionary` suppression cache thread safety | HIGH | BCL documentation; `TryAdd`/indexer are atomic per bucket |
-| `[DisallowConcurrentExecution]` guarantee from Quartz | HIGH | Read in `MetricPollJob.cs`, `CorrelationJob.cs`; Quartz 3.x contract |
-| `ITenantVectorRegistry.Groups` already priority-sorted | HIGH | Read `TenantVectorRegistry.Reload` — uses `SortedDictionary<int, List<Tenant>>` ascending |
-| No new NuGet packages needed | HIGH | All required types identified in existing source + BCL |
+| aiohttp 3.13.3 current version | HIGH | pypi.org/project/aiohttp verified 2026-03-17 |
+| AppRunner/TCPSite non-blocking integration | HIGH | docs.aiohttp.org/en/stable/web_advanced.html |
+| pysnmp open_dispatcher calls loop.run_forever() | MEDIUM | Observed behavior in existing simulator (tasks run inside open_dispatcher call); pysnmp asyncio dispatch.py confirms asyncio loop integration; direct source read blocked by 429 rate limit |
+| Same-loop OID state safety (no locks needed) | HIGH | asyncio single-threaded execution guarantee; Python asyncio documentation |
+| bash poll_until_log pattern correctness | HIGH | Mirrors poll_until in existing lib/prometheus.sh; kubectl logs --since is documented |
+| grep -F for log pattern matching | HIGH | POSIX standard; avoids regex escaping for tier log messages |
+| K8s Service TCP 8080 port addition | HIGH | Standard K8s Service manifest pattern |
 
 ---
 
 ## Sources
 
-All authoritative sources read directly:
-
-- `src/SnmpCollector/Pipeline/ISnmpClient.cs` — existing interface, extension point
-- `src/SnmpCollector/Pipeline/SharpSnmpClient.cs` — `Messenger.GetAsync` delegation pattern
-- `src/SnmpCollector/Pipeline/TrapChannel.cs` — `Channel<T>` bounded channel pattern
-- `src/SnmpCollector/Pipeline/TenantVectorRegistry.cs` — `SortedDictionary` priority ordering
-- `src/SnmpCollector/Pipeline/MetricSlotHolder.cs` — `ThresholdOptions`, `ReadSlot()`
-- `src/SnmpCollector/Configuration/CommandSlotOptions.cs` — `Ip`, `Port`, `CommandName`, `Value`, `ValueType`
-- `src/SnmpCollector/Configuration/ThresholdOptions.cs` — `Min`/`Max` fields
-- `src/SnmpCollector/Jobs/MetricPollJob.cs` — `[DisallowConcurrentExecution]`, Quartz `Execute` pattern
-- `src/SnmpCollector/Extensions/ServiceCollectionExtensions.cs` — full registration flow
-- `SharpSnmpLib.dll` 12.5.7 via reflection (`dotnet run` against NuGet cache):
-  - `Messenger.SetAsync` overloads and return types
-  - `Variable` constructors
-  - `IP`, `Integer32`, `OctetString`, `Gauge32` constructors
-  - `ErrorException`, `TimeoutException`, `SnmpException` hierarchy
+- [aiohttp PyPI page](https://pypi.org/project/aiohttp/) — version 3.13.3, Python >=3.9
+- [aiohttp Web Server Advanced docs](https://docs.aiohttp.org/en/stable/web_advanced.html) — AppRunner/TCPSite pattern
+- [pysnmp PyPI page](https://pypi.org/project/pysnmp/) — version 7.1.22 confirmed current
+- [Python http.server docs](https://docs.python.org/3/library/http.server.html) — confirmed no async support
+- [Python asyncio event loop docs](https://docs.python.org/3/library/asyncio-eventloop.html) — run_in_executor, single-threaded guarantee
+- Existing codebase read directly:
+  - `simulators/e2e-sim/e2e_simulator.py` — open_dispatcher call site, create_task pattern, DynamicInstance callbacks
+  - `simulators/e2e-sim/requirements.txt` — current deps
+  - `simulators/e2e-sim/Dockerfile` — base image
+  - `tests/e2e/lib/common.sh`, `prometheus.sh`, `kubectl.sh` — existing utility patterns
+  - `tests/e2e/scenarios/07-poll-recovered.sh`, `28-tenantvector-routing.sh` — established scenario structure
 
 ---
 
-*Stack research for: SnapshotJob & SNMP SET Command Execution milestone*
-*Researched: 2026-03-16*
+*Stack research for: E2E simulator HTTP control + SnapshotJob tenant evaluation test scripts*
+*Researched: 2026-03-17*
