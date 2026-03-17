@@ -50,10 +50,10 @@ None.
 | 066 | Fix tenants.json binding to match devices.json pattern (remove double nesting) | 2026-03-17 | c0b85d7 | [066-tenants-config-binding-consistency](./quick/066-tenants-config-binding-consistency/) |
 | 067 | Flatten tenants.json to bare array format matching devices.json | 2026-03-17 | acdde9b | [067-tenants-bare-array-config](./quick/067-tenants-bare-array-config/) |
 | 068 | Threshold equality condition (Min==Max → violated if value equals) | 2026-03-17 | f87992b | [068-threshold-equal-condition](./quick/068-threshold-equal-condition/) |
-| 069 | All time series samples threshold check for Evaluate metrics | 2026-03-17 | 62a24e3 | [069-all-timeseries-samples-threshold-check](./quick/069-all-timeseries-samples-threshold-check/) |
+| 069 | All time series samples threshold check for Evaluate and Resolved metrics | 2026-03-17 | 74cb0b6 | [069-all-timeseries-samples-threshold-check](./quick/069-all-timeseries-samples-threshold-check/) |
 
 ## Session Continuity
 
 Last session: 2026-03-17
-Stopped at: Completed quick-069-PLAN.md
+Stopped at: Completed quick task 069: all time series samples threshold check
 Resume file: None
