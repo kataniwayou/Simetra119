@@ -209,6 +209,25 @@ data:
               "e2e_info_test",
               "e2e_ip_test"
             ]
+          },
+          {
+            "IntervalSeconds": 10,
+            "GraceMultiplier": 2.0,
+            "MetricNames": [
+              "e2e_port_utilization",
+              "e2e_channel_state",
+              "e2e_bypass_status",
+              "e2e_command_response",
+              "e2e_agg_source_a",
+              "e2e_agg_source_b"
+            ]
+          },
+          {
+            "IntervalSeconds": 10,
+            "GraceMultiplier": 2.0,
+            "MetricNames": ["e2e_agg_source_a", "e2e_agg_source_b"],
+            "AggregatedMetricName": "e2e_total_util",
+            "Aggregator": "sum"
           }
         ]
       }
