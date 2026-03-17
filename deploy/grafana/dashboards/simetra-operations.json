@@ -1405,7 +1405,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(snmp_snapshot_cycle_duration_ms_bucket{k8s_pod_name=~\"$pod\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(snmp_snapshot_cycle_duration_ms_bucket{k8s_pod_name=~\"$pod\"}[$__rate_interval])))",
           "legendFormat": "p99 {{k8s_pod_name}}",
           "refId": "A",
           "range": true,
