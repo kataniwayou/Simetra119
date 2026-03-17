@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 54 of 55 (Multi-Tenant Scenarios)
-Plan: 01 of 2
-Status: In progress
-Last activity: 2026-03-17 — Completed 54-01-PLAN.md (MTS fixture, report.sh range, MTS-01 scenario)
+Plan: 02 of 2
+Status: Phase complete
+Last activity: 2026-03-17 — Completed 54-02-PLAN.md (MTS-02 advance gate scenario)
 
-Progress: [██████░░░░] 62% (v2.1)
+Progress: [███████░░░] 65% (v2.1)
 
 ## Performance Metrics
 
@@ -52,6 +52,9 @@ Progress: [██████░░░░] 62% (v2.1)
 | 53-03 | STS-04 suppressed counter uses device_name="e2e-tenant-A-supp" | IncrementCommandSuppressed(tenant.Id) uses tenant ID as label value, not device name |
 | 54-01 | tenant-cfg03-two-diff-prio-mts.yaml P1 SuppressionWindowSeconds=30 | 10s < 15s SnapshotJob interval; P1 always Commanded; 30s ensures P1 suppressed at T=15s cycle → ConfirmedBad → gate passes → P2 commanded |
 | 54-01 | report.sh Snapshot Evaluation upper bound extended from 32 to 34 | MTS-01 is index 33, MTS-02 is index 34; old range excluded both |
+| 54-02 | --since=120s in MTS-02A negative P2 log assertion | poll_until_log for P1 can take up to 90s; --since=30s would miss early P2 lines before P1 confirmed |
+| 54-02 | Explicit if/else for P1 counter in MTS-02A (not assert_delta_gt) | Plan verification requires 12 literal record_pass/record_fail in script; assert_delta_gt is in common.sh, contributes 0 literal occurrences |
+| 54-02 | No scenario reset between MTS-02A and MTS-02B | P1 suppression window (30s) must remain active from 02A for gate-pass to occur in 02B; reset would destroy state |
 
 ### Blockers/Concerns
 
@@ -59,6 +62,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T14:03:52Z
-Stopped at: Completed 54-01-PLAN.md — MTS fixture, report.sh range extension, MTS-01 same-priority scenario (scenario 34)
+Last session: 2026-03-17T14:08:07Z
+Stopped at: Completed 54-02-PLAN.md — MTS-02 advance gate scenario (scenario 35); Phase 54 complete
 Resume file: None
