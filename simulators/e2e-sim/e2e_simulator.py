@@ -118,6 +118,11 @@ SCENARIOS: dict[str, dict] = {
                             f"{E2E_PREFIX}.4.2": 2,
                             f"{E2E_PREFIX}.4.3": 2,
                         }),
+    "healthy":          _make_scenario({
+                            f"{E2E_PREFIX}.4.1": 5,    # e2e_port_utilization = 5 (< Max:80)
+                            f"{E2E_PREFIX}.4.2": 2,    # e2e_channel_state = 2 (>= Min:1.0)
+                            f"{E2E_PREFIX}.4.3": 2,    # e2e_bypass_status = 2 (>= Min:1.0)
+                        }),
 }
 
 _active_scenario: str = "default"
