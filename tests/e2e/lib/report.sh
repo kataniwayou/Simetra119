@@ -10,9 +10,8 @@ _REPORT_CATEGORIES=(
     "Pipeline Counters|0|9"
     "Business Metrics|10|22"
     "OID Mutations|23|25"
-    "Device Lifecycle|26|28"
-    "Watcher Resilience|29|32"
-    "Tenant Vector|33|36"
+    "Device Lifecycle|26|27"
+    "Snapshot Evaluation|28|32"
 )
 
 generate_report() {
