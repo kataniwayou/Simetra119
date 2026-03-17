@@ -2,16 +2,23 @@
 E2E Test SNMP Simulator
 
 Provides a controllable, deterministic SNMP device for E2E pipeline testing.
-All values are static (no random walk) so tests can assert exact expected values.
+All values are driven by a named scenario registry — switch scenarios at runtime
+via the HTTP control endpoint on port 8080.
 
-Serves 9 OIDs total:
-  7 mapped   (.999.1.x) -- Gauge32, Integer32, Counter32, Counter64, TimeTicks,
-                            OctetString, IpAddress
-  2 unmapped (.999.2.x) -- Gauge32, OctetString (outside oidmaps.json)
+Serves 15 OIDs total:
+  7 mapped      (.999.1.x) -- Gauge32, Integer32, Counter32, Counter64, TimeTicks,
+                              OctetString, IpAddress
+  2 unmapped    (.999.2.x) -- Gauge32, OctetString (outside oidmaps.json)
+  6 test-purpose(.999.4.x) -- Gauge32 x5, Integer32 x1 (writable command target)
 
 Sends two trap streams:
   - Valid traps   with community Simetra.E2E-SIM  every TRAP_INTERVAL seconds
   - Bad-community traps with community BadCommunity every BAD_TRAP_INTERVAL seconds
+
+HTTP control endpoint (aiohttp, port 8080):
+  POST /scenario/{name}  -- switch active scenario
+  GET  /scenario         -- return current scenario name
+  GET  /scenarios        -- return sorted list of all scenario names
 
 OID tree: 1.3.6.1.4.1.47477.999.{subtree}.{suffix}.0
 Community string: Simetra.{DEVICE_NAME} (default: Simetra.E2E-SIM)
@@ -31,10 +38,12 @@ import os
 import signal
 import socket
 
+from aiohttp import web
 from pysnmp.entity import engine, config
 from pysnmp.entity.rfc3413 import cmdrsp, context
 from pysnmp.carrier.asyncio.dgram import udp
 from pysnmp.proto.api import v2c
+from pysnmp.smi.error import NoSuchInstanceError
 from pysnmp.hlapi.v3arch.asyncio import (
     SnmpEngine as HlapiEngine,
     CommunityData,
@@ -64,7 +73,52 @@ STARTUP_DELAY = 12  # seconds before first trap
 E2E_PREFIX = "1.3.6.1.4.1.47477.999"
 
 # ---------------------------------------------------------------------------
-# OID definitions -- static values for deterministic testing
+# Scenario registry
+# ---------------------------------------------------------------------------
+
+STALE = object()  # Sentinel: return noSuchInstance for this OID
+
+
+def _make_scenario(overrides: dict) -> dict:
+    """Create a full scenario dict from baseline values with optional overrides."""
+    baseline = {
+        # Existing 9 OIDs -- exact same values as pre-HTTP simulator
+        f"{E2E_PREFIX}.1.1": 42,                # gauge_test      Gauge32
+        f"{E2E_PREFIX}.1.2": 100,               # integer_test    Integer32
+        f"{E2E_PREFIX}.1.3": 5000,              # counter32_test  Counter32
+        f"{E2E_PREFIX}.1.4": 1000000,           # counter64_test  Counter64
+        f"{E2E_PREFIX}.1.5": 360000,            # timeticks_test  TimeTicks
+        f"{E2E_PREFIX}.1.6": "E2E-TEST-VALUE",  # info_test       OctetString
+        f"{E2E_PREFIX}.1.7": "10.0.0.1",        # ip_test         IpAddress
+        f"{E2E_PREFIX}.2.1": 99,                # unmapped_gauge  Gauge32
+        f"{E2E_PREFIX}.2.2": "UNMAPPED",        # unmapped_info   OctetString
+        # New test-purpose OIDs (subtree .999.4.x)
+        f"{E2E_PREFIX}.4.1": 0,                 # e2e_evaluate_metric   Gauge32
+        f"{E2E_PREFIX}.4.2": 0,                 # e2e_resolved_metric   Gauge32
+        f"{E2E_PREFIX}.4.3": 0,                 # e2e_bypass_status     Gauge32
+        f"{E2E_PREFIX}.4.4": 0,                 # e2e_command_response  Integer32 (writable)
+        f"{E2E_PREFIX}.4.5": 0,                 # e2e_agg_source_a      Gauge32
+        f"{E2E_PREFIX}.4.6": 0,                 # e2e_agg_source_b      Gauge32
+    }
+    baseline.update(overrides)
+    return baseline
+
+
+SCENARIOS: dict[str, dict] = {
+    "default":          _make_scenario({}),
+    "threshold_breach": _make_scenario({f"{E2E_PREFIX}.4.1": 90}),
+    "threshold_clear":  _make_scenario({f"{E2E_PREFIX}.4.1": 5}),
+    "bypass_active":    _make_scenario({f"{E2E_PREFIX}.4.3": 1}),
+    "stale":            _make_scenario({
+                            f"{E2E_PREFIX}.4.1": STALE,
+                            f"{E2E_PREFIX}.4.2": STALE,
+                        }),
+}
+
+_active_scenario: str = "default"
+
+# ---------------------------------------------------------------------------
+# OID definitions -- for documentation and registration
 # ---------------------------------------------------------------------------
 
 # Mapped OIDs (7 total, subtree .999.1.x) -- covered by oidmaps.json
@@ -84,7 +138,16 @@ UNMAPPED_OIDS = [
     (f"{E2E_PREFIX}.2.2", "unmapped_info",  v2c.OctetString,  "UNMAPPED"),
 ]
 
-ALL_OIDS = MAPPED_OIDS + UNMAPPED_OIDS
+# Test-purpose OIDs (6 total, subtree .999.4.x)
+# Tuple: (oid_str, label, syntax_cls, writable)
+TEST_OIDS = [
+    (f"{E2E_PREFIX}.4.1", "e2e_evaluate_metric",  v2c.Gauge32,   False),
+    (f"{E2E_PREFIX}.4.2", "e2e_resolved_metric",   v2c.Gauge32,   False),
+    (f"{E2E_PREFIX}.4.3", "e2e_bypass_status",     v2c.Gauge32,   False),
+    (f"{E2E_PREFIX}.4.4", "e2e_command_response",  v2c.Integer32, True),   # writable
+    (f"{E2E_PREFIX}.4.5", "e2e_agg_source_a",      v2c.Gauge32,   False),
+    (f"{E2E_PREFIX}.4.6", "e2e_agg_source_b",      v2c.Gauge32,   False),
+]
 
 # Trap configuration
 TRAP_OID = f"{E2E_PREFIX}.3.1"
@@ -124,14 +187,29 @@ MibScalar, MibScalarInstance = mibBuilder.import_symbols(
 
 
 class DynamicInstance(MibScalarInstance):
-    """MibScalarInstance that returns a live value via a callback function."""
+    """MibScalarInstance that reads its value from the active scenario dict."""
 
-    def __init__(self, oid_tuple, index_tuple, syntax, get_value_fn):
+    def __init__(self, oid_tuple, index_tuple, syntax, oid_str):
         super().__init__(oid_tuple, index_tuple, syntax)
-        self._get_value_fn = get_value_fn
+        self._oid_str = oid_str
 
     def getValue(self, name, **ctx):
-        return self.getSyntax().clone(self._get_value_fn())
+        val = SCENARIOS[_active_scenario].get(self._oid_str, STALE)
+        if val is STALE:
+            raise NoSuchInstanceError(name=name, idx=(0,))
+        return self.getSyntax().clone(val)
+
+
+class WritableDynamicInstance(DynamicInstance):
+    """DynamicInstance that accepts SNMP SET, storing value in active scenario."""
+
+    def writeTest(self, varBind, **ctx):
+        ctx['cbFun'](varBind, **ctx)  # MUST always call cbFun
+
+    def writeCommit(self, varBind, **ctx):
+        name, value = varBind
+        SCENARIOS[_active_scenario][self._oid_str] = value
+        ctx['cbFun'](varBind, **ctx)  # MUST always call cbFun
 
 
 def oid_str_to_tuple(oid_str):
@@ -140,19 +218,40 @@ def oid_str_to_tuple(oid_str):
 
 
 # ---------------------------------------------------------------------------
-# OID registration: 9 OIDs (7 mapped + 2 unmapped)
+# OID registration: 15 OIDs (7 mapped + 2 unmapped + 6 test-purpose)
 # ---------------------------------------------------------------------------
 
 symbols = {}
 registered_oids = []
 
-for oid_str, label, syntax_cls, static_value in ALL_OIDS:
+# Register existing 9 OIDs (MAPPED + UNMAPPED) using DynamicInstance
+for oid_str, label, syntax_cls, _static_value in MAPPED_OIDS + UNMAPPED_OIDS:
     oid_tuple = oid_str_to_tuple(oid_str)
     safe_label = label.replace("-", "_")
 
     symbols[f"scalar_{safe_label}"] = MibScalar(oid_tuple, syntax_cls())
     symbols[f"instance_{safe_label}"] = DynamicInstance(
-        oid_tuple, (0,), syntax_cls(), lambda v=static_value: v
+        oid_tuple, (0,), syntax_cls(), oid_str
+    )
+    registered_oids.append(f"{oid_str}.0")
+
+# Register 6 new test-purpose OIDs
+for oid_str, label, syntax_cls, writable in TEST_OIDS:
+    oid_tuple = oid_str_to_tuple(oid_str)
+    safe_label = label.replace("-", "_")
+
+    scalar = MibScalar(oid_tuple, syntax_cls())
+    if writable:
+        # CRITICAL: MibScalar must be readwrite so VACM permits SET before
+        # ever reaching writeCommit on the instance
+        scalar = scalar.setMaxAccess("readwrite")
+        instance_cls = WritableDynamicInstance
+    else:
+        instance_cls = DynamicInstance
+
+    symbols[f"scalar_{safe_label}"] = scalar
+    symbols[f"instance_{safe_label}"] = instance_cls(
+        oid_tuple, (0,), syntax_cls(), oid_str
     )
     registered_oids.append(f"{oid_str}.0")
 
@@ -241,12 +340,50 @@ async def bad_community_trap_loop():
 
 
 # ---------------------------------------------------------------------------
+# HTTP control endpoint (aiohttp)
+# ---------------------------------------------------------------------------
+
+
+async def post_scenario(request: web.Request) -> web.Response:
+    name = request.match_info["name"]
+    global _active_scenario
+    if name not in SCENARIOS:
+        raise web.HTTPNotFound(
+            reason=f"Unknown scenario: {name!r}. Valid: {sorted(SCENARIOS)}"
+        )
+    _active_scenario = name
+    log.info("Scenario switched to: %s", name)
+    return web.json_response({"scenario": name})
+
+
+async def get_scenario(request: web.Request) -> web.Response:
+    return web.json_response({"scenario": _active_scenario})
+
+
+async def get_scenarios(request: web.Request) -> web.Response:
+    return web.json_response({"scenarios": sorted(SCENARIOS.keys())})
+
+
+async def start_http_server() -> web.AppRunner:
+    app = web.Application()
+    app.router.add_post("/scenario/{name}", post_scenario)
+    app.router.add_get("/scenario", get_scenario)
+    app.router.add_get("/scenarios", get_scenarios)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 8080)
+    await site.start()
+    log.info("HTTP control endpoint listening on 0.0.0.0:8080")
+    return runner
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 
 def main():
-    log.info("E2E Test Simulator starting (9 OIDs, dual trap loops)...")
+    log.info("E2E Test Simulator starting (15 OIDs, dual trap loops, HTTP control)...")
     log.info("PID: %d", os.getpid())
     log.info("Community string: %s", COMMUNITY)
     log.info(
@@ -254,12 +391,17 @@ def main():
         "TRAP_INTERVAL=%ds BAD_TRAP_INTERVAL=%ds STARTUP_DELAY=%ds",
         TRAP_TARGET, TRAP_PORT, TRAP_INTERVAL, BAD_TRAP_INTERVAL, STARTUP_DELAY,
     )
+    log.info("Active scenario: %s", _active_scenario)
     log.info("Registered %d poll OIDs:", len(registered_oids))
     for oid in registered_oids:
         log.info("  %s", oid)
     log.info("Trap OID: %s", TRAP_OID)
 
     loop = asyncio.get_event_loop()
+
+    # CRITICAL: start HTTP server BEFORE open_dispatcher() -- open_dispatcher() calls
+    # loop.run_forever() internally, blocking all subsequent code until shutdown
+    runner = loop.run_until_complete(start_http_server())
 
     tasks = [
         loop.create_task(supervised_task("valid_trap_loop", valid_trap_loop)),
@@ -270,6 +412,7 @@ def main():
         log.info("Received %s -- shutting down gracefully", sig_name)
         for t in tasks:
             t.cancel()
+        loop.run_until_complete(runner.cleanup())  # clean aiohttp shutdown
         snmpEngine.close_dispatcher()
 
     for sig in (signal.SIGTERM, signal.SIGINT):
