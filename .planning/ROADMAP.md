@@ -233,10 +233,11 @@ Plans:
   2. ADV-02 (time series depth > 1): with `TimeSeriesSize: 3`, a single out-of-range sample does not fire — the tier-4 log line and counter increment appear only after all 3 time series slots contain violated values, requiring at least 3 full poll cycles (minimum 75s wait) before the assertion passes
   3. ADV-02 recovery: switching one sample back in-range while depth-3 series is partially filled causes the tier result to return to Healthy — the all-samples check rejects the partial violation
   4. The complete scenario suite (scenarios 29 and above) produces a categorized pass/fail report consistent with the existing run-all.sh Markdown output format
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 55-01-PLAN.md — TBD
+- [ ] 55-01-PLAN.md — Simulator agg_breach scenario, report.sh extension, ADV-01 aggregate evaluate script
+- [ ] 55-02-PLAN.md — ADV-02 depth-3 all-samples time-series script (breach + recovery)
 
 ---
 
@@ -274,8 +275,8 @@ Plans:
 | 52. Test Library and Config Artifacts | v2.1 | 3/3 | Complete | 2026-03-17 |
 | 53. Single-Tenant Scenarios | v2.1 | 3/3 | Complete | 2026-03-17 |
 | 54. Multi-Tenant Scenarios | v2.1 | 2/2 | Complete | 2026-03-17 |
-| 55. Advanced Scenarios | v2.1 | 0/TBD | Not started | - |
+| 55. Advanced Scenarios | v2.1 | 0/2 | Planning | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-17 after Phase 54 planning*
+*Last updated: 2026-03-17 after Phase 55 planning*
