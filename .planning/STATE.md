@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 53 of 55 (Single-Tenant Scenarios)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-03-17 — Phase 52 complete and verified (10/10 must-haves)
+Plan: 01 of TBD
+Status: In progress
+Last activity: 2026-03-17 — Completed 53-01-PLAN.md — healthy scenario, suppression fixture, Snapshot Evaluation report category
 
-Progress: [████░░░░░░] 40% (v2.1)
+Progress: [████░░░░░░] 42% (v2.1)
 
 ## Performance Metrics
 
@@ -35,12 +35,20 @@ Progress: [████░░░░░░] 40% (v2.1)
 - Use distinct tenant names per scenario fixture to prevent suppression cache bleed between scenarios
 - Port 8080 for HTTP endpoint — no collision confirmed (collector health port is per-pod, separate Deployment; e2e-sim pod port 8080 is free)
 
+### Decisions
+
+| Plan | Decision | Rationale |
+|------|----------|-----------|
+| 53-01 | SuppressionWindowSeconds=30 in suppression fixture | 15s SnapshotJob interval > 10s default window; 30s allows second cycle to be suppressed |
+| 53-01 | Distinct tenant ID e2e-tenant-A-supp for suppression fixture | Prevents suppression cache key bleed across scenarios |
+| 53-01 | Removed placeholder report categories (Watcher Resilience, Tenant Vector) | No scenario files exist for those ranges; avoids phantom entries in reports |
+
 ### Blockers/Concerns
 
 None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T12:10:24Z
-Stopped at: Completed 52-01-PLAN.md — K8s ConfigMaps (6 .999.4.x OID metric entries, e2e_set_bypass command, 3-group E2E-SIM device) + command_trigger simulator scenario
+Last session: 2026-03-17T13:20:36Z
+Stopped at: Completed 53-01-PLAN.md — healthy scenario, suppression fixture, Snapshot Evaluation report category
 Resume file: None
