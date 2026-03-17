@@ -267,9 +267,6 @@ public sealed class MetricPollJob : IJob
         };
 
         await _sender.Send(syntheticMsg, ct);
-
-        // CM-13: increment counter on successful dispatch
-        _pipelineMetrics.IncrementAggregatedComputed(device.Name);
     }
 
     private static bool IsNumeric(SnmpType typeCode) => typeCode is

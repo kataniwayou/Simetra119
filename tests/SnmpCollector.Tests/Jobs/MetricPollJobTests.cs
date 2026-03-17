@@ -115,9 +115,6 @@ public sealed class MetricPollJobTests : IDisposable
     private long CountPollExecuted()
         => _measurements.Count(m => m.InstrumentName == "snmp.poll.executed");
 
-    private long CountAggregatedComputed()
-        => _measurements.Count(m => m.InstrumentName == "snmp.aggregated.computed");
-
     private static DeviceInfo MakeDeviceWithAggregates(
         string[] pollOids,
         AggregatedMetricDefinition[] aggregates)
@@ -659,38 +656,6 @@ public sealed class MetricPollJobTests : IDisposable
     }
 
     // -------------------------------------------------------------------------
-    // Test 18: snmp.aggregated.computed counter increments on successful dispatch
-    // -------------------------------------------------------------------------
-
-    [Fact]
-    public async Task Execute_AggregatedMetrics_Success_IncrementsAggregatedComputedCounter()
-    {
-        // Arrange: same as Test 10 (Sum with 2 OIDs)
-        var combined = new AggregatedMetricDefinition("obp_combined_power", AggregationKind.Sum,
-            [IfInOctetsOid, IfOutOctetsOid]);
-        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined]);
-
-        var response = new List<Variable>
-        {
-            new(new ObjectIdentifier(IfInOctetsOid),  new Gauge32(1000)),
-            new(new ObjectIdentifier(IfOutOctetsOid), new Gauge32(2000)),
-        };
-
-        var snmpClient = new StubSnmpClient { Response = response };
-        var sender     = new CapturingSender();
-        var job        = CreateJob(
-            registry:   new StubDeviceRegistry([device]),
-            snmpClient: snmpClient,
-            sender:     sender);
-
-        // Act
-        await job.Execute(MakeContext());
-
-        // Assert: counter incremented once for the successful dispatch
-        Assert.Equal(1, CountAggregatedComputed());
-    }
-
-    // -------------------------------------------------------------------------
     // Test 19: Exception in aggregate block does not trigger unreachability
     // -------------------------------------------------------------------------
 
@@ -720,10 +685,9 @@ public sealed class MetricPollJobTests : IDisposable
         // Act
         await job.Execute(MakeContext());
 
-        // Assert: individual varbinds dispatched, no failure recorded, counter NOT incremented
+        // Assert: individual varbinds dispatched, no failure recorded
         Assert.Equal(2, throwSender.Sent.Count); // 2 Poll messages captured before throw
         Assert.Equal(0, tracker.GetFailureCount(DeviceName));
-        Assert.Equal(0, CountAggregatedComputed());
     }
 
     // -------------------------------------------------------------------------

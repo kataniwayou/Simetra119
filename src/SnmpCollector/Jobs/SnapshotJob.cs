@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Quartz;
@@ -55,6 +56,7 @@ public sealed class SnapshotJob : IJob
     {
         _correlation.OperationCorrelationId = _correlation.CurrentCorrelationId;
         var jobKey = context.JobDetail.Key.Name;
+        var sw = Stopwatch.StartNew();
 
         try
         {
@@ -91,9 +93,12 @@ public sealed class SnapshotJob : IJob
                     break;
             }
 
+            sw.Stop();
+            _pipelineMetrics.RecordSnapshotCycleDuration(sw.Elapsed.TotalMilliseconds);
+
             _logger.LogDebug(
-                "Snapshot cycle complete: {TenantsEvaluated} evaluated, {Commanded} commanded, {Stale} stale",
-                totalEvaluated, totalCommanded, totalStale);
+                "Snapshot cycle complete: {TenantsEvaluated} evaluated, {Commanded} commanded, {Stale} stale, {DurationMs:F1}ms",
+                totalEvaluated, totalCommanded, totalStale, sw.Elapsed.TotalMilliseconds);
         }
         catch (OperationCanceledException)
         {

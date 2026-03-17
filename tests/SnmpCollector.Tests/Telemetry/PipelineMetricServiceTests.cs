@@ -21,6 +21,7 @@ public sealed class PipelineMetricServiceTests : IDisposable
 
     // Recorded measurements: (instrumentName, value, tags)
     private readonly List<(string InstrumentName, long Value, KeyValuePair<string, object?>[] Tags)> _measurements = new();
+    private readonly List<(string InstrumentName, double Value, KeyValuePair<string, object?>[] Tags)> _doubleMeasurements = new();
 
     public PipelineMetricServiceTests()
     {
@@ -40,6 +41,10 @@ public sealed class PipelineMetricServiceTests : IDisposable
         _listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
         {
             _measurements.Add((instrument.Name, value, tags.ToArray()));
+        });
+        _listener.SetMeasurementEventCallback<double>((instrument, value, tags, _) =>
+        {
+            _doubleMeasurements.Add((instrument.Name, value, tags.ToArray()));
         });
         _listener.Start();
     }
@@ -157,5 +162,20 @@ public sealed class PipelineMetricServiceTests : IDisposable
         Assert.Equal("device-01", tags["device_name"]);
         Assert.DoesNotContain("host_name", tags.Keys);
         Assert.DoesNotContain("pod_name", tags.Keys);
+    }
+
+    // -----------------------------------------------------------------------
+    // 8. RecordSnapshotCycleDuration records histogram with no tags (PMET-16)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void RecordSnapshotCycleDuration_RecordsHistogramWithNoTags()
+    {
+        _service.RecordSnapshotCycleDuration(42.5);
+
+        var match = _doubleMeasurements.Single(m => m.InstrumentName == "snmp.snapshot.cycle_duration_ms");
+
+        Assert.Equal(42.5, match.Value);
+        Assert.Empty(match.Tags);
     }
 }

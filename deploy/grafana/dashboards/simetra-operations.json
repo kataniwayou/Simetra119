@@ -1376,7 +1376,7 @@
               }
             ]
           },
-          "unit": "ops"
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -1405,16 +1405,16 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (k8s_pod_name) (rate(snmp_aggregated_computed_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
-          "legendFormat": "{{k8s_pod_name}}",
+          "expr": "histogram_quantile(0.99, sum(rate(snmp_snapshot_cycle_duration_ms_bucket{k8s_pod_name=~\"$pod\"}[$__rate_interval])))",
+          "legendFormat": "p99 {{k8s_pod_name}}",
           "refId": "A",
           "range": true,
           "instant": false
         }
       ],
-      "title": "Aggregated Computed",
+      "title": "Snapshot Cycle Duration",
       "type": "timeseries",
-      "description": "Rate of aggregated (combined) metrics computed by MetricPollJob aggregate dispatch. Source: snmp_aggregated_computed_total."
+      "description": "P99 duration of SnapshotJob evaluation cycles. Source: snmp_snapshot_cycle_duration_ms histogram."
     },
     {
       "datasource": {

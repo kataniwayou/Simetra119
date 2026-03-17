@@ -4,7 +4,7 @@ using System.Diagnostics.Metrics;
 namespace SnmpCollector.Telemetry;
 
 /// <summary>
-/// Singleton service that owns all 15 pipeline counter instruments on the SnmpCollector meter.
+/// Singleton service that owns all 14 pipeline counter instruments and 1 histogram on the SnmpCollector meter.
 /// Creating counters here (once) avoids duplicate instrument registration and provides a single
 /// injection point for all pipeline behaviors and handlers that need to record metrics.
 /// </summary>
@@ -45,9 +45,6 @@ public sealed class PipelineMetricService : IDisposable
     // Phase 27: counts successful fan-out writes to tenant vector metric slots
     private readonly Counter<long> _tenantVectorRouted;
 
-    // CM-13: counts successfully computed and dispatched combined (aggregate) metrics
-    private readonly Counter<long> _aggregatedComputed;
-
     // PMET-13: counts SNMP SET commands dispatched to CommandWorkerService
     private readonly Counter<long> _commandSent;
 
@@ -56,6 +53,9 @@ public sealed class PipelineMetricService : IDisposable
 
     // PMET-15: counts SNMP SET commands suppressed by SuppressionCache within the suppression window
     private readonly Counter<long> _commandSuppressed;
+
+    // PMET-16: histogram of SnapshotJob evaluation cycle durations in milliseconds
+    private readonly Histogram<double> _snapshotCycleDuration;
 
     public PipelineMetricService(IMeterFactory meterFactory)
     {
@@ -75,11 +75,13 @@ public sealed class PipelineMetricService : IDisposable
 
         _tenantVectorRouted = _meter.CreateCounter<long>("snmp.tenantvector.routed");
 
-        _aggregatedComputed = _meter.CreateCounter<long>("snmp.aggregated.computed");
-
         _commandSent       = _meter.CreateCounter<long>("snmp.command.sent");
         _commandFailed     = _meter.CreateCounter<long>("snmp.command.failed");
         _commandSuppressed = _meter.CreateCounter<long>("snmp.command.suppressed");
+
+        _snapshotCycleDuration = _meter.CreateHistogram<double>(
+            "snmp.snapshot.cycle_duration_ms", "ms",
+            "Duration of one SnapshotJob evaluation cycle");
     }
 
     /// <summary>PMET-01: Increment the count of published pipeline notifications by 1.</summary>
@@ -140,10 +142,6 @@ public sealed class PipelineMetricService : IDisposable
     public void IncrementTenantVectorRouted(string deviceName)
         => _tenantVectorRouted.Add(1, new TagList { { "device_name", deviceName } });
 
-    /// <summary>CM-13: Increment the count of successfully computed combined metrics by 1.</summary>
-    public void IncrementAggregatedComputed(string deviceName)
-        => _aggregatedComputed.Add(1, new TagList { { "device_name", deviceName } });
-
     /// <summary>PMET-13: Increment the count of dispatched SET commands by 1.</summary>
     public void IncrementCommandSent(string deviceName)
         => _commandSent.Add(1, new TagList { { "device_name", deviceName } });
@@ -155,6 +153,10 @@ public sealed class PipelineMetricService : IDisposable
     /// <summary>PMET-15: Increment the count of suppressed SET commands by 1.</summary>
     public void IncrementCommandSuppressed(string deviceName)
         => _commandSuppressed.Add(1, new TagList { { "device_name", deviceName } });
+
+    /// <summary>PMET-16: Record the duration of one SnapshotJob evaluation cycle in milliseconds.</summary>
+    public void RecordSnapshotCycleDuration(double durationMs)
+        => _snapshotCycleDuration.Record(durationMs);
 
     public void Dispose() => _meter.Dispose();
 }

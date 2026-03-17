@@ -28,6 +28,8 @@ public sealed class SnapshotJobTests : IDisposable
 
     private readonly ServiceProvider _sp;
     private readonly PipelineMetricService _pipelineMetrics;
+    private readonly MeterListener _listener;
+    private readonly List<(string InstrumentName, double Value)> _doubleMeasurements = new();
     private readonly StubTenantVectorRegistry _registry = new();
     private readonly StubSuppressionCache _suppressionCache = new();
     private readonly StubCommandChannel _commandChannel = new();
@@ -44,6 +46,18 @@ public sealed class SnapshotJobTests : IDisposable
         _pipelineMetrics = new PipelineMetricService(
             _sp.GetRequiredService<IMeterFactory>());
 
+        _listener = new MeterListener();
+        _listener.InstrumentPublished = (instrument, listener) =>
+        {
+            if (instrument.Meter.Name == TelemetryConstants.MeterName)
+                listener.EnableMeasurementEvents(instrument);
+        };
+        _listener.SetMeasurementEventCallback<double>((instrument, value, _, _) =>
+        {
+            _doubleMeasurements.Add((instrument.Name, value));
+        });
+        _listener.Start();
+
         _job = new SnapshotJob(
             _registry,
             _suppressionCache,
@@ -57,6 +71,7 @@ public sealed class SnapshotJobTests : IDisposable
 
     public void Dispose()
     {
+        _listener.Dispose();
         _pipelineMetrics.Dispose();
         _sp.Dispose();
     }
@@ -764,6 +779,27 @@ public sealed class SnapshotJobTests : IDisposable
         Assert.True(_liveness.StampCalled);
         Assert.Equal("snapshot", _liveness.LastStampedKey);
         Assert.Null(_correlation.OperationCorrelationId);
+    }
+
+    // -------------------------------------------------------------------------
+    // Snapshot cycle duration histogram
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_RecordsSnapshotCycleDuration()
+    {
+        _registry.SetGroups(new PriorityGroup(1, new[]
+        {
+            MakeHealthyTenant("t1")
+        }));
+
+        await _job.Execute(MakeContext("snapshot"));
+
+        var match = _doubleMeasurements.SingleOrDefault(m =>
+            m.InstrumentName == "snmp.snapshot.cycle_duration_ms");
+
+        Assert.NotEqual(default, match);
+        Assert.True(match.Value >= 0, "Cycle duration should be non-negative");
     }
 
     // -------------------------------------------------------------------------
