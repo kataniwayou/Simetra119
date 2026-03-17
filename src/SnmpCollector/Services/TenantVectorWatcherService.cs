@@ -447,7 +447,9 @@ public sealed class TenantVectorWatcherService : BackgroundService
         TenantVectorOptions? options;
         try
         {
-            options = JsonSerializer.Deserialize<TenantVectorOptions>(jsonContent, JsonOptions);
+            // Bare array format: deserialize as List<TenantOptions>, then wrap.
+            var tenantList = JsonSerializer.Deserialize<List<TenantOptions>>(jsonContent, JsonOptions);
+            options = tenantList is not null ? new TenantVectorOptions { Tenants = tenantList } : null;
         }
         catch (JsonException ex)
         {
