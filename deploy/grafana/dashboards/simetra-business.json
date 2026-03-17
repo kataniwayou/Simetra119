@@ -389,7 +389,7 @@
                       "to": -0.0001,
                       "result": {
                         "color": "dark-red",
-                        "text": "\u25bc"
+                        "text": "▼"
                       }
                     },
                     "type": "range"
@@ -400,7 +400,7 @@
                       "to": 0.0001,
                       "result": {
                         "color": "text",
-                        "text": "\u2014"
+                        "text": "—"
                       }
                     },
                     "type": "range"
@@ -411,7 +411,7 @@
                       "to": 1000000000,
                       "result": {
                         "color": "dark-green",
-                        "text": "\u25b2"
+                        "text": "▲"
                       }
                     },
                     "type": "range"
@@ -968,7 +968,7 @@
           "custom": {
             "axisBorderShow": false,
             "axisCenteredZero": false,
-            "axisLabel": "changes/min",
+            "axisLabel": "",
             "drawStyle": "line",
             "fillOpacity": 20,
             "lineWidth": 2,
@@ -982,7 +982,7 @@
               "mode": "none"
             }
           },
-          "unit": "short"
+          "unit": "ops"
         },
         "overrides": [
           {
