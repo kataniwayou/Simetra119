@@ -9,12 +9,12 @@ Requirements for E2E Tenant Evaluation Tests milestone. Each maps to roadmap pha
 
 ### Simulator Infrastructure
 
-- [ ] **SIM-01**: E2E simulator exposes HTTP endpoint (`POST /scenario/{name}`) to switch active scenario at runtime
-- [ ] **SIM-02**: E2E simulator exposes HTTP endpoint (`GET /scenario`) returning the current active scenario name
-- [ ] **SIM-03**: Scenario registry supports named scenarios, each defining return values for all registered OIDs
-- [ ] **SIM-04**: Default scenario reproduces current static OID values (zero regression for existing E2E tests)
-- [ ] **SIM-05**: Test-purpose OIDs registered for evaluate metric, 2 resolved metrics, and command response OID
-- [ ] **SIM-06**: K8s deployment updated with HTTP port exposure (8080/tcp) for test script access
+- [x] **SIM-01**: E2E simulator exposes HTTP endpoint (`POST /scenario/{name}`) to switch active scenario at runtime
+- [x] **SIM-02**: E2E simulator exposes HTTP endpoint (`GET /scenario`) returning the current active scenario name
+- [x] **SIM-03**: Scenario registry supports named scenarios, each defining return values for all registered OIDs
+- [x] **SIM-04**: Default scenario reproduces current static OID values (zero regression for existing E2E tests)
+- [x] **SIM-05**: Test-purpose OIDs registered for evaluate metric, 2 resolved metrics, and command response OID
+- [x] **SIM-06**: K8s deployment updated with HTTP port exposure (8080/tcp) for test script access
 
 ### Test Config Artifacts
 
@@ -70,12 +70,12 @@ Requirements for E2E Tenant Evaluation Tests milestone. Each maps to roadmap pha
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIM-01 | Phase 51 | Pending |
-| SIM-02 | Phase 51 | Pending |
-| SIM-03 | Phase 51 | Pending |
-| SIM-04 | Phase 51 | Pending |
-| SIM-05 | Phase 51 | Pending |
-| SIM-06 | Phase 51 | Pending |
+| SIM-01 | Phase 51 | Complete |
+| SIM-02 | Phase 51 | Complete |
+| SIM-03 | Phase 51 | Complete |
+| SIM-04 | Phase 51 | Complete |
+| SIM-05 | Phase 51 | Complete |
+| SIM-06 | Phase 51 | Complete |
 | CFG-01 | Phase 52 | Pending |
 | CFG-02 | Phase 52 | Pending |
 | CFG-03 | Phase 52 | Pending |

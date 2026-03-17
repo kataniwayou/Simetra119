@@ -160,8 +160,8 @@ See `.planning/milestones/v2.0-ROADMAP.md` for details.
   5. The K8s Deployment and Service expose TCP/8080 and the simulator Dockerfile declares `EXPOSE 8080` — `kubectl port-forward` to 8080 succeeds
 **Plans**: 2 plans
 
-- [ ] 51-01-PLAN.md — Scenario registry, DynamicInstance refactor, HTTP control endpoint, 6 new OIDs
-- [ ] 51-02-PLAN.md — Infrastructure: requirements.txt, Dockerfile, K8s deployment/service ports
+- [x] 51-01-PLAN.md — Scenario registry, DynamicInstance refactor, HTTP control endpoint, 6 new OIDs
+- [x] 51-02-PLAN.md — Infrastructure: requirements.txt, Dockerfile, K8s deployment/service ports
 
 ---
 
@@ -265,7 +265,7 @@ Plans:
 | 48. SnapshotJob 4-Tier Evaluation | v2.0 | 4/4 | Complete | 2026-03-16 |
 | 49. Observability & Dashboard | v2.0 | 1/1 | Complete | 2026-03-16 |
 | 50. Label Rename | v2.0 | 1/1 | Complete | 2026-03-16 |
-| 51. Simulator HTTP Control Endpoint | v2.1 | 0/2 | In progress | - |
+| 51. Simulator HTTP Control Endpoint | v2.1 | 2/2 | Complete | 2026-03-17 |
 | 52. Test Library and Config Artifacts | v2.1 | 0/TBD | Not started | - |
 | 53. Single-Tenant Scenarios | v2.1 | 0/TBD | Not started | - |
 | 54. Multi-Tenant Scenarios | v2.1 | 0/TBD | Not started | - |
