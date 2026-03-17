@@ -215,10 +215,11 @@ Plans:
   2. MTS-02 sub-scenario A (advance gate blocked): when tenant-A at priority 1 is Healthy and tenant-B at priority 1 is Commanded, pod logs show group-2 tenants are not evaluated — `sum(snmp_command_sent_total)` delta for group-2 tenants is zero
   3. MTS-02 sub-scenario B (advance gate passed): when all priority-1 tenants are Commanded, pod logs show group-2 tenants are evaluated and their tier results appear in logs — the advance gate allows progression
   4. All counter assertions use `sum(snmp_command_sent_total{...})` without a pod label filter — per-pod counter checks are not used
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 54-01-PLAN.md — TBD
+- [ ] 54-01-PLAN.md — MTS fixture (P1 SuppressionWindowSeconds=30), report.sh extension, MTS-01 same-priority script
+- [ ] 54-02-PLAN.md — MTS-02 advance gate script (gate blocked + gate passed in one script)
 
 ---
 
@@ -272,9 +273,9 @@ Plans:
 | 51. Simulator HTTP Control Endpoint | v2.1 | 2/2 | Complete | 2026-03-17 |
 | 52. Test Library and Config Artifacts | v2.1 | 3/3 | Complete | 2026-03-17 |
 | 53. Single-Tenant Scenarios | v2.1 | 3/3 | Complete | 2026-03-17 |
-| 54. Multi-Tenant Scenarios | v2.1 | 0/TBD | Not started | - |
+| 54. Multi-Tenant Scenarios | v2.1 | 0/2 | Not started | - |
 | 55. Advanced Scenarios | v2.1 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-17 after Phase 53 planning*
+*Last updated: 2026-03-17 after Phase 54 planning*
