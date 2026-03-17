@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 53 of 55 (Single-Tenant Scenarios)
-Plan: 02 of TBD
+Plan: 03 of TBD
 Status: In progress
-Last activity: 2026-03-17 — Completed 53-02-PLAN.md — STS-01 healthy, STS-02 evaluate violated, STS-03 resolved gate scenario scripts
+Last activity: 2026-03-17 — Completed 53-03-PLAN.md — STS-04 suppression window (3 windows, 6 sub-scenarios) and STS-05 staleness detection
 
-Progress: [████░░░░░░] 43% (v2.1)
+Progress: [████░░░░░░] 44% (v2.1)
 
 ## Performance Metrics
 
@@ -45,6 +45,9 @@ Progress: [████░░░░░░] 43% (v2.1)
 | 53-02 | poll_until_log 90s for STS-02 tier=4 | TimeSeriesSize=3 requires ~30s fill time; 90s accommodates 3 poll cycles safely |
 | 53-02 | Negative tier=4 assertion uses direct grep (since=60s) not poll_until_log | Absence check is a snapshot — polling would just time out; single-pass grep is correct |
 | 53-02 | sim_set_scenario default called explicitly in STS-03 | Clarity over brevity; makes ConfirmedBad scenario intent obvious |
+| 53-03 | sleep 20 in STS-04 Window 3 is the only fixed sleep in Phase 53 | No log event signals suppression window expiry; fixed sleep is unavoidable |
+| 53-03 | STS-05 primes with healthy + sleep 20 before stale switch | HasStaleness returns false for null slots; slots must hold recent data to age out |
+| 53-03 | STS-04 suppressed counter uses device_name="e2e-tenant-A-supp" | IncrementCommandSuppressed(tenant.Id) uses tenant ID as label value, not device name |
 
 ### Blockers/Concerns
 
@@ -52,6 +55,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T13:25:16Z
-Stopped at: Completed 53-02-PLAN.md — STS-01/02/03 scenario scripts (scenarios 29-31)
+Last session: 2026-03-17T13:26:45Z
+Stopped at: Completed 53-03-PLAN.md — STS-04 suppression window and STS-05 staleness detection (scenarios 32-33)
 Resume file: None
