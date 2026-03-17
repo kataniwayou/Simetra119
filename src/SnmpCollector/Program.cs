@@ -108,28 +108,22 @@ if (!k8s.KubernetesClientConfiguration.IsInCluster())
         }
     }
 
-    // Load tenant vector from tenants.json (section-wrapped format)
+    // Load tenant vector from tenants.json (flat format: { "Tenants": [...] })
     var tenantsPath = Path.Combine(configDir, "tenants.json");
     if (File.Exists(tenantsPath))
     {
         var tvJson = File.ReadAllText(tenantsPath);
-        // tenants.json uses IConfiguration section wrapper { "Tenants": { "Tenants": [...] } }.
-        // Extract the inner Tenants object for direct deserialization as TenantVectorOptions.
-        using var tvDoc = System.Text.Json.JsonDocument.Parse(tvJson);
-        if (tvDoc.RootElement.TryGetProperty("Tenants", out var tvElement))
+        var tvOptions = System.Text.Json.JsonSerializer.Deserialize<SnmpCollector.Configuration.TenantVectorOptions>(
+                tvJson, jsonOptions);
+        if (tvOptions != null)
         {
-            var tvOptions = System.Text.Json.JsonSerializer.Deserialize<SnmpCollector.Configuration.TenantVectorOptions>(
-                    tvElement.GetRawText(), jsonOptions);
-            if (tvOptions != null)
-            {
-                var oidMapService = app.Services.GetRequiredService<SnmpCollector.Pipeline.IOidMapService>();
-                var deviceRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.IDeviceRegistry>();
-                var tvLogger = app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SnmpCollector.Services.TenantVectorWatcherService>>();
-                var cleanOptions = SnmpCollector.Services.TenantVectorWatcherService.ValidateAndBuildTenants(
-                    tvOptions, oidMapService, deviceRegistry, tvLogger);
-                var tvRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.TenantVectorRegistry>();
-                tvRegistry.Reload(cleanOptions);
-            }
+            var oidMapService = app.Services.GetRequiredService<SnmpCollector.Pipeline.IOidMapService>();
+            var deviceRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.IDeviceRegistry>();
+            var tvLogger = app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SnmpCollector.Services.TenantVectorWatcherService>>();
+            var cleanOptions = SnmpCollector.Services.TenantVectorWatcherService.ValidateAndBuildTenants(
+                tvOptions, oidMapService, deviceRegistry, tvLogger);
+            var tvRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.TenantVectorRegistry>();
+            tvRegistry.Reload(cleanOptions);
         }
     }
 
