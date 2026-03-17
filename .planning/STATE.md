@@ -60,6 +60,12 @@ Progress: [██████████] v2.1 complete
 | 55-02 | Recovery baseline captured after sim_set_scenario healthy (not after breach) | Delta measures only the recovery observation window; baseline after breach would include breach commands |
 | 55-02 | since=30 in tier=3 poll_until_log for ADV-02 recovery | Pre-breach tier=3 logs exist for same tenant; since=30 focuses on recent logs after healthy switch |
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 070 | Exclude SnmpSource.Command from staleness check | 2026-03-17 | 119275c | [070-exclude-command-source-from-staleness](./quick/070-exclude-command-source-from-staleness/) |
+
 ### Blockers/Concerns
 
 None.
