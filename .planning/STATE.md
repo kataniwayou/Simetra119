@@ -65,6 +65,7 @@ Progress: [██████████] v2.1 complete
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 070 | Exclude SnmpSource.Command from staleness check | 2026-03-17 | 119275c | [070-exclude-command-source-from-staleness](./quick/070-exclude-command-source-from-staleness/) |
+| 071 | Source-aware threshold check — newest only for Trap/Command | 2026-03-17 | 050c0bb | [071-source-aware-threshold-check](./quick/071-source-aware-threshold-check/) |
 
 ### Blockers/Concerns
 
