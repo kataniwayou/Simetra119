@@ -14,6 +14,7 @@
 - ✅ **v1.9 Metric Threshold Structure & Validation** - Phases 41-42 (shipped 2026-03-15)
 - ✅ **v1.10 Heartbeat Refactor & Pipeline Liveness** - Phases 43-44 (shipped 2026-03-15)
 - ✅ **v2.0 Tenant Evaluation & Control** - Phases 45-50 (shipped 2026-03-17)
+- 🚧 **v2.1 E2E Tenant Evaluation Tests** - Phases 51-55 (in progress)
 
 ## Phases
 
@@ -142,6 +143,98 @@ See `.planning/milestones/v2.0-ROADMAP.md` for details.
 
 ---
 
+### 🚧 v2.1 E2E Tenant Evaluation Tests (In Progress)
+
+**Milestone Goal:** Validate the SnapshotJob 4-tier tenant evaluation flow end-to-end via a purpose-built HTTP-controlled simulator and bash scenario scripts, proving every evaluation path observable in Prometheus metrics and pod logs.
+
+#### Phase 51: Simulator HTTP Control Endpoint
+
+**Goal**: The E2E simulator exposes an HTTP control endpoint so test scripts can switch OID return values mid-test without restarting the pod, while all existing E2E scenarios continue to pass unchanged
+**Depends on**: Nothing (foundation that unblocks all remaining phases)
+**Requirements**: SIM-01, SIM-02, SIM-03, SIM-04, SIM-05, SIM-06
+**Success Criteria** (what must be TRUE):
+  1. `POST /scenario/{name}` switches the active scenario and all subsequent SNMP GET responses for registered OIDs return the new scenario's values — the switch takes effect within the next poll cycle
+  2. `GET /scenario` returns a JSON object with the current active scenario name — verifiable with `curl` from a test script
+  3. The simulator starts in the "default" scenario and emits a startup log line naming the active scenario — no unknown initial state
+  4. The "default" scenario produces the identical OID values as the pre-HTTP simulator — existing scenario 11 (gauge-labels-e2e-sim) passes without modification
+  5. The K8s Deployment and Service expose TCP/8080 and the simulator Dockerfile declares `EXPOSE 8080` — `kubectl port-forward` to 8080 succeeds
+**Plans**: TBD
+
+Plans:
+- [ ] 51-01-PLAN.md — TBD
+
+---
+
+#### Phase 52: Test Library and Config Artifacts
+
+**Goal**: All bash library helpers, port-forward orchestration, tenant fixture YAML files, and OID/command/device config entries required by the scenario scripts exist and are wired into the test runner
+**Depends on**: Phase 51 (port-forward to 8080 must be available before simulator.sh helpers are useful)
+**Requirements**: CFG-01, CFG-02, CFG-03, CFG-04, CFG-05, CFG-06, CFG-07, INF-01, INF-02, INF-03
+**Success Criteria** (what must be TRUE):
+  1. `set_scenario <name>`, `reset_scenario`, and `get_active_scenario` bash functions are available to any scenario script that sources `lib/simulator.sh` — each function produces a non-zero exit code on HTTP failure
+  2. `poll_until_log <pod> <pattern> <timeout>` iterates all replica pods via `kubectl get pods -o jsonpath` and returns success when any pod log matches the pattern within the timeout — single-pod checks are not used anywhere in the new scripts
+  3. All 28 existing E2E scenarios pass without modification after `run-all.sh` sources `simulator.sh` and adds the 8080 port-forward
+  4. Tenant fixture YAML files (`tenant-eval-single.yaml`, `tenant-eval-two-same-priority.yaml`, `tenant-eval-two-diff-priority.yaml`, `tenant-eval-aggregate.yaml`) each use distinct tenant IDs and `GraceMultiplier >= 2.0`
+  5. OID metric map, OID command map, and device config entries for the evaluate OID, two resolved OIDs, and command response OID are applied to the cluster and visible in the collector's loaded config logs
+**Plans**: TBD
+
+Plans:
+- [ ] 52-01-PLAN.md — TBD
+
+---
+
+#### Phase 53: Single-Tenant Scenarios
+
+**Goal**: Five single-tenant scenario scripts validate every branch of the 4-tier evaluation tree — healthy no-action, evaluate violated with command dispatch, resolved gate block, suppression window, and staleness detection — each producing observable evidence in pod logs and Prometheus counters
+**Depends on**: Phase 52 (library helpers and fixtures must exist before scenario scripts run)
+**Requirements**: STS-01, STS-02, STS-03, STS-04, STS-05
+**Success Criteria** (what must be TRUE):
+  1. STS-01 (healthy baseline): after stabilization with all OIDs in-range, pod logs contain a tier-3 no-action log line and `sum(snmp_command_sent_total)` delta is zero across the observation window
+  2. STS-02 (evaluate violated): after switching to the violated scenario and waiting at least one full poll+OTel cycle (45s), `sum(snmp_command_sent_total)` delta is >= 1 and pod logs contain a tier-4 command dispatch log line
+  3. STS-03 (resolved gate): with all resolved metrics out-of-range, pod logs contain a ConfirmedBad tier-2 log line and `sum(snmp_command_sent_total)` delta remains zero — the evaluate tier is never reached
+  4. STS-04 (suppression): the first cycle within the suppression window increments `snmp_command_sent_total`; the second cycle within the window increments `snmp_command_suppressed_total` instead; a cycle after the window expires increments `snmp_command_sent_total` again
+  5. STS-05 (staleness): after the simulator switches to a stale scenario and one grace period elapses, pod logs contain a tier-1 Stale log line and no command counters increment
+**Plans**: TBD
+
+Plans:
+- [ ] 53-01-PLAN.md — TBD
+
+---
+
+#### Phase 54: Multi-Tenant Scenarios
+
+**Goal**: Two multi-tenant scenario scripts validate that same-priority tenants are evaluated independently in parallel and that different-priority groups enforce the advance gate — a single non-Healthy result in group 1 blocks group 2
+**Depends on**: Phase 53 (single-tenant infrastructure must be stable before multi-tenant complexity is added)
+**Requirements**: MTS-01, MTS-02
+**Success Criteria** (what must be TRUE):
+  1. MTS-01 (same priority): with two tenants at priority 1 each producing distinct tier results, pod logs contain independent tier log lines per tenant name and each tenant's counter deltas match its own scenario outcome — neither tenant's result is attributed to the other
+  2. MTS-02 sub-scenario A (advance gate blocked): when tenant-A at priority 1 is Healthy and tenant-B at priority 1 is Commanded, pod logs show group-2 tenants are not evaluated — `sum(snmp_command_sent_total)` delta for group-2 tenants is zero
+  3. MTS-02 sub-scenario B (advance gate passed): when all priority-1 tenants are Commanded, pod logs show group-2 tenants are evaluated and their tier results appear in logs — the advance gate allows progression
+  4. All counter assertions use `sum(snmp_command_sent_total{...})` without a pod label filter — per-pod counter checks are not used
+**Plans**: TBD
+
+Plans:
+- [ ] 54-01-PLAN.md — TBD
+
+---
+
+#### Phase 55: Advanced Scenarios
+
+**Goal**: Two advanced scenario scripts validate aggregate metric evaluation (synthetic pipeline feeds threshold check) and time-series depth enforcement (all samples in a depth-3 series must be violated before tier-4 fires), producing the complete v2.1 scenario coverage
+**Depends on**: Phase 54 (advanced scenarios are last due to 75s+ timing requirements; multi-tenant must be stable first)
+**Requirements**: ADV-01, ADV-02
+**Success Criteria** (what must be TRUE):
+  1. ADV-01 (aggregate as evaluate): with an AggregatedMetricDefinition configured as the evaluate holder, breaching the aggregate threshold produces a tier-4 command dispatch log line and `sum(snmp_command_sent_total)` delta >= 1 — the Synthetic source reaches the threshold check without being blocked by OID resolution
+  2. ADV-02 (time series depth > 1): with `TimeSeriesSize: 3`, a single out-of-range sample does not fire — the tier-4 log line and counter increment appear only after all 3 time series slots contain violated values, requiring at least 3 full poll cycles (minimum 75s wait) before the assertion passes
+  3. ADV-02 recovery: switching one sample back in-range while depth-3 series is partially filled causes the tier result to return to Healthy — the all-samples check rejects the partial violation
+  4. The complete scenario suite (scenarios 29 and above) produces a categorized pass/fail report consistent with the existing run-all.sh Markdown output format
+**Plans**: TBD
+
+Plans:
+- [ ] 55-01-PLAN.md — TBD
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -172,7 +265,12 @@ See `.planning/milestones/v2.0-ROADMAP.md` for details.
 | 48. SnapshotJob 4-Tier Evaluation | v2.0 | 4/4 | Complete | 2026-03-16 |
 | 49. Observability & Dashboard | v2.0 | 1/1 | Complete | 2026-03-16 |
 | 50. Label Rename | v2.0 | 1/1 | Complete | 2026-03-16 |
+| 51. Simulator HTTP Control Endpoint | v2.1 | 0/TBD | Not started | - |
+| 52. Test Library and Config Artifacts | v2.1 | 0/TBD | Not started | - |
+| 53. Single-Tenant Scenarios | v2.1 | 0/TBD | Not started | - |
+| 54. Multi-Tenant Scenarios | v2.1 | 0/TBD | Not started | - |
+| 55. Advanced Scenarios | v2.1 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-17 after v2.0 milestone complete*
+*Last updated: 2026-03-17 after v2.1 milestone roadmap created*

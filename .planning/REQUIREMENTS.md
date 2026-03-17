@@ -70,37 +70,37 @@ Requirements for E2E Tenant Evaluation Tests milestone. Each maps to roadmap pha
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIM-01 | — | Pending |
-| SIM-02 | — | Pending |
-| SIM-03 | — | Pending |
-| SIM-04 | — | Pending |
-| SIM-05 | — | Pending |
-| SIM-06 | — | Pending |
-| CFG-01 | — | Pending |
-| CFG-02 | — | Pending |
-| CFG-03 | — | Pending |
-| CFG-04 | — | Pending |
-| CFG-05 | — | Pending |
-| CFG-06 | — | Pending |
-| CFG-07 | — | Pending |
-| STS-01 | — | Pending |
-| STS-02 | — | Pending |
-| STS-03 | — | Pending |
-| STS-04 | — | Pending |
-| STS-05 | — | Pending |
-| MTS-01 | — | Pending |
-| MTS-02 | — | Pending |
-| ADV-01 | — | Pending |
-| ADV-02 | — | Pending |
-| INF-01 | — | Pending |
-| INF-02 | — | Pending |
-| INF-03 | — | Pending |
+| SIM-01 | Phase 51 | Pending |
+| SIM-02 | Phase 51 | Pending |
+| SIM-03 | Phase 51 | Pending |
+| SIM-04 | Phase 51 | Pending |
+| SIM-05 | Phase 51 | Pending |
+| SIM-06 | Phase 51 | Pending |
+| CFG-01 | Phase 52 | Pending |
+| CFG-02 | Phase 52 | Pending |
+| CFG-03 | Phase 52 | Pending |
+| CFG-04 | Phase 52 | Pending |
+| CFG-05 | Phase 52 | Pending |
+| CFG-06 | Phase 52 | Pending |
+| CFG-07 | Phase 52 | Pending |
+| STS-01 | Phase 53 | Pending |
+| STS-02 | Phase 53 | Pending |
+| STS-03 | Phase 53 | Pending |
+| STS-04 | Phase 53 | Pending |
+| STS-05 | Phase 53 | Pending |
+| MTS-01 | Phase 54 | Pending |
+| MTS-02 | Phase 54 | Pending |
+| ADV-01 | Phase 55 | Pending |
+| ADV-02 | Phase 55 | Pending |
+| INF-01 | Phase 52 | Pending |
+| INF-02 | Phase 52 | Pending |
+| INF-03 | Phase 52 | Pending |
 
 **Coverage:**
 - v2.1 requirements: 25 total
-- Mapped to phases: 0
-- Unmapped: 25 ⚠️
+- Mapped to phases: 25
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 after initial definition*
+*Last updated: 2026-03-17 after v2.1 roadmap creation — all 25 requirements mapped*

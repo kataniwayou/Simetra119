@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.1 E2E Tenant Evaluation Tests — defining requirements
+**Current focus:** v2.1 E2E Tenant Evaluation Tests — Phase 51: Simulator HTTP Control Endpoint
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-17 — Milestone v2.1 started
+Phase: 51 of 55 (Simulator HTTP Control Endpoint)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-03-17 — Roadmap created for v2.1 milestone (5 phases, 25 requirements)
 
-Progress: [██████████] v2.0 complete
+Progress: [░░░░░░░░░░] 0% (v2.1)
 
 ## Performance Metrics
 
@@ -29,31 +29,18 @@ Progress: [██████████] v2.0 complete
 
 ### Key Facts
 
-None — between milestones. See `.planning/milestones/v2.0-ROADMAP.md` for v2.0 context.
+- Phase 51 is the hard dependency: aiohttp==3.13.3 HTTP server must be registered via `loop.run_until_complete(start_http_server())` BEFORE `snmpEngine.open_dispatcher()` — order cannot be reversed
+- Minimum stabilization wait per scenario: 2 × SnapshotJob cycle (30s) + OTel scrape (15s) = ~45s; depth-3 time series scenarios require 75s+
+- All Prometheus command counter assertions must use `sum(snmp_command_sent_total{...})` across replicas — per-pod checks will miss leader-only counter increments
+- Use distinct tenant names per scenario fixture to prevent suppression cache bleed between scenarios
+- Port 8080 for HTTP endpoint — confirm no collision with collector health endpoint before Phase 51 implementation
 
 ### Blockers/Concerns
 
 None.
 
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 058 | Add GraceMultiplier + resolve IntervalSeconds/GraceMultiplier from device poll group | 2026-03-15 | b2059b6 | [058-gracemultiplier-device-resolved](./quick/058-gracemultiplier-device-resolved/) |
-| 059 | Build, deploy, and test heartbeat liveness E2E script | 2026-03-16 | 2d2a97a | [059-build-deploy-test-heartbeat-liveness](./quick/059-build-deploy-test-heartbeat-liveness/) |
-| 060 | Pipeline panel layout: 4 semantic rows (events/polls/traps/routing) | 2026-03-16 | 142e5a0 | [060-pipeline-panel-layout-rows](./quick/060-pipeline-panel-layout-rows/) |
-| 061 | Remove DeviceName from CommandRequest, resolve from DeviceRegistry | 2026-03-16 | 88e2f8c | [061-remove-devicename-from-commandrequest](./quick/061-remove-devicename-from-commandrequest/) |
-| 062 | Add finally block cleanup for OperationCorrelationId in services | 2026-03-16 | f9c73c7 | [062-add-correlation-finally-cleanup](./quick/062-add-correlation-finally-cleanup/) |
-| 063 | Initialize CurrentCorrelationId with Guid at construction | 2026-03-16 | 223b454 | — |
-| 064 | Staleness sentinel timestamp + Range validation + SnapshotJob config | 2026-03-16 | 6738f73 | [064-staleness-sentinel-range-validation](./quick/064-staleness-sentinel-range-validation/) |
-| 065 | Remove snmp.aggregated.computed + add snmp.snapshot.cycle_duration_ms | 2026-03-17 | 45a14db | [065-remove-aggregated-add-cycle-duration](./quick/065-remove-aggregated-add-cycle-duration/) |
-| 066 | Fix tenants.json binding to match devices.json pattern (remove double nesting) | 2026-03-17 | c0b85d7 | [066-tenants-config-binding-consistency](./quick/066-tenants-config-binding-consistency/) |
-| 067 | Flatten tenants.json to bare array format matching devices.json | 2026-03-17 | acdde9b | [067-tenants-bare-array-config](./quick/067-tenants-bare-array-config/) |
-| 068 | Threshold equality condition (Min==Max → violated if value equals) | 2026-03-17 | f87992b | [068-threshold-equal-condition](./quick/068-threshold-equal-condition/) |
-| 069 | All time series samples threshold check for Evaluate and Resolved metrics | 2026-03-17 | 74cb0b6 | [069-all-timeseries-samples-threshold-check](./quick/069-all-timeseries-samples-threshold-check/) |
-
 ## Session Continuity
 
 Last session: 2026-03-17
-Stopped at: Completed quick task 069: all time series samples threshold check
+Stopped at: v2.1 roadmap created — ready to plan Phase 51
 Resume file: None
