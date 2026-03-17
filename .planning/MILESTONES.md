@@ -1,5 +1,32 @@
 # Project Milestones: SNMP Monitoring System
 
+## v2.0 Tenant Evaluation & Control (Shipped: 2026-03-17)
+
+**Delivered:** SnapshotJob evaluates tenants by priority with 4-tier logic (staleness, resolved thresholds, evaluate thresholds, command dispatch) and issues SNMP SET commands through a Channel-backed worker with leader gate and suppression cache. Label rename: metric_name -> resolved_name across all instruments and dashboards.
+
+**Phases completed:** 45-50 (13 plans total, 9 quick tasks)
+
+**Key accomplishments:**
+- SnapshotJob 4-tier evaluation with priority group traversal (parallel within group, sequential across)
+- CommandWorkerService: Channel-backed SNMP SET execution with leader gate, Stopwatch logging, response dispatch through full MediatR pipeline
+- ISuppressionCache: per-tenant suppression window with lazy TTL expiry
+- 3 command pipeline counters (sent/failed/suppressed) + snapshot cycle duration histogram
+- MetricSlotHolder sentinel timestamp + Range validation (GraceMultiplier 2-5, TimeoutMultiplier 0.1-0.9)
+- Label rename: metric_name -> resolved_name across all instruments and dashboards
+
+**Stats:**
+- 60 files changed (3,959 insertions, 372 deletions)
+- 8,163 LOC C# source + 11,244 LOC C# tests
+- 6 phases, 13 plans, 9 quick tasks
+- 2 days (2026-03-16 -> 2026-03-17)
+- 424 tests passing
+
+**Git range:** `v1.10` -> `v2.0`
+
+**What's next:** TBD — next milestone planning
+
+---
+
 ## v1.10 Heartbeat Refactor & Pipeline Liveness (Shipped: 2026-03-15)
 
 **Delivered:** Removed hardcoded heartbeat special cases (-115 lines) and added pipeline-arrival liveness detection proving the full MediatR chain is working, with two independent liveness layers (job completion + pipeline arrival).

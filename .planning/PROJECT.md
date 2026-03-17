@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A K8s-native SNMP monitoring agent that receives traps and polls devices, resolves OIDs to human-readable metric names via a flat OID map, and pushes metrics through OpenTelemetry to Prometheus/Grafana. Built on C# .NET 9 with MediatR for event routing and Quartz for poll scheduling. Runs as a 3-replica Kubernetes deployment with leader-gated metric export and near-instant failover. Includes OBP and NPB device simulators for development and testing.
+A K8s-native SNMP monitoring agent that receives traps and polls devices, resolves OIDs to human-readable metric names via a flat OID map, and pushes metrics through OpenTelemetry to Prometheus/Grafana. Evaluates tenant health on a 15s cycle through a 4-tier logic tree (staleness, resolved thresholds, evaluate thresholds, command dispatch) and issues SNMP SET commands through a Channel-backed worker with leader gate and suppression cache. Built on C# .NET 9 with MediatR for event routing and Quartz for poll scheduling. Runs as a 3-replica Kubernetes deployment with leader-gated metric export and near-instant failover. Includes OBP and NPB device simulators for development and testing.
 
 ## Core Value
 
@@ -108,24 +108,26 @@ See `.planning/milestones/v1.9-REQUIREMENTS.md` for full requirement details.
 
 See `.planning/milestones/v1.10-REQUIREMENTS.md` for full requirement details.
 
+**v2.0 Tenant Evaluation & Control (shipped 2026-03-17)**
+
+- SnapshotJob: 4-tier tenant evaluation (staleness, resolved thresholds, evaluate thresholds, command dispatch) on 15s Quartz cycle
+- Priority group traversal: parallel within group, sequential across groups, advance only if all violated
+- CommandWorkerService: Channel-backed SNMP SET execution with leader gate and Stopwatch logging
+- SET response dispatched through full MediatR pipeline with source=Command
+- ISuppressionCache: per-tenant suppression window with lazy TTL expiry (ConcurrentDictionary, Ip:Port:CommandName key)
+- 3 command pipeline counters (snmp.command.sent/failed/suppressed) + snmp.snapshot.cycle_duration_ms histogram
+- MetricSlotHolder sentinel timestamp at construction + Range validation (GraceMultiplier 2-5, TimeoutMultiplier 0.1-0.9)
+- Label rename: metric_name -> resolved_name across all instruments and dashboards
+- SnapshotJob liveness stamp via ILivenessVectorService
+
+See `.planning/milestones/v2.0-REQUIREMENTS.md` for full requirement details.
+
 ### Active
 
-**v2.0 Tenant Evaluation & Control**
-
-- SnapshotJob: periodic Quartz job (15s configurable) that evaluates tenant health by priority order
-- Tier 1: Metric staleness detection (IntervalSeconds × GraceMultiplier, excluding traps)
-- Tier 2: Resolved metrics threshold check (all violated → end, no command)
-- Tier 3: Evaluate metrics threshold check (all violated → command queue)
-- Tier 4: Command queueing with per-tenant suppression window cache (Ip+Port+CommandName key)
-- SNMP SET command execution via background worker (ISnmpClient.SetAsync)
-- SET response dispatched through full MediatR pipeline with source=Command
-- snmp.command.* pipeline counters (sent, failed, suppressed) symmetric to snmp.poll.*
-- Priority group processing: parallel within group, sequential across groups, advance only if all violated
-- SnapshotJob stamps liveness vector same as other scheduled jobs
+(No active milestone)
 
 ### Out of Scope
 
-- ~~SNMP SET execution path~~ — MOVED TO ACTIVE (v2.0)
 - Custom middleware pipeline — using MediatR
 - Device modules (`IDeviceModule`) — device-agnostic, flat OID map only
 - Traces / distributed tracing — no TracerProvider, no ActivitySource
@@ -137,7 +139,7 @@ See `.planning/milestones/v1.10-REQUIREMENTS.md` for full requirement details.
 
 ## Context
 
-**Current state:** v1.7 shipped. 6,920 LOC source + 7,785 LOC tests across C# files + 783 LOC Python simulators + ~1,848 LOC bash/python E2E test infrastructure. 286 unit tests passing. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. Full E2E test harness with 28 scenarios. Two Grafana dashboards shipped. All 4 watchers follow watcher-validates-registry-stores pattern.
+**Current state:** v2.0 shipped. 8,163 LOC C# source + 11,244 LOC C# tests + 783 LOC Python simulators + ~1,848 LOC bash/python E2E test infrastructure. 424 unit tests passing. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. Full E2E test harness with 28 scenarios. Two Grafana dashboards shipped. All 4 watchers follow watcher-validates-registry-stores pattern. Closed-loop tenant evaluation with SNMP SET command execution operational.
 
 **Reference project:** `src/Simetra/` is an existing SNMP monitoring system used as architectural reference. Key patterns adopted: structured logging, OTel setup, console formatter, correlation IDs, leader election, role-gated export. Key patterns replaced: custom middleware -> MediatR, device modules -> flat OID map, channels -> single shared trap channel.
 
@@ -192,4 +194,4 @@ See `.planning/milestones/v1.10-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-15 after v1.10 milestone complete*
+*Last updated: 2026-03-17 after v2.0 milestone complete*
