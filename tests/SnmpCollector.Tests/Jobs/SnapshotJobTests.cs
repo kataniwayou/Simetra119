@@ -126,6 +126,21 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     [Fact]
+    public void EvaluateTenant_CommandSource_ExcludedFromStalenessCheck()
+    {
+        // Command-response holder should be excluded from staleness — one-shot, no interval
+        var holder = MakeHolder(intervalSeconds: 1, graceMultiplier: 1.0, role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(holder, 50.0, source: SnmpSource.Command);
+
+        var tenant = MakeTenant(holder);
+        var result = _job.EvaluateTenant(tenant);
+
+        // Command source excluded from staleness → not stale
+        Assert.NotEqual(SnapshotJob.TierResult.Stale, result);
+    }
+
+    [Fact]
     public void EvaluateTenant_IntervalSecondsZero_ExcludedFromStalenessCheck()
     {
         // IntervalSeconds=0 holder should be excluded from staleness check

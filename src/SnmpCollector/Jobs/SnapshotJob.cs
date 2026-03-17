@@ -198,15 +198,15 @@ public sealed class SnapshotJob : IJob
 
     /// <summary>
     /// Tier 1: Checks whether any non-excluded holder has stale data.
-    /// Excluded: Source=Trap, IntervalSeconds=0.
+    /// Excluded: Source=Trap, Source=Command, IntervalSeconds=0.
     /// Holders with null ReadSlot are skipped (cannot judge, not stale).
     /// </summary>
     private static bool HasStaleness(IReadOnlyList<MetricSlotHolder> holders)
     {
         foreach (var holder in holders)
         {
-            // Exclude trap-sourced and zero-interval holders
-            if (holder.Source == SnmpSource.Trap || holder.IntervalSeconds == 0)
+            // Exclude trap-sourced, command-response, and zero-interval holders
+            if (holder.Source == SnmpSource.Trap || holder.Source == SnmpSource.Command || holder.IntervalSeconds == 0)
                 continue;
 
             var slot = holder.ReadSlot();
