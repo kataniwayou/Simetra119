@@ -452,6 +452,85 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     // -------------------------------------------------------------------------
+    // Tier 3: All-samples series check
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void Execute_EvaluateAllSeriesSamplesViolated_ProceedsToTier4()
+    {
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0); // In range → not violated
+
+        // Evaluate holder with 3-sample series, all violated (below Min=10)
+        var eval1 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 }, timeSeriesSize: 3);
+        WriteValue(eval1, 5.0);
+        WriteValue(eval1, 3.0);
+        WriteValue(eval1, 1.0); // All 3 below Min → all violated
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
+        var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmd });
+
+        _job.EvaluateTenant(tenant);
+
+        // Tier 4 reached → command should be enqueued
+        Assert.True(_commandChannel.Reader.TryRead(out var request));
+        Assert.Equal("reset", request!.CommandName);
+    }
+
+    [Fact]
+    public void Execute_EvaluateOneSeriesSampleInRange_Healthy()
+    {
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0); // In range → not violated
+
+        // Evaluate holder with 3-sample series: 2 violated, 1 in-range
+        var eval1 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 }, timeSeriesSize: 3);
+        WriteValue(eval1, 5.0);  // Below Min → violated
+        WriteValue(eval1, 5.0);  // Below Min → violated
+        WriteValue(eval1, 50.0); // Above Min → NOT violated
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
+        var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmd });
+
+        var result = _job.EvaluateTenant(tenant);
+
+        // One in-range sample → Healthy, no command enqueued
+        Assert.Equal(SnapshotJob.TierResult.Healthy, result);
+        Assert.False(_commandChannel.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public void Execute_EvaluatePartialSeriesFill_AllViolated_ProceedsToTier4()
+    {
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0); // In range → not violated
+
+        // Evaluate holder with timeSeriesSize=5 but only 2 values written
+        // (sentinel + 2 writes = 3 samples, but sentinel is value=0 which is < Min=10 → violated)
+        var eval1 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 }, timeSeriesSize: 5);
+        WriteValue(eval1, 5.0); // Below Min → violated
+        WriteValue(eval1, 3.0); // Below Min → violated
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
+        var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmd });
+
+        _job.EvaluateTenant(tenant);
+
+        // All present samples violated (partial fill) → Tier 4 reached
+        Assert.True(_commandChannel.Reader.TryRead(out var request));
+        Assert.Equal("reset", request!.CommandName);
+    }
+
+    // -------------------------------------------------------------------------
     // Tier 4: Command dispatch tests
     // -------------------------------------------------------------------------
 
@@ -811,7 +890,8 @@ public sealed class SnapshotJobTests : IDisposable
         double graceMultiplier = 2.0,
         string role = "Resolved",
         ThresholdOptions? threshold = null,
-        string metricName = "test-metric")
+        string metricName = "test-metric",
+        int timeSeriesSize = 1)
     {
         return new MetricSlotHolder(
             ip: "10.0.0.1",
@@ -819,7 +899,7 @@ public sealed class SnapshotJobTests : IDisposable
             metricName: metricName,
             intervalSeconds: intervalSeconds,
             role: role,
-            timeSeriesSize: 1,
+            timeSeriesSize: timeSeriesSize,
             graceMultiplier: graceMultiplier,
             threshold: threshold);
     }
