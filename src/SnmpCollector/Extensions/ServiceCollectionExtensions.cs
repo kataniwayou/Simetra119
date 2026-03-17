@@ -301,8 +301,11 @@ public static class ServiceCollectionExtensions
             .ValidateOnStart();
 
         // --- Phase 25: Tenant vector configuration ---
+        // TenantVectorOptions: "Tenants" is a JSON array; bind list directly into the Tenants property.
+        // Same delegate binding pattern as DevicesOptions (line 276-278).
         services.AddOptions<TenantVectorOptions>()
-            .Bind(configuration.GetSection(TenantVectorOptions.SectionName))
+            .Configure<IConfiguration>((opts, config) =>
+                config.GetSection(TenantVectorOptions.SectionName).Bind(opts.Tenants))
             .ValidateOnStart();
 
         services.AddSingleton<TenantVectorOptionsValidator>();
