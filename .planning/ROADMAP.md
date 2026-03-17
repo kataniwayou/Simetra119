@@ -196,10 +196,12 @@ Plans:
   3. STS-03 (resolved gate): with all resolved metrics out-of-range, pod logs contain a ConfirmedBad tier-2 log line and `sum(snmp_command_sent_total)` delta remains zero — the evaluate tier is never reached
   4. STS-04 (suppression): the first cycle within the suppression window increments `snmp_command_sent_total`; the second cycle within the window increments `snmp_command_suppressed_total` instead; a cycle after the window expires increments `snmp_command_sent_total` again
   5. STS-05 (staleness): after the simulator switches to a stale scenario and one grace period elapses, pod logs contain a tier-1 Stale log line and no command counters increment
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 53-01-PLAN.md — TBD
+- [ ] 53-01-PLAN.md — Simulator "healthy" scenario, suppression fixture, report category
+- [ ] 53-02-PLAN.md — STS-01 healthy, STS-02 evaluate violated, STS-03 resolved gate scripts
+- [ ] 53-03-PLAN.md — STS-04 suppression window, STS-05 staleness detection scripts
 
 ---
 
@@ -269,10 +271,10 @@ Plans:
 | 50. Label Rename | v2.0 | 1/1 | Complete | 2026-03-16 |
 | 51. Simulator HTTP Control Endpoint | v2.1 | 2/2 | Complete | 2026-03-17 |
 | 52. Test Library and Config Artifacts | v2.1 | 3/3 | Complete | 2026-03-17 |
-| 53. Single-Tenant Scenarios | v2.1 | 0/TBD | Not started | - |
+| 53. Single-Tenant Scenarios | v2.1 | 0/3 | Not started | - |
 | 54. Multi-Tenant Scenarios | v2.1 | 0/TBD | Not started | - |
 | 55. Advanced Scenarios | v2.1 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-17 after Phase 52 planning*
+*Last updated: 2026-03-17 after Phase 53 planning*
