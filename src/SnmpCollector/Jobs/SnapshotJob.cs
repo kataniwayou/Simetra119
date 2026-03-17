@@ -254,10 +254,11 @@ public sealed class SnapshotJob : IJob
     }
 
     /// <summary>
-    /// Tier 3: Checks whether ALL Evaluate holders with data are violated.
-    /// Returns true if all are violated (proceed to Tier 4 command dispatch).
-    /// Returns false if any Evaluate holder with data is NOT violated (Healthy).
-    /// Holders with null ReadSlot do not participate.
+    /// Tier 3: Checks whether ALL Evaluate holders have ALL time series samples violated.
+    /// Returns true if every sample in every Evaluate holder's series is violated
+    /// (proceed to Tier 4 command dispatch).
+    /// Returns false if any single sample in any Evaluate holder is NOT violated (Healthy).
+    /// Holders with empty series (Length == 0) do not participate.
     /// If no Evaluate holders have data, returns false (vacuous fail — no command).
     /// </summary>
     private static bool AreAllEvaluateViolated(IReadOnlyList<MetricSlotHolder> holders)
@@ -269,18 +270,22 @@ public sealed class SnapshotJob : IJob
             if (holder.Role != "Evaluate")
                 continue;
 
-            var slot = holder.ReadSlot();
-            if (slot is null)
-                continue; // Does not participate in "all violated" check
+            var series = holder.ReadSeries();
+            if (series.Length == 0)
+                continue; // No data — does not participate in "all violated" check
+
+            // Every sample in the series must be violated for this holder to count
+            foreach (var sample in series)
+            {
+                if (!IsViolated(holder, sample))
+                    return false; // A single in-range sample → tenant is Healthy
+            }
 
             checkedCount++;
-
-            if (!IsViolated(holder, slot))
-                return false; // Not all Evaluate are violated — tenant is Healthy
         }
 
-        // If at least one Evaluate holder was checked and ALL were violated → proceed to Tier 4
-        // If none were checked (all null or no Evaluate) → vacuous false (no data = no command)
+        // If at least one Evaluate holder was checked and ALL samples were violated → proceed to Tier 4
+        // If none were checked (all empty or no Evaluate) → vacuous false (no data = no command)
         return checkedCount > 0;
     }
 
