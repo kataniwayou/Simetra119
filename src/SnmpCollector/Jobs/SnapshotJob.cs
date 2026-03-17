@@ -224,10 +224,11 @@ public sealed class SnapshotJob : IJob
     }
 
     /// <summary>
-    /// Tier 2: Checks whether ALL Resolved holders have ALL time series samples violated.
-    /// Returns true if every sample in every Resolved holder's series is violated
-    /// (ConfirmedBad — evaluation stops).
-    /// Returns false if any single sample in any Resolved holder is NOT violated (continue to Tier 3).
+    /// Tier 2: Checks whether ALL Resolved holders with data are violated.
+    /// For Poll/Synthetic sources: every sample in the time series must be violated.
+    /// For Trap/Command sources: only the newest sample is checked (no periodic interval).
+    /// Returns true if all are violated (ConfirmedBad — evaluation stops).
+    /// Returns false if any Resolved holder with data is NOT violated (continue to Tier 3).
     /// Holders with empty series (Length == 0) do not participate.
     /// </summary>
     private static bool AreAllResolvedViolated(IReadOnlyList<MetricSlotHolder> holders)
@@ -239,30 +240,46 @@ public sealed class SnapshotJob : IJob
             if (holder.Role != "Resolved")
                 continue;
 
+            // Trap/Command sources: check newest sample only (one-shot, no periodic interval)
+            if (holder.Source == SnmpSource.Trap || holder.Source == SnmpSource.Command)
+            {
+                var slot = holder.ReadSlot();
+                if (slot is null)
+                    continue;
+
+                checkedCount++;
+
+                if (!IsViolated(holder, slot))
+                    return false;
+
+                continue;
+            }
+
+            // Poll/Synthetic sources: check all time series samples
             var series = holder.ReadSeries();
             if (series.Length == 0)
-                continue; // No data — does not participate in "all violated" check
+                continue;
 
-            // Every sample in the series must be violated for this holder to count
             foreach (var sample in series)
             {
                 if (!IsViolated(holder, sample))
-                    return false; // A single in-range sample → not all Resolved violated
+                    return false;
             }
 
             checkedCount++;
         }
 
-        // If at least one Resolved holder was checked and ALL samples were violated → ConfirmedBad
+        // If at least one Resolved holder was checked and ALL were violated → ConfirmedBad
         // If none were checked (all empty or no Resolved) → vacuous true (defensive)
         return true;
     }
 
     /// <summary>
-    /// Tier 3: Checks whether ALL Evaluate holders have ALL time series samples violated.
-    /// Returns true if every sample in every Evaluate holder's series is violated
-    /// (proceed to Tier 4 command dispatch).
-    /// Returns false if any single sample in any Evaluate holder is NOT violated (Healthy).
+    /// Tier 3: Checks whether ALL Evaluate holders with data are violated.
+    /// For Poll/Synthetic sources: every sample in the time series must be violated.
+    /// For Trap/Command sources: only the newest sample is checked (no periodic interval).
+    /// Returns true if all are violated (proceed to Tier 4 command dispatch).
+    /// Returns false if any Evaluate holder with data is NOT violated (Healthy).
     /// Holders with empty series (Length == 0) do not participate.
     /// If no Evaluate holders have data, returns false (vacuous fail — no command).
     /// </summary>
@@ -275,15 +292,30 @@ public sealed class SnapshotJob : IJob
             if (holder.Role != "Evaluate")
                 continue;
 
+            // Trap/Command sources: check newest sample only (one-shot, no periodic interval)
+            if (holder.Source == SnmpSource.Trap || holder.Source == SnmpSource.Command)
+            {
+                var slot = holder.ReadSlot();
+                if (slot is null)
+                    continue;
+
+                checkedCount++;
+
+                if (!IsViolated(holder, slot))
+                    return false;
+
+                continue;
+            }
+
+            // Poll/Synthetic sources: check all time series samples
             var series = holder.ReadSeries();
             if (series.Length == 0)
-                continue; // No data — does not participate in "all violated" check
+                continue;
 
-            // Every sample in the series must be violated for this holder to count
             foreach (var sample in series)
             {
                 if (!IsViolated(holder, sample))
-                    return false; // A single in-range sample → tenant is Healthy
+                    return false;
             }
 
             checkedCount++;

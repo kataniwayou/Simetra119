@@ -346,6 +346,112 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     // -------------------------------------------------------------------------
+    // Source-aware threshold check (Trap/Command = newest only, Poll = all samples)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void EvaluateTenant_ResolvedCommandSource_ChecksNewestSampleOnly()
+    {
+        // Command-sourced resolved holder with 3-sample series:
+        // first 2 violated, last one in-range.
+        // With all-samples check this would be "not all violated" → continue to Tier 3.
+        // But Command source should only check the newest (in-range) → NOT violated → Tier 3.
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 10 }, timeSeriesSize: 3);
+        WriteValue(resolved, 5.0);   // Below Min → violated
+        WriteValue(resolved, 5.0);   // Below Min → violated
+        WriteValue(resolved, 50.0, source: SnmpSource.Command); // In range → NOT violated (newest)
+
+        var tenant = MakeTenant(resolved);
+        var result = _job.EvaluateTenant(tenant);
+
+        // Command source checks newest only (50.0 >= 10) → not violated → continues to Tier 3
+        Assert.NotEqual(SnapshotJob.TierResult.ConfirmedBad, result);
+    }
+
+    [Fact]
+    public void EvaluateTenant_ResolvedCommandSource_NewestViolated_ConfirmedBad()
+    {
+        // Command-sourced resolved holder: newest sample is violated
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 10 }, timeSeriesSize: 3);
+        WriteValue(resolved, 50.0);  // In range
+        WriteValue(resolved, 50.0);  // In range
+        WriteValue(resolved, 5.0, source: SnmpSource.Command); // Below Min → violated (newest)
+
+        var tenant = MakeTenant(resolved);
+        var result = _job.EvaluateTenant(tenant);
+
+        // Command source checks newest only (5.0 < 10) → violated → ConfirmedBad
+        Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
+    }
+
+    [Fact]
+    public void EvaluateTenant_ResolvedTrapSource_ChecksNewestSampleOnly()
+    {
+        // Trap-sourced resolved: old samples violated, newest in-range
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 10 }, timeSeriesSize: 3);
+        WriteValue(resolved, 5.0);   // Below Min → violated
+        WriteValue(resolved, 5.0);   // Below Min → violated
+        WriteValue(resolved, 50.0, source: SnmpSource.Trap); // In range (newest)
+
+        var tenant = MakeTenant(resolved);
+        var result = _job.EvaluateTenant(tenant);
+
+        // Trap source checks newest only → NOT violated → Tier 3
+        Assert.NotEqual(SnapshotJob.TierResult.ConfirmedBad, result);
+    }
+
+    [Fact]
+    public void EvaluateTenant_EvaluateCommandSource_ChecksNewestSampleOnly()
+    {
+        // Command-sourced evaluate holder: 2 violated, newest in-range
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0); // In range → not violated
+
+        var eval1 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 }, timeSeriesSize: 3);
+        WriteValue(eval1, 5.0);  // Below Min → violated
+        WriteValue(eval1, 5.0);  // Below Min → violated
+        WriteValue(eval1, 50.0, source: SnmpSource.Command); // In range (newest)
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
+        var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmd });
+
+        var result = _job.EvaluateTenant(tenant);
+
+        // Command source checks newest only (50.0 >= 10) → NOT violated → Healthy
+        Assert.Equal(SnapshotJob.TierResult.Healthy, result);
+    }
+
+    [Fact]
+    public void EvaluateTenant_EvaluatePollSource_ChecksAllSamples()
+    {
+        // Poll-sourced evaluate holder: 2 violated + 1 in-range → NOT all violated
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0);
+
+        var eval1 = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 }, timeSeriesSize: 3);
+        WriteValue(eval1, 5.0);   // Below Min → violated
+        WriteValue(eval1, 5.0);   // Below Min → violated
+        WriteValue(eval1, 50.0);  // In range (Poll source — all samples checked)
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
+        var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmd });
+
+        var result = _job.EvaluateTenant(tenant);
+
+        // Poll source checks ALL samples — one in-range → Healthy
+        Assert.Equal(SnapshotJob.TierResult.Healthy, result);
+    }
+
+    // -------------------------------------------------------------------------
     // IsViolated direct tests
     // -------------------------------------------------------------------------
 
