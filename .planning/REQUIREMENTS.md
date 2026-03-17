@@ -36,8 +36,8 @@ Requirements for E2E Tenant Evaluation Tests milestone. Each maps to roadmap pha
 
 ### Multi-Tenant Scenarios
 
-- [ ] **MTS-01**: Two tenants same priority — both evaluated in parallel, correct tier results per tenant
-- [ ] **MTS-02**: Two tenants different priority — sequential groups, advance gate blocks on Commanded/Stale tenant
+- [x] **MTS-01**: Two tenants same priority — both evaluated in parallel, correct tier results per tenant
+- [x] **MTS-02**: Two tenants different priority — sequential groups, advance gate blocks on Commanded/Stale tenant
 
 ### Advanced Scenarios
 
@@ -88,8 +88,8 @@ Requirements for E2E Tenant Evaluation Tests milestone. Each maps to roadmap pha
 | STS-03 | Phase 53 | Complete |
 | STS-04 | Phase 53 | Complete |
 | STS-05 | Phase 53 | Complete |
-| MTS-01 | Phase 54 | Pending |
-| MTS-02 | Phase 54 | Pending |
+| MTS-01 | Phase 54 | Complete |
+| MTS-02 | Phase 54 | Complete |
 | ADV-01 | Phase 55 | Pending |
 | ADV-02 | Phase 55 | Pending |
 | INF-01 | Phase 52 | Complete |

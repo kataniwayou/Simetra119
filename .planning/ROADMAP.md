@@ -218,8 +218,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 54-01-PLAN.md — MTS fixture (P1 SuppressionWindowSeconds=30), report.sh extension, MTS-01 same-priority script
-- [ ] 54-02-PLAN.md — MTS-02 advance gate script (gate blocked + gate passed in one script)
+- [x] 54-01-PLAN.md — MTS fixture (P1 SuppressionWindowSeconds=30), report.sh extension, MTS-01 same-priority script
+- [x] 54-02-PLAN.md — MTS-02 advance gate script (gate blocked + gate passed in one script)
 
 ---
 
@@ -273,7 +273,7 @@ Plans:
 | 51. Simulator HTTP Control Endpoint | v2.1 | 2/2 | Complete | 2026-03-17 |
 | 52. Test Library and Config Artifacts | v2.1 | 3/3 | Complete | 2026-03-17 |
 | 53. Single-Tenant Scenarios | v2.1 | 3/3 | Complete | 2026-03-17 |
-| 54. Multi-Tenant Scenarios | v2.1 | 0/2 | Not started | - |
+| 54. Multi-Tenant Scenarios | v2.1 | 2/2 | Complete | 2026-03-17 |
 | 55. Advanced Scenarios | v2.1 | 0/TBD | Not started | - |
 
 ---
