@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 53 of 55 (Single-Tenant Scenarios)
-Plan: 01 of TBD
+Plan: 02 of TBD
 Status: In progress
-Last activity: 2026-03-17 — Completed 53-01-PLAN.md — healthy scenario, suppression fixture, Snapshot Evaluation report category
+Last activity: 2026-03-17 — Completed 53-02-PLAN.md — STS-01 healthy, STS-02 evaluate violated, STS-03 resolved gate scenario scripts
 
-Progress: [████░░░░░░] 42% (v2.1)
+Progress: [████░░░░░░] 43% (v2.1)
 
 ## Performance Metrics
 
@@ -42,6 +42,9 @@ Progress: [████░░░░░░] 42% (v2.1)
 | 53-01 | SuppressionWindowSeconds=30 in suppression fixture | 15s SnapshotJob interval > 10s default window; 30s allows second cycle to be suppressed |
 | 53-01 | Distinct tenant ID e2e-tenant-A-supp for suppression fixture | Prevents suppression cache key bleed across scenarios |
 | 53-01 | Removed placeholder report categories (Watcher Resilience, Tenant Vector) | No scenario files exist for those ranges; avoids phantom entries in reports |
+| 53-02 | poll_until_log 90s for STS-02 tier=4 | TimeSeriesSize=3 requires ~30s fill time; 90s accommodates 3 poll cycles safely |
+| 53-02 | Negative tier=4 assertion uses direct grep (since=60s) not poll_until_log | Absence check is a snapshot — polling would just time out; single-pass grep is correct |
+| 53-02 | sim_set_scenario default called explicitly in STS-03 | Clarity over brevity; makes ConfirmedBad scenario intent obvious |
 
 ### Blockers/Concerns
 
@@ -49,6 +52,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T13:20:36Z
-Stopped at: Completed 53-01-PLAN.md — healthy scenario, suppression fixture, Snapshot Evaluation report category
+Last session: 2026-03-17T13:25:16Z
+Stopped at: Completed 53-02-PLAN.md — STS-01/02/03 scenario scripts (scenarios 29-31)
 Resume file: None
