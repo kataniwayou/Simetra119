@@ -95,6 +95,7 @@ None.
 | 065 | Remove snmp.aggregated.computed + add snmp.snapshot.cycle_duration_ms | 2026-03-17 | 45a14db | [065-remove-aggregated-add-cycle-duration](./quick/065-remove-aggregated-add-cycle-duration/) |
 | 066 | Fix tenants.json binding to match devices.json pattern (remove double nesting) | 2026-03-17 | c0b85d7 | [066-tenants-config-binding-consistency](./quick/066-tenants-config-binding-consistency/) |
 | 067 | Flatten tenants.json to bare array format matching devices.json | 2026-03-17 | acdde9b | [067-tenants-bare-array-config](./quick/067-tenants-bare-array-config/) |
+| 068 | Threshold equality condition (Min==Max → violated if value equals) | 2026-03-17 | f87992b | [068-threshold-equal-condition](./quick/068-threshold-equal-condition/) |
 
 ## Session Continuity
 
