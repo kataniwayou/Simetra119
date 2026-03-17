@@ -28,13 +28,9 @@ if (Directory.Exists(configDir))
         builder.Configuration.AddJsonFile(k8sConfig, optional: true, reloadOnChange: false);
     }
 
-    // Phase 25: Load tenant vector configuration if present.
-    // reloadOnChange: false -- tenant vector changes require restart for validation.
-    var tenantsConfig = Path.Combine(configDir, "tenants.json");
-    if (File.Exists(tenantsConfig))
-    {
-        builder.Configuration.AddJsonFile(tenantsConfig, optional: true, reloadOnChange: false);
-    }
+    // Phase 25: Tenant vector configuration loaded manually (bare array format)
+    // in the local-dev block below, matching the devices.json pattern.
+    // In K8s mode, TenantVectorWatcherService handles live reload via API watch.
 }
 
 // DI registration order:
@@ -108,15 +104,16 @@ if (!k8s.KubernetesClientConfiguration.IsInCluster())
         }
     }
 
-    // Load tenant vector from tenants.json (flat format: { "Tenants": [...] })
+    // Load tenant vector from tenants.json (bare array format, matching devices.json)
     var tenantsPath = Path.Combine(configDir, "tenants.json");
     if (File.Exists(tenantsPath))
     {
         var tvJson = File.ReadAllText(tenantsPath);
-        var tvOptions = System.Text.Json.JsonSerializer.Deserialize<SnmpCollector.Configuration.TenantVectorOptions>(
+        var rawTenants = System.Text.Json.JsonSerializer.Deserialize<List<SnmpCollector.Configuration.TenantOptions>>(
                 tvJson, jsonOptions);
-        if (tvOptions != null)
+        if (rawTenants != null)
         {
+            var tvOptions = new SnmpCollector.Configuration.TenantVectorOptions { Tenants = rawTenants };
             var oidMapService = app.Services.GetRequiredService<SnmpCollector.Pipeline.IOidMapService>();
             var deviceRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.IDeviceRegistry>();
             var tvLogger = app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SnmpCollector.Services.TenantVectorWatcherService>>();
