@@ -123,6 +123,14 @@ SCENARIOS: dict[str, dict] = {
                             f"{E2E_PREFIX}.4.2": 2,    # e2e_channel_state = 2 (>= Min:1.0)
                             f"{E2E_PREFIX}.4.3": 2,    # e2e_bypass_status = 2 (>= Min:1.0)
                         }),
+    "agg_breach":       _make_scenario({
+                            f"{E2E_PREFIX}.4.2": 2,    # e2e_channel_state = 2 (>= Min:1.0 -> in-range)
+                            f"{E2E_PREFIX}.4.3": 2,    # e2e_bypass_status = 2 (>= Min:1.0 -> in-range)
+                            f"{E2E_PREFIX}.4.5": 50,   # e2e_agg_source_a = 50
+                            f"{E2E_PREFIX}.4.6": 50,   # e2e_agg_source_b = 50
+                            # sum(50,50) = 100 > Max:80 -> e2e_total_util violated
+                            # Resolved metrics in-range -> tier-2 passes -> reaches tier-4
+                        }),
 }
 
 _active_scenario: str = "default"
