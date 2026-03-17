@@ -176,10 +176,12 @@ See `.planning/milestones/v2.0-ROADMAP.md` for details.
   3. All 28 existing E2E scenarios pass without modification after `run-all.sh` sources `simulator.sh` and adds the 8080 port-forward
   4. Tenant fixture YAML files (`tenant-eval-single.yaml`, `tenant-eval-two-same-priority.yaml`, `tenant-eval-two-diff-priority.yaml`, `tenant-eval-aggregate.yaml`) each use distinct tenant IDs and `GraceMultiplier >= 2.0`
   5. OID metric map, OID command map, and device config entries for the evaluate OID, two resolved OIDs, and command response OID are applied to the cluster and visible in the collector's loaded config logs
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 52-01-PLAN.md — TBD
+- [ ] 52-01-PLAN.md — OID metric map, command map, device config entries, command_trigger simulator scenario
+- [ ] 52-02-PLAN.md — sim.sh bash library and run-all.sh port-forward integration
+- [ ] 52-03-PLAN.md — Tenant fixture YAML files (4 topologies: single, two-same-prio, two-diff-prio, aggregate)
 
 ---
 
@@ -266,11 +268,11 @@ Plans:
 | 49. Observability & Dashboard | v2.0 | 1/1 | Complete | 2026-03-16 |
 | 50. Label Rename | v2.0 | 1/1 | Complete | 2026-03-16 |
 | 51. Simulator HTTP Control Endpoint | v2.1 | 2/2 | Complete | 2026-03-17 |
-| 52. Test Library and Config Artifacts | v2.1 | 0/TBD | Not started | - |
+| 52. Test Library and Config Artifacts | v2.1 | 0/3 | Not started | - |
 | 53. Single-Tenant Scenarios | v2.1 | 0/TBD | Not started | - |
 | 54. Multi-Tenant Scenarios | v2.1 | 0/TBD | Not started | - |
 | 55. Advanced Scenarios | v2.1 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-17 after Phase 51 planning*
+*Last updated: 2026-03-17 after Phase 52 planning*
