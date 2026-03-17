@@ -106,58 +106,56 @@ metadata:
   namespace: simetra
 data:
   tenants.json: |
-    {
-      "Tenants": [
-        {
-          "Priority": 1,
-          "Metrics": [
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_status_P1", "Role": "Resolved" },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_rx_octets_P1", "Role": "Evaluate" },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_tx_octets_P1", "Role": "Evaluate" },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_cpu_util", "Role": "Evaluate" }
-          ],
-          "Commands": [
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "CommandName": "npb_reset_counters_P1", "Value": "1", "ValueType": "Integer32" }
-          ]
-        },
-        {
-          "Priority": 2,
-          "Metrics": [
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_mem_util", "Role": "Evaluate" },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_sys_temp", "Role": "Evaluate" },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_rx_packets_P1", "Role": "Evaluate" },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_tx_packets_P1", "Role": "Evaluate" },
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_status_P2", "Role": "Resolved" }
-          ],
-          "Commands": [
-            { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "CommandName": "npb_reset_counters_P2", "Value": "1", "ValueType": "Integer32" }
-          ]
-        },
-        {
-          "Priority": 3,
-          "Metrics": [
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L1", "Role": "Resolved" },
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r1_power_L1", "Role": "Evaluate" },
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r2_power_L1", "Role": "Evaluate" },
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L2", "Role": "Resolved" }
-          ],
-          "Commands": [
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "CommandName": "obp_set_bypass_L1", "Value": "1", "ValueType": "Integer32" }
-          ]
-        },
-        {
-          "Priority": 4,
-          "Metrics": [
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r3_power_L1", "Role": "Evaluate" },
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r4_power_L1", "Role": "Evaluate" },
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_link_state_L1", "Role": "Resolved" }
-          ],
-          "Commands": [
-            { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "CommandName": "obp_set_bypass_L3", "Value": "1", "ValueType": "Integer32" }
-          ]
-        }
-      ]
-    }
+    [
+      {
+        "Priority": 1,
+        "Metrics": [
+          { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_status_P1", "Role": "Resolved" },
+          { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_rx_octets_P1", "Role": "Evaluate" },
+          { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_tx_octets_P1", "Role": "Evaluate" },
+          { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_cpu_util", "Role": "Evaluate" }
+        ],
+        "Commands": [
+          { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "CommandName": "npb_reset_counters_P1", "Value": "1", "ValueType": "Integer32" }
+        ]
+      },
+      {
+        "Priority": 2,
+        "Metrics": [
+          { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_mem_util", "Role": "Evaluate" },
+          { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_sys_temp", "Role": "Evaluate" },
+          { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_rx_packets_P1", "Role": "Evaluate" },
+          { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_tx_packets_P1", "Role": "Evaluate" },
+          { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "npb_port_status_P2", "Role": "Resolved" }
+        ],
+        "Commands": [
+          { "Ip": "npb-simulator.simetra.svc.cluster.local", "Port": 161, "CommandName": "npb_reset_counters_P2", "Value": "1", "ValueType": "Integer32" }
+        ]
+      },
+      {
+        "Priority": 3,
+        "Metrics": [
+          { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L1", "Role": "Resolved" },
+          { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r1_power_L1", "Role": "Evaluate" },
+          { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r2_power_L1", "Role": "Evaluate" },
+          { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_channel_L2", "Role": "Resolved" }
+        ],
+        "Commands": [
+          { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "CommandName": "obp_set_bypass_L1", "Value": "1", "ValueType": "Integer32" }
+        ]
+      },
+      {
+        "Priority": 4,
+        "Metrics": [
+          { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r3_power_L1", "Role": "Evaluate" },
+          { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_r4_power_L1", "Role": "Evaluate" },
+          { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "MetricName": "obp_link_state_L1", "Role": "Resolved" }
+        ],
+        "Commands": [
+          { "Ip": "obp-simulator.simetra.svc.cluster.local", "Port": 161, "CommandName": "obp_set_bypass_L3", "Value": "1", "ValueType": "Integer32" }
+        ]
+      }
+    ]
 EOF
 
 log_info "Waiting 15s for watcher detection..."
