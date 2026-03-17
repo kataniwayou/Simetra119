@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 55 of 55 (Advanced Scenarios)
-Plan: 01 of 1
-Status: Plan 01 complete
-Last activity: 2026-03-17 — Completed 55-01-PLAN.md — ADV-01 aggregate evaluate scenario (scenario 36)
+Plan: 02 of 2
+Status: Phase complete — v2.1 milestone COMPLETE
+Last activity: 2026-03-17 — Completed 55-02-PLAN.md — ADV-02 depth-3 all-samples scenario (scenario 37)
 
-Progress: [█████████░] 90% (v2.1)
+Progress: [██████████] 100% (v2.1)
 
 ## Performance Metrics
 
@@ -57,6 +57,8 @@ Progress: [█████████░] 90% (v2.1)
 | 54-02 | No scenario reset between MTS-02A and MTS-02B | P1 suppression window (30s) must remain active from 02A for gate-pass to occur in 02B; reset would destroy state |
 | 55-01 | agg_breach sets .4.2=2 and .4.3=2 explicitly | Default value 0 keeps Resolved metrics violated; must be in-range so tier-2 passes and tier-4 fires on sum(100) > Max:80 |
 | 55-01 | sleep 30 before source=synthetic Prometheus assertion | OTel export + Prometheus scrape require time after tier=4 fires; 30s accommodates 15s scrape interval + export latency |
+| 55-02 | Recovery baseline captured after sim_set_scenario healthy (not after breach) | Delta measures only the recovery observation window; baseline after breach would include breach commands |
+| 55-02 | since=30 in tier=3 poll_until_log for ADV-02 recovery | Pre-breach tier=3 logs exist for same tenant; since=30 focuses on recent logs after healthy switch |
 
 ### Blockers/Concerns
 
@@ -64,6 +66,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T14:38:01Z
-Stopped at: Completed 55-01-PLAN.md — ADV-01 aggregate evaluate scenario (scenario 36); Phase 55 plan 01 complete
+Last session: 2026-03-17T14:41:16Z
+Stopped at: Completed 55-02-PLAN.md — ADV-02 depth-3 all-samples scenario (scenario 37); Phase 55 complete; v2.1 milestone complete
 Resume file: None
