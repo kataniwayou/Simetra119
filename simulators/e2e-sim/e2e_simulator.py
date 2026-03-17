@@ -113,6 +113,11 @@ SCENARIOS: dict[str, dict] = {
                             f"{E2E_PREFIX}.4.1": STALE,
                             f"{E2E_PREFIX}.4.2": STALE,
                         }),
+    "command_trigger":  _make_scenario({
+                            f"{E2E_PREFIX}.4.1": 90,
+                            f"{E2E_PREFIX}.4.2": 2,
+                            f"{E2E_PREFIX}.4.3": 2,
+                        }),
 }
 
 _active_scenario: str = "default"
