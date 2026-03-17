@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 52 of 55 (Test Library and Config Artifacts)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-03-17 — Phase 51 complete and verified (9/9 must-haves)
+Plan: 02 of TBD
+Status: In progress
+Last activity: 2026-03-17 — Completed 52-02-PLAN.md — sim.sh library and run-all.sh wiring
 
 Progress: [██░░░░░░░░] 20% (v2.1)
 
@@ -41,6 +41,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T10:57:07Z
-Stopped at: Completed 51-01-PLAN.md — e2e_simulator.py reworked with HTTP control endpoint, scenario registry, 15 OIDs
+Last session: 2026-03-17T12:10:14Z
+Stopped at: Completed 52-02-PLAN.md — sim.sh bash library + run-all.sh wiring (sim source + e2e-simulator:8080 port-forward)
 Resume file: None
