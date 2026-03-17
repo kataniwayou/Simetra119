@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simetra-tenants
+  namespace: simetra
+data:
+  tenants.json: |
+    [
+      {
+        "Id": "e2e-tenant-A",
+        "Priority": 1,
+        "SuppressionWindowSeconds": 10,
+        "Metrics": [
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_port_utilization",
+            "TimeSeriesSize": 3,
+            "GraceMultiplier": 2.0,
+            "Role": "Evaluate",
+            "Threshold": { "Max": 80.0 }
+          },
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_channel_state",
+            "Role": "Resolved",
+            "Threshold": { "Min": 1.0 }
+          },
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_bypass_status",
+            "Role": "Resolved",
+            "Threshold": { "Min": 1.0 }
+          }
+        ],
+        "Commands": [
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "CommandName": "e2e_set_bypass",
+            "Value": "0",
+            "ValueType": "Integer32"
+          }
+        ]
+      }
+    ]
