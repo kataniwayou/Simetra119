@@ -26,6 +26,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/prometheus.sh"
 source "$SCRIPT_DIR/lib/kubectl.sh"
 source "$SCRIPT_DIR/lib/report.sh"
+source "$SCRIPT_DIR/lib/sim.sh"
 
 # ---------------------------------------------------------------------------
 # Cleanup trap
@@ -53,6 +54,7 @@ echo ""
 # ---------------------------------------------------------------------------
 
 start_port_forward prometheus 9090 9090
+start_port_forward e2e-simulator 8080 8080
 
 # ---------------------------------------------------------------------------
 # Pre-flight checks
