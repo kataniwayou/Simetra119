@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 54 of 55 (Multi-Tenant Scenarios)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-03-17 — Phase 53 complete and verified (5/5 must-haves)
+Plan: 01 of 2
+Status: In progress
+Last activity: 2026-03-17 — Completed 54-01-PLAN.md (MTS fixture, report.sh range, MTS-01 scenario)
 
-Progress: [██████░░░░] 60% (v2.1)
+Progress: [██████░░░░] 62% (v2.1)
 
 ## Performance Metrics
 
@@ -34,6 +34,8 @@ Progress: [██████░░░░] 60% (v2.1)
 - All Prometheus command counter assertions must use `sum(snmp_command_sent_total{...})` across replicas — per-pod checks will miss leader-only counter increments
 - Use distinct tenant names per scenario fixture to prevent suppression cache bleed between scenarios
 - Port 8080 for HTTP endpoint — no collision confirmed (collector health port is per-pod, separate Deployment; e2e-sim pod port 8080 is free)
+- MTS-01 multi-tenant log polling: use two separate poll_until_log calls (one per tenant) since poll_until_log checks one pattern at a time
+- tenant-cfg03-two-diff-prio-mts.yaml has P1 SuppressionWindowSeconds=30; required for MTS-02B gate-pass (P1 suppressed at T=15s → ConfirmedBad → gate passes → P2 commanded)
 
 ### Decisions
 
@@ -48,6 +50,8 @@ Progress: [██████░░░░] 60% (v2.1)
 | 53-03 | sleep 20 in STS-04 Window 3 is the only fixed sleep in Phase 53 | No log event signals suppression window expiry; fixed sleep is unavoidable |
 | 53-03 | STS-05 primes with healthy + sleep 20 before stale switch | HasStaleness returns false for null slots; slots must hold recent data to age out |
 | 53-03 | STS-04 suppressed counter uses device_name="e2e-tenant-A-supp" | IncrementCommandSuppressed(tenant.Id) uses tenant ID as label value, not device name |
+| 54-01 | tenant-cfg03-two-diff-prio-mts.yaml P1 SuppressionWindowSeconds=30 | 10s < 15s SnapshotJob interval; P1 always Commanded; 30s ensures P1 suppressed at T=15s cycle → ConfirmedBad → gate passes → P2 commanded |
+| 54-01 | report.sh Snapshot Evaluation upper bound extended from 32 to 34 | MTS-01 is index 33, MTS-02 is index 34; old range excluded both |
 
 ### Blockers/Concerns
 
@@ -55,6 +59,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T13:26:45Z
-Stopped at: Completed 53-03-PLAN.md — STS-04 suppression window and STS-05 staleness detection (scenarios 32-33)
+Last session: 2026-03-17T14:03:52Z
+Stopped at: Completed 54-01-PLAN.md — MTS fixture, report.sh range extension, MTS-01 same-priority scenario (scenario 34)
 Resume file: None
