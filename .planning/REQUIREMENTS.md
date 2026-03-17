@@ -28,11 +28,11 @@ Requirements for E2E Tenant Evaluation Tests milestone. Each maps to roadmap pha
 
 ### Single-Tenant Scenarios
 
-- [ ] **STS-01**: Healthy baseline — no violations, tier flow reaches Healthy, zero commands dispatched
-- [ ] **STS-02**: Evaluate violated — all evaluate samples violated, tier flow reaches Commanded, command counter increments
-- [ ] **STS-03**: Resolved gate — all resolved metrics violated, tier flow stops at ConfirmedBad, zero commands
-- [ ] **STS-04**: Suppression window — second cycle within window shows command suppressed
-- [ ] **STS-05**: Staleness — simulator stops/delays response, tier flow stops at Stale
+- [x] **STS-01**: Healthy baseline — no violations, tier flow reaches Healthy, zero commands dispatched
+- [x] **STS-02**: Evaluate violated — all evaluate samples violated, tier flow reaches Commanded, command counter increments
+- [x] **STS-03**: Resolved gate — all resolved metrics violated, tier flow stops at ConfirmedBad, zero commands
+- [x] **STS-04**: Suppression window — second cycle within window shows command suppressed
+- [x] **STS-05**: Staleness — simulator stops/delays response, tier flow stops at Stale
 
 ### Multi-Tenant Scenarios
 
@@ -83,11 +83,11 @@ Requirements for E2E Tenant Evaluation Tests milestone. Each maps to roadmap pha
 | CFG-05 | Phase 52 | Complete |
 | CFG-06 | Phase 52 | Complete |
 | CFG-07 | Phase 52 | Complete |
-| STS-01 | Phase 53 | Pending |
-| STS-02 | Phase 53 | Pending |
-| STS-03 | Phase 53 | Pending |
-| STS-04 | Phase 53 | Pending |
-| STS-05 | Phase 53 | Pending |
+| STS-01 | Phase 53 | Complete |
+| STS-02 | Phase 53 | Complete |
+| STS-03 | Phase 53 | Complete |
+| STS-04 | Phase 53 | Complete |
+| STS-05 | Phase 53 | Complete |
 | MTS-01 | Phase 54 | Pending |
 | MTS-02 | Phase 54 | Pending |
 | ADV-01 | Phase 55 | Pending |

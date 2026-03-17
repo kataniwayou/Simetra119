@@ -199,9 +199,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 53-01-PLAN.md — Simulator "healthy" scenario, suppression fixture, report category
-- [ ] 53-02-PLAN.md — STS-01 healthy, STS-02 evaluate violated, STS-03 resolved gate scripts
-- [ ] 53-03-PLAN.md — STS-04 suppression window, STS-05 staleness detection scripts
+- [x] 53-01-PLAN.md — Simulator "healthy" scenario, suppression fixture, report category
+- [x] 53-02-PLAN.md — STS-01 healthy, STS-02 evaluate violated, STS-03 resolved gate scripts
+- [x] 53-03-PLAN.md — STS-04 suppression window, STS-05 staleness detection scripts
 
 ---
 
@@ -271,7 +271,7 @@ Plans:
 | 50. Label Rename | v2.0 | 1/1 | Complete | 2026-03-16 |
 | 51. Simulator HTTP Control Endpoint | v2.1 | 2/2 | Complete | 2026-03-17 |
 | 52. Test Library and Config Artifacts | v2.1 | 3/3 | Complete | 2026-03-17 |
-| 53. Single-Tenant Scenarios | v2.1 | 0/3 | Not started | - |
+| 53. Single-Tenant Scenarios | v2.1 | 3/3 | Complete | 2026-03-17 |
 | 54. Multi-Tenant Scenarios | v2.1 | 0/TBD | Not started | - |
 | 55. Advanced Scenarios | v2.1 | 0/TBD | Not started | - |
 
