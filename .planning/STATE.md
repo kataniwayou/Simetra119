@@ -12,14 +12,14 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 Phase: 50 of 50 (Label Rename)
 Plan: 1 of 1 in current phase
 Status: v2.0 milestone complete
-Last activity: 2026-03-17 — Completed quick/066 (Fix tenants.json config binding to match devices.json pattern)
+Last activity: 2026-03-17 — Completed quick/067 (Flatten tenants.json to bare array format)
 
 Progress: [██████████] v2.0 — 13/13 plans complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 108 (v1.0 through v1.10 + Phases 45-50-01, including quick tasks)
+- Total plans completed: 109 (v1.0 through v1.10 + Phases 45-50-01, including quick tasks)
 - Average duration: ~25 min
 - Total execution time: ~39 hours
 
@@ -94,9 +94,10 @@ None.
 | 064 | Staleness sentinel timestamp + Range validation + SnapshotJob config | 2026-03-16 | 6738f73 | [064-staleness-sentinel-range-validation](./quick/064-staleness-sentinel-range-validation/) |
 | 065 | Remove snmp.aggregated.computed + add snmp.snapshot.cycle_duration_ms | 2026-03-17 | 45a14db | [065-remove-aggregated-add-cycle-duration](./quick/065-remove-aggregated-add-cycle-duration/) |
 | 066 | Fix tenants.json binding to match devices.json pattern (remove double nesting) | 2026-03-17 | c0b85d7 | [066-tenants-config-binding-consistency](./quick/066-tenants-config-binding-consistency/) |
+| 067 | Flatten tenants.json to bare array format matching devices.json | 2026-03-17 | acdde9b | [067-tenants-bare-array-config](./quick/067-tenants-bare-array-config/) |
 
 ## Session Continuity
 
-Last session: 2026-03-16
-Stopped at: Completed quick/064 — sentinel timestamp, range validation, SnapshotJob config; 415 tests green
+Last session: 2026-03-17
+Stopped at: Completed quick/067 — flatten tenants.json to bare array format; 416 tests green
 Resume file: None
