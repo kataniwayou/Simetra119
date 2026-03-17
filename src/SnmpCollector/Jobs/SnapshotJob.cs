@@ -224,10 +224,11 @@ public sealed class SnapshotJob : IJob
     }
 
     /// <summary>
-    /// Tier 2: Checks whether ALL Resolved holders with data are violated.
-    /// Returns true if all are violated (ConfirmedBad — evaluation stops).
-    /// Returns false if any Resolved holder with data is NOT violated (continue to Tier 3).
-    /// Holders with null ReadSlot do not participate.
+    /// Tier 2: Checks whether ALL Resolved holders have ALL time series samples violated.
+    /// Returns true if every sample in every Resolved holder's series is violated
+    /// (ConfirmedBad — evaluation stops).
+    /// Returns false if any single sample in any Resolved holder is NOT violated (continue to Tier 3).
+    /// Holders with empty series (Length == 0) do not participate.
     /// </summary>
     private static bool AreAllResolvedViolated(IReadOnlyList<MetricSlotHolder> holders)
     {
@@ -238,18 +239,22 @@ public sealed class SnapshotJob : IJob
             if (holder.Role != "Resolved")
                 continue;
 
-            var slot = holder.ReadSlot();
-            if (slot is null)
-                continue; // Does not participate in "all violated" check
+            var series = holder.ReadSeries();
+            if (series.Length == 0)
+                continue; // No data — does not participate in "all violated" check
+
+            // Every sample in the series must be violated for this holder to count
+            foreach (var sample in series)
+            {
+                if (!IsViolated(holder, sample))
+                    return false; // A single in-range sample → not all Resolved violated
+            }
 
             checkedCount++;
-
-            if (!IsViolated(holder, slot))
-                return false; // Not all Resolved are violated — continue to Tier 3
         }
 
-        // If at least one Resolved holder was checked and ALL were violated → ConfirmedBad
-        // If none were checked (all null or no Resolved) → vacuous true (defensive)
+        // If at least one Resolved holder was checked and ALL samples were violated → ConfirmedBad
+        // If none were checked (all empty or no Resolved) → vacuous true (defensive)
         return true;
     }
 

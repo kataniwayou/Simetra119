@@ -277,6 +277,60 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     // -------------------------------------------------------------------------
+    // Tier 2: Resolved all-samples series check
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void EvaluateTenant_ResolvedAllSeriesSamplesViolated_ConfirmedBad()
+    {
+        // Resolved holder with 3-sample series, all violated (below Min=10)
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 10 }, timeSeriesSize: 3);
+        WriteValue(resolved, 5.0);
+        WriteValue(resolved, 3.0);
+        WriteValue(resolved, 1.0); // All 3 below Min → all violated
+
+        var tenant = MakeTenant(resolved);
+        var result = _job.EvaluateTenant(tenant);
+
+        Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
+    }
+
+    [Fact]
+    public void EvaluateTenant_ResolvedOneSeriesSampleInRange_ContinuesToTier3()
+    {
+        // Resolved holder with 3-sample series: 2 violated, 1 in-range
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 10 }, timeSeriesSize: 3);
+        WriteValue(resolved, 5.0);  // Below Min → violated
+        WriteValue(resolved, 5.0);  // Below Min → violated
+        WriteValue(resolved, 50.0); // Above Min → NOT violated
+
+        var tenant = MakeTenant(resolved);
+        var result = _job.EvaluateTenant(tenant);
+
+        // One in-range sample → not all Resolved violated → continues to Tier 3
+        Assert.NotEqual(SnapshotJob.TierResult.ConfirmedBad, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Stale, result);
+    }
+
+    [Fact]
+    public void EvaluateTenant_ResolvedPartialSeriesFill_AllViolated_ConfirmedBad()
+    {
+        // Resolved holder with timeSeriesSize=5 but only 2 writes
+        // (sentinel + 2 writes = 3 samples, sentinel value=0 < Min=10 → violated)
+        var resolved = MakeHolder(role: "Resolved",
+            threshold: new ThresholdOptions { Min = 10 }, timeSeriesSize: 5);
+        WriteValue(resolved, 5.0); // Below Min → violated
+        WriteValue(resolved, 3.0); // Below Min → violated
+
+        var tenant = MakeTenant(resolved);
+        var result = _job.EvaluateTenant(tenant);
+
+        Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
+    }
+
+    // -------------------------------------------------------------------------
     // IsViolated direct tests
     // -------------------------------------------------------------------------
 
