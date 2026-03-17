@@ -236,8 +236,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 55-01-PLAN.md — Simulator agg_breach scenario, report.sh extension, ADV-01 aggregate evaluate script
-- [ ] 55-02-PLAN.md — ADV-02 depth-3 all-samples time-series script (breach + recovery)
+- [x] 55-01-PLAN.md — Simulator agg_breach scenario, report.sh extension, ADV-01 aggregate evaluate script
+- [x] 55-02-PLAN.md — ADV-02 depth-3 all-samples time-series script (breach + recovery)
 
 ---
 
@@ -275,7 +275,7 @@ Plans:
 | 52. Test Library and Config Artifacts | v2.1 | 3/3 | Complete | 2026-03-17 |
 | 53. Single-Tenant Scenarios | v2.1 | 3/3 | Complete | 2026-03-17 |
 | 54. Multi-Tenant Scenarios | v2.1 | 2/2 | Complete | 2026-03-17 |
-| 55. Advanced Scenarios | v2.1 | 0/2 | Planning | - |
+| 55. Advanced Scenarios | v2.1 | 2/2 | Complete | 2026-03-17 |
 
 ---
 *Roadmap created: 2026-03-10*

@@ -41,8 +41,8 @@ Requirements for E2E Tenant Evaluation Tests milestone. Each maps to roadmap pha
 
 ### Advanced Scenarios
 
-- [ ] **ADV-01**: Aggregate metric as evaluate — synthetic pipeline feeds threshold check, correct tier flow
-- [ ] **ADV-02**: Time series depth > 1 — series must fill before violation fires, validates all-samples check E2E
+- [x] **ADV-01**: Aggregate metric as evaluate — synthetic pipeline feeds threshold check, correct tier flow
+- [x] **ADV-02**: Time series depth > 1 — series must fill before violation fires, validates all-samples check E2E
 
 ### Test Infrastructure
 
@@ -90,8 +90,8 @@ Requirements for E2E Tenant Evaluation Tests milestone. Each maps to roadmap pha
 | STS-05 | Phase 53 | Complete |
 | MTS-01 | Phase 54 | Complete |
 | MTS-02 | Phase 54 | Complete |
-| ADV-01 | Phase 55 | Pending |
-| ADV-02 | Phase 55 | Pending |
+| ADV-01 | Phase 55 | Complete |
+| ADV-02 | Phase 55 | Complete |
 | INF-01 | Phase 52 | Complete |
 | INF-02 | Phase 52 | Complete |
 | INF-03 | Phase 52 | Complete |
