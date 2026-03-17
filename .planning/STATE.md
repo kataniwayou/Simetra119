@@ -93,6 +93,7 @@ None.
 | 063 | Initialize CurrentCorrelationId with Guid at construction | 2026-03-16 | 223b454 | — |
 | 064 | Staleness sentinel timestamp + Range validation + SnapshotJob config | 2026-03-16 | 6738f73 | [064-staleness-sentinel-range-validation](./quick/064-staleness-sentinel-range-validation/) |
 | 065 | Remove snmp.aggregated.computed + add snmp.snapshot.cycle_duration_ms | 2026-03-17 | 45a14db | [065-remove-aggregated-add-cycle-duration](./quick/065-remove-aggregated-add-cycle-duration/) |
+| 066 | Fix tenants.json binding to match devices.json pattern (remove double nesting) | 2026-03-17 | c0b85d7 | [066-tenants-config-binding-consistency](./quick/066-tenants-config-binding-consistency/) |
 
 ## Session Continuity
 
