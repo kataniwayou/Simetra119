@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 51 of 55 (Simulator HTTP Control Endpoint)
-Plan: 2 of TBD in current phase
-Status: In progress
-Last activity: 2026-03-17 — Completed 51-02-PLAN.md (simulator infra: aiohttp dep + port 8080 in Dockerfile and K8s)
+Plan: 2 of 2 in current phase (phase complete)
+Status: Phase complete
+Last activity: 2026-03-17 — Completed 51-01-PLAN.md (scenario registry, DynamicInstance, WritableDynamicInstance, 6 new OIDs, aiohttp HTTP endpoint)
 
-Progress: [█░░░░░░░░░] ~10% (v2.1)
+Progress: [██░░░░░░░░] ~20% (v2.1)
 
 ## Performance Metrics
 
@@ -33,7 +33,7 @@ Progress: [█░░░░░░░░░] ~10% (v2.1)
 - Minimum stabilization wait per scenario: 2 × SnapshotJob cycle (30s) + OTel scrape (15s) = ~45s; depth-3 time series scenarios require 75s+
 - All Prometheus command counter assertions must use `sum(snmp_command_sent_total{...})` across replicas — per-pod checks will miss leader-only counter increments
 - Use distinct tenant names per scenario fixture to prevent suppression cache bleed between scenarios
-- Port 8080 for HTTP endpoint — confirm no collision with collector health endpoint before Phase 51 implementation
+- Port 8080 for HTTP endpoint — no collision confirmed (collector health port is per-pod, separate Deployment; e2e-sim pod port 8080 is free)
 
 ### Blockers/Concerns
 
@@ -41,6 +41,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T10:55:07Z
-Stopped at: Completed 51-02-PLAN.md — simulator infra updated (requirements.txt, Dockerfile, K8s Deployment+Service)
+Last session: 2026-03-17T10:57:07Z
+Stopped at: Completed 51-01-PLAN.md — e2e_simulator.py reworked with HTTP control endpoint, scenario registry, 15 OIDs
 Resume file: None
