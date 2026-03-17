@@ -80,8 +80,8 @@ public sealed class PipelineMetricService : IDisposable
         _commandSuppressed = _meter.CreateCounter<long>("snmp.command.suppressed");
 
         _snapshotCycleDuration = _meter.CreateHistogram<double>(
-            "snmp.snapshot.cycle_duration_ms", "ms",
-            "Duration of one SnapshotJob evaluation cycle");
+            "snmp.snapshot.cycle_duration_ms",
+            description: "Duration of one SnapshotJob evaluation cycle in milliseconds");
     }
 
     /// <summary>PMET-01: Increment the count of published pipeline notifications by 1.</summary>
