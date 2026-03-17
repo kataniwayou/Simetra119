@@ -124,7 +124,14 @@ See `.planning/milestones/v2.0-REQUIREMENTS.md` for full requirement details.
 
 ### Active
 
-(No active milestone)
+**v2.1 E2E Tenant Evaluation Tests (in progress)**
+
+- E2E simulator rework with HTTP scenario control endpoint for test-driven OID value changes
+- Purpose-built OIDs, tenant configs, and OID maps for SnapshotJob evaluation testing
+- Test scripts validating 4-tier evaluation flow: staleness, resolved gate, evaluate gate, command dispatch
+- Multi-tenant tests: same-priority parallel eval, different-priority sequential advance gate
+- Aggregate metric evaluate tests: synthetic pipeline through threshold check
+- Validation via pod logs (tier debug lines) and Prometheus metrics (command counters)
 
 ### Out of Scope
 
@@ -194,4 +201,4 @@ See `.planning/milestones/v2.0-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-17 after v2.0 milestone complete*
+*Last updated: 2026-03-17 after v2.1 milestone started*

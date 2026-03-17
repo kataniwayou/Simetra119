@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Between milestones — v2.0 complete, next milestone TBD
+**Current focus:** v2.1 E2E Tenant Evaluation Tests — defining requirements
 
 ## Current Position
 
-Phase: 50 of 50 (all phases complete)
-Plan: N/A
-Status: Between milestones
-Last activity: 2026-03-17 — Completed quick-069 (all-timeseries-samples-threshold-check)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-17 — Milestone v2.1 started
 
 Progress: [██████████] v2.0 complete
 
