@@ -12,14 +12,14 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 Phase: 50 of 50 (Label Rename)
 Plan: 1 of 1 in current phase
 Status: v2.0 milestone complete
-Last activity: 2026-03-16 — Completed quick/064 (Staleness Sentinel + Range Validation + SnapshotJob Config)
+Last activity: 2026-03-17 — Completed quick/065 (Remove aggregated.computed + Add snapshot.cycle_duration_ms)
 
 Progress: [██████████] v2.0 — 13/13 plans complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 106 (v1.0 through v1.10 + Phases 45-50-01, including quick tasks)
+- Total plans completed: 107 (v1.0 through v1.10 + Phases 45-50-01, including quick tasks)
 - Average duration: ~25 min
 - Total execution time: ~39 hours
 
