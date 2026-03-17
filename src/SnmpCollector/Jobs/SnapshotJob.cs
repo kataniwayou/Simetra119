@@ -286,8 +286,14 @@ public sealed class SnapshotJob : IJob
 
     /// <summary>
     /// Checks whether a holder's current value violates its threshold bounds.
-    /// Uses strict inequality: boundary values (exactly Min or Max) are in-range (NOT violated).
-    /// No threshold (null or both Min/Max null) is treated as violated.
+    /// <para>
+    /// Threshold conditions:
+    /// - null threshold or both Min/Max null → always violated
+    /// - Min == Max (both non-null, same value) → violated if value equals that value (equality check)
+    /// - Min != Max → strict inequality: value &lt; Min or value &gt; Max is violated; boundary values are in-range
+    /// - Only Min set → violated if value &lt; Min
+    /// - Only Max set → violated if value &gt; Max
+    /// </para>
     /// </summary>
     internal static bool IsViolated(MetricSlotHolder holder, MetricSlot slot)
     {
@@ -302,6 +308,14 @@ public sealed class SnapshotJob : IJob
             return true;
 
         var value = slot.Value;
+
+        // Equal bounds (Min == Max, both non-null) → equality condition
+        // Violated if value equals the threshold point (exact match triggers action)
+        if (threshold.Min is not null && threshold.Max is not null
+            && threshold.Min.Value == threshold.Max.Value)
+        {
+            return value == threshold.Min.Value;
+        }
 
         // Strict inequality: value < Min is violated, value == Min is in-range
         if (threshold.Min is not null && value < threshold.Min.Value)

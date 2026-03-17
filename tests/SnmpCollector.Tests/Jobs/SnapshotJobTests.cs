@@ -1014,4 +1014,79 @@ public sealed class SnapshotJobTests : IDisposable
         public void Put(object key, object objectValue) { }
         public object? Get(object key) => null;
     }
+
+    // -----------------------------------------------------------------------
+    // IsViolated — direct unit tests for threshold edge cases
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void IsViolated_NullThreshold_ReturnsTrue()
+    {
+        var holder = MakeHolder(role: "Evaluate", threshold: null);
+        var slot = new MetricSlot(5.0, null, DateTimeOffset.UtcNow);
+        Assert.True(SnapshotJob.IsViolated(holder, slot));
+    }
+
+    [Fact]
+    public void IsViolated_BothBoundsNull_ReturnsTrue()
+    {
+        var holder = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = null, Max = null });
+        var slot = new MetricSlot(5.0, null, DateTimeOffset.UtcNow);
+        Assert.True(SnapshotJob.IsViolated(holder, slot));
+    }
+
+    [Fact]
+    public void IsViolated_EqualBounds_ValueEquals_ReturnsTrue()
+    {
+        var holder = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 5.0, Max = 5.0 });
+        var slot = new MetricSlot(5.0, null, DateTimeOffset.UtcNow);
+        Assert.True(SnapshotJob.IsViolated(holder, slot));
+    }
+
+    [Fact]
+    public void IsViolated_EqualBounds_ValueDiffers_ReturnsFalse()
+    {
+        var holder = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 5.0, Max = 5.0 });
+        var slot = new MetricSlot(6.0, null, DateTimeOffset.UtcNow);
+        Assert.False(SnapshotJob.IsViolated(holder, slot));
+    }
+
+    [Fact]
+    public void IsViolated_RangeBounds_ValueAtBoundary_ReturnsFalse()
+    {
+        var holder = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 5.0, Max = 10.0 });
+        var slot = new MetricSlot(5.0, null, DateTimeOffset.UtcNow);
+        Assert.False(SnapshotJob.IsViolated(holder, slot)); // Boundary = in-range
+    }
+
+    [Fact]
+    public void IsViolated_RangeBounds_ValueBelowMin_ReturnsTrue()
+    {
+        var holder = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 5.0, Max = 10.0 });
+        var slot = new MetricSlot(4.9, null, DateTimeOffset.UtcNow);
+        Assert.True(SnapshotJob.IsViolated(holder, slot));
+    }
+
+    [Fact]
+    public void IsViolated_OnlyMin_ValueBelow_ReturnsTrue()
+    {
+        var holder = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 5.0 });
+        var slot = new MetricSlot(4.0, null, DateTimeOffset.UtcNow);
+        Assert.True(SnapshotJob.IsViolated(holder, slot));
+    }
+
+    [Fact]
+    public void IsViolated_OnlyMax_ValueAbove_ReturnsTrue()
+    {
+        var holder = MakeHolder(role: "Evaluate",
+            threshold: new ThresholdOptions { Max = 10.0 });
+        var slot = new MetricSlot(11.0, null, DateTimeOffset.UtcNow);
+        Assert.True(SnapshotJob.IsViolated(holder, slot));
+    }
 }
