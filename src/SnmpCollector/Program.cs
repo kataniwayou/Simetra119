@@ -145,6 +145,21 @@ if (!k8s.KubernetesClientConfiguration.IsInCluster())
         }
     }
 
+    // Load command map from oid_command_map.json (array-of-objects format)
+    // Must load BEFORE tenants -- ValidateAndBuildTenants calls ResolveCommandOid.
+    var oidCommandMapPath = Path.Combine(configDir, "oid_command_map.json");
+    if (File.Exists(oidCommandMapPath))
+    {
+        var cmdJson = File.ReadAllText(oidCommandMapPath);
+        var cmdMapLogger = app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SnmpCollector.Services.CommandMapWatcherService>>();
+        var cmdMap = SnmpCollector.Services.CommandMapWatcherService.ValidateAndParseCommandMap(cmdJson, cmdMapLogger);
+        if (cmdMap != null)
+        {
+            var commandMapService = app.Services.GetRequiredService<SnmpCollector.Pipeline.CommandMapService>();
+            commandMapService.UpdateMap(cmdMap);
+        }
+    }
+
     // Load tenant vector from tenants.json (bare array format, matching devices.json)
     var tenantsPath = Path.Combine(configDir, "tenants.json");
     if (File.Exists(tenantsPath))
@@ -164,20 +179,6 @@ if (!k8s.KubernetesClientConfiguration.IsInCluster())
                 tvOptions, oidMapService, deviceRegistry, commandMapService, snapshotJobOpts.Value.IntervalSeconds, tvLogger);
             var tvRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.TenantVectorRegistry>();
             tvRegistry.Reload(cleanOptions);
-        }
-    }
-
-    // Load command map from oid_command_map.json (array-of-objects format)
-    var oidCommandMapPath = Path.Combine(configDir, "oid_command_map.json");
-    if (File.Exists(oidCommandMapPath))
-    {
-        var cmdJson = File.ReadAllText(oidCommandMapPath);
-        var cmdMapLogger = app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SnmpCollector.Services.CommandMapWatcherService>>();
-        var cmdMap = SnmpCollector.Services.CommandMapWatcherService.ValidateAndParseCommandMap(cmdJson, cmdMapLogger);
-        if (cmdMap != null)
-        {
-            var commandMapService = app.Services.GetRequiredService<SnmpCollector.Pipeline.CommandMapService>();
-            commandMapService.UpdateMap(cmdMap);
         }
     }
 }
