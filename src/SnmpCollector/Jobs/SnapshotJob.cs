@@ -30,7 +30,7 @@ public sealed class SnapshotJob : IJob
     /// Result of per-tenant 4-tier evaluation. Drives priority-group advance gate
     /// and cycle summary logging.
     /// </summary>
-    internal enum TierResult { Stale, ConfirmedBad, Healthy, Commanded }
+    internal enum TierResult { Violated, Healthy, Commanded }
 
     public SnapshotJob(
         ITenantVectorRegistry registry,
@@ -62,7 +62,6 @@ public sealed class SnapshotJob : IJob
         {
             var totalEvaluated = 0;
             var totalCommanded = 0;
-            var totalStale = 0;
 
             foreach (var group in _registry.Groups)
             {
@@ -75,14 +74,13 @@ public sealed class SnapshotJob : IJob
                 {
                     totalEvaluated++;
                     if (results[i] == TierResult.Commanded) totalCommanded++;
-                    if (results[i] == TierResult.Stale) totalStale++;
                 }
 
-                // Advance gate: block if ANY tenant is Stale or Commanded
+                // Advance gate: block if ANY tenant is Commanded
                 var shouldAdvance = true;
                 for (var i = 0; i < results.Length; i++)
                 {
-                    if (results[i] == TierResult.Stale || results[i] == TierResult.Commanded)
+                    if (results[i] == TierResult.Commanded)
                     {
                         shouldAdvance = false;
                         break;
@@ -97,8 +95,8 @@ public sealed class SnapshotJob : IJob
             _pipelineMetrics.RecordSnapshotCycleDuration(sw.Elapsed.TotalMilliseconds);
 
             _logger.LogDebug(
-                "Snapshot cycle complete: {TenantsEvaluated} evaluated, {Commanded} commanded, {Stale} stale, {DurationMs:F1}ms",
-                totalEvaluated, totalCommanded, totalStale, sw.Elapsed.TotalMilliseconds);
+                "Snapshot cycle complete: {TenantsEvaluated} evaluated, {Commanded} commanded, {DurationMs:F1}ms",
+                totalEvaluated, totalCommanded, sw.Elapsed.TotalMilliseconds);
         }
         catch (OperationCanceledException)
         {
@@ -118,41 +116,45 @@ public sealed class SnapshotJob : IJob
     /// <summary>
     /// Runs the 4-tier evaluation for a single tenant. Returns the tier result
     /// for priority-group advance gate decisions.
-    /// Tier 1: staleness check. Tier 2: resolved gate. Tier 3: evaluate threshold.
+    /// Tier 1: staleness check — if stale, skip to tier 4 (commands).
+    /// Tier 2: resolved gate — if all violated, end (no commands).
+    /// Tier 3: evaluate threshold — if all violated, proceed to tier 4.
     /// Tier 4: command dispatch with suppression.
     /// </summary>
     internal TierResult EvaluateTenant(Tenant tenant)
     {
-        // Tier 1: Staleness check
+        // Tier 1: Staleness check — stale data skips tiers 2-3, goes straight to commands
         if (HasStaleness(tenant.Holders))
         {
             _logger.LogDebug(
-                "Tenant {TenantId} priority={Priority} tier=1 stale — skipping threshold checks",
+                "Tenant {TenantId} priority={Priority} tier=1 stale — skipping to commands",
                 tenant.Id, tenant.Priority);
-            return TierResult.Stale;
+            // Fall through to Tier 4 (command dispatch)
         }
-
-        // Tier 2: Resolved gate — are ALL Resolved metrics violated?
-        if (AreAllResolvedViolated(tenant.Holders))
+        else
         {
-            _logger.LogDebug(
-                "Tenant {TenantId} priority={Priority} tier=2 — all resolved violated, device confirmed bad, no commands",
-                tenant.Id, tenant.Priority);
-            return TierResult.ConfirmedBad;
-        }
+            // Tier 2: Resolved gate — are ALL Resolved metrics violated?
+            if (AreAllResolvedViolated(tenant.Holders))
+            {
+                _logger.LogDebug(
+                    "Tenant {TenantId} priority={Priority} tier=2 — all resolved violated, no commands",
+                    tenant.Id, tenant.Priority);
+                return TierResult.Violated;
+            }
 
-        // Not all Resolved violated — proceed to Tier 3 (evaluate check)
-        _logger.LogDebug(
-            "Tenant {TenantId} priority={Priority} tier=2 — resolved not all violated, proceeding to evaluate check",
-            tenant.Id, tenant.Priority);
-
-        // Tier 3: Evaluate gate — are ALL Evaluate metrics violated?
-        if (!AreAllEvaluateViolated(tenant.Holders))
-        {
+            // Not all Resolved violated — proceed to Tier 3 (evaluate check)
             _logger.LogDebug(
-                "Tenant {TenantId} priority={Priority} tier=3 — not all evaluate metrics violated, no action",
+                "Tenant {TenantId} priority={Priority} tier=2 — resolved not all violated, proceeding to evaluate check",
                 tenant.Id, tenant.Priority);
-            return TierResult.Healthy;
+
+            // Tier 3: Evaluate gate — are ALL Evaluate metrics violated?
+            if (!AreAllEvaluateViolated(tenant.Holders))
+            {
+                _logger.LogDebug(
+                    "Tenant {TenantId} priority={Priority} tier=3 — not all evaluate metrics violated, no action",
+                    tenant.Id, tenant.Priority);
+                return TierResult.Healthy;
+            }
         }
 
         // Tier 4: Command dispatch with suppression
@@ -192,8 +194,8 @@ public sealed class SnapshotJob : IJob
             tenant.Id, tenant.Priority, enqueueCount);
 
         // If no commands were actually enqueued (all suppressed or channel full),
-        // treat as ConfirmedBad — no active commands firing, safe to cascade
-        return enqueueCount > 0 ? TierResult.Commanded : TierResult.ConfirmedBad;
+        // treat as Violated — no active commands firing, safe to cascade
+        return enqueueCount > 0 ? TierResult.Commanded : TierResult.Violated;
     }
 
     /// <summary>
@@ -227,7 +229,7 @@ public sealed class SnapshotJob : IJob
     /// Tier 2: Checks whether ALL Resolved holders with data are violated.
     /// For Poll/Synthetic sources: every sample in the time series must be violated.
     /// For Trap/Command sources: only the newest sample is checked (no periodic interval).
-    /// Returns true if all are violated (ConfirmedBad — evaluation stops).
+    /// Returns true if all are violated (Violated — evaluation stops).
     /// Returns false if any Resolved holder with data is NOT violated (continue to Tier 3).
     /// Holders with empty series (Length == 0) do not participate.
     /// </summary>
@@ -269,7 +271,7 @@ public sealed class SnapshotJob : IJob
             checkedCount++;
         }
 
-        // If at least one Resolved holder was checked and ALL were violated → ConfirmedBad
+        // If at least one Resolved holder was checked and ALL were violated → Violated
         // If none were checked (all empty or no Resolved) → vacuous true (defensive)
         return true;
     }

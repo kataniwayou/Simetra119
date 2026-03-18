@@ -91,7 +91,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(holder);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.NotEqual(SnapshotJob.TierResult.Stale, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Commanded, result);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Sentinel within grace → not stale. Sentinel Value=0 in range → not violated → Healthy
-        Assert.NotEqual(SnapshotJob.TierResult.Stale, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Commanded, result);
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Trap source excluded from staleness → not stale
-        Assert.NotEqual(SnapshotJob.TierResult.Stale, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Commanded, result);
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Command source excluded from staleness → not stale
-        Assert.NotEqual(SnapshotJob.TierResult.Stale, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Commanded, result);
     }
 
     [Fact]
@@ -151,11 +151,11 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(holder);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.NotEqual(SnapshotJob.TierResult.Stale, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Commanded, result);
     }
 
     [Fact]
-    public async Task EvaluateTenant_StaleHolder_ReturnsStale()
+    public async Task EvaluateTenant_StaleHolder_SkipsToCommands()
     {
         // Very small interval + grace = 1 * 1.0 = 1 second window
         var holder = MakeHolder(intervalSeconds: 1, graceMultiplier: 1.0, role: "Resolved",
@@ -165,10 +165,13 @@ public sealed class SnapshotJobTests : IDisposable
         // Wait for value to become stale (> 1 second)
         await Task.Delay(TimeSpan.FromSeconds(1.5));
 
-        var tenant = MakeTenant(holder);
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.1", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
+        var tenant = MakeTenant([holder], [cmd]);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.Stale, result);
+        // Stale data skips tiers 2-3, goes straight to command dispatch
+        Assert.Equal(SnapshotJob.TierResult.Commanded, result);
     }
 
     // -------------------------------------------------------------------------
@@ -176,7 +179,7 @@ public sealed class SnapshotJobTests : IDisposable
     // -------------------------------------------------------------------------
 
     [Fact]
-    public void EvaluateTenant_AllResolvedViolated_ConfirmedBadNoCommands()
+    public void EvaluateTenant_AllResolvedViolated_ViolatedNoCommands()
     {
         // Two Resolved holders, both violated (value below Min)
         var h1 = MakeHolder(intervalSeconds: 3600, role: "Resolved",
@@ -190,7 +193,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(h1, h2);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
+        Assert.Equal(SnapshotJob.TierResult.Violated, result);
         // No commands should be enqueued (channel should be empty)
         Assert.False(_commandChannel.Reader.TryRead(out _));
     }
@@ -211,8 +214,8 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Not all Resolved violated → continues to Tier 3 → currently returns Healthy (Tier 3/4 not yet wired)
-        Assert.NotEqual(SnapshotJob.TierResult.ConfirmedBad, result);
-        Assert.NotEqual(SnapshotJob.TierResult.Stale, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Violated, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Commanded, result);
     }
 
     [Fact]
@@ -230,8 +233,8 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(h1, h2);
         var result = _job.EvaluateTenant(tenant);
 
-        // h1 violated, h2 sentinel (Value=0 < Min=10) violated → all Resolved violated → ConfirmedBad
-        Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
+        // h1 violated, h2 sentinel (Value=0 < Min=10) violated → all Resolved violated → Violated
+        Assert.Equal(SnapshotJob.TierResult.Violated, result);
     }
 
     [Fact]
@@ -244,7 +247,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(holder);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
+        Assert.Equal(SnapshotJob.TierResult.Violated, result);
     }
 
     [Fact]
@@ -258,7 +261,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(holder);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
+        Assert.Equal(SnapshotJob.TierResult.Violated, result);
     }
 
     [Fact]
@@ -273,8 +276,8 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Not violated → not all Resolved violated → continues to Tier 3
-        Assert.NotEqual(SnapshotJob.TierResult.ConfirmedBad, result);
-        Assert.NotEqual(SnapshotJob.TierResult.Stale, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Violated, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Commanded, result);
     }
 
     [Fact]
@@ -288,7 +291,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(holder);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.NotEqual(SnapshotJob.TierResult.ConfirmedBad, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Violated, result);
     }
 
     // -------------------------------------------------------------------------
@@ -296,7 +299,7 @@ public sealed class SnapshotJobTests : IDisposable
     // -------------------------------------------------------------------------
 
     [Fact]
-    public void EvaluateTenant_ResolvedAllSeriesSamplesViolated_ConfirmedBad()
+    public void EvaluateTenant_ResolvedAllSeriesSamplesViolated_Violated()
     {
         // Resolved holder with 3-sample series, all violated (below Min=10)
         var resolved = MakeHolder(role: "Resolved",
@@ -308,7 +311,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(resolved);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
+        Assert.Equal(SnapshotJob.TierResult.Violated, result);
     }
 
     [Fact]
@@ -325,12 +328,12 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // One in-range sample → not all Resolved violated → continues to Tier 3
-        Assert.NotEqual(SnapshotJob.TierResult.ConfirmedBad, result);
-        Assert.NotEqual(SnapshotJob.TierResult.Stale, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Violated, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Commanded, result);
     }
 
     [Fact]
-    public void EvaluateTenant_ResolvedPartialSeriesFill_AllViolated_ConfirmedBad()
+    public void EvaluateTenant_ResolvedPartialSeriesFill_AllViolated_Violated()
     {
         // Resolved holder with timeSeriesSize=5 but only 2 writes
         // (sentinel + 2 writes = 3 samples, sentinel value=0 < Min=10 → violated)
@@ -342,7 +345,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(resolved);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
+        Assert.Equal(SnapshotJob.TierResult.Violated, result);
     }
 
     // -------------------------------------------------------------------------
@@ -366,11 +369,11 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Command source checks newest only (50.0 >= 10) → not violated → continues to Tier 3
-        Assert.NotEqual(SnapshotJob.TierResult.ConfirmedBad, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Violated, result);
     }
 
     [Fact]
-    public void EvaluateTenant_ResolvedCommandSource_NewestViolated_ConfirmedBad()
+    public void EvaluateTenant_ResolvedCommandSource_NewestViolated_Violated()
     {
         // Command-sourced resolved holder: newest sample is violated
         var resolved = MakeHolder(role: "Resolved",
@@ -382,8 +385,8 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(resolved);
         var result = _job.EvaluateTenant(tenant);
 
-        // Command source checks newest only (5.0 < 10) → violated → ConfirmedBad
-        Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
+        // Command source checks newest only (5.0 < 10) → violated → Violated
+        Assert.Equal(SnapshotJob.TierResult.Violated, result);
     }
 
     [Fact]
@@ -400,7 +403,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Trap source checks newest only → NOT violated → Tier 3
-        Assert.NotEqual(SnapshotJob.TierResult.ConfirmedBad, result);
+        Assert.NotEqual(SnapshotJob.TierResult.Violated, result);
     }
 
     [Fact]
@@ -752,9 +755,9 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmd });
         var result = _job.EvaluateTenant(tenant);
 
-        // Suppressed → no TryWrite, zero enqueued → ConfirmedBad (safe to cascade)
+        // Suppressed → no TryWrite, zero enqueued → Violated (safe to cascade)
         Assert.False(_commandChannel.Reader.TryRead(out _));
-        Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
+        Assert.Equal(SnapshotJob.TierResult.Violated, result);
     }
 
     [Fact]
@@ -776,10 +779,10 @@ public sealed class SnapshotJobTests : IDisposable
             { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
         var tenant = MakeTenant(new[] { resolved, eval1 }, new[] { cmd });
 
-        // Should not throw — channel full means zero enqueued → ConfirmedBad
+        // Should not throw — channel full means zero enqueued → Violated
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.ConfirmedBad, result);
+        Assert.Equal(SnapshotJob.TierResult.Violated, result);
     }
 
     [Fact]
@@ -874,34 +877,34 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     [Fact]
-    public async Task Execute_SingleGroupOneStale_StaleDetected()
+    public async Task Execute_SingleGroupOneStale_CommandsEnqueued()
     {
-        // One stale tenant in the group
+        // One stale tenant with a command — staleness skips to command dispatch
         var staleHolder = MakeHolder(intervalSeconds: 1, graceMultiplier: 0.001, role: "Resolved",
             threshold: new ThresholdOptions { Min = 0, Max = 100 });
         WriteValue(staleHolder, 50.0);
-        // Force staleness by writing a value with an old timestamp
-        // Instead, use a very small interval so the value is immediately stale
         // IntervalSeconds=1, GraceMultiplier=0.001 → grace window = 0.001s (1ms)
-        // The WriteValue call just happened, so we need to wait briefly
         await Task.Delay(TimeSpan.FromMilliseconds(50));
 
-        var staleTenant = MakeTenant(new[] { staleHolder }, Array.Empty<CommandSlotOptions>(), id: "stale-t");
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.1", Port = 161, CommandName = "stale-cmd", Value = "1", ValueType = "Integer32" };
+        var staleTenant = MakeTenant(new[] { staleHolder }, new[] { cmd }, id: "stale-t");
         var healthyTenant = MakeHealthyTenant("healthy-t");
 
         _registry.SetGroups(new PriorityGroup(1, new[] { staleTenant, healthyTenant }));
         await _job.Execute(MakeContext("snapshot"));
 
-        // Stale tenant detected, no commands
-        Assert.False(_commandChannel.Reader.TryRead(out _));
+        // Stale tenant skips to commands — command should be enqueued
+        Assert.True(_commandChannel.Reader.TryRead(out var req));
+        Assert.Equal("stale-cmd", req!.CommandName);
         Assert.True(_liveness.StampCalled);
     }
 
     [Fact]
-    public async Task Execute_TwoGroups_FirstAllConfirmedBad_SecondGroupEvaluated()
+    public async Task Execute_TwoGroups_FirstAllViolated_SecondGroupEvaluated()
     {
-        // Group 1: ALL Resolved violated → ConfirmedBad (Tier 2 stop). Advance gate passes.
-        var confirmedBadTenant = MakeConfirmedBadTenant("cb-t");
+        // Group 1: ALL Resolved violated → Violated (Tier 2 stop). Advance gate passes.
+        var confirmedBadTenant = MakeViolatedTenant("cb-t");
         // Group 2: Healthy tenant (should be evaluated since group 1 advances)
         var healthyTenant = MakeHealthyTenant("healthy-t");
 
@@ -911,7 +914,7 @@ public sealed class SnapshotJobTests : IDisposable
 
         await _job.Execute(MakeContext("snapshot"));
 
-        // No commands from either group (ConfirmedBad stops at Tier 2, Healthy stops at Tier 3)
+        // No commands from either group (Violated stops at Tier 2, Healthy stops at Tier 3)
         Assert.False(_commandChannel.Reader.TryRead(out _));
         Assert.True(_liveness.StampCalled);
     }
@@ -939,12 +942,14 @@ public sealed class SnapshotJobTests : IDisposable
     [Fact]
     public async Task Execute_TwoGroups_FirstGroupStale_SecondGroupNotEvaluated()
     {
-        // Group 1: Stale tenant → advance gate blocks
+        // Group 1: Stale tenant with command → commands enqueued, advance gate blocks
         var staleHolder = MakeHolder(intervalSeconds: 1, graceMultiplier: 0.001, role: "Resolved",
             threshold: new ThresholdOptions { Min = 0, Max = 100 });
         WriteValue(staleHolder, 50.0);
         await Task.Delay(TimeSpan.FromMilliseconds(50));
-        var staleTenant = MakeTenant(new[] { staleHolder }, Array.Empty<CommandSlotOptions>(), id: "stale-t");
+        var staleCmd = new CommandSlotOptions
+            { Ip = "10.0.0.1", Port = 161, CommandName = "stale-cmd", Value = "1", ValueType = "Integer32" };
+        var staleTenant = MakeTenant(new[] { staleHolder }, new[] { staleCmd }, id: "stale-t");
 
         // Group 2: Commanding tenant — would enqueue if evaluated
         var group2Tenant = MakeCommandingTenant("cmd-t2", "cmd-group2");
@@ -955,7 +960,10 @@ public sealed class SnapshotJobTests : IDisposable
 
         await _job.Execute(MakeContext("snapshot"));
 
-        // No commands — group 1 blocked, group 2 not evaluated
+        // Group 1 stale → commands enqueued (Commanded) → advance gate blocks → group 2 not evaluated
+        Assert.True(_commandChannel.Reader.TryRead(out var req));
+        Assert.Equal("stale-cmd", req!.CommandName);
+        // Group 2 command should NOT be present
         Assert.False(_commandChannel.Reader.TryRead(out _));
     }
 
@@ -980,11 +988,11 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     [Fact]
-    public async Task Execute_TwoGroups_FirstMixedHealthyAndConfirmedBad_SecondGroupEvaluated()
+    public async Task Execute_TwoGroups_FirstMixedHealthyAndViolated_SecondGroupEvaluated()
     {
-        // Group 1: Mixed Healthy + ConfirmedBad → both are advance-allowing states
+        // Group 1: Mixed Healthy + Violated → both are advance-allowing states
         var healthyTenant = MakeHealthyTenant("h1");
-        var confirmedBadTenant = MakeConfirmedBadTenant("cb1");
+        var confirmedBadTenant = MakeViolatedTenant("cb1");
         // Group 2: Commanding tenant — should be evaluated
         var group2Tenant = MakeCommandingTenant("cmd-t", "cmd-group2");
 
@@ -1119,10 +1127,10 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     /// <summary>
-    /// Creates a tenant that evaluates as ConfirmedBad (Tier 2 stop):
-    /// ALL Resolved violated → ConfirmedBad.
+    /// Creates a tenant that evaluates as Violated (Tier 2 stop):
+    /// ALL Resolved violated → Violated.
     /// </summary>
-    private static Tenant MakeConfirmedBadTenant(string id)
+    private static Tenant MakeViolatedTenant(string id)
     {
         var resolved = MakeHolder(role: "Resolved",
             threshold: new ThresholdOptions { Min = 10 });
