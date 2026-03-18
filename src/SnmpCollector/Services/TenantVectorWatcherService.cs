@@ -421,10 +421,13 @@ public sealed class TenantVectorWatcherService : BackgroundService
                         tenantId, k, cmd.Ip);
                     continue;
                 }
-                cmd.Ip = resolvedCmdIp;
+                // NOTE: Do NOT overwrite cmd.Ip with resolvedCmdIp.
+                // CommandWorkerService looks up the device registry by ConfigAddress (the original
+                // hostname), not by ResolvedIp. Overwriting would break the registry lookup.
+                // Use resolvedCmdIp only for duplicate detection below.
 
                 // 10. Duplicate command detection: skip duplicate, keep first
-                var cmdKey = $"{cmd.Ip}:{cmd.Port}:{cmd.CommandName}";
+                var cmdKey = $"{resolvedCmdIp}:{cmd.Port}:{cmd.CommandName}";
                 if (!seenCommandKeys.Add(cmdKey))
                 {
                     logger.LogError(

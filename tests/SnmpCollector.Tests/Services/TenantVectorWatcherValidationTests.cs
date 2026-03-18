@@ -1359,9 +1359,11 @@ public sealed class TenantVectorWatcherValidationTests
     }
 
     [Fact]
-    public void CommandIpResolved_MatchesDeviceResolvedIp()
+    public void CommandIpResolved_PreservesConfigAddress()
     {
         // DeviceInfo with ConfigAddress="cmd-host" and ResolvedIp="10.0.0.5".
+        // Command Ip should NOT be overwritten with ResolvedIp — CommandWorkerService
+        // looks up the device registry by ConfigAddress, not ResolvedIp.
         var pollGroup = new MetricPollInfo(0, new[] { PassthroughOid }.AsReadOnly(), 10, GraceMultiplier: 2.0);
         var device = new DeviceInfo(
             Name: "cmd-host",
@@ -1395,7 +1397,7 @@ public sealed class TenantVectorWatcherValidationTests
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
-        Assert.Equal("10.0.0.5", result.Tenants[0].Commands[0].Ip);
+        Assert.Equal("cmd-host", result.Tenants[0].Commands[0].Ip);
     }
 
     [Fact]
