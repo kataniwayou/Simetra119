@@ -48,6 +48,7 @@ public sealed class TenantVectorWatcherService : BackgroundService
     private readonly TenantVectorOptionsValidator _validator;
     private readonly IOidMapService _oidMapService;
     private readonly IDeviceRegistry _deviceRegistry;
+    private readonly ICommandMapService _commandMapService;
     private readonly IOptions<SnapshotJobOptions> _snapshotJobOptions;
     private readonly ILogger<TenantVectorWatcherService> _logger;
     private readonly SemaphoreSlim _reloadLock = new(1, 1);
@@ -59,6 +60,7 @@ public sealed class TenantVectorWatcherService : BackgroundService
         TenantVectorOptionsValidator validator,
         IOidMapService oidMapService,
         IDeviceRegistry deviceRegistry,
+        ICommandMapService commandMapService,
         IOptions<SnapshotJobOptions> snapshotJobOptions,
         ILogger<TenantVectorWatcherService> logger)
     {
@@ -67,6 +69,7 @@ public sealed class TenantVectorWatcherService : BackgroundService
         _validator = validator ?? throw new ArgumentNullException(nameof(validator));
         _oidMapService = oidMapService ?? throw new ArgumentNullException(nameof(oidMapService));
         _deviceRegistry = deviceRegistry ?? throw new ArgumentNullException(nameof(deviceRegistry));
+        _commandMapService = commandMapService ?? throw new ArgumentNullException(nameof(commandMapService));
         _snapshotJobOptions = snapshotJobOptions ?? throw new ArgumentNullException(nameof(snapshotJobOptions));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -82,6 +85,7 @@ public sealed class TenantVectorWatcherService : BackgroundService
     /// <param name="options">Raw options from ConfigMap or local dev file.</param>
     /// <param name="oidMapService">OID map for MetricName existence checks (TEN-05).</param>
     /// <param name="deviceRegistry">Device registry for IP+Port existence checks (TEN-07) and IP resolution.</param>
+    /// <param name="commandMapService">Command map for CommandName existence checks.</param>
     /// <param name="snapshotIntervalSeconds">Snapshot job interval for SuppressionWindowSeconds validation.</param>
     /// <param name="logger">Logger for per-entry skip and TEN-13 messages.</param>
     /// <returns>A new <see cref="TenantVectorOptions"/> containing only valid, resolved tenants.</returns>
@@ -89,10 +93,12 @@ public sealed class TenantVectorWatcherService : BackgroundService
         TenantVectorOptions options,
         IOidMapService oidMapService,
         IDeviceRegistry deviceRegistry,
+        ICommandMapService commandMapService,
         int snapshotIntervalSeconds,
         ILogger logger)
     {
         var cleanTenants = new List<TenantOptions>();
+        var seenTenantNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         for (var i = 0; i < options.Tenants.Count; i++)
         {
@@ -101,7 +107,17 @@ public sealed class TenantVectorWatcherService : BackgroundService
                 ? tenantOpts.Name
                 : $"tenant-{i}";
 
+            // Duplicate tenant name detection: skip duplicate, keep first
+            if (!string.IsNullOrWhiteSpace(tenantOpts.Name) && !seenTenantNames.Add(tenantOpts.Name))
+            {
+                logger.LogError(
+                    "Tenant '{TenantId}' skipped: duplicate Name (first instance kept, suppression key collision avoided)",
+                    tenantId);
+                continue;
+            }
+
             var cleanMetrics = new List<MetricSlotOptions>();
+            var seenMetricKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             int evaluateCount = 0;
             int resolvedCount = 0;
 
@@ -281,6 +297,17 @@ public sealed class TenantVectorWatcherService : BackgroundService
                 }
 
                 metric.Ip = resolvedIp;
+
+                // 13. Duplicate metric detection: skip duplicate, keep first
+                var metricKey = $"{metric.Ip}:{metric.Port}:{metric.MetricName}";
+                if (!seenMetricKeys.Add(metricKey))
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Metrics[{Index}] skipped: duplicate metric {Ip}:{Port}:{MetricName} (first instance kept)",
+                        tenantId, j, metric.Ip, metric.Port, metric.MetricName);
+                    continue;
+                }
+
                 cleanMetrics.Add(metric);
 
                 // Track role counts for TEN-13 gate.
@@ -290,6 +317,7 @@ public sealed class TenantVectorWatcherService : BackgroundService
 
             // Per-command entry validation.
             var cleanCommands = new List<CommandSlotOptions>();
+            var seenCommandKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (var k = 0; k < tenantOpts.Commands.Count; k++)
             {
                 var cmd = tenantOpts.Commands[k];
@@ -365,10 +393,45 @@ public sealed class TenantVectorWatcherService : BackgroundService
                     continue;
                 }
 
-                // TEN-06: CommandName stored as-is — resolution deferred to execution time.
-                logger.LogDebug(
-                    "Tenant '{TenantId}' Commands[{Index}]: CommandName '{CommandName}' stored as-is (resolution deferred to execution)",
-                    tenantId, k, cmd.CommandName);
+                // 8. CommandName not in command map — skip command
+                if (commandMapService.ResolveCommandOid(cmd.CommandName) is null)
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Commands[{Index}] skipped: CommandName '{CommandName}' not found in command map",
+                        tenantId, k, cmd.CommandName);
+                    continue;
+                }
+
+                // Resolve command IP via DeviceRegistry.AllDevices (same as metric IP resolution)
+                var resolvedCmdIp = cmd.Ip;
+                foreach (var registeredDevice in deviceRegistry.AllDevices)
+                {
+                    if (string.Equals(registeredDevice.ConfigAddress, cmd.Ip, StringComparison.OrdinalIgnoreCase))
+                    {
+                        resolvedCmdIp = registeredDevice.ResolvedIp;
+                        break;
+                    }
+                }
+
+                // 9. Command IP resolution check: hostname must resolve
+                if (resolvedCmdIp == cmd.Ip && !System.Net.IPAddress.TryParse(cmd.Ip, out _))
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Commands[{Index}] skipped: IP '{Ip}' could not be resolved to a device address",
+                        tenantId, k, cmd.Ip);
+                    continue;
+                }
+                cmd.Ip = resolvedCmdIp;
+
+                // 10. Duplicate command detection: skip duplicate, keep first
+                var cmdKey = $"{cmd.Ip}:{cmd.Port}:{cmd.CommandName}";
+                if (!seenCommandKeys.Add(cmdKey))
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Commands[{Index}] skipped: duplicate command {Ip}:{Port}:{CommandName} (first instance kept)",
+                        tenantId, k, cmd.Ip, cmd.Port, cmd.CommandName);
+                    continue;
+                }
 
                 cleanCommands.Add(cmd);
             }
@@ -573,7 +636,7 @@ public sealed class TenantVectorWatcherService : BackgroundService
         await _reloadLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var cleanOptions = ValidateAndBuildTenants(options, _oidMapService, _deviceRegistry, _snapshotJobOptions.Value.IntervalSeconds, _logger);
+            var cleanOptions = ValidateAndBuildTenants(options, _oidMapService, _deviceRegistry, _commandMapService, _snapshotJobOptions.Value.IntervalSeconds, _logger);
             _registry.Reload(cleanOptions);
 
             _logger.LogInformation(

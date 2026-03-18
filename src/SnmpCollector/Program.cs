@@ -118,8 +118,9 @@ if (!k8s.KubernetesClientConfiguration.IsInCluster())
             var deviceRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.IDeviceRegistry>();
             var tvLogger = app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SnmpCollector.Services.TenantVectorWatcherService>>();
             var snapshotJobOpts = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SnmpCollector.Configuration.SnapshotJobOptions>>();
+            var commandMapService = app.Services.GetRequiredService<SnmpCollector.Pipeline.ICommandMapService>();
             var cleanOptions = SnmpCollector.Services.TenantVectorWatcherService.ValidateAndBuildTenants(
-                tvOptions, oidMapService, deviceRegistry, snapshotJobOpts.Value.IntervalSeconds, tvLogger);
+                tvOptions, oidMapService, deviceRegistry, commandMapService, snapshotJobOpts.Value.IntervalSeconds, tvLogger);
             var tvRegistry = app.Services.GetRequiredService<SnmpCollector.Pipeline.TenantVectorRegistry>();
             tvRegistry.Reload(cleanOptions);
         }
