@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Between milestones — v2.1 complete, next milestone TBD
+**Current focus:** Phase 56 — Tenant Validation Hardening
 
 ## Current Position
 
-Phase: 55 of 55 (all phases complete)
-Plan: N/A
-Status: Between milestones
-Last activity: 2026-03-17 — v2.1 milestone complete, all 5 phases verified
+Phase: 56 of 56 (Tenant Validation Hardening)
+Plan: 1 of 2
+Status: In progress
+Last activity: 2026-03-18 — Completed 56-01-PLAN.md
 
-Progress: [██████████] v2.1 complete
+Progress: [█████████░] v2.1 + Phase 56 plan 1/2
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 122 (v1.0 through v2.1, including quick tasks)
+- Total plans completed: 123 (v1.0 through v2.1, including quick tasks + 56-01)
 - Average duration: ~25 min
-- Total execution time: ~39 hours
+- Total execution time: ~39.2 hours
 
 *Updated after each plan completion*
 
@@ -36,6 +36,9 @@ Progress: [██████████] v2.1 complete
 - Port 8080 for HTTP endpoint — no collision confirmed (collector health port is per-pod, separate Deployment; e2e-sim pod port 8080 is free)
 - MTS-01 multi-tenant log polling: use two separate poll_until_log calls (one per tenant) since poll_until_log checks one pattern at a time
 - tenant-cfg03-two-diff-prio-mts.yaml has P1 SuppressionWindowSeconds=30; required for MTS-02B gate-pass (P1 suppressed at T=15s → ConfirmedBad → gate passes → P2 commanded)
+- ValidateAndBuildTenants now takes snapshotIntervalSeconds parameter for SuppressionWindowSeconds validation
+- IntervalSeconds=0 after poll group resolution now SKIPS metric (was: preserved as default)
+- Threshold Min>Max now SKIPS metric (was: clear threshold + keep metric)
 
 ### Decisions
 
@@ -59,6 +62,9 @@ Progress: [██████████] v2.1 complete
 | 55-01 | sleep 30 before source=synthetic Prometheus assertion | OTel export + Prometheus scrape require time after tier=4 fires; 30s accommodates 15s scrape interval + export latency |
 | 55-02 | Recovery baseline captured after sim_set_scenario healthy (not after breach) | Delta measures only the recovery observation window; baseline after breach would include breach commands |
 | 55-02 | since=30 in tier=3 poll_until_log for ADV-02 recovery | Pre-breach tier=3 logs exist for same tenant; since=30 focuses on recent logs after healthy switch |
+| 56-01 | Threshold Min>Max skips metric (not clear+keep) | Consistent with all other Error-level checks that skip the metric via continue |
+| 56-01 | IntervalSeconds=0 skips metric | If MetricName passed TEN-05 but can't resolve interval from any poll group, the metric is genuinely broken |
+| 56-01 | Passthrough test helpers return real devices | New IntervalSeconds=0 check requires device with poll group for OID-to-interval resolution in tests |
 
 ### Quick Tasks Completed
 
@@ -75,6 +81,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-18T09:31:50Z
-Stopped at: Completed quick-072 — Fix ADV test script counter timing
+Last session: 2026-03-18T14:52:28Z
+Stopped at: Completed 56-01-PLAN.md
 Resume file: None
