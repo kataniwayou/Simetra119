@@ -67,6 +67,7 @@ Progress: [██████████] v2.1 complete
 | 070 | Exclude SnmpSource.Command from staleness check | 2026-03-17 | 119275c | [070-exclude-command-source-from-staleness](./quick/070-exclude-command-source-from-staleness/) |
 | 071 | Source-aware threshold check — newest only for Trap/Command | 2026-03-17 | 050c0bb | [071-source-aware-threshold-check](./quick/071-source-aware-threshold-check/) |
 | 072 | Fix ADV test script counter timing — poll_until instead of immediate snapshot | 2026-03-18 | ff5a88a | [072-fix-adv-test-script-counter-timing](./quick/072-fix-adv-test-script-counter-timing/) |
+| 073 | TimeSeriesSize validation must be >= 1 | 2026-03-18 | 385daf2 | [073-timeseriessize-validation-gt-zero](./quick/073-timeseriessize-validation-gt-zero/) |
 
 ### Blockers/Concerns
 
