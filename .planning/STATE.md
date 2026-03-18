@@ -66,6 +66,7 @@ Progress: [██████████] v2.1 complete
 |---|-------------|------|--------|-----------|
 | 070 | Exclude SnmpSource.Command from staleness check | 2026-03-17 | 119275c | [070-exclude-command-source-from-staleness](./quick/070-exclude-command-source-from-staleness/) |
 | 071 | Source-aware threshold check — newest only for Trap/Command | 2026-03-17 | 050c0bb | [071-source-aware-threshold-check](./quick/071-source-aware-threshold-check/) |
+| 072 | Fix ADV test script counter timing — poll_until instead of immediate snapshot | 2026-03-18 | ff5a88a | [072-fix-adv-test-script-counter-timing](./quick/072-fix-adv-test-script-counter-timing/) |
 
 ### Blockers/Concerns
 
@@ -73,6 +74,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T14:41:16Z
-Stopped at: Completed 55-02-PLAN.md — ADV-02 depth-3 all-samples scenario (scenario 37); Phase 55 complete; v2.1 milestone complete
+Last session: 2026-03-18T09:31:50Z
+Stopped at: Completed quick-072 — Fix ADV test script counter timing
 Resume file: None
