@@ -12,14 +12,14 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 Phase: 57 of 57 (all phases complete)
 Plan: N/A
 Status: v2.1 milestone complete (Phases 51-57)
-Last activity: 2026-03-18 — Phase 57 verified, 7/7 must-haves passed
+Last activity: 2026-03-18 — Completed quick task 074: Fix command registry lookup
 
 Progress: [██████████] v2.1 complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 126 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02)
+- Total plans completed: 127 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02)
 - Average duration: ~25 min
 - Total execution time: ~39.4 hours
 
@@ -84,6 +84,7 @@ Progress: [██████████] v2.1 complete
 | 071 | Source-aware threshold check — newest only for Trap/Command | 2026-03-17 | 050c0bb | [071-source-aware-threshold-check](./quick/071-source-aware-threshold-check/) |
 | 072 | Fix ADV test script counter timing — poll_until instead of immediate snapshot | 2026-03-18 | ff5a88a | [072-fix-adv-test-script-counter-timing](./quick/072-fix-adv-test-script-counter-timing/) |
 | 073 | TimeSeriesSize validation must be >= 1 | 2026-03-18 | 385daf2 | [073-timeseriessize-validation-gt-zero](./quick/073-timeseriessize-validation-gt-zero/) |
+| 074 | Fix command registry lookup — preserve config address | 2026-03-18 | 9bc5ab1 | [074-command-registry-lookup-config-address](./quick/074-command-registry-lookup-config-address/) |
 
 ### Blockers/Concerns
 
