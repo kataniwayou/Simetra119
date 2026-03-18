@@ -263,6 +263,27 @@ Plans:
 
 ---
 
+#### Phase 57: Deterministic Watcher Startup Order
+
+**Goal**: Enforce sequential initial load order for ConfigMap watchers — OID metric map → devices → command map → tenants — so the tenant watcher always validates against fully populated registries, eliminating false-positive skips from startup race conditions
+**Depends on**: Phase 56 (validation hardening added CommandName skip that requires command map to be loaded first)
+**Requirements**: WSO-01, WSO-02, WSO-03, WSO-04
+**Success Criteria** (what must be TRUE):
+  1. OidMapWatcherService completes initial load before DeviceWatcherService starts — OID map has all entries when device config resolves MetricNames
+  2. DeviceWatcherService completes initial load before CommandMapWatcherService starts — device registry is populated when command map loads
+  3. CommandMapWatcherService completes initial load before TenantVectorWatcherService starts — command map has all entries when tenant config validates CommandNames
+  4. TenantVectorWatcherService initial load runs last — all 3 dependency registries are populated, zero false-positive skips from empty registries
+  5. After initial load completes, all 4 watchers independently watch for K8s ConfigMap changes — hot-reload is unaffected by startup ordering
+  6. Pod startup logs show sequential load order with clear "initial load complete" markers per watcher
+  7. All existing unit tests pass — no behavioral change after initial load phase
+**Plans**: 2 plans
+
+Plans:
+- [ ] 57-01-PLAN.md — Extract InitialLoadAsync from all 4 watcher services
+- [ ] 57-02-PLAN.md — Wire sequential startup in Program.cs (K8s + local-dev paths)
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -299,7 +320,8 @@ Plans:
 | 54. Multi-Tenant Scenarios | v2.1 | 2/2 | Complete | 2026-03-17 |
 | 55. Advanced Scenarios | v2.1 | 2/2 | Complete | 2026-03-17 |
 | 56. Tenant Validation Hardening | v2.1 | 2/2 | Complete | 2026-03-18 |
+| 57. Deterministic Watcher Startup Order | v2.1 | 0/2 | Planned | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-18 after Phase 56 planning*
+*Last updated: 2026-03-18 after Phase 57 planning*
