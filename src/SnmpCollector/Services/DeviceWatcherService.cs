@@ -68,24 +68,23 @@ public sealed class DeviceWatcherService : BackgroundService
         _namespace = ReadNamespace();
     }
 
+    /// <summary>
+    /// Performs the initial ConfigMap read and applies configuration. Called by Program.cs
+    /// during startup sequencing to ensure devices are loaded before dependent services start.
+    /// Exceptions propagate to the caller (crash-the-pod semantics).
+    /// </summary>
+    public async Task<int> InitialLoadAsync(CancellationToken ct)
+    {
+        await LoadFromConfigMapAsync(ct).ConfigureAwait(false);
+        _logger.LogInformation(
+            "DeviceWatcher initial load complete ({DeviceCount} devices)",
+            _deviceRegistry.AllDevices.Count);
+        return _deviceRegistry.AllDevices.Count;
+    }
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Initial load: read current ConfigMap state before starting watch
-        try
-        {
-            await LoadFromConfigMapAsync(stoppingToken).ConfigureAwait(false);
-            _logger.LogInformation(
-                "DeviceWatcher initial load complete for {ConfigMap}/{Key} in namespace {Namespace}",
-                ConfigMapName, ConfigKey, _namespace);
-        }
-        catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-        {
-            _logger.LogError(ex,
-                "DeviceWatcher initial load failed for {ConfigMap}/{Key} -- will retry via watch loop",
-                ConfigMapName, ConfigKey);
-        }
-
         // Watch loop with automatic reconnect (K8s watch timeout ~30 min)
         while (!stoppingToken.IsCancellationRequested)
         {

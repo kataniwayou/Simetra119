@@ -492,24 +492,23 @@ public sealed class TenantVectorWatcherService : BackgroundService
         return new TenantVectorOptions { Tenants = cleanTenants };
     }
 
+    /// <summary>
+    /// Performs the initial ConfigMap read and applies configuration. Called by Program.cs
+    /// during startup sequencing to ensure tenant vectors are loaded before dependent services start.
+    /// Exceptions propagate to the caller (crash-the-pod semantics).
+    /// </summary>
+    public async Task<int> InitialLoadAsync(CancellationToken ct)
+    {
+        await LoadFromConfigMapAsync(ct).ConfigureAwait(false);
+        _logger.LogInformation(
+            "TenantVectorWatcher initial load complete ({TenantCount} tenants)",
+            _registry.TenantCount);
+        return _registry.TenantCount;
+    }
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Initial load: read current ConfigMap state before starting watch
-        try
-        {
-            await LoadFromConfigMapAsync(stoppingToken).ConfigureAwait(false);
-            _logger.LogInformation(
-                "TenantVectorWatcher initial load complete for {ConfigMap}/{Key} in namespace {Namespace}",
-                ConfigMapName, ConfigKey, _namespace);
-        }
-        catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-        {
-            _logger.LogError(ex,
-                "TenantVectorWatcher initial load failed for {ConfigMap}/{Key} -- will retry via watch loop",
-                ConfigMapName, ConfigKey);
-        }
-
         // Watch loop with automatic reconnect (K8s watch timeout ~30 min)
         while (!stoppingToken.IsCancellationRequested)
         {
