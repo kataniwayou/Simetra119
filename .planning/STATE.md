@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 56 of 56 (Tenant Validation Hardening)
-Plan: 1 of 2
-Status: In progress
-Last activity: 2026-03-18 — Completed 56-01-PLAN.md
+Plan: 2 of 2
+Status: Phase complete
+Last activity: 2026-03-18 — Completed 56-02-PLAN.md
 
-Progress: [█████████░] v2.1 + Phase 56 plan 1/2
+Progress: [██████████] v2.1 + Phase 56 complete (2/2)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 123 (v1.0 through v2.1, including quick tasks + 56-01)
+- Total plans completed: 124 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02)
 - Average duration: ~25 min
-- Total execution time: ~39.2 hours
+- Total execution time: ~39.3 hours
 
 *Updated after each plan completion*
 
@@ -36,9 +36,12 @@ Progress: [█████████░] v2.1 + Phase 56 plan 1/2
 - Port 8080 for HTTP endpoint — no collision confirmed (collector health port is per-pod, separate Deployment; e2e-sim pod port 8080 is free)
 - MTS-01 multi-tenant log polling: use two separate poll_until_log calls (one per tenant) since poll_until_log checks one pattern at a time
 - tenant-cfg03-two-diff-prio-mts.yaml has P1 SuppressionWindowSeconds=30; required for MTS-02B gate-pass (P1 suppressed at T=15s → ConfirmedBad → gate passes → P2 commanded)
-- ValidateAndBuildTenants now takes snapshotIntervalSeconds parameter for SuppressionWindowSeconds validation
+- ValidateAndBuildTenants now takes snapshotIntervalSeconds and ICommandMapService parameters
 - IntervalSeconds=0 after poll group resolution now SKIPS metric (was: preserved as default)
 - Threshold Min>Max now SKIPS metric (was: clear threshold + keep metric)
+- Duplicate tenant Name, metric, and command detection: skip duplicate, keep first
+- CommandName not in command map: Error + skip (was: pass-through)
+- Command IP resolution via AllDevices loop (mirrors metric pattern)
 
 ### Decisions
 
@@ -65,6 +68,9 @@ Progress: [█████████░] v2.1 + Phase 56 plan 1/2
 | 56-01 | Threshold Min>Max skips metric (not clear+keep) | Consistent with all other Error-level checks that skip the metric via continue |
 | 56-01 | IntervalSeconds=0 skips metric | If MetricName passed TEN-05 but can't resolve interval from any poll group, the metric is genuinely broken |
 | 56-01 | Passthrough test helpers return real devices | New IntervalSeconds=0 check requires device with poll group for OID-to-interval resolution in tests |
+| 56-02 | CommandName not in map -> Error + skip | Consistent with TEN-05 MetricName check; commands skipped until next reload if map loads late |
+| 56-02 | Duplicate metric/command key uses resolved IP | Post-resolution key prevents hostname+IP of same device from falsely surviving as distinct |
+| 56-02 | Command IP resolution mirrors metric pattern | Identical AllDevices loop + unresolved skip for consistency |
 
 ### Quick Tasks Completed
 
@@ -81,6 +87,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-18T14:52:28Z
-Stopped at: Completed 56-01-PLAN.md
+Last session: 2026-03-18T14:59:45Z
+Stopped at: Completed 56-02-PLAN.md
 Resume file: None
