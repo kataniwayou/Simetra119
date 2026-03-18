@@ -163,6 +163,17 @@ public sealed class CommandWorkerService : BackgroundService
         // 5. Dispatch response varbinds through full MediatR pipeline
         foreach (var varbind in response)
         {
+            // Skip error sentinels — mirrors MetricPollJob filter
+            if (varbind.Data.TypeCode is SnmpType.NoSuchObject
+                                       or SnmpType.NoSuchInstance
+                                       or SnmpType.EndOfMibView)
+            {
+                _logger.LogDebug(
+                    "SET response OID {Oid} returned {TypeCode} from {DeviceName} -- skipping",
+                    varbind.Id, varbind.Data.TypeCode, device.Name);
+                continue;
+            }
+
             var metricName = _commandMapService.ResolveCommandName(varbind.Id.ToString());
 
             var msg = new SnmpOidReceived
