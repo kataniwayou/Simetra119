@@ -49,18 +49,21 @@ fi
 
 # ---------------------------------------------------------------------------
 # Sub-scenario 36b: sent counter incremented (command dispatch confirmed)
+# Poll for counter — SNMP SET round-trip + OTel export + Prometheus scrape takes time.
 # ---------------------------------------------------------------------------
 
-AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
-DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
-log_info "ADV-01: Sent counter after tier=4: before=${BEFORE_SENT} after=${AFTER_SENT} delta=${DELTA_SENT}"
-
-if [ "$DELTA_SENT" -gt 0 ]; then
+if poll_until 45 5 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
+    AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
+    log_info "ADV-01: Sent counter after tier=4: before=${BEFORE_SENT} after=${AFTER_SENT} delta=${DELTA_SENT}"
     record_pass "ADV-01: Command sent counter incremented" \
         "sent_delta=${DELTA_SENT} $(get_evidence "snmp_command_sent_total" 'device_name="E2E-SIM"')"
 else
+    AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
+    log_info "ADV-01: Sent counter after tier=4: before=${BEFORE_SENT} after=${AFTER_SENT} delta=${DELTA_SENT}"
     record_fail "ADV-01: Command sent counter incremented" \
-        "sent_delta=${DELTA_SENT} expected > 0; command was not dispatched $(get_evidence "snmp_command_sent_total" 'device_name="E2E-SIM"')"
+        "sent_delta=${DELTA_SENT} expected > 0 after 45s polling $(get_evidence "snmp_command_sent_total" 'device_name="E2E-SIM"')"
 fi
 
 # ---------------------------------------------------------------------------
