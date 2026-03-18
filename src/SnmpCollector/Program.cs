@@ -4,10 +4,12 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SnmpCollector.Extensions;
 using SnmpCollector.HealthChecks;
 using SnmpCollector.Pipeline;
+using SnmpCollector.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -52,6 +54,45 @@ var app = builder.Build();
 // Seed first correlation ID before any Quartz job fires (before Run starts hosted services)
 var correlationService = app.Services.GetRequiredService<ICorrelationService>();
 correlationService.SetCorrelationId(Guid.NewGuid().ToString("N"));
+
+// Phase 57: Deterministic watcher startup order (K8s mode only).
+// Sequential initial load ensures tenant validation runs against fully populated registries.
+// Order: OidMap -> Devices -> CommandMap -> Tenants
+// Failure at any step crashes the pod immediately -- K8s restarts it.
+if (k8s.KubernetesClientConfiguration.IsInCluster())
+{
+    var startupLogger = app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Program>>();
+    var totalSw = System.Diagnostics.Stopwatch.StartNew();
+
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    var oidWatcher = app.Services.GetRequiredService<OidMapWatcherService>();
+    var oidCount = await oidWatcher.InitialLoadAsync(CancellationToken.None);
+    var oidTime = sw.Elapsed;
+
+    sw.Restart();
+    var deviceWatcher = app.Services.GetRequiredService<DeviceWatcherService>();
+    var deviceCount = await deviceWatcher.InitialLoadAsync(CancellationToken.None);
+    var deviceTime = sw.Elapsed;
+
+    sw.Restart();
+    var commandWatcher = app.Services.GetRequiredService<CommandMapWatcherService>();
+    var commandCount = await commandWatcher.InitialLoadAsync(CancellationToken.None);
+    var commandTime = sw.Elapsed;
+
+    sw.Restart();
+    var tenantWatcher = app.Services.GetRequiredService<TenantVectorWatcherService>();
+    var tenantCount = await tenantWatcher.InitialLoadAsync(CancellationToken.None);
+    var tenantTime = sw.Elapsed;
+
+    totalSw.Stop();
+    startupLogger.LogInformation(
+        "Startup sequence: OidMap={OidCount} ({OidTime:F1}s) -> Devices={DeviceCount} ({DeviceTime:F1}s) -> CommandMap={CommandCount} ({CommandTime:F1}s) -> Tenants={TenantCount} ({TenantTime:F1}s) -- total {TotalTime:F1}s",
+        oidCount, oidTime.TotalSeconds,
+        deviceCount, deviceTime.TotalSeconds,
+        commandCount, commandTime.TotalSeconds,
+        tenantCount, tenantTime.TotalSeconds,
+        totalSw.Elapsed.TotalSeconds);
+}
 
 // Local dev -- load OID map and devices from separate files when not in K8s.
 // In K8s mode, OidMapWatcherService and DeviceWatcherService handle config
