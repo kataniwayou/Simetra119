@@ -279,8 +279,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 57-01-PLAN.md — Extract InitialLoadAsync from all 4 watcher services
-- [ ] 57-02-PLAN.md — Wire sequential startup in Program.cs (K8s + local-dev paths)
+- [x] 57-01-PLAN.md — Extract InitialLoadAsync from all 4 watcher services
+- [x] 57-02-PLAN.md — Wire sequential startup in Program.cs (K8s + local-dev paths)
 
 ---
 
@@ -320,7 +320,7 @@ Plans:
 | 54. Multi-Tenant Scenarios | v2.1 | 2/2 | Complete | 2026-03-17 |
 | 55. Advanced Scenarios | v2.1 | 2/2 | Complete | 2026-03-17 |
 | 56. Tenant Validation Hardening | v2.1 | 2/2 | Complete | 2026-03-18 |
-| 57. Deterministic Watcher Startup Order | v2.1 | 0/2 | Planned | - |
+| 57. Deterministic Watcher Startup Order | v2.1 | 2/2 | Complete | 2026-03-18 |
 
 ---
 *Roadmap created: 2026-03-10*
