@@ -20,11 +20,21 @@ public sealed class TenantVectorWatcherValidationTests
     /// <summary>Passthrough OID used by the default device registry poll group.</summary>
     private const string PassthroughOid = "1.3.6.1.99";
 
+    /// <summary>Passthrough command OID used by the default command map service.</summary>
+    private const string PassthroughCommandOid = "1.3.6.1.4.1.0";
+
     private static IOidMapService CreatePassthroughOidMapService()
     {
         var svc = Substitute.For<IOidMapService>();
         svc.ContainsMetricName(Arg.Any<string>()).Returns(true);
         svc.ResolveToOid(Arg.Any<string>()).Returns(PassthroughOid);
+        return svc;
+    }
+
+    private static ICommandMapService CreatePassthroughCommandMapService()
+    {
+        var svc = Substitute.For<ICommandMapService>();
+        svc.ResolveCommandOid(Arg.Any<string>()).Returns(PassthroughCommandOid);
         return svc;
     }
 
@@ -82,7 +92,7 @@ public sealed class TenantVectorWatcherValidationTests
     {
         var options = Wrap(CreateValidTenant());
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            options, CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            options, CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -110,7 +120,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -136,7 +146,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -162,7 +172,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -188,7 +198,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -220,7 +230,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), oidMap, CreatePassthroughDeviceRegistry(), TestSnapshotIntervalSeconds, NullLogger.Instance);
+            Wrap(tenant), oidMap, CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(), TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
         Assert.Equal(2, result.Tenants[0].Metrics.Count);
@@ -264,7 +274,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), oidMap, reg, TestSnapshotIntervalSeconds, NullLogger.Instance);
+            Wrap(tenant), oidMap, reg, CreatePassthroughCommandMapService(), TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
         Assert.Equal(2, result.Tenants[0].Metrics.Count);
@@ -290,7 +300,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -316,7 +326,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -352,7 +362,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), devReg, TestSnapshotIntervalSeconds, NullLogger.Instance);
+            Wrap(tenant), CreatePassthroughOidMapService(), devReg, CreatePassthroughCommandMapService(), TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
         Assert.Equal(2, result.Tenants[0].Metrics.Count);
@@ -367,7 +377,7 @@ public sealed class TenantVectorWatcherValidationTests
     {
         var options = Wrap(CreateValidTenant());
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            options, CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            options, CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -393,7 +403,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -420,7 +430,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -446,7 +456,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -482,7 +492,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), devReg, TestSnapshotIntervalSeconds, NullLogger.Instance);
+            Wrap(tenant), CreatePassthroughOidMapService(), devReg, CreatePassthroughCommandMapService(), TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
         Assert.Single(result.Tenants[0].Commands);
@@ -511,7 +521,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -538,7 +548,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -564,7 +574,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -590,7 +600,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -599,14 +609,17 @@ public sealed class TenantVectorWatcherValidationTests
     }
 
     // ──────────────────────────────────────────────────────
-    // TEN-06: CommandName pass-through
+    // CommandName existence check (replaces old TEN-06 pass-through)
     // ──────────────────────────────────────────────────────
 
     [Fact]
-    public void UnresolvableCommandName_StoredAsIs()
+    public void CommandNameNotInMap_CommandSkipped()
     {
-        // TEN-06: watcher does NOT check if CommandName exists in command map.
-        // Any non-empty CommandName that passes structural + TEN-07 checks is stored as-is.
+        // CommandName not in command map -> Error + skip (consistent with TEN-05).
+        var cmdMap = Substitute.For<ICommandMapService>();
+        cmdMap.ResolveCommandOid("unknown_cmd").Returns((string?)null);
+        cmdMap.ResolveCommandOid(Arg.Is<string>(s => s != "unknown_cmd")).Returns(PassthroughCommandOid);
+
         var tenant = new TenantOptions
         {
             Priority = 1,
@@ -617,17 +630,18 @@ public sealed class TenantVectorWatcherValidationTests
             },
             Commands = new List<CommandSlotOptions>
             {
-                new() { Ip = "10.0.0.1", Port = 161, CommandName = "no-such-command-in-map", Value = "1", ValueType = "Integer32" }
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "unknown_cmd", Value = "1", ValueType = "Integer32" },  // not in map: skipped
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "good-cmd", Value = "1", ValueType = "Integer32" }      // valid
             }
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), cmdMap,
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
         Assert.Single(result.Tenants[0].Commands);
-        Assert.Equal("no-such-command-in-map", result.Tenants[0].Commands[0].CommandName);
+        Assert.Equal("good-cmd", result.Tenants[0].Commands[0].CommandName);
     }
 
     // ──────────────────────────────────────────────────────
@@ -653,7 +667,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Empty(result.Tenants);
@@ -678,7 +692,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Empty(result.Tenants);
@@ -699,7 +713,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Empty(result.Tenants);
@@ -742,7 +756,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), devReg, TestSnapshotIntervalSeconds, NullLogger.Instance);
+            Wrap(tenant), CreatePassthroughOidMapService(), devReg, CreatePassthroughCommandMapService(), TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
         // Metrics IPs are resolved to "10.0.0.5".
@@ -759,7 +773,7 @@ public sealed class TenantVectorWatcherValidationTests
         var options = new TenantVectorOptions { Tenants = new List<TenantOptions>() };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            options, CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            options, CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Empty(result.Tenants);
@@ -786,7 +800,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -805,7 +819,7 @@ public sealed class TenantVectorWatcherValidationTests
         tenant.Metrics[0].Threshold = new ThresholdOptions { Min = 10.0, Max = 90.0 };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -838,7 +852,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -852,7 +866,7 @@ public sealed class TenantVectorWatcherValidationTests
         tenant.Metrics[0].Threshold = new ThresholdOptions { Min = null, Max = null };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -894,7 +908,7 @@ public sealed class TenantVectorWatcherValidationTests
 
         var tenant = CreateValidTenant();
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), oidMap, devReg, TestSnapshotIntervalSeconds, NullLogger.Instance);
+            Wrap(tenant), oidMap, devReg, CreatePassthroughCommandMapService(), TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
         Assert.Equal(10, result.Tenants[0].Metrics[0].IntervalSeconds);
@@ -930,7 +944,7 @@ public sealed class TenantVectorWatcherValidationTests
 
         var tenant = CreateValidTenant();
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), oidMap, devReg, TestSnapshotIntervalSeconds, NullLogger.Instance);
+            Wrap(tenant), oidMap, devReg, CreatePassthroughCommandMapService(), TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
         Assert.Equal(3.0, result.Tenants[0].Metrics[0].GraceMultiplier);
@@ -967,7 +981,7 @@ public sealed class TenantVectorWatcherValidationTests
 
         var tenant = CreateValidTenant();
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), oidMap, devReg, TestSnapshotIntervalSeconds, NullLogger.Instance);
+            Wrap(tenant), oidMap, devReg, CreatePassthroughCommandMapService(), TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         // All metrics skipped (IntervalSeconds=0) -> TEN-13 fails -> tenant skipped
         Assert.Empty(result.Tenants);
@@ -1025,7 +1039,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), oidMap, devReg, TestSnapshotIntervalSeconds, NullLogger.Instance);
+            Wrap(tenant), oidMap, devReg, CreatePassthroughCommandMapService(), TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
         Assert.Equal(15, result.Tenants[0].Metrics[0].IntervalSeconds);
@@ -1056,7 +1070,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -1083,7 +1097,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -1120,7 +1134,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), devReg, TestSnapshotIntervalSeconds, NullLogger.Instance);
+            Wrap(tenant), CreatePassthroughOidMapService(), devReg, CreatePassthroughCommandMapService(), TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
         Assert.Equal(2, result.Tenants[0].Metrics.Count); // unresolvable hostname skipped
@@ -1160,7 +1174,7 @@ public sealed class TenantVectorWatcherValidationTests
         };
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), oidMap, devReg, TestSnapshotIntervalSeconds, NullLogger.Instance);
+            Wrap(tenant), oidMap, devReg, CreatePassthroughCommandMapService(), TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
         Assert.Equal(2, result.Tenants[0].Metrics.Count); // bad-interval skipped
@@ -1173,7 +1187,7 @@ public sealed class TenantVectorWatcherValidationTests
         tenant.SuppressionWindowSeconds = 0;
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -1187,7 +1201,7 @@ public sealed class TenantVectorWatcherValidationTests
         tenant.SuppressionWindowSeconds = -1;
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
@@ -1201,10 +1215,223 @@ public sealed class TenantVectorWatcherValidationTests
         tenant.SuppressionWindowSeconds = 5; // below TestSnapshotIntervalSeconds (15)
 
         var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
         Assert.Single(result.Tenants);
         Assert.Equal(TestSnapshotIntervalSeconds, result.Tenants[0].SuppressionWindowSeconds);
+    }
+
+    // ──────────────────────────────────────────────────────
+    // Plan 56-02: Duplicate detection + command IP + CommandName tests
+    // ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void DuplicateTenantName_SecondSkipped()
+    {
+        // Two tenants with Name="tenant-A". First is kept, second is skipped.
+        var t1 = CreateValidTenant();
+        t1.Name = "tenant-A";
+        var t2 = CreateValidTenant();
+        t2.Name = "tenant-A";
+
+        var options = new TenantVectorOptions { Tenants = new List<TenantOptions> { t1, t2 } };
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            options, CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
+            TestSnapshotIntervalSeconds, NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Equal("tenant-A", result.Tenants[0].Name);
+    }
+
+    [Fact]
+    public void DuplicateTenantName_FirstKeptWithCorrectMetrics()
+    {
+        // Two tenants with same name but different metric names. Assert first tenant's metrics are in result.
+        var t1 = new TenantOptions
+        {
+            Name = "dup-tenant",
+            Priority = 1,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "first-eval", Role = "Evaluate" },
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "first-res", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd1", Value = "1", ValueType = "Integer32" }
+            }
+        };
+
+        var t2 = new TenantOptions
+        {
+            Name = "dup-tenant",
+            Priority = 2,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "second-eval", Role = "Evaluate" },
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "second-res", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd2", Value = "2", ValueType = "Integer32" }
+            }
+        };
+
+        var options = new TenantVectorOptions { Tenants = new List<TenantOptions> { t1, t2 } };
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            options, CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
+            TestSnapshotIntervalSeconds, NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Equal("first-eval", result.Tenants[0].Metrics[0].MetricName);
+        Assert.Equal("first-res", result.Tenants[0].Metrics[1].MetricName);
+    }
+
+    [Fact]
+    public void NoDuplicates_AllTenantsLoad()
+    {
+        // Three tenants with unique names — all load (regression guard).
+        var t1 = CreateValidTenant(); t1.Name = "alpha";
+        var t2 = CreateValidTenant(); t2.Name = "bravo";
+        var t3 = CreateValidTenant(); t3.Name = "charlie";
+
+        var options = new TenantVectorOptions { Tenants = new List<TenantOptions> { t1, t2, t3 } };
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            options, CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
+            TestSnapshotIntervalSeconds, NullLogger.Instance);
+
+        Assert.Equal(3, result.Tenants.Count);
+    }
+
+    [Fact]
+    public void DuplicateMetricInTenant_SecondSkipped()
+    {
+        // Tenant with two metrics having same Ip+Port+MetricName. Second is skipped.
+        var tenant = new TenantOptions
+        {
+            Priority = 1,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m1", Role = "Evaluate" },
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m1", Role = "Evaluate" },  // duplicate
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m2", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd1", Value = "1", ValueType = "Integer32" }
+            }
+        };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
+            TestSnapshotIntervalSeconds, NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Equal(2, result.Tenants[0].Metrics.Count); // 3 input -> 2 output (1 duplicate skipped)
+    }
+
+    [Fact]
+    public void DuplicateCommandInTenant_SecondSkipped()
+    {
+        // Tenant with two commands having same Ip+Port+CommandName. Second is skipped.
+        var tenant = new TenantOptions
+        {
+            Priority = 1,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m1", Role = "Evaluate" },
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m2", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd1", Value = "1", ValueType = "Integer32" },
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd1", Value = "2", ValueType = "Integer32" }  // duplicate
+            }
+        };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
+            TestSnapshotIntervalSeconds, NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Single(result.Tenants[0].Commands); // 2 input -> 1 output
+    }
+
+    [Fact]
+    public void CommandIpResolved_MatchesDeviceResolvedIp()
+    {
+        // DeviceInfo with ConfigAddress="cmd-host" and ResolvedIp="10.0.0.5".
+        var pollGroup = new MetricPollInfo(0, new[] { PassthroughOid }.AsReadOnly(), 10, GraceMultiplier: 2.0);
+        var device = new DeviceInfo(
+            Name: "cmd-host",
+            ConfigAddress: "cmd-host",
+            ResolvedIp: "10.0.0.5",
+            Port: 161,
+            PollGroups: new[] { pollGroup },
+            CommunityString: "Simetra.cmd-host");
+
+        var devReg = Substitute.For<IDeviceRegistry>();
+        devReg.AllDevices.Returns(new[] { device });
+        devReg.TryGetByIpPort(Arg.Any<string>(), Arg.Any<int>(), out Arg.Any<DeviceInfo?>())
+            .Returns(x => { x[2] = device; return true; });
+
+        var tenant = new TenantOptions
+        {
+            Priority = 1,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = "cmd-host", Port = 161, MetricName = "m1", Role = "Evaluate" },
+                new() { Ip = "cmd-host", Port = 161, MetricName = "m2", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = "cmd-host", Port = 161, CommandName = "cmd1", Value = "1", ValueType = "Integer32" }
+            }
+        };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), CreatePassthroughOidMapService(), devReg, CreatePassthroughCommandMapService(),
+            TestSnapshotIntervalSeconds, NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Equal("10.0.0.5", result.Tenants[0].Commands[0].Ip);
+    }
+
+    [Fact]
+    public void CommandIpNotResolved_CommandSkipped()
+    {
+        // DeviceRegistry has no matching ConfigAddress for "unresolvable-cmd-host".
+        // TryGetByIpPort returns true but AllDevices doesn't contain the hostname.
+        var pollGroup = new MetricPollInfo(0, new[] { PassthroughOid }.AsReadOnly(), 10, GraceMultiplier: 2.0);
+        var device = new DeviceInfo("dev", "10.0.0.1", "10.0.0.1", 161, new[] { pollGroup }, "Simetra.dev");
+
+        var devReg = Substitute.For<IDeviceRegistry>();
+        devReg.TryGetByIpPort(Arg.Any<string>(), Arg.Any<int>(), out Arg.Any<DeviceInfo?>())
+            .Returns(x => { x[2] = device; return true; });
+        devReg.AllDevices.Returns(new[] { device }); // only "10.0.0.1", not "unresolvable-cmd-host"
+
+        var tenant = new TenantOptions
+        {
+            Priority = 1,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m1", Role = "Evaluate" },
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m2", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = "unresolvable-cmd-host", Port = 161, CommandName = "bad-cmd", Value = "1", ValueType = "Integer32" }, // hostname, not in AllDevices
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "good-cmd", Value = "1", ValueType = "Integer32" }             // valid
+            }
+        };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), CreatePassthroughOidMapService(), devReg, CreatePassthroughCommandMapService(),
+            TestSnapshotIntervalSeconds, NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Single(result.Tenants[0].Commands);
+        Assert.Equal("good-cmd", result.Tenants[0].Commands[0].CommandName);
     }
 }
