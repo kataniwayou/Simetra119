@@ -205,6 +205,101 @@ public sealed class TenantVectorWatcherValidationTests
     }
 
     [Fact]
+    public void MetricNameNotInOidMap_ButIsAggregateMetric_MetricSurvives()
+    {
+        // TEN-05 fallback: MetricName not in OID map but is an AggregatedMetricName in device poll groups.
+        var oidMap = Substitute.For<IOidMapService>();
+        oidMap.ContainsMetricName("e2e_total_util").Returns(false);
+        oidMap.ContainsMetricName(Arg.Is<string>(s => s != "e2e_total_util")).Returns(true);
+        oidMap.ResolveToOid(Arg.Any<string>()).Returns((string?)null);
+
+        var aggDef = new AggregatedMetricDefinition("e2e_total_util", AggregationKind.Sum, new[] { ".1.1", ".1.2" });
+        var pollInfo = new MetricPollInfo(0, new[] { ".1.1", ".1.2" }, 10)
+        {
+            AggregatedMetrics = new[] { aggDef }
+        };
+        var deviceInfo = new DeviceInfo("E2E-SIM", "10.0.0.1", "10.0.0.1", 161, new[] { pollInfo }, "Simetra.E2E-SIM");
+
+        var reg = Substitute.For<IDeviceRegistry>();
+        reg.TryGetByIpPort("10.0.0.1", 161, out Arg.Any<DeviceInfo?>())
+            .Returns(x => { x[2] = deviceInfo; return true; });
+        reg.AllDevices.Returns(new[] { deviceInfo });
+
+        var tenant = new TenantOptions
+        {
+            Priority = 1,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "e2e_total_util", Role = "Evaluate" },
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m2", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd1", Value = "1", ValueType = "Integer32" }
+            }
+        };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), oidMap, reg, NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Equal(2, result.Tenants[0].Metrics.Count);
+        Assert.Equal("e2e_total_util", result.Tenants[0].Metrics[0].MetricName);
+    }
+
+    [Fact]
+    public void TimeSeriesSizeZero_MetricSkipped()
+    {
+        var tenant = new TenantOptions
+        {
+            Priority = 1,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "bad", Role = "Evaluate", TimeSeriesSize = 0 }, // invalid
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m1", Role = "Evaluate" },
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m2", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd1", Value = "1", ValueType = "Integer32" }
+            }
+        };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Equal(2, result.Tenants[0].Metrics.Count);
+    }
+
+    [Fact]
+    public void TimeSeriesSizeNegative_MetricSkipped()
+    {
+        var tenant = new TenantOptions
+        {
+            Priority = 1,
+            Metrics = new List<MetricSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "bad", Role = "Evaluate", TimeSeriesSize = -1 }, // invalid
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m1", Role = "Evaluate" },
+                new() { Ip = "10.0.0.1", Port = 161, MetricName = "m2", Role = "Resolved" }
+            },
+            Commands = new List<CommandSlotOptions>
+            {
+                new() { Ip = "10.0.0.1", Port = 161, CommandName = "cmd1", Value = "1", ValueType = "Integer32" }
+            }
+        };
+
+        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
+            Wrap(tenant), CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(),
+            NullLogger.Instance);
+
+        Assert.Single(result.Tenants);
+        Assert.Equal(2, result.Tenants[0].Metrics.Count);
+    }
+
+    [Fact]
     public void IpPortNotInDeviceRegistry_MetricSkipped()
     {
         // TEN-07: DeviceRegistry returns false for "10.0.0.99".

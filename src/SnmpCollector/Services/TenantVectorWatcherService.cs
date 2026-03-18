@@ -140,13 +140,43 @@ public sealed class TenantVectorWatcherService : BackgroundService
                     continue;
                 }
 
-                // 5. MetricName resolution (TEN-05): must exist in OID map
-                if (!oidMapService.ContainsMetricName(metric.MetricName))
+                // 5. TimeSeriesSize validation: must be >= 1
+                if (metric.TimeSeriesSize < 1)
                 {
                     logger.LogError(
-                        "Tenant '{TenantId}' Metrics[{Index}] skipped: MetricName '{MetricName}' not found in OID map (TEN-05)",
-                        tenantId, j, metric.MetricName);
+                        "Tenant '{TenantId}' Metrics[{Index}] skipped: TimeSeriesSize {TimeSeriesSize} is invalid (must be >= 1)",
+                        tenantId, j, metric.TimeSeriesSize);
                     continue;
+                }
+
+                // 6. MetricName resolution (TEN-05): must exist in OID map or as an aggregate metric name
+                if (!oidMapService.ContainsMetricName(metric.MetricName))
+                {
+                    // Fallback: check if metric name is an AggregatedMetricName in the device's poll groups
+                    var isAggregate = false;
+                    if (deviceRegistry.TryGetByIpPort(metric.Ip, metric.Port, out var aggDevice) && aggDevice is not null)
+                    {
+                        foreach (var pg in aggDevice.PollGroups)
+                        {
+                            foreach (var agg in pg.AggregatedMetrics)
+                            {
+                                if (string.Equals(agg.MetricName, metric.MetricName, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    isAggregate = true;
+                                    goto aggFound;
+                                }
+                            }
+                        }
+                        aggFound:;
+                    }
+
+                    if (!isAggregate)
+                    {
+                        logger.LogError(
+                            "Tenant '{TenantId}' Metrics[{Index}] skipped: MetricName '{MetricName}' not found in OID map or device aggregates (TEN-05)",
+                            tenantId, j, metric.MetricName);
+                        continue;
+                    }
                 }
 
                 // 6. IP+Port existence (TEN-07): device must be registered
@@ -328,6 +358,7 @@ public sealed class TenantVectorWatcherService : BackgroundService
             {
                 Name = tenantOpts.Name,
                 Priority = tenantOpts.Priority,
+                SuppressionWindowSeconds = tenantOpts.SuppressionWindowSeconds,
                 Metrics = cleanMetrics,
                 Commands = cleanCommands
             });
