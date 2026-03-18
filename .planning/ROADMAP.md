@@ -258,8 +258,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 56-01-PLAN.md — Point fixes: log param rename, comment renumber, IP/interval warnings, suppression clamp + 4 tests
-- [ ] 56-02-PLAN.md — Structural additions: duplicate tenant/metric detection, command IP resolution + 5 tests
+- [x] 56-01-PLAN.md — Point fixes: comment renumber, threshold skip, IP skip, TimeSeriesSize cap, IntervalSeconds skip, suppression -1/0/interval validation + 7 tests
+- [x] 56-02-PLAN.md — Structural additions: duplicate tenant/metric/command detection, command IP resolution + skip, CommandName skip + 8 tests
 
 ---
 
@@ -298,7 +298,7 @@ Plans:
 | 53. Single-Tenant Scenarios | v2.1 | 3/3 | Complete | 2026-03-17 |
 | 54. Multi-Tenant Scenarios | v2.1 | 2/2 | Complete | 2026-03-17 |
 | 55. Advanced Scenarios | v2.1 | 2/2 | Complete | 2026-03-17 |
-| 56. Tenant Validation Hardening | v2.1 | 0/2 | Planned | - |
+| 56. Tenant Validation Hardening | v2.1 | 2/2 | Complete | 2026-03-18 |
 
 ---
 *Roadmap created: 2026-03-10*
