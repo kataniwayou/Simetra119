@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 57 — Deterministic Watcher Startup Order
+**Current focus:** Phase 58 — SnapshotJob Tier Simulation Tests
 
 ## Current Position
 
-Phase: 57 of 57 (all phases complete)
-Plan: N/A
-Status: v2.1 milestone complete (Phases 51-57)
+Phase: 58 of 58
+Plan: N/A — not yet planned
+Status: v2.1 in progress (Phases 51-58)
 Last activity: 2026-03-18 — Completed quick task 076: Snapshot tier fixes
 
-Progress: [██████████] v2.1 complete
+Progress: [█████████░] v2.1 Phase 58 pending
 
 ## Performance Metrics
 

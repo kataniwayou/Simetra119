@@ -14,7 +14,7 @@
 - ✅ **v1.9 Metric Threshold Structure & Validation** - Phases 41-42 (shipped 2026-03-15)
 - ✅ **v1.10 Heartbeat Refactor & Pipeline Liveness** - Phases 43-44 (shipped 2026-03-15)
 - ✅ **v2.0 Tenant Evaluation & Control** - Phases 45-50 (shipped 2026-03-17)
-- 🚧 **v2.1 E2E Tenant Evaluation Tests** - Phases 51-55 (in progress)
+- 🚧 **v2.1 E2E Tenant Evaluation Tests** - Phases 51-58 (in progress)
 
 ## Phases
 
@@ -284,6 +284,25 @@ Plans:
 
 ---
 
+#### Phase 58: SnapshotJob Tier Simulation Tests
+
+**Goal**: E2E scenario scripts that validate every SnapshotJob tier path by source type (Poll, Synthetic, Trap, Command) — proving staleness-to-commands, resolved gate, evaluate gate, suppression, and source-aware threshold checks are observable in pod logs and Prometheus counters
+**Depends on**: Phase 57 (deterministic startup ensures clean tenant config), Quick tasks 074-076 (command registry fix, staleness fix)
+**Success Criteria** (what must be TRUE):
+  1. Stale poll data triggers command dispatch (tier=1 → tier=4) — `snmp_command_sent_total` increments, pod logs show "tier=1 stale — skipping to commands"
+  2. All resolved violated produces Violated result with no commands — pod logs show tier=2 stop, `snmp_command_sent_total` delta is zero
+  3. Resolved not all violated + all evaluate violated produces command dispatch — tier=4 log and counter increment
+  4. Suppression window blocks duplicate commands within window, allows after expiry
+  5. Source-aware threshold: Poll/Synthetic check all time series samples, Trap/Command check newest only
+  6. Advance gate: Commanded tenant blocks lower-priority group evaluation
+  7. All existing E2E scenarios (1-37) continue to pass unchanged
+**Plans**: 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 58 to break down)
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -324,4 +343,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-18 after Phase 57 planning*
+*Last updated: 2026-03-18 after Phase 58 added*
