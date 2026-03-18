@@ -12,14 +12,14 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 Phase: 57 of 57 (all phases complete)
 Plan: N/A
 Status: v2.1 milestone complete (Phases 51-57)
-Last activity: 2026-03-18 — Completed quick task 075: Command error sentinel filter
+Last activity: 2026-03-18 — Completed quick task 076: Snapshot tier fixes
 
 Progress: [██████████] v2.1 complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 128 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02)
+- Total plans completed: 129 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02)
 - Average duration: ~25 min
 - Total execution time: ~39.4 hours
 
@@ -86,6 +86,7 @@ Progress: [██████████] v2.1 complete
 | 073 | TimeSeriesSize validation must be >= 1 | 2026-03-18 | 385daf2 | [073-timeseriessize-validation-gt-zero](./quick/073-timeseriessize-validation-gt-zero/) |
 | 074 | Fix command registry lookup — preserve config address | 2026-03-18 | 9bc5ab1 | [074-command-registry-lookup-config-address](./quick/074-command-registry-lookup-config-address/) |
 | 075 | Add error sentinel filter to CommandWorkerService | 2026-03-18 | 34e67eb | [075-command-error-sentinel-filter](./quick/075-command-error-sentinel-filter/) |
+| 076 | Snapshot tier fixes — staleness to commands, rename ConfirmedBad | 2026-03-18 | 911dd08 | [076-snapshot-tier-fixes](./quick/076-snapshot-tier-fixes/) |
 
 ### Blockers/Concerns
 
