@@ -241,6 +241,28 @@ Plans:
 
 ---
 
+#### Phase 56: Tenant Validation Hardening
+
+**Goal**: Fix all validation audit findings — silent failures get logs, inconsistent behaviors get normalized, missing checks get added — so every tenant config problem is observable in pod logs at load time
+**Depends on**: Phase 55 (validation gaps discovered during v2.1 E2E testing)
+**Requirements**: VAL-01 through VAL-08
+**Success Criteria** (what must be TRUE):
+  1. IP resolution failure logs a Warning with the unresolved hostname and the metric continues with hostname (existing behavior, now observable)
+  2. IntervalSeconds=0 (unresolved from poll group) logs a Warning per metric — operator knows the metric is excluded from staleness
+  3. Duplicate tenant Names across the config produce a Warning per duplicate — suppression key collision risk is surfaced
+  4. Duplicate metric (same Ip+Port+MetricName) within one tenant produces a Warning — double-write risk is surfaced
+  5. SuppressionWindowSeconds <= 0 logs a Warning and clamps to default 60 — prevents every-cycle firing
+  6. Threshold Min>Max log uses consistent parameter names (`TenantId`/`Index`) matching all other checks
+  7. Comment step numbers are sequential (no duplicate step 6)
+  8. Command Ip resolved to device IP (same as metric Ip resolution) — eliminates asymmetry
+**Plans**: 2 plans
+
+Plans:
+- [ ] 56-01-PLAN.md — Point fixes: log param rename, comment renumber, IP/interval warnings, suppression clamp + 4 tests
+- [ ] 56-02-PLAN.md — Structural additions: duplicate tenant/metric detection, command IP resolution + 5 tests
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -276,7 +298,8 @@ Plans:
 | 53. Single-Tenant Scenarios | v2.1 | 3/3 | Complete | 2026-03-17 |
 | 54. Multi-Tenant Scenarios | v2.1 | 2/2 | Complete | 2026-03-17 |
 | 55. Advanced Scenarios | v2.1 | 2/2 | Complete | 2026-03-17 |
+| 56. Tenant Validation Hardening | v2.1 | 0/2 | Planned | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-17 after Phase 55 planning*
+*Last updated: 2026-03-18 after Phase 56 planning*
