@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 56 — Tenant Validation Hardening
+**Current focus:** Phase 57 — Deterministic Watcher Startup Order
 
 ## Current Position
 
 Phase: 57 of 57 (Deterministic Watcher Startup Order)
-Plan: 01 of 02
-Status: In progress
-Last activity: 2026-03-18 — Completed 57-01-PLAN.md (Extract InitialLoadAsync)
+Plan: 02 of 02
+Status: Phase complete
+Last activity: 2026-03-18 — Completed 57-02-PLAN.md (Wire Sequential Startup in Program.cs)
 
-Progress: [█████████░] v2.1 + Phase 57 plan 01/02
+Progress: [██████████] v2.1 + Phase 57 complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 125 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01)
+- Total plans completed: 126 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02)
 - Average duration: ~25 min
 - Total execution time: ~39.4 hours
 
@@ -42,6 +42,8 @@ Progress: [█████████░] v2.1 + Phase 57 plan 01/02
 - Duplicate tenant Name, metric, and command detection: skip duplicate, keep first
 - CommandName not in command map: Error + skip (was: pass-through)
 - Command IP resolution via AllDevices loop (mirrors metric pattern)
+- Phase 57: K8s watcher startup order is OidMap -> Devices -> CommandMap -> Tenants via sequential InitialLoadAsync before host starts
+- Phase 57: Local-dev load order fixed — command map loads before tenants (was: tenants before command map)
 
 ### Decisions
 
@@ -71,6 +73,8 @@ Progress: [█████████░] v2.1 + Phase 57 plan 01/02
 | 56-02 | CommandName not in map -> Error + skip | Consistent with TEN-05 MetricName check; commands skipped until next reload if map loads late |
 | 56-02 | Duplicate metric/command key uses resolved IP | Post-resolution key prevents hostname+IP of same device from falsely surviving as distinct |
 | 56-02 | Command IP resolution mirrors metric pattern | Identical AllDevices loop + unresolved skip for consistency |
+| 57-02 | CancellationToken.None for pre-host InitialLoadAsync | Host stoppingToken not available before app.RunAsync |
+| 57-02 | No try/catch around InitialLoadAsync in K8s block | Crash-the-pod semantics — K8s restarts on failure |
 
 ### Quick Tasks Completed
 
@@ -87,6 +91,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-18T15:38:00Z
-Stopped at: Completed 57-01-PLAN.md
+Last session: 2026-03-18T15:38:09Z
+Stopped at: Completed 57-02-PLAN.md (Phase 57 complete)
 Resume file: None
