@@ -3,6 +3,7 @@ using k8s;
 using k8s.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SnmpCollector.Configuration;
 using SnmpCollector.Configuration.Validators;
 using SnmpCollector.Pipeline;
@@ -47,6 +48,7 @@ public sealed class TenantVectorWatcherService : BackgroundService
     private readonly TenantVectorOptionsValidator _validator;
     private readonly IOidMapService _oidMapService;
     private readonly IDeviceRegistry _deviceRegistry;
+    private readonly IOptions<SnapshotJobOptions> _snapshotJobOptions;
     private readonly ILogger<TenantVectorWatcherService> _logger;
     private readonly SemaphoreSlim _reloadLock = new(1, 1);
     private readonly string _namespace;
@@ -57,6 +59,7 @@ public sealed class TenantVectorWatcherService : BackgroundService
         TenantVectorOptionsValidator validator,
         IOidMapService oidMapService,
         IDeviceRegistry deviceRegistry,
+        IOptions<SnapshotJobOptions> snapshotJobOptions,
         ILogger<TenantVectorWatcherService> logger)
     {
         _kubeClient = kubeClient ?? throw new ArgumentNullException(nameof(kubeClient));
@@ -64,6 +67,7 @@ public sealed class TenantVectorWatcherService : BackgroundService
         _validator = validator ?? throw new ArgumentNullException(nameof(validator));
         _oidMapService = oidMapService ?? throw new ArgumentNullException(nameof(oidMapService));
         _deviceRegistry = deviceRegistry ?? throw new ArgumentNullException(nameof(deviceRegistry));
+        _snapshotJobOptions = snapshotJobOptions ?? throw new ArgumentNullException(nameof(snapshotJobOptions));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _namespace = ReadNamespace();
@@ -78,12 +82,14 @@ public sealed class TenantVectorWatcherService : BackgroundService
     /// <param name="options">Raw options from ConfigMap or local dev file.</param>
     /// <param name="oidMapService">OID map for MetricName existence checks (TEN-05).</param>
     /// <param name="deviceRegistry">Device registry for IP+Port existence checks (TEN-07) and IP resolution.</param>
+    /// <param name="snapshotIntervalSeconds">Snapshot job interval for SuppressionWindowSeconds validation.</param>
     /// <param name="logger">Logger for per-entry skip and TEN-13 messages.</param>
     /// <returns>A new <see cref="TenantVectorOptions"/> containing only valid, resolved tenants.</returns>
     internal static TenantVectorOptions ValidateAndBuildTenants(
         TenantVectorOptions options,
         IOidMapService oidMapService,
         IDeviceRegistry deviceRegistry,
+        int snapshotIntervalSeconds,
         ILogger logger)
     {
         var cleanTenants = new List<TenantOptions>();
@@ -149,7 +155,16 @@ public sealed class TenantVectorWatcherService : BackgroundService
                     continue;
                 }
 
-                // 6. MetricName resolution (TEN-05): must exist in OID map or as an aggregate metric name
+                // 6. TimeSeriesSize cap: must be <= 1000
+                if (metric.TimeSeriesSize > 1000)
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Metrics[{Index}] skipped: TimeSeriesSize {TimeSeriesSize} exceeds maximum 1000",
+                        tenantId, j, metric.TimeSeriesSize);
+                    continue;
+                }
+
+                // 7. MetricName resolution (TEN-05): must exist in OID map or as an aggregate metric name
                 if (!oidMapService.ContainsMetricName(metric.MetricName))
                 {
                     // Fallback: check if metric name is an AggregatedMetricName in the device's poll groups
@@ -179,7 +194,7 @@ public sealed class TenantVectorWatcherService : BackgroundService
                     }
                 }
 
-                // 6. IP+Port existence (TEN-07): device must be registered
+                // 8. IP+Port existence (TEN-07): device must be registered
                 if (!deviceRegistry.TryGetByIpPort(metric.Ip, metric.Port, out var device))
                 {
                     logger.LogError(
@@ -188,13 +203,13 @@ public sealed class TenantVectorWatcherService : BackgroundService
                     continue;
                 }
 
-                // 7. Threshold: Min > Max clears threshold; metric still loads (THR-04/THR-05)
+                // 9. Threshold: Min > Max -> skip metric
                 if (metric.Threshold is { Min: not null, Max: not null } thr && thr.Min > thr.Max)
                 {
                     logger.LogError(
-                        "Tenant '{TenantName}' Metrics[{MetricIndex}] threshold invalid: Min {Min} > Max {Max} -- threshold cleared, metric still loads",
+                        "Tenant '{TenantId}' Metrics[{Index}] skipped: Threshold Min {Min} > Max {Max}",
                         tenantId, j, thr.Min, thr.Max);
-                    metric.Threshold = null;
+                    continue;
                 }
 
                 // Resolve IntervalSeconds + GraceMultiplier from device poll group.
@@ -235,7 +250,16 @@ public sealed class TenantVectorWatcherService : BackgroundService
                 metric.IntervalSeconds = resolvedInterval;
                 metric.GraceMultiplier = resolvedGrace;
 
-                // Passed all checks — resolve IP via DeviceRegistry.AllDevices.
+                // 11. IntervalSeconds=0: poll group resolution failed — skip metric
+                if (metric.IntervalSeconds == 0)
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Metrics[{Index}] skipped: IntervalSeconds=0 (not resolved from any poll group)",
+                        tenantId, j);
+                    continue;
+                }
+
+                // Resolve IP via DeviceRegistry.AllDevices.
                 var resolvedIp = metric.Ip;
                 foreach (var registeredDevice in deviceRegistry.AllDevices)
                 {
@@ -245,6 +269,15 @@ public sealed class TenantVectorWatcherService : BackgroundService
                         resolvedIp = registeredDevice.ResolvedIp;
                         break;
                     }
+                }
+
+                // 12. IP resolution check — skip metric
+                if (resolvedIp == metric.Ip && !System.Net.IPAddress.TryParse(metric.Ip, out _))
+                {
+                    logger.LogError(
+                        "Tenant '{TenantId}' Metrics[{Index}] skipped: IP '{Ip}' could not be resolved to a device address",
+                        tenantId, j, metric.Ip);
+                    continue;
                 }
 
                 metric.Ip = resolvedIp;
@@ -352,6 +385,35 @@ public sealed class TenantVectorWatcherService : BackgroundService
                     "Tenant '{TenantId}' skipped: {Reason}",
                     tenantId, string.Join("; ", missing));
                 continue;
+            }
+
+            // SuppressionWindowSeconds validation: -1 = no suppression, 0 or < -1 = error+clamp, 1..interval-1 = warn+clamp
+            if (tenantOpts.SuppressionWindowSeconds == 0)
+            {
+                logger.LogError(
+                    "Tenant '{TenantId}' SuppressionWindowSeconds is 0 (ambiguous), clamped to {Interval}s (snapshot interval)",
+                    tenantId, snapshotIntervalSeconds);
+                tenantOpts.SuppressionWindowSeconds = snapshotIntervalSeconds;
+            }
+            else if (tenantOpts.SuppressionWindowSeconds < -1)
+            {
+                logger.LogError(
+                    "Tenant '{TenantId}' SuppressionWindowSeconds {Value} is invalid (< -1), clamped to {Interval}s (snapshot interval)",
+                    tenantId, tenantOpts.SuppressionWindowSeconds, snapshotIntervalSeconds);
+                tenantOpts.SuppressionWindowSeconds = snapshotIntervalSeconds;
+            }
+            else if (tenantOpts.SuppressionWindowSeconds == -1)
+            {
+                logger.LogDebug(
+                    "Tenant '{TenantId}' suppression disabled (SuppressionWindowSeconds=-1)",
+                    tenantId);
+            }
+            else if (tenantOpts.SuppressionWindowSeconds > 0 && tenantOpts.SuppressionWindowSeconds < snapshotIntervalSeconds)
+            {
+                logger.LogWarning(
+                    "Tenant '{TenantId}' SuppressionWindowSeconds {Value}s < snapshot interval {Interval}s, clamped to interval",
+                    tenantId, tenantOpts.SuppressionWindowSeconds, snapshotIntervalSeconds);
+                tenantOpts.SuppressionWindowSeconds = snapshotIntervalSeconds;
             }
 
             cleanTenants.Add(new TenantOptions
@@ -511,7 +573,7 @@ public sealed class TenantVectorWatcherService : BackgroundService
         await _reloadLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var cleanOptions = ValidateAndBuildTenants(options, _oidMapService, _deviceRegistry, _logger);
+            var cleanOptions = ValidateAndBuildTenants(options, _oidMapService, _deviceRegistry, _snapshotJobOptions.Value.IntervalSeconds, _logger);
             _registry.Reload(cleanOptions);
 
             _logger.LogInformation(
