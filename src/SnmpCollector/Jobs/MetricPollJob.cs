@@ -185,18 +185,18 @@ public sealed class MetricPollJob : IJob
         }
 
         // CM-08/CM-10: compute and dispatch aggregated metrics after all individual varbinds
-        foreach (var combined in pollGroup.AggregatedMetrics)
+        foreach (var aggregated in pollGroup.AggregatedMetrics)
         {
             try
             {
-                await DispatchAggregatedMetricAsync(combined, response, device, ct);
+                await DispatchAggregatedMetricAsync(aggregated, response, device, ct);
             }
             catch (Exception ex)
             {
                 // CM decision: aggregate exceptions do NOT call RecordFailure / increment snmp_poll_unreachable_total
                 _logger.LogError(ex,
-                    "Combined metric {MetricName} dispatch failed for {DeviceName} poll group {PollIndex}",
-                    combined.MetricName, device.Name, pollGroup.PollIndex);
+                    "Aggregated metric {MetricName} dispatch failed for {DeviceName} poll group {PollIndex}",
+                    aggregated.MetricName, device.Name, pollGroup.PollIndex);
             }
         }
     }
@@ -206,7 +206,7 @@ public sealed class MetricPollJob : IJob
     /// it as a synthetic SnmpOidReceived through the full MediatR pipeline.
     /// </summary>
     private async Task DispatchAggregatedMetricAsync(
-        AggregatedMetricDefinition combined,
+        AggregatedMetricDefinition aggregated,
         IList<Variable> response,
         DeviceInfo device,
         CancellationToken ct)
@@ -224,29 +224,29 @@ public sealed class MetricPollJob : IJob
         }
 
         // CM-09: all source OIDs must be present and numeric
-        var values = new List<double>(combined.SourceOids.Count);
-        foreach (var oid in combined.SourceOids)
+        var values = new List<double>(aggregated.SourceOids.Count);
+        foreach (var oid in aggregated.SourceOids)
         {
             if (!oidValues.TryGetValue(oid, out var data))
             {
                 _logger.LogWarning(
-                    "Combined metric {MetricName} skipped: OID {Oid} absent from response for {DeviceName}",
-                    combined.MetricName, oid, device.Name);
+                    "Aggregated metric {MetricName} skipped: OID {Oid} absent from response for {DeviceName}",
+                    aggregated.MetricName, oid, device.Name);
                 return;
             }
             if (!IsNumeric(data.TypeCode))
             {
                 _logger.LogWarning(
-                    "Combined metric {MetricName} skipped: OID {Oid} is non-numeric ({TypeCode}) for {DeviceName}",
-                    combined.MetricName, oid, data.TypeCode, device.Name);
+                    "Aggregated metric {MetricName} skipped: OID {Oid} is non-numeric ({TypeCode}) for {DeviceName}",
+                    aggregated.MetricName, oid, data.TypeCode, device.Name);
                 return;
             }
             values.Add(ExtractNumericValue(data));
         }
 
         // CM-08: compute aggregate
-        var result = Compute(combined.Kind, values);
-        var typeCode = SelectTypeCode(combined.Kind);
+        var result = Compute(aggregated.Kind, values);
+        var typeCode = SelectTypeCode(aggregated.Kind);
 
         // Construct ISnmpData Value wrapper with clamping for overflow safety
         ISnmpData value = typeCode == SnmpType.Integer32
@@ -262,7 +262,7 @@ public sealed class MetricPollJob : IJob
             Value      = value,
             Source     = SnmpSource.Synthetic,               // causes OidResolutionBehavior to bypass
             TypeCode   = typeCode,
-            MetricName = combined.MetricName,                // pre-set: preserved through OidResolution bypass
+            MetricName = aggregated.MetricName,              // pre-set: preserved through OidResolution bypass
             PollDurationMs = null                            // no round-trip for synthetic metrics
         };
 

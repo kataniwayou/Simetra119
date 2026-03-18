@@ -383,9 +383,9 @@ public sealed class MetricPollJobTests : IDisposable
     public async Task Execute_AggregatedMetrics_Sum_DispatchesSyntheticGauge32()
     {
         // Arrange
-        var combined = new AggregatedMetricDefinition("obp_combined_power", AggregationKind.Sum,
+        var aggregated = new AggregatedMetricDefinition("obp_combined_power", AggregationKind.Sum,
             [IfInOctetsOid, IfOutOctetsOid]);
-        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [aggregated]);
 
         var response = new List<Variable>
         {
@@ -422,9 +422,9 @@ public sealed class MetricPollJobTests : IDisposable
     public async Task Execute_AggregatedMetrics_Subtract_DispatchesSyntheticInteger32()
     {
         // Arrange
-        var combined = new AggregatedMetricDefinition("obp_power_diff", AggregationKind.Subtract,
+        var aggregated = new AggregatedMetricDefinition("obp_power_diff", AggregationKind.Subtract,
             [IfInOctetsOid, IfOutOctetsOid]);
-        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [aggregated]);
 
         var response = new List<Variable>
         {
@@ -458,9 +458,9 @@ public sealed class MetricPollJobTests : IDisposable
     public async Task Execute_AggregatedMetrics_AbsDiff_DispatchesAbsoluteInteger32()
     {
         // Arrange: m1=1000, m2=3000 → |1000-3000| = 2000
-        var combined = new AggregatedMetricDefinition("obp_abs_diff", AggregationKind.AbsDiff,
+        var aggregated = new AggregatedMetricDefinition("obp_abs_diff", AggregationKind.AbsDiff,
             [IfInOctetsOid, IfOutOctetsOid]);
-        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [aggregated]);
 
         var response = new List<Variable>
         {
@@ -494,9 +494,9 @@ public sealed class MetricPollJobTests : IDisposable
     {
         // Arrange: 3 values (10, 20, 30) → mean = 20
         const string Oid3 = "1.3.6.1.2.1.2.2.1.99.1";
-        var combined = new AggregatedMetricDefinition("obp_mean_power", AggregationKind.Mean,
+        var aggregated = new AggregatedMetricDefinition("obp_mean_power", AggregationKind.Mean,
             [IfInOctetsOid, IfOutOctetsOid, Oid3]);
-        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid, Oid3], [combined]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid, Oid3], [aggregated]);
 
         var response = new List<Variable>
         {
@@ -529,10 +529,10 @@ public sealed class MetricPollJobTests : IDisposable
     [Fact]
     public async Task Execute_AggregatedMetrics_MissingOid_SkipsWithNoSynthetic()
     {
-        // Arrange: combined needs both OIDs but response only has IfInOctetsOid
-        var combined = new AggregatedMetricDefinition("obp_combined_power", AggregationKind.Sum,
+        // Arrange: aggregated needs both OIDs but response only has IfInOctetsOid
+        var aggregated = new AggregatedMetricDefinition("obp_combined_power", AggregationKind.Sum,
             [IfInOctetsOid, IfOutOctetsOid]);
-        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [aggregated]);
 
         var response = new List<Variable>
         {
@@ -563,9 +563,9 @@ public sealed class MetricPollJobTests : IDisposable
     public async Task Execute_AggregatedMetrics_NonNumericOid_SkipsWithNoSynthetic()
     {
         // Arrange: oid1 is Gauge32, oid2 is OctetString (non-numeric)
-        var combined = new AggregatedMetricDefinition("obp_combined_power", AggregationKind.Sum,
+        var aggregated = new AggregatedMetricDefinition("obp_combined_power", AggregationKind.Sum,
             [IfInOctetsOid, IfOutOctetsOid]);
-        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [aggregated]);
 
         var response = new List<Variable>
         {
@@ -595,7 +595,7 @@ public sealed class MetricPollJobTests : IDisposable
     [Fact]
     public async Task Execute_AggregatedMetrics_MultipleCombined_DispatchesBoth()
     {
-        // Arrange: 2 combined definitions using the same source OIDs
+        // Arrange: 2 aggregated definitions using the same source OIDs
         var combined1 = new AggregatedMetricDefinition("obp_sum_power", AggregationKind.Sum,
             [IfInOctetsOid, IfOutOctetsOid]);
         var combined2 = new AggregatedMetricDefinition("obp_diff_power", AggregationKind.Subtract,
@@ -663,9 +663,9 @@ public sealed class MetricPollJobTests : IDisposable
     public async Task Execute_AggregatedMetrics_Exception_DoesNotRecordFailure()
     {
         // Arrange: use a sender that throws when it receives a Synthetic message
-        var combined = new AggregatedMetricDefinition("obp_combined_power", AggregationKind.Sum,
+        var aggregated = new AggregatedMetricDefinition("obp_combined_power", AggregationKind.Sum,
             [IfInOctetsOid, IfOutOctetsOid]);
-        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [combined]);
+        var device = MakeDeviceWithAggregates([IfInOctetsOid, IfOutOctetsOid], [aggregated]);
 
         var response = new List<Variable>
         {
