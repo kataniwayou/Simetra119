@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 58 of 58
-Plan: N/A — not yet planned
+Plan: 02 of N (in progress)
 Status: v2.1 in progress (Phases 51-58)
-Last activity: 2026-03-18 — Completed quick task 076: Snapshot tier fixes
+Last activity: 2026-03-19 — Completed 58-02-PLAN.md (STS-06 staleness-to-commands scenario)
 
-Progress: [█████████░] v2.1 Phase 58 pending
+Progress: [█████████░] v2.1 Phase 58 in progress
 
 ## Performance Metrics
 
@@ -75,6 +75,8 @@ Progress: [█████████░] v2.1 Phase 58 pending
 | 56-02 | Command IP resolution mirrors metric pattern | Identical AllDevices loop + unresolved skip for consistency |
 | 57-02 | CancellationToken.None for pre-host InitialLoadAsync | Host stoppingToken not available before app.RunAsync |
 | 57-02 | No try/catch around InitialLoadAsync in K8s block | Crash-the-pod semantics — K8s restarts on failure |
+| 58-02 | STS-06 38b tier=4 log scoped to e2e-tenant-A prefix | Avoids false positives from tier=4 logs in prior scenarios still in pod log buffer |
+| 58-02 | STS-06 baseline captured after priming, before stale switch | Delta measures only post-stale dispatches, not priming phase commands |
 
 ### Quick Tasks Completed
 
@@ -94,6 +96,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-18T15:38:09Z
-Stopped at: Completed 57-02-PLAN.md (Phase 57 complete)
+Last session: 2026-03-19T08:30:31Z
+Stopped at: Completed 58-02-PLAN.md (STS-06 staleness-to-commands scenario)
 Resume file: None
