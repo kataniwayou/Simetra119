@@ -125,6 +125,7 @@ public sealed class SnapshotJob : IJob
     /// <summary>
     /// Runs the 4-tier evaluation for a single tenant. Returns the tier result
     /// for priority-group advance gate decisions.
+    /// Pre-tier: readiness check — skip tenants where any holder is still in grace window.
     /// Tier 1: staleness check — if stale, skip to tier 4 (commands).
     /// Tier 2: resolved gate — if all violated, end (no commands).
     /// Tier 3: evaluate threshold — if all violated, proceed to tier 4.
@@ -132,6 +133,15 @@ public sealed class SnapshotJob : IJob
     /// </summary>
     internal TierResult EvaluateTenant(Tenant tenant)
     {
+        // Pre-tier: Readiness check — skip tenants where any holder is still in grace window
+        if (!AreAllReady(tenant.Holders))
+        {
+            _logger.LogDebug(
+                "Tenant {TenantId} priority={Priority} not ready (in grace window) — skipping",
+                tenant.Id, tenant.Priority);
+            return TierResult.Unresolved;
+        }
+
         // Tier 1: Staleness check — stale data skips tiers 2-3, goes straight to commands
         if (HasStaleness(tenant.Holders))
         {
@@ -208,9 +218,24 @@ public sealed class SnapshotJob : IJob
     }
 
     /// <summary>
+    /// Pre-tier: Checks whether all holders in the tenant are past their readiness grace window.
+    /// A holder with real data (from WriteValue or CopyFrom) is always considered ready,
+    /// even if its ConstructedAt is recent (handles config reload).
+    /// </summary>
+    private static bool AreAllReady(IReadOnlyList<MetricSlotHolder> holders)
+    {
+        foreach (var holder in holders)
+        {
+            if (!holder.IsReady)
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
     /// Tier 1: Checks whether any non-excluded holder has stale data.
     /// Excluded: Source=Trap, Source=Command, IntervalSeconds=0.
-    /// Holders with null ReadSlot are skipped (cannot judge, not stale).
+    /// Holders with null ReadSlot after readiness check are stale (device never responded).
     /// </summary>
     private static bool HasStaleness(IReadOnlyList<MetricSlotHolder> holders)
     {
@@ -222,7 +247,7 @@ public sealed class SnapshotJob : IJob
 
             var slot = holder.ReadSlot();
             if (slot is null)
-                continue; // No data yet — cannot judge, not stale
+                return true; // Grace ended, no data — device never responded — stale
 
             var age = DateTimeOffset.UtcNow - slot.Timestamp;
             var graceWindow = TimeSpan.FromSeconds(holder.IntervalSeconds * holder.GraceMultiplier);
