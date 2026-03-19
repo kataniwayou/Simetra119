@@ -1,7 +1,7 @@
-# Scenario 31: STS-03 Resolved gate -- tier=2 ConfirmedBad, zero command counters
-# Validates the Tier 2 (ConfirmedBad gate) branch of the 4-tier evaluation tree.
+# Scenario 31: STS-03 Resolved gate -- tier=2 Violated, zero command counters
+# Validates the Tier 2 (Violated gate) branch of the 4-tier evaluation tree.
 # Default scenario has all Resolved metrics at 0 (< Min:1 → violated), so SnapshotJob
-# must log tier=2 ConfirmedBad, dispatch zero commands, and never reach tier=4.
+# must log tier=2 Violated, dispatch zero commands, and never reach tier=4.
 
 # ---------------------------------------------------------------------------
 # Setup: Save current tenants ConfigMap, apply single-tenant fixture
@@ -22,7 +22,7 @@ fi
 
 # ---------------------------------------------------------------------------
 # Set default scenario explicitly: all OIDs return 0
-# e2e_channel_state=0 and e2e_bypass_status=0 (both < Min:1 → Resolved violated → ConfirmedBad)
+# e2e_channel_state=0 and e2e_bypass_status=0 (both < Min:1 → Resolved violated → Violated)
 # ---------------------------------------------------------------------------
 
 sim_set_scenario default
@@ -36,24 +36,24 @@ BEFORE_SUPP=$(snapshot_counter "snmp_command_suppressed_total" 'device_name="e2e
 log_info "Baseline sent=${BEFORE_SENT} suppressed=${BEFORE_SUPP}"
 
 # ---------------------------------------------------------------------------
-# Sub-scenario 31a: tier=2 ConfirmedBad log assertion
+# Sub-scenario 31a: tier=2 Violated log assertion
 # ---------------------------------------------------------------------------
 
-SCENARIO_NAME="STS-03: Resolved gate tier=2 ConfirmedBad log detected"
+SCENARIO_NAME="STS-03: Resolved gate tier=2 Violated log detected"
 
-log_info "Polling for tier=2 ConfirmedBad log (timeout 90s, since 60s)..."
-if poll_until_log 90 5 "tier=2 — all resolved violated, device confirmed bad" 60; then
-    record_pass "$SCENARIO_NAME" "log=tier2_confirmed_bad_found"
+log_info "Polling for tier=2 Violated log (timeout 90s, since 60s)..."
+if poll_until_log 90 5 "tier=2 — all resolved violated, no commands" 60; then
+    record_pass "$SCENARIO_NAME" "log=tier2_violated_found"
 else
-    record_fail "$SCENARIO_NAME" "log=tier2_confirmed_bad_not_found — poll_until_log timed out after 90s"
+    record_fail "$SCENARIO_NAME" "log=tier2_violated_not_found — poll_until_log timed out after 90s"
 fi
 
 # ---------------------------------------------------------------------------
 # Sub-scenario 31b: command counter delta assertion
-# Both sent and suppressed deltas must be zero — ConfirmedBad gate blocks all commands.
+# Both sent and suppressed deltas must be zero — Violated gate blocks all commands.
 # ---------------------------------------------------------------------------
 
-SCENARIO_NAME="STS-03: Zero command counters while ConfirmedBad"
+SCENARIO_NAME="STS-03: Zero command counters while Violated"
 
 AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
 AFTER_SUPP=$(snapshot_counter "snmp_command_suppressed_total" 'device_name="e2e-tenant-A"')
@@ -71,9 +71,12 @@ fi
 
 # ---------------------------------------------------------------------------
 # Sub-scenario 31c: negative tier=4 assertion
-# When ConfirmedBad gate is active, tier=4 must NOT appear in recent logs.
+# When Violated gate is active, tier=4 must NOT appear in recent logs.
 # Short window (60s) grep — no polling needed, just check recent pod logs.
 # ---------------------------------------------------------------------------
+
+# Wait one full SnapshotJob cycle so any previous tier=4 logs age out of the check window.
+sleep 16
 
 SCENARIO_NAME="STS-03: No tier=4 log while resolved gate active"
 
@@ -82,8 +85,9 @@ PODS=$(kubectl get pods -n simetra -l app=snmp-collector \
 
 FOUND_TIER4=0
 for POD in $PODS; do
-    POD_LOGS=$(kubectl logs "$POD" -n simetra --since=60s 2>/dev/null) || true
-    if echo "$POD_LOGS" | grep "tier=4" > /dev/null 2>&1; then
+    POD_LOGS=$(kubectl logs "$POD" -n simetra --since=15s 2>/dev/null) || true
+    # Scope to e2e-tenant-A to avoid matching tier=4 logs from previous test scenarios
+    if echo "$POD_LOGS" | grep "e2e-tenant-A.*tier=4" > /dev/null 2>&1; then
         FOUND_TIER4=1
         break
     fi
