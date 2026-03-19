@@ -378,10 +378,12 @@ Plans:
   6. Mixed group 1 results (one Resolved + one Unresolved) correctly blocks group 2
   7. All scenarios use 1s snapshot interval for fast cycle times
   8. All new E2E scenarios pass consistently
-**Plans**: 0 plans
+**Plans**: 3 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 61 to break down)
+- [ ] 61-01-PLAN.md — Simulator per-OID endpoint, 9 new OIDs, OID map, 4-tenant fixture, sim.sh helpers, report.sh
+- [ ] 61-02-PLAN.md — Part 1: tenant evaluation state scripts (SNS-01 through SNS-05)
+- [ ] 61-03-PLAN.md — Part 2: advance gate logic scripts (SNS-A1 through SNS-B4)
 
 ---
 
@@ -425,7 +427,8 @@ Plans:
 | 58. SnapshotJob Tier Simulation Tests | v2.1 | 3/3 | Complete | 2026-03-18 |
 | 59. Advance Gate Fix & Starvation Sim | v2.1 | 2/2 | Complete | 2026-03-19 |
 | 60. Readiness Window for Holders | v2.1 | 2/2 | Complete | 2026-03-19 |
+| 61. New E2E Suite Snapshot | v2.1 | 0/3 | Planned | |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-19 after Phase 60 complete*
+*Last updated: 2026-03-19 after Phase 61 planned*
