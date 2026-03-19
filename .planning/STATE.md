@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 60 of 60
-Plan: N/A — not yet planned
+Plan: 01 of 2 complete
 Status: v2.1 in progress (Phases 51-60)
-Last activity: 2026-03-19 — Phase 60 added: Readiness Window for Holders
+Last activity: 2026-03-19 — Completed 60-01-PLAN.md (sentinel removal + readiness window)
 
-Progress: [█████████░] v2.1 Phase 60 pending
+Progress: [█████████░] v2.1 Phase 60 Plan 01 complete
 
 ## Performance Metrics
 
@@ -85,6 +85,9 @@ Progress: [█████████░] v2.1 Phase 60 pending
 | 59-01 | Advance gate blocks on TierResult.Unresolved (not Commanded) | Fixes bug where suppressed P1 commands allowed P2 to evaluate, defeating priority starvation |
 | 59-02 | MTS-02B gate-pass via sim_set_scenario default (P1 Healthy) | Corrected advance gate blocks on Unresolved; gate-pass must come from P1 transitioning to tier=3 Healthy, not from suppression |
 | 59-02 | report.sh range |28|40| unchanged | New scenario 40 is at 0-based index 39, already within existing range; no extension required |
+| 60-01 | IsReady short-circuits true when ReadSeries().Length > 0 | CopyFrom with real data makes holder immediately ready despite new ConstructedAt |
+| 60-01 | ReadinessGrace = TimeSeriesSize * IntervalSeconds * GraceMultiplier | Pure computed property; fields are immutable so no caching needed |
+| 60-01 | ConstructedAt uses property initializer (= DateTimeOffset.UtcNow) | Equivalent to constructor body assignment, syntactically cleaner |
 
 ### Quick Tasks Completed
 
@@ -105,6 +108,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T15:19:39Z
-Stopped at: Completed 59-02-PLAN.md (MTS-02 rewrite + MTS-03 starvation proof) — v2.1 COMPLETE
+Last session: 2026-03-19T17:06:38Z
+Stopped at: Completed 60-01-PLAN.md (sentinel removal + ConstructedAt/ReadinessGrace/IsReady)
 Resume file: None
