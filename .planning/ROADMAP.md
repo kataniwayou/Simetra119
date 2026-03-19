@@ -339,8 +339,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 60-01-PLAN.md — Remove sentinel from MetricSlotHolder, add ConstructedAt/ReadinessGrace/IsReady + update tests
-- [ ] 60-02-PLAN.md — Add readiness pre-tier check to SnapshotJob + rewrite sentinel tests + E2E comment updates
+- [x] 60-01-PLAN.md — Remove sentinel from MetricSlotHolder, add ConstructedAt/ReadinessGrace/IsReady + update tests
+- [x] 60-02-PLAN.md — Add readiness pre-tier check to SnapshotJob + rewrite sentinel tests + E2E comment updates
 
 ---
 
@@ -381,7 +381,10 @@ Plans:
 | 55. Advanced Scenarios | v2.1 | 2/2 | Complete | 2026-03-17 |
 | 56. Tenant Validation Hardening | v2.1 | 2/2 | Complete | 2026-03-18 |
 | 57. Deterministic Watcher Startup Order | v2.1 | 2/2 | Complete | 2026-03-18 |
+| 58. SnapshotJob Tier Simulation Tests | v2.1 | 3/3 | Complete | 2026-03-18 |
+| 59. Advance Gate Fix & Starvation Sim | v2.1 | 2/2 | Complete | 2026-03-19 |
+| 60. Readiness Window for Holders | v2.1 | 2/2 | Complete | 2026-03-19 |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-19 after Phase 60 planned*
+*Last updated: 2026-03-19 after Phase 60 complete*
