@@ -75,8 +75,11 @@ fi
 # Short window (60s) grep — no polling needed, just check recent pod logs.
 # ---------------------------------------------------------------------------
 
-# Wait one full SnapshotJob cycle so any previous tier=4 logs age out of the check window.
-sleep 16
+# Wait for any previous tier=4 logs to age out of the check window.
+# Phase 60: readiness grace window (20s) delays evaluation after tenant reload,
+# so previous tier=4 logs persist longer. 25s ensures both grace window and
+# SnapshotJob cycle are accounted for.
+sleep 25
 
 SCENARIO_NAME="STS-03: No tier=4 log while resolved gate active"
 

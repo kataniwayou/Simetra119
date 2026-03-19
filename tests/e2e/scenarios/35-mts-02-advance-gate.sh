@@ -14,6 +14,12 @@ FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 log_info "MTS-02: Saving original tenant ConfigMap..."
 save_configmap "simetra-tenants" "simetra" "$FIXTURES_DIR/.original-tenants-configmap.yaml" || true
 
+# Set command_trigger BEFORE tenant config so the first evaluation after reload
+# sees violated evaluate metrics → P1 tier=4 → Unresolved → gate blocks P2.
+# Without this, the default scenario gives P1 tier=2 Resolved which PASSES the gate.
+log_info "MTS-02: Setting simulator to command_trigger scenario..."
+sim_set_scenario command_trigger
+
 log_info "MTS-02: Applying tenant-cfg03-two-diff-prio-mts.yaml (P1 SuppressionWindowSeconds=30)..."
 kubectl apply -f "$FIXTURES_DIR/tenant-cfg03-two-diff-prio-mts.yaml" > /dev/null 2>&1 || true
 
@@ -23,13 +29,6 @@ if poll_until_log 60 5 "Tenant vector reload complete\|TenantVectorWatcher initi
 else
     log_warn "MTS-02: Tenant vector reload log not found within 60s — proceeding anyway"
 fi
-
-# ---------------------------------------------------------------------------
-# Set command_trigger scenario and capture initial baseline
-# ---------------------------------------------------------------------------
-
-log_info "MTS-02: Setting simulator to command_trigger scenario..."
-sim_set_scenario command_trigger
 
 BEFORE_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
 log_info "MTS-02: Initial sent baseline=${BEFORE_SENT}"
@@ -49,8 +48,10 @@ else
     record_fail "MTS-02A: P1 tier=4 detected (gate blocker)" "tier4 log for P1 not found within 90s"
 fi
 
-# Sub-scenario 35b (pass/fail): P2 must NOT appear in tier logs while P1 is Unresolved (--since=15s check).
-log_info "MTS-02A: Checking P2 is absent from tier logs in same cycle as P1 (--since=15s)..."
+# Sub-scenario 35b (pass/fail): P2 must NOT appear in tier logs while P1 is Unresolved.
+# command_trigger was set before tenant reload, so P1 reaches tier=4 → Unresolved from
+# the very first evaluation cycle. P2 should never appear in tier logs.
+log_info "MTS-02A: Checking P2 is absent from tier logs (--since=15s)..."
 PODS=$(kubectl get pods -n simetra -l app=snmp-collector \
     -o jsonpath='{.items[*].metadata.name}' 2>/dev/null) || true
 P2_FOUND=0
@@ -70,16 +71,19 @@ else
 fi
 
 # Sub-scenario 35c (pass/fail): sent counter delta > 0 -- confirms P1 actually sent a command
+# Re-capture baseline now (after P1 tier=4 confirmed) to guard against counter resets
+# from prior scenario pod restarts (scenario 28 does rollout restart).
+FRESH_BASELINE=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
 # Poll for counter — SNMP SET round-trip + OTel export + Prometheus scrape takes time.
-if poll_until 45 5 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
+if poll_until 45 5 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$FRESH_BASELINE"; then
     AFTER_SENT_A=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
-    DELTA_A=$((AFTER_SENT_A - BEFORE_SENT))
-    log_info "MTS-02A: sent delta after P1 command: ${DELTA_A} (before=${BEFORE_SENT} after=${AFTER_SENT_A})"
+    DELTA_A=$((AFTER_SENT_A - FRESH_BASELINE))
+    log_info "MTS-02A: sent delta after P1 command: ${DELTA_A} (before=${FRESH_BASELINE} after=${AFTER_SENT_A})"
     record_pass "MTS-02A: P1 sent counter incremented" "sent_delta=${DELTA_A}"
 else
     AFTER_SENT_A=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
-    DELTA_A=$((AFTER_SENT_A - BEFORE_SENT))
-    log_info "MTS-02A: sent delta after P1 command: ${DELTA_A} (before=${BEFORE_SENT} after=${AFTER_SENT_A})"
+    DELTA_A=$((AFTER_SENT_A - FRESH_BASELINE))
+    log_info "MTS-02A: sent delta after P1 command: ${DELTA_A} (before=${FRESH_BASELINE} after=${AFTER_SENT_A})"
     record_fail "MTS-02A: P1 sent counter incremented" "sent_delta=${DELTA_A} after 45s polling"
 fi
 
