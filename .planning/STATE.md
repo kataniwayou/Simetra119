@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 Phase: 58 of 58 (all phases complete)
 Plan: N/A
 Status: v2.1 milestone complete (Phases 51-58)
-Last activity: 2026-03-19 — Phase 58 complete (3 plans executed)
+Last activity: 2026-03-19 — Completed quick task 077: Direct EvaluateTenant for single-tenant groups
 
 Progress: [██████████] v2.1 complete
 
@@ -93,6 +93,7 @@ Progress: [██████████] v2.1 complete
 | 074 | Fix command registry lookup — preserve config address | 2026-03-18 | 9bc5ab1 | [074-command-registry-lookup-config-address](./quick/074-command-registry-lookup-config-address/) |
 | 075 | Add error sentinel filter to CommandWorkerService | 2026-03-18 | 34e67eb | [075-command-error-sentinel-filter](./quick/075-command-error-sentinel-filter/) |
 | 076 | Snapshot tier fixes — staleness to commands, rename ConfirmedBad | 2026-03-18 | 911dd08 | [076-snapshot-tier-fixes](./quick/076-snapshot-tier-fixes/) |
+| 077 | Direct EvaluateTenant for single-tenant groups — skip ThreadPool | 2026-03-19 | 9410015 | [077-snapshot-direct-eval-single-tenant](./quick/077-snapshot-direct-eval-single-tenant/) |
 
 ### Blockers/Concerns
 
