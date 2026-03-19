@@ -77,6 +77,62 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     // -------------------------------------------------------------------------
+    // Pre-tier: Readiness tests
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void EvaluateTenant_AllHoldersReady_ProceedsToTier1()
+    {
+        // Holder with data → IsReady short-circuits true → pre-tier passes → proceeds to tier 1
+        var holder = MakeHolder(intervalSeconds: 3600, graceMultiplier: 2.0, role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(holder, 50.0); // data present → IsReady = true
+
+        var tenant = MakeTenant(holder);
+        var result = _job.EvaluateTenant(tenant);
+
+        // Ready and fresh, in-range → Healthy (tier 3)
+        Assert.Equal(SnapshotJob.TierResult.Healthy, result);
+    }
+
+    [Fact]
+    public void EvaluateTenant_OneHolderNotReady_ReturnsUnresolved()
+    {
+        // h1 has data (ready), h2 has no data and large grace (not ready) → pre-tier blocks
+        var h1 = MakeHolder(intervalSeconds: 3600, role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(h1, 50.0); // data present → h1 immediately ready
+
+        var h2 = MakeHolder(intervalSeconds: 3600, role: "Evaluate",
+            threshold: new ThresholdOptions { Min = 10 });
+        // h2 has no data, ReadinessGrace = 3600 * 2.0 = 7200s → not ready
+
+        var tenant = MakeTenant(h1, h2);
+        var result = _job.EvaluateTenant(tenant);
+
+        // h2 not ready → pre-tier returns Unresolved
+        Assert.Equal(SnapshotJob.TierResult.Unresolved, result);
+    }
+
+    [Fact]
+    public async Task EvaluateTenant_ReadyEmptyHolder_TreatedAsStale()
+    {
+        // Holder with tiny grace (1s * 0.001 = 1ms) and no data.
+        // After 50ms the grace has elapsed → IsReady = true. Null slot in HasStaleness → stale → Unresolved.
+        var holder = MakeHolder(intervalSeconds: 1, graceMultiplier: 0.001, role: "Resolved",
+            threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        await Task.Delay(50); // grace elapses → IsReady = true (no data but time elapsed)
+
+        var cmd = new CommandSlotOptions
+            { Ip = "10.0.0.1", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
+        var tenant = MakeTenant(new[] { holder }, new[] { cmd });
+        var result = _job.EvaluateTenant(tenant);
+
+        // Ready but no data → HasStaleness returns true (null slot = stale) → Unresolved (tier 4)
+        Assert.Equal(SnapshotJob.TierResult.Unresolved, result);
+    }
+
+    // -------------------------------------------------------------------------
     // Tier 1: Staleness tests
     // -------------------------------------------------------------------------
 
@@ -95,19 +151,19 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     [Fact]
-    public void EvaluateTenant_SentinelReadSlot_NotStaleWithinGrace()
+    public void EvaluateTenant_NotReady_ReturnsUnresolved()
     {
-        // Holder with only sentinel (no real write). Sentinel timestamp is from construction.
-        // With intervalSeconds=3600 and graceMultiplier=2.0, grace window is 7200s — sentinel is fresh.
+        // Holder with no real write and a large grace window (intervalSeconds=3600, graceMultiplier=2.0
+        // → ReadinessGrace = 7200s). Holder is not ready → pre-tier check returns Unresolved.
         var holder = MakeHolder(intervalSeconds: 3600, graceMultiplier: 2.0, role: "Resolved",
             threshold: new ThresholdOptions { Min = 0, Max = 100 });
-        // Do NOT write any value — sentinel has Value=0, in range [0,100] → not violated
+        // Do NOT write any value — IsReady is false (no data, grace not elapsed)
 
         var tenant = MakeTenant(holder);
         var result = _job.EvaluateTenant(tenant);
 
-        // Sentinel within grace → not stale. Sentinel Value=0 in range → not violated → Healthy
-        Assert.NotEqual(SnapshotJob.TierResult.Unresolved, result);
+        // Not ready → pre-tier returns Unresolved (blocks advance gate)
+        Assert.Equal(SnapshotJob.TierResult.Unresolved, result);
     }
 
     [Fact]
@@ -219,21 +275,24 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     [Fact]
-    public void EvaluateTenant_ResolvedSentinelReadSlot_ParticipatesInGate()
+    public void EvaluateTenant_ResolvedEmptyHolder_SkippedInGate()
     {
-        // One Resolved with data (violated), one with sentinel only
+        // One Resolved with data (violated), one IntervalSeconds=0 Resolved with no data (empty series).
+        // IntervalSeconds=0 holders are excluded from staleness; empty series (Length=0) are skipped in the gate.
+        // The gate proceeds on h1 alone → h1 is violated → all participating Resolved holders violated → Resolved.
         var h1 = MakeHolder(intervalSeconds: 3600, role: "Resolved",
             threshold: new ThresholdOptions { Min = 10 });
         WriteValue(h1, 5.0); // Below Min=10 → violated
 
-        var h2 = MakeHolder(intervalSeconds: 3600, role: "Resolved",
+        var h2 = MakeHolder(intervalSeconds: 0, role: "Resolved",
             threshold: new ThresholdOptions { Min = 10 });
-        // h2 has sentinel Value=0. 0 < 10 → violated
+        // h2 has IntervalSeconds=0 → excluded from staleness. No real write → ReadSeries().Length == 0 → skipped in gate.
+        // h2 IsReady = true immediately (ReadinessGrace = 0 → elapsed).
 
         var tenant = MakeTenant(h1, h2);
         var result = _job.EvaluateTenant(tenant);
 
-        // h1 violated, h2 sentinel (Value=0 < Min=10) violated → all Resolved violated → Violated
+        // h1 violated, h2 empty (Length=0, skipped in gate) → only h1 participates → all Resolved violated → Resolved
         Assert.Equal(SnapshotJob.TierResult.Resolved, result);
     }
 
@@ -335,8 +394,7 @@ public sealed class SnapshotJobTests : IDisposable
     [Fact]
     public void EvaluateTenant_ResolvedPartialSeriesFill_AllViolated_Violated()
     {
-        // Resolved holder with timeSeriesSize=5 but only 2 writes
-        // (sentinel + 2 writes = 3 samples, sentinel value=0 < Min=10 → violated)
+        // Resolved holder with timeSeriesSize=5 but only 2 writes (2 writes = 2 samples, both violated)
         var resolved = MakeHolder(role: "Resolved",
             threshold: new ThresholdOptions { Min = 10 }, timeSeriesSize: 5);
         WriteValue(resolved, 5.0); // Below Min → violated
@@ -564,21 +622,23 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     [Fact]
-    public void Execute_EvaluateSentinelReadSlot_ParticipatesInCheck()
+    public async Task Execute_EvaluateEmptyHolder_SkippedInCheck()
     {
         var resolved = MakeHolder(role: "Resolved",
-            threshold: new ThresholdOptions { Min = 0, Max = 100 });
-        WriteValue(resolved, 50.0);
+            threshold: new ThresholdOptions { Min = 0, Max = 100 }, graceMultiplier: 0.001);
+        WriteValue(resolved, 50.0); // data present → immediately ready
 
-        // Evaluate holder with data → violated
+        // Evaluate holder with data → violated, immediately ready
         var eval1 = MakeHolder(role: "Evaluate",
-            threshold: new ThresholdOptions { Min = 10 });
+            threshold: new ThresholdOptions { Min = 10 }, graceMultiplier: 0.001);
         WriteValue(eval1, 5.0);
 
-        // Evaluate holder with sentinel only. Sentinel Value=0, threshold Min=10 → 0 < 10 → violated
-        var eval2 = MakeHolder(role: "Evaluate",
-            threshold: new ThresholdOptions { Min = 10 });
-        // No real write — sentinel (Value=0) participates
+        // Evaluate holder with no data but tiny grace (1s * 0.001 = 1ms) → ready after 50ms but empty
+        var eval2 = MakeHolder(role: "Evaluate", intervalSeconds: 1,
+            threshold: new ThresholdOptions { Min = 10 }, graceMultiplier: 0.001);
+        // No real write — empty after grace; skipped in AreAllEvaluateViolated
+
+        await Task.Delay(50);
 
         var cmd = new CommandSlotOptions
             { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
@@ -586,7 +646,7 @@ public sealed class SnapshotJobTests : IDisposable
 
         _job.EvaluateTenant(tenant);
 
-        // eval1 violated, eval2 sentinel (Value=0 < Min=10) violated → all Evaluate violated → Tier 4
+        // eval1 violated, eval2 empty (skipped) → only eval1 checked → all checked Evaluate violated → Tier 4
         Assert.True(_commandChannel.Reader.TryRead(out _));
     }
 
@@ -690,8 +750,7 @@ public sealed class SnapshotJobTests : IDisposable
             threshold: new ThresholdOptions { Min = 0, Max = 100 });
         WriteValue(resolved, 50.0); // In range → not violated
 
-        // Evaluate holder with timeSeriesSize=5 but only 2 values written
-        // (sentinel + 2 writes = 3 samples, but sentinel is value=0 which is < Min=10 → violated)
+        // Evaluate holder with timeSeriesSize=5 but only 2 values written (2 writes = 2 samples, both violated)
         var eval1 = MakeHolder(role: "Evaluate",
             threshold: new ThresholdOptions { Min = 10 }, timeSeriesSize: 5);
         WriteValue(eval1, 5.0); // Below Min → violated

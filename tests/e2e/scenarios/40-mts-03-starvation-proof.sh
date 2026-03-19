@@ -10,6 +10,9 @@
 #
 # This proves the Phase 59 bug fix: suppressed commands no longer return Resolved/Violated
 # (which would have let P2 through). They return Unresolved, permanently blocking P2.
+#
+# Phase 60 note: the 90s poll timeout (MTS-03A) naturally absorbs the readiness grace
+# window. P1 holders are ready before the first tier=4 log is expected.
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 

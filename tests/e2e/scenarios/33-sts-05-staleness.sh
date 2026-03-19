@@ -9,8 +9,8 @@
 # After 20s of stale data + one SnapshotJob cycle (15s), tier=1 log appears.
 #
 # Priming step: switch to healthy scenario first and wait 20s to populate fresh poll
-# timestamps. Without this, slots may be null (never polled) and HasStaleness returns false
-# for null slots -- the stale scenario would not trigger tier=1.
+# timestamps. This satisfies the readiness grace window for all holders and populates
+# recent poll timestamps so the stale scenario can trigger tier=1.
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
@@ -37,7 +37,7 @@ poll_until_log 60 5 "Tenant vector reload complete" 30 || \
 log_info "STS-05: Priming with healthy scenario to populate fresh poll timestamps..."
 sim_set_scenario healthy
 
-log_info "STS-05: Waiting 20s for at least one poll cycle to populate fresh timestamps..."
+log_info "STS-05: Waiting 20s to satisfy readiness grace window and populate fresh poll timestamps..."
 sleep 20
 
 # ---------------------------------------------------------------------------

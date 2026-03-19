@@ -296,7 +296,7 @@ public sealed class TenantVectorRegistryTests
     }
 
     [Fact]
-    public void Reload_NewMetric_StartsWithSentinel()
+    public void Reload_NewMetric_StartsEmpty()
     {
         var registry = CreateRegistry();
 
@@ -313,9 +313,9 @@ public sealed class TenantVectorRegistryTests
 
         registry.TryRoute("10.0.0.1", 161, "ifInOctets", out var holders);
         Assert.NotNull(holders);
+        // Sentinel removed in Phase 60: new metrics start with empty series, not a sentinel sample.
         var slot = holders[0].ReadSlot();
-        Assert.NotNull(slot);
-        Assert.Equal(0, slot.Value); // Sentinel value
+        Assert.Null(slot); // No data yet — empty series
     }
 
     [Fact]
