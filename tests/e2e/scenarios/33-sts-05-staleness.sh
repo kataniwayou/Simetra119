@@ -1,6 +1,9 @@
-# Scenario 33: STS-05 Staleness detection -- tier=1 stale, no command counters
+# Scenario 33: STS-05 Staleness detection -- tier=1 stale triggers command dispatch
 # Validates that after the simulator returns NoSuchInstance (stale scenario), the grace window
-# expires and SnapshotJob logs tier=1 stale, with zero command activity throughout.
+# expires, SnapshotJob logs tier=1 stale, and commands ARE dispatched (tier=4 skip-to-commands).
+#
+# Quick-076 changed staleness behavior: stale data now skips to tier=4 command dispatch
+# instead of returning early with no commands.
 #
 # Grace window: IntervalSeconds(10) * GraceMultiplier(2.0) = 20s
 # After 20s of stale data + one SnapshotJob cycle (15s), tier=1 log appears.
@@ -38,65 +41,51 @@ log_info "STS-05: Waiting 20s for at least one poll cycle to populate fresh time
 sleep 20
 
 # ---------------------------------------------------------------------------
-# Switch to stale: simulator now returns NoSuchInstance for .4.1 and .4.2
-# Poll failures cause existing timestamps to age out past the grace window
+# Baseline sent counter BEFORE switching to stale
 # ---------------------------------------------------------------------------
 
 log_info "STS-05: Baselining command counters BEFORE switching to stale..."
 BEFORE_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
-BEFORE_SUPP=$(snapshot_counter "snmp_command_suppressed_total" 'device_name="e2e-tenant-A"')
-log_info "STS-05 baseline sent=${BEFORE_SENT} suppressed=${BEFORE_SUPP}"
+log_info "STS-05 baseline sent=${BEFORE_SENT}"
+
+# ---------------------------------------------------------------------------
+# Switch to stale: simulator now returns NoSuchInstance for .4.1 and .4.2
+# Poll failures cause existing timestamps to age out past the grace window
+# ---------------------------------------------------------------------------
 
 log_info "STS-05: Switching to stale scenario..."
 sim_set_scenario stale
 
 # ---------------------------------------------------------------------------
-# Wait for staleness: grace window (20s) must elapse before tier=1 log appears
+# Sub-scenario 33a: tier=1 stale log detected
 # Use generous timeout (90s) to accommodate timing variance
 # ---------------------------------------------------------------------------
 
-log_info "STS-05: Waiting for tier=1 stale log (90s timeout, 5s interval)..."
-STALE_LOG_FOUND=0
-if poll_until_log 90 5 "tier=1 stale" 60; then
-    STALE_LOG_FOUND=1
-fi
-
-# ---------------------------------------------------------------------------
-# Assertions
-# ---------------------------------------------------------------------------
-
-# Sub-scenario 33a: tier=1 stale log detected
 SCENARIO_NAME="STS-05: Staleness tier=1 stale log detected"
-if [ "$STALE_LOG_FOUND" -eq 1 ]; then
+log_info "STS-05: Waiting for tier=1 stale log (90s timeout, 5s interval)..."
+if poll_until_log 90 5 "tier=1 stale" 60; then
     record_pass "$SCENARIO_NAME" "log=tier1_stale_found"
 else
     record_fail "$SCENARIO_NAME" "tier=1 stale log not found within 90s after stale scenario switch"
 fi
 
-AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
-AFTER_SUPP=$(snapshot_counter "snmp_command_suppressed_total" 'device_name="e2e-tenant-A"')
-DELTA_SENT=$(( AFTER_SENT - BEFORE_SENT ))
-DELTA_SUPP=$(( AFTER_SUPP - BEFORE_SUPP ))
-log_info "STS-05 deltas: sent=${DELTA_SENT} suppressed=${DELTA_SUPP}"
+# ---------------------------------------------------------------------------
+# Sub-scenario 33b: commands ARE sent when stale (tier=4 skip-to-commands)
+# Poll for counter increment -- same pattern as STS-02 sub-scenario 30b.
+# ---------------------------------------------------------------------------
 
-# Sub-scenario 33b: no command_sent counter increments while stale
-SCENARIO_NAME="STS-05: No commands sent while data is stale"
-if [ "$DELTA_SENT" -eq 0 ]; then
-    record_pass "$SCENARIO_NAME" \
-        "sent_delta=${DELTA_SENT} expected=0 $(get_evidence "snmp_command_sent_total" 'device_name="E2E-SIM"')"
+SCENARIO_NAME="STS-05: Commands dispatched when data is stale"
+log_info "STS-05: Polling for command sent counter to increment (45s timeout)..."
+if poll_until 45 5 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
+    AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
+    log_info "STS-05: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
+    record_pass "$SCENARIO_NAME" "sent_delta=${DELTA_SENT}"
 else
-    record_fail "$SCENARIO_NAME" \
-        "unexpected sent_delta=${DELTA_SENT} expected=0; commands fired during staleness"
-fi
-
-# Sub-scenario 33c: no command_suppressed counter increments while stale
-SCENARIO_NAME="STS-05: No suppressions while data is stale"
-if [ "$DELTA_SUPP" -eq 0 ]; then
-    record_pass "$SCENARIO_NAME" \
-        "suppressed_delta=${DELTA_SUPP} expected=0 $(get_evidence "snmp_command_suppressed_total" 'device_name="e2e-tenant-A"')"
-else
-    record_fail "$SCENARIO_NAME" \
-        "unexpected suppressed_delta=${DELTA_SUPP} expected=0; suppression events fired during staleness"
+    AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
+    log_info "STS-05: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
+    record_fail "$SCENARIO_NAME" "sent_delta=${DELTA_SENT} expected > 0 after 45s polling"
 fi
 
 # ---------------------------------------------------------------------------
