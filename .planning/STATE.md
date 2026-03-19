@@ -96,6 +96,10 @@ Progress: [██████████] v2.1 Phase 61 complete (03/03)
 | 61-01 | All 4 tenants use Min:10 for evaluate threshold (not Max:80) | Symmetric with resolved Min:1; value=0 always violated, value>=10 always healthy |
 | 61-01 | reset_scenario calls reset_oid_overrides before sim_set_scenario default | Prevents per-OID state leakage across scenarios |
 | 61-01 | T1 reuses existing .999.4.x OIDs, no new OID map entries for T1 | e2e_port_utilization/.channel_state/.bypass_status already in OID map |
+| 61-02 | SNS-02 BEFORE_SENT baseline captured before sim_set_oid_stale calls | Delta measures only post-stale dispatches; priming-phase commands excluded |
+| 61-02 | Negative counter assertion uses snapshot+sleep 10+snapshot (delta=0) | Absence of increment is a point-in-time check; polling would just time out |
+| 61-02 | SNS-03 partial violation sub-assertion calls reset_oid_overrides + re-prime + sleep 3 | Flushes prior tier=2 logs before --since=10s absence check |
+| 61-02 | tier=4 log patterns include both em-dash and double-dash variants | Defensive against log format differences across environments |
 | 61-03 | Gate-block scripts assert G1 state first, then sleep 10 + check G2 absent | Prevents false pass if G2 had stale logs from prior scenarios in pod buffer |
 | 61-03 | SNS-B2 uses 5s poll, no sleep-8 | ReadinessGrace = 6s; must catch "not ready" before grace expires (time-based IsReady becomes true after 6s) |
 | 61-03 | Negative G2 assertion uses --since=15s (B1/B3/B4) or --since=10s (B2) | Isolates current observation window from prior scenario log residue |
