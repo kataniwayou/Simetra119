@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Lextm.SharpSnmpLib;
 using SnmpCollector.Configuration;
 using SnmpCollector.Pipeline;
@@ -17,16 +18,11 @@ public sealed class MetricSlotHolderTests
         => new(ip, port, metricName, intervalSeconds, role);
 
     [Fact]
-    public void ReadSlot_BeforeAnyWrite_ReturnsSentinel()
+    public void ReadSlot_BeforeAnyWrite_ReturnsNull()
     {
-        var before = DateTimeOffset.UtcNow;
         var holder = CreateHolder();
         var slot = holder.ReadSlot();
-        Assert.NotNull(slot);
-        Assert.Equal(0, slot.Value);
-        Assert.Null(slot.StringValue);
-        Assert.True(slot.Timestamp >= before);
-        Assert.True(slot.Timestamp <= DateTimeOffset.UtcNow);
+        Assert.Null(slot);
     }
 
     [Fact]
@@ -114,12 +110,11 @@ public sealed class MetricSlotHolderTests
     }
 
     [Fact]
-    public void ReadSeries_BeforeAnyWrite_ReturnsSentinel()
+    public void ReadSeries_BeforeAnyWrite_ReturnsEmpty()
     {
         var holder = CreateHolder();
         var series = holder.ReadSeries();
-        Assert.Single(series);
-        Assert.Equal(0, series[0].Value);
+        Assert.True(series.IsEmpty);
     }
 
     [Fact]
@@ -173,8 +168,8 @@ public sealed class MetricSlotHolderTests
         var fresh = new MetricSlotHolder("10.0.0.1", 161, "test", 30, "Evaluate", timeSeriesSize: 3);
         fresh.CopyFrom(old);
 
-        // Old has sentinel + 2 writes = 3 entries (at capacity)
-        Assert.Equal(3, fresh.ReadSeries().Length);
+        // 2 writes (no sentinel) = 2 entries
+        Assert.Equal(2, fresh.ReadSeries().Length);
         Assert.Equal(2.0, fresh.ReadSlot()!.Value);
         Assert.Equal(SnmpType.Gauge32, fresh.TypeCode);
         Assert.Equal(SnmpSource.Poll, fresh.Source);
@@ -213,5 +208,62 @@ public sealed class MetricSlotHolderTests
     {
         var holder = new MetricSlotHolder("10.0.0.1", 161, "m", 30, "Evaluate");
         Assert.Null(holder.Threshold);
+    }
+
+    [Fact]
+    public void Constructor_SetsConstructedAt()
+    {
+        var before = DateTimeOffset.UtcNow;
+        var holder = CreateHolder();
+        Assert.True(holder.ConstructedAt >= before);
+        Assert.True(holder.ConstructedAt <= DateTimeOffset.UtcNow);
+    }
+
+    [Fact]
+    public void ReadinessGrace_ComputedFromProperties()
+    {
+        var holder = new MetricSlotHolder("10.0.0.1", 161, "m", 30, "Evaluate",
+            timeSeriesSize: 3, graceMultiplier: 2.0);
+        // 3 * 30 * 2.0 = 180 seconds
+        Assert.Equal(TimeSpan.FromSeconds(180), holder.ReadinessGrace);
+    }
+
+    [Fact]
+    public void IsReady_FreshHolder_NotReady()
+    {
+        // intervalSeconds=3600, timeSeriesSize=1, graceMultiplier=2.0 → 7200s grace
+        var holder = new MetricSlotHolder("10.0.0.1", 161, "m", 3600, "Evaluate");
+        Assert.False(holder.IsReady);
+    }
+
+    [Fact]
+    public void IsReady_HolderWithData_AlwaysReady()
+    {
+        var holder = new MetricSlotHolder("10.0.0.1", 161, "m", 3600, "Evaluate");
+        holder.WriteValue(42.0, null, SnmpType.Integer32, SnmpSource.Poll);
+        Assert.True(holder.IsReady);
+    }
+
+    [Fact]
+    public async Task IsReady_TinyGrace_BecomesReady()
+    {
+        // graceMultiplier=0.001 → grace = 1 * 30 * 0.001 = 0.03s
+        var holder = new MetricSlotHolder("10.0.0.1", 161, "m", 30, "Evaluate",
+            graceMultiplier: 0.001);
+        await Task.Delay(100); // 100ms > 30ms grace
+        Assert.True(holder.IsReady);
+    }
+
+    [Fact]
+    public void IsReady_CopyFromWithData_ImmediatelyReady()
+    {
+        var old = new MetricSlotHolder("10.0.0.1", 161, "m", 3600, "Evaluate");
+        old.WriteValue(1.0, null, SnmpType.Integer32, SnmpSource.Poll);
+
+        var fresh = new MetricSlotHolder("10.0.0.1", 161, "m", 3600, "Evaluate");
+        Assert.False(fresh.IsReady); // Before CopyFrom: not ready
+
+        fresh.CopyFrom(old);
+        Assert.True(fresh.IsReady); // After CopyFrom: has data → ready
     }
 }
