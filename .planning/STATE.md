@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 60 — Readiness Window for Holders
+**Current focus:** Phase 60 complete — v2.1 complete
 
 ## Current Position
 
 Phase: 60 of 60
-Plan: 01 of 2 complete
-Status: v2.1 in progress (Phases 51-60)
-Last activity: 2026-03-19 — Completed 60-01-PLAN.md (sentinel removal + readiness window)
+Plan: 02 of 2 complete
+Status: v2.1 complete (Phases 51-60)
+Last activity: 2026-03-19 — Completed 60-02-PLAN.md (pre-tier readiness check + sentinel test cleanup)
 
-Progress: [█████████░] v2.1 Phase 60 Plan 01 complete
+Progress: [██████████] v2.1 complete — all 60 phases done
 
 ## Performance Metrics
 
@@ -88,6 +88,9 @@ Progress: [█████████░] v2.1 Phase 60 Plan 01 complete
 | 60-01 | IsReady short-circuits true when ReadSeries().Length > 0 | CopyFrom with real data makes holder immediately ready despite new ConstructedAt |
 | 60-01 | ReadinessGrace = TimeSeriesSize * IntervalSeconds * GraceMultiplier | Pure computed property; fields are immutable so no caching needed |
 | 60-01 | ConstructedAt uses property initializer (= DateTimeOffset.UtcNow) | Equivalent to constructor body assignment, syntactically cleaner |
+| 60-02 | AreAllReady() is a private static method in SnapshotJob | Mirrors HasStaleness/AreAllResolvedViolated pattern; keeps EvaluateTenant readable |
+| 60-02 | HasStaleness null-slot: return true (stale) instead of continue | Only reachable after AreAllReady passes; null slot post-readiness = device never responded |
+| 60-02 | EvaluateTenant_ResolvedEmptyHolder_SkippedInGate uses IntervalSeconds=0 | Excluded from staleness; empty series skipped in gate; no async needed |
 
 ### Quick Tasks Completed
 
@@ -108,6 +111,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T17:06:38Z
-Stopped at: Completed 60-01-PLAN.md (sentinel removal + ConstructedAt/ReadinessGrace/IsReady)
+Last session: 2026-03-19T17:15:05Z
+Stopped at: Completed 60-02-PLAN.md (pre-tier readiness check + sentinel test cleanup) — v2.1 complete
 Resume file: None
