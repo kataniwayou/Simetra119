@@ -1006,7 +1006,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (source) (changes(snmp_gauge{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (source) (changes({__name__=~\"snmp_gauge|snmp_info\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "legendFormat": "{{source}}",
           "refId": "A"
         }
@@ -1090,7 +1090,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (source) (increase(snmp_gauge{source=~\".+\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__range]))",
+          "expr": "sum by (source) (changes({__name__=~\"snmp_gauge|snmp_info\", source=~\".+\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__range]))",
           "instant": true,
           "legendFormat": "{{source}}",
           "refId": "A"
