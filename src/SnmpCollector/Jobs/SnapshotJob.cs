@@ -30,7 +30,7 @@ public sealed class SnapshotJob : IJob
     /// Result of per-tenant 4-tier evaluation. Drives priority-group advance gate
     /// and cycle summary logging.
     /// </summary>
-    internal enum TierResult { Violated, Healthy, Commanded }
+    internal enum TierResult { Resolved, Healthy, Unresolved }
 
     public SnapshotJob(
         ITenantVectorRegistry registry,
@@ -61,7 +61,7 @@ public sealed class SnapshotJob : IJob
         try
         {
             var totalEvaluated = 0;
-            var totalCommanded = 0;
+            var totalUnresolved = 0;
 
             foreach (var group in _registry.Groups)
             {
@@ -82,14 +82,14 @@ public sealed class SnapshotJob : IJob
                 for (var i = 0; i < results.Length; i++)
                 {
                     totalEvaluated++;
-                    if (results[i] == TierResult.Commanded) totalCommanded++;
+                    if (results[i] == TierResult.Unresolved) totalUnresolved++;
                 }
 
-                // Advance gate: block if ANY tenant is Commanded
+                // Advance gate: block if ANY tenant is Unresolved
                 var shouldAdvance = true;
                 for (var i = 0; i < results.Length; i++)
                 {
-                    if (results[i] == TierResult.Commanded)
+                    if (results[i] == TierResult.Unresolved)
                     {
                         shouldAdvance = false;
                         break;
@@ -104,8 +104,8 @@ public sealed class SnapshotJob : IJob
             _pipelineMetrics.RecordSnapshotCycleDuration(sw.Elapsed.TotalMilliseconds);
 
             _logger.LogDebug(
-                "Snapshot cycle complete: {TenantsEvaluated} evaluated, {Commanded} commanded, {DurationMs:F1}ms",
-                totalEvaluated, totalCommanded, sw.Elapsed.TotalMilliseconds);
+                "Snapshot cycle complete: {TenantsEvaluated} evaluated, {Unresolved} unresolved, {DurationMs:F1}ms",
+                totalEvaluated, totalUnresolved, sw.Elapsed.TotalMilliseconds);
         }
         catch (OperationCanceledException)
         {
@@ -148,7 +148,7 @@ public sealed class SnapshotJob : IJob
                 _logger.LogDebug(
                     "Tenant {TenantId} priority={Priority} tier=2 — all resolved violated, no commands",
                     tenant.Id, tenant.Priority);
-                return TierResult.Violated;
+                return TierResult.Resolved;
             }
 
             // Not all Resolved violated — proceed to Tier 3 (evaluate check)
@@ -202,9 +202,9 @@ public sealed class SnapshotJob : IJob
             "Tenant {TenantId} priority={Priority} tier=4 — commands enqueued, count={CommandCount}",
             tenant.Id, tenant.Priority, enqueueCount);
 
-        // If no commands were actually enqueued (all suppressed or channel full),
-        // treat as Violated — no active commands firing, safe to cascade
-        return enqueueCount > 0 ? TierResult.Commanded : TierResult.Violated;
+        // Tier 4 reached = command intent = device state unresolved,
+        // regardless of whether commands were actually dispatched (suppression/channel full)
+        return TierResult.Unresolved;
     }
 
     /// <summary>
