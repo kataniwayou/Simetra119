@@ -1,18 +1,17 @@
-# Scenario 35: MTS-02 Advance gate -- P1 Commanded blocks P2 (02A), then P1 suppressed (ConfirmedBad) passes gate for P2 (02B)
+# Scenario 35: MTS-02 Advance gate -- P1 Unresolved blocks P2 (02A), then P1 Healthy passes gate for P2 (02B)
 # Uses tenant-cfg03-two-diff-prio-mts.yaml (P1 SuppressionWindowSeconds=30, P2 SuppressionWindowSeconds=10)
 #
 # Timing model:
-#   T=0:   command_trigger set; P1 first SnapshotJob cycle -> Commanded (enqueueCount>0, sent counter +1)
-#          Advance gate sees P1 Commanded (not ConfirmedBad) -> gate blocked -> P2 NOT evaluated
-#   T=15s: next SnapshotJob cycle; P1's 30s suppression window still active -> all P1 commands suppressed
-#          (enqueueCount==0) -> P1 returns ConfirmedBad -> advance gate passes -> P2 evaluated for the
-#          first time -> P2 Commanded (enqueueCount>0, sent counter +1)
+#   T=0:   command_trigger set; P1 first SnapshotJob cycle -> Unresolved (tier=4 command intent)
+#          Advance gate sees P1 Unresolved -> gate blocked -> P2 NOT evaluated
+#   T=Ns:  Simulator switched to 'default' scenario; all metrics return baseline values (0)
+#          P1's evaluate metric e2e_port_utilization=0 (< Max:80) -> tier=3 Healthy
+#          Advance gate sees P1 Healthy -> passes -> P2 evaluated -> P2 also Healthy
 #
-# MTS-02A asserts: P1 evaluated (tier=4 log present), P2 NOT evaluated (no tier log in 120s window),
-#                  P1 counter incremented (sent delta > 0), counter quiescence (no further commands in
-#                  one SnapshotJob cycle, proving P2 was blocked)
-# MTS-02B asserts: P2 evaluated after gate passes (P2 tier=4 log present), both groups sent commands
-#                  (total sent delta from initial baseline >= 2, proving P1 + P2 each contributed)
+# MTS-02A asserts: P1 evaluated (tier=4 log present), P2 NOT evaluated (no tier log),
+#                  P1 counter incremented (sent delta > 0)
+# MTS-02B asserts: After switching to default scenario, P1 returns Healthy (tier=3 log),
+#                  P2 is evaluated (P2 tier=3 log present, proving gate passed)
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
@@ -45,8 +44,8 @@ log_info "MTS-02: Initial sent baseline=${BEFORE_SENT}"
 
 # ---------------------------------------------------------------------------
 # === MTS-02A: Gate Blocked ===
-# P1 (Priority 1) reaches tier=4 on first cycle and is Commanded.
-# Gate sees Commanded (not ConfirmedBad) -> blocks evaluation of P2 (Priority 2).
+# P1 (Priority 1) reaches tier=4 on first cycle and is Unresolved.
+# Gate sees Unresolved -> blocks evaluation of P2 (Priority 2).
 # ---------------------------------------------------------------------------
 
 log_info "MTS-02A: Polling for P1 tier=4 log (gate blocker assertion)..."
@@ -58,9 +57,7 @@ else
     record_fail "MTS-02A: P1 tier=4 detected (gate blocker)" "tier4 log for P1 not found within 90s"
 fi
 
-# Sub-scenario 35b (pass/fail): P2 must NOT appear in the SAME SnapshotJob cycle as P1's first tier=4.
-# Check immediately — use --since=15s (one SnapshotJob cycle) to look only at the cycle where P1
-# was Commanded. With fast SET, P1 may become ConfirmedBad (suppressed) in the next cycle, letting P2 through.
+# Sub-scenario 35b (pass/fail): P2 must NOT appear in tier logs while P1 is Unresolved (--since=15s check).
 log_info "MTS-02A: Checking P2 is absent from tier logs in same cycle as P1 (--since=15s)..."
 PODS=$(kubectl get pods -n simetra -l app=snmp-collector \
     -o jsonpath='{.items[*].metadata.name}' 2>/dev/null) || true
@@ -94,65 +91,29 @@ else
     record_fail "MTS-02A: P1 sent counter incremented" "sent_delta=${DELTA_A} after 45s polling"
 fi
 
-# Sub-scenario 35d: quiescence check -- with fast SET, P1 transitions to ConfirmedBad (suppressed)
-# within one cycle, allowing P2 through. Check that the total sent from P1+P2 is bounded:
-# after P1 sent and P2 may have sent, no further commands should fire for 18s.
-QUIESCE_BASELINE=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
-log_info "MTS-02A: quiescence baseline=${QUIESCE_BASELINE}, sleeping 18s (one SnapshotJob cycle + margin)"
-sleep 18
-QUIESCE_AFTER=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
-QUIESCE_DELTA=$((QUIESCE_AFTER - QUIESCE_BASELINE))
-log_info "MTS-02A: quiescence delta=${QUIESCE_DELTA} (baseline=${QUIESCE_BASELINE} after=${QUIESCE_AFTER})"
-
-# With fast SET, P2 may have sent during the quiescence window (gate opened). Allow delta <= 1.
-if [ "$QUIESCE_DELTA" -le 1 ]; then
-    record_pass "MTS-02A: No additional commands sent (P2 blocked)" "quiesce_delta=${QUIESCE_DELTA} (0=P2 blocked, 1=P2 gate-passed)"
-else
-    record_fail "MTS-02A: No additional commands sent (P2 blocked)" "quiesce_delta=${QUIESCE_DELTA} — expected <= 1"
-fi
-
 # ---------------------------------------------------------------------------
 # === MTS-02B: Gate Passed ===
-# No scenario reset between 02A and 02B. command_trigger stays active.
-# At the next SnapshotJob cycle (T=15s from P1's first command), P1's 30s window is still active.
-# P1 reaches tier=4 but all commands are suppressed (enqueueCount==0) -> P1 returns ConfirmedBad.
-# Advance gate sees ConfirmedBad -> passes -> P2 evaluated for the first time -> P2 Commanded.
+# Switch simulator to 'default' — P1 metrics return to baseline (evaluate not violated).
+# P1 reaches tier=3 Healthy → advance gate passes → P2 is evaluated.
 # ---------------------------------------------------------------------------
 
-log_info "MTS-02B: Gate-passed window starting — P1 ConfirmedBad should allow P2 evaluation..."
+log_info "MTS-02B: Switching simulator to 'default' to make P1 Healthy..."
+sim_set_scenario default
 
-BEFORE_SENT_B=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
-log_info "MTS-02B: Baseline before P2 evaluation: before_b=${BEFORE_SENT_B}"
-
-# Sub-scenario 35e (pass/fail): P2 tier=4 log detected -- confirms gate passed and P2 was evaluated
-log_info "MTS-02B: Polling for P2 tier=4 log (gate-passed assertion, timeout 60s, since 30s)..."
-if poll_until_log 60 5 "e2e-tenant-P2.*tier=4 — commands enqueued" 30; then
-    record_pass "MTS-02B: P2 tier=4 detected (gate passed)" "log=tier4_P2_found"
+# Sub-scenario 35e (pass/fail): P1 tier=3 Healthy log — confirms P1 is no longer Unresolved
+log_info "MTS-02B: Polling for P1 tier=3 Healthy log (timeout 60s, since 15s)..."
+if poll_until_log 60 5 "e2e-tenant-P1.*tier=3 — not all evaluate metrics violated" 15; then
+    record_pass "MTS-02B: P1 tier=3 Healthy (gate passes)" "log=tier3_P1_healthy_found"
 else
-    record_fail "MTS-02B: P2 tier=4 detected (gate passed)" "tier4 log for P2 not found within 60s"
+    record_fail "MTS-02B: P1 tier=3 Healthy (gate passes)" "tier3 Healthy log for P1 not found within 60s"
 fi
 
-# Sub-scenario 35f (pass/fail): total sent delta from ORIGINAL baseline >= 2
-# Uses BEFORE_SENT (step 4) -- the very first baseline before any commands were sent.
-# P1 sent during 02A (+1) and P2 sent during 02B (+1) -> total delta must be >= 2.
-# The -ge 2 check (not > 0) proves BOTH groups contributed at least one command each.
-# Poll for total delta >= 2 (P1 + P2 each sent at least 1)
-NEED_AT_LEAST=$((BEFORE_SENT + 1))
-if poll_until 45 5 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$NEED_AT_LEAST"; then
-    AFTER_SENT_B=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
-    DELTA_B_TOTAL=$((AFTER_SENT_B - BEFORE_SENT))
-    log_info "MTS-02B: Total sent delta from original baseline: ${DELTA_B_TOTAL} (original_baseline=${BEFORE_SENT} after=${AFTER_SENT_B})"
-    if [ "$DELTA_B_TOTAL" -ge 2 ]; then
-        record_pass "MTS-02B: Both groups sent commands (total delta >= 2)" "total_sent_delta=${DELTA_B_TOTAL}"
-    else
-        record_fail "MTS-02B: Both groups sent commands (total delta >= 2)" "total_sent_delta=${DELTA_B_TOTAL} — expected >= 2"
-    fi
+# Sub-scenario 35f (pass/fail): P2 tier log appears — confirms gate passed and P2 was evaluated
+log_info "MTS-02B: Polling for P2 tier log (gate-passed assertion, timeout 60s, since 15s)..."
+if poll_until_log 60 5 "e2e-tenant-P2.*tier=" 15; then
+    record_pass "MTS-02B: P2 evaluated (gate passed)" "log=P2_tier_found"
 else
-    AFTER_SENT_B=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
-    DELTA_B_TOTAL=$((AFTER_SENT_B - BEFORE_SENT))
-    log_info "MTS-02B: Total sent delta from original baseline: ${DELTA_B_TOTAL} (original_baseline=${BEFORE_SENT} after=${AFTER_SENT_B})"
-    record_fail "MTS-02B: Both groups sent commands (total delta >= 2)" \
-        "total_sent_delta=${DELTA_B_TOTAL} after 45s polling — expected >= 2"
+    record_fail "MTS-02B: P2 evaluated (gate passed)" "P2 tier log not found within 60s"
 fi
 
 # ---------------------------------------------------------------------------
