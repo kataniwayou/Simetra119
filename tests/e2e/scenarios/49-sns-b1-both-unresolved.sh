@@ -65,7 +65,7 @@ sim_set_oid "5.1" "0"     # T2 eval violated (< Min:10)
 # ---------------------------------------------------------------------------
 
 log_info "SNS-B1a: Polling for G1-T1 tier=4 log..."
-if poll_until_log 30 1 "e2e-tenant-G1-T1.*tier=4 — commands enqueued" 15; then
+if poll_until_log 30 1 "e2e-tenant-G1-T1.*tier=4 — commands enqueued\|e2e-tenant-G1-T1.*tier=4 -- commands enqueued" 15; then
     record_pass "SNS-B1a: G1-T1 tier=4 Unresolved" "log=tier4_G1T1_found"
 else
     record_fail "SNS-B1a: G1-T1 tier=4 Unresolved" "tier=4 log for G1-T1 not found within 30s"
@@ -76,7 +76,7 @@ fi
 # ---------------------------------------------------------------------------
 
 log_info "SNS-B1b: Polling for G1-T2 tier=4 log..."
-if poll_until_log 30 1 "e2e-tenant-G1-T2.*tier=4 — commands enqueued" 15; then
+if poll_until_log 30 1 "e2e-tenant-G1-T2.*tier=4 — commands enqueued\|e2e-tenant-G1-T2.*tier=4 -- commands enqueued" 15; then
     record_pass "SNS-B1b: G1-T2 tier=4 Unresolved" "log=tier4_G1T2_found"
 else
     record_fail "SNS-B1b: G1-T2 tier=4 Unresolved" "tier=4 log for G1-T2 not found within 30s"
