@@ -296,10 +296,12 @@ Plans:
   5. Source-aware threshold: Poll/Synthetic check all time series samples, Trap/Command check newest only
   6. Advance gate: Commanded tenant blocks lower-priority group evaluation
   7. All existing E2E scenarios (1-37) continue to pass unchanged
-**Plans**: 0 plans
+**Plans**: 3 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 58 to break down)
+- [ ] 58-01-PLAN.md — Fix scenarios 31/33 log patterns + staleness behavior + report.sh range
+- [ ] 58-02-PLAN.md — New STS-06 staleness-to-commands scenario (Poll source)
+- [ ] 58-03-PLAN.md — New STS-07 synthetic staleness-to-commands scenario + report.sh range update
 
 ---
 
