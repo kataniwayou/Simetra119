@@ -14,7 +14,7 @@
 - ✅ **v1.9 Metric Threshold Structure & Validation** - Phases 41-42 (shipped 2026-03-15)
 - ✅ **v1.10 Heartbeat Refactor & Pipeline Liveness** - Phases 43-44 (shipped 2026-03-15)
 - ✅ **v2.0 Tenant Evaluation & Control** - Phases 45-50 (shipped 2026-03-17)
-- 🚧 **v2.1 E2E Tenant Evaluation Tests** - Phases 51-59 (in progress)
+- 🚧 **v2.1 E2E Tenant Evaluation Tests** - Phases 51-60 (in progress)
 
 ## Phases
 
@@ -320,6 +320,26 @@ Plans:
 Plans:
 - [x] 59-01-PLAN.md — Rename TierResult enum + fix tier=4 advance gate bug + update unit tests
 - [x] 59-02-PLAN.md — Rewrite MTS-02 gate-pass + new MTS-03 starvation proof scenario
+
+---
+
+#### Phase 60: Readiness Window for Holders
+
+**Goal**: Replace the sentinel sample in MetricSlotHolder with a readiness grace window (`TimeSeriesSize × IntervalSeconds × GraceMultiplier`), so tenants are not evaluated until enough time has passed for all metric slots to fill with real data — eliminating false threshold results from sentinel zeros and startup race conditions
+**Depends on**: Phase 59 (advance gate semantics must be stable before changing holder initialization)
+**Success Criteria** (what must be TRUE):
+  1. MetricSlotHolder constructor no longer creates a sentinel sample — series starts empty
+  2. Each holder has a `ConstructedAt` timestamp and a readiness grace window calculated as `TimeSeriesSize × IntervalSeconds × GraceMultiplier`
+  3. SnapshotJob skips tenants where any holder has not passed its readiness grace — tenant is "not ready", blocks the advance gate
+  4. Staleness check remains unchanged: `IntervalSeconds × GraceMultiplier` from newest real sample timestamp
+  5. Threshold evaluation only runs on real samples — empty holders are skipped (no sentinel participation)
+  6. MTS-03 startup race is eliminated — P1 is "not ready" during fill window, not falsely Healthy
+  7. All existing E2E scenarios pass with the new readiness logic
+  8. All unit tests updated for sentinel removal
+**Plans**: 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 60 to break down)
 
 ---
 
