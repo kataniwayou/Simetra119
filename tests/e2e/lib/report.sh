@@ -11,7 +11,7 @@ _REPORT_CATEGORIES=(
     "Business Metrics|10|22"
     "OID Mutations|23|25"
     "Device Lifecycle|26|27"
-    "Snapshot Evaluation|28|38"
+    "Snapshot Evaluation|28|40"
 )
 
 generate_report() {
