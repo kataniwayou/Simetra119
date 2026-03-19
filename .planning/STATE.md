@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 61 of 61
-Plan: N/A — not yet planned
+Plan: 01 of 3 complete
 Status: v2.1 in progress (Phases 51-61)
-Last activity: 2026-03-19 — Phase 61 added: New E2E Suite Snapshot
+Last activity: 2026-03-19 — Completed 61-01-PLAN.md (E2E snapshot suite infrastructure)
 
-Progress: [█████████░] v2.1 Phase 61 pending
+Progress: [█████████░] v2.1 Phase 61 in progress (01/03)
 
 ## Performance Metrics
 
@@ -91,6 +91,11 @@ Progress: [█████████░] v2.1 Phase 61 pending
 | 60-02 | AreAllReady() is a private static method in SnapshotJob | Mirrors HasStaleness/AreAllResolvedViolated pattern; keeps EvaluateTenant readable |
 | 60-02 | HasStaleness null-slot: return true (stale) instead of continue | Only reachable after AreAllReady passes; null slot post-readiness = device never responded |
 | 60-02 | EvaluateTenant_ResolvedEmptyHolder_SkippedInGate uses IntervalSeconds=0 | Excluded from staleness; empty series skipped in gate; no async needed |
+| 61-01 | Per-OID override dict checked before scenario in DynamicInstance.getValue | Enables arbitrary test control without predefined scenario combinations |
+| 61-01 | /oid/{oid}/stale registered before /oid/{oid}/{value} | aiohttp route registration order determines handler for overlapping patterns; literal 'stale' must win |
+| 61-01 | All 4 tenants use Min:10 for evaluate threshold (not Max:80) | Symmetric with resolved Min:1; value=0 always violated, value>=10 always healthy |
+| 61-01 | reset_scenario calls reset_oid_overrides before sim_set_scenario default | Prevents per-OID state leakage across scenarios |
+| 61-01 | T1 reuses existing .999.4.x OIDs, no new OID map entries for T1 | e2e_port_utilization/.channel_state/.bypass_status already in OID map |
 
 ### Quick Tasks Completed
 
@@ -111,6 +116,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T17:15:05Z
-Stopped at: Completed 60-02-PLAN.md (pre-tier readiness check + sentinel test cleanup) — v2.1 complete
+Last session: 2026-03-19T20:10:35Z
+Stopped at: Completed 61-01-PLAN.md (E2E snapshot suite infrastructure — simulator, OID map, fixture, helpers, config)
 Resume file: None
