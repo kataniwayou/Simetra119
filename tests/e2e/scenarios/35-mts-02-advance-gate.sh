@@ -1,17 +1,9 @@
-# Scenario 35: MTS-02 Advance gate -- P1 Unresolved blocks P2 (02A), then P1 Healthy passes gate for P2 (02B)
+# Scenario 35: MTS-02 Advance gate -- three sub-scenarios testing all gate results
 # Uses tenant-cfg03-two-diff-prio-mts.yaml (P1 SuppressionWindowSeconds=30, P2 SuppressionWindowSeconds=10)
 #
-# Timing model:
-#   T=0:   command_trigger set; P1 first SnapshotJob cycle -> Unresolved (tier=4 command intent)
-#          Advance gate sees P1 Unresolved -> gate blocked -> P2 NOT evaluated
-#   T=Ns:  Simulator switched to 'default' scenario; all metrics return baseline values (0)
-#          P1's evaluate metric e2e_port_utilization=0 (< Max:80) -> tier=3 Healthy
-#          Advance gate sees P1 Healthy -> passes -> P2 evaluated -> P2 also Healthy
-#
-# MTS-02A asserts: P1 evaluated (tier=4 log present), P2 NOT evaluated (no tier log),
-#                  P1 counter incremented (sent delta > 0)
-# MTS-02B asserts: After switching to default scenario, P1 returns Healthy (tier=3 log),
-#                  P2 is evaluated (P2 tier=3 log present, proving gate passed)
+# MTS-02A: P1 Unresolved (command_trigger, tier=4) -> gate BLOCKS -> P2 NOT evaluated
+# MTS-02B: P1 Resolved  (default, tier=2 all resolved violated) -> gate PASSES -> P2 evaluated
+# MTS-02C: P1 Healthy   (healthy, tier=3 evaluate not violated) -> gate PASSES -> P2 evaluated
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
@@ -92,28 +84,54 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# === MTS-02B: Gate Passed ===
-# Switch simulator to 'default' — P1 metrics return to baseline (evaluate not violated).
-# P1 reaches tier=3 Healthy → advance gate passes → P2 is evaluated.
+# === MTS-02B: Gate Passed via Resolved ===
+# Switch simulator to 'default' — all OIDs return 0.
+# P1 resolved metrics 0 < Min:1.0 → all resolved violated → tier=2 Resolved.
+# Resolved advances gate → P2 evaluated.
 # ---------------------------------------------------------------------------
 
-log_info "MTS-02B: Switching simulator to 'default' to make P1 Healthy..."
+log_info "MTS-02B: Switching simulator to 'default' to make P1 Resolved (tier=2)..."
 sim_set_scenario default
 
-# Sub-scenario 35e (pass/fail): P1 tier=3 Healthy log — confirms P1 is no longer Unresolved
-log_info "MTS-02B: Polling for P1 tier=3 Healthy log (timeout 60s, since 15s)..."
-if poll_until_log 60 5 "e2e-tenant-P1.*tier=3 — not all evaluate metrics violated" 15; then
-    record_pass "MTS-02B: P1 tier=3 Healthy (gate passes)" "log=tier3_P1_healthy_found"
+# Sub-scenario 35d (pass/fail): P1 tier=2 Resolved log — confirms P1 is Resolved (gate passes)
+log_info "MTS-02B: Polling for P1 tier=2 Resolved log (timeout 60s, since 30s)..."
+if poll_until_log 60 5 "e2e-tenant-P1.*tier=2 — all resolved violated" 30; then
+    record_pass "MTS-02B: P1 tier=2 Resolved (gate passes)" "log=tier2_P1_resolved_found"
 else
-    record_fail "MTS-02B: P1 tier=3 Healthy (gate passes)" "tier3 Healthy log for P1 not found within 60s"
+    record_fail "MTS-02B: P1 tier=2 Resolved (gate passes)" "tier2 Resolved log for P1 not found within 60s"
 fi
 
-# Sub-scenario 35f (pass/fail): P2 tier log appears — confirms gate passed and P2 was evaluated
-log_info "MTS-02B: Polling for P2 tier log (gate-passed assertion, timeout 60s, since 15s)..."
-if poll_until_log 60 5 "e2e-tenant-P2.*tier=" 15; then
-    record_pass "MTS-02B: P2 evaluated (gate passed)" "log=P2_tier_found"
+# Sub-scenario 35e (pass/fail): P2 tier log appears — confirms gate passed via Resolved
+log_info "MTS-02B: Polling for P2 tier log (gate-passed via Resolved, timeout 60s, since 30s)..."
+if poll_until_log 60 5 "e2e-tenant-P2.*tier=" 30; then
+    record_pass "MTS-02B: P2 evaluated (gate passed via Resolved)" "log=P2_tier_found_resolved"
 else
-    record_fail "MTS-02B: P2 evaluated (gate passed)" "P2 tier log not found within 60s"
+    record_fail "MTS-02B: P2 evaluated (gate passed via Resolved)" "P2 tier log not found within 60s"
+fi
+
+# ---------------------------------------------------------------------------
+# === MTS-02C: Gate Passed via Healthy ===
+# Switch simulator to 'healthy' — resolved in-range, evaluate in-range.
+# P1 reaches tier=3 Healthy. Healthy advances gate → P2 evaluated.
+# ---------------------------------------------------------------------------
+
+log_info "MTS-02C: Switching simulator to 'healthy' to make P1 Healthy (tier=3)..."
+sim_set_scenario healthy
+
+# Sub-scenario 35f (pass/fail): P1 tier=3 Healthy log
+log_info "MTS-02C: Polling for P1 tier=3 Healthy log (timeout 60s, since 30s)..."
+if poll_until_log 60 5 "e2e-tenant-P1.*tier=3 — not all evaluate metrics violated" 30; then
+    record_pass "MTS-02C: P1 tier=3 Healthy (gate passes)" "log=tier3_P1_healthy_found"
+else
+    record_fail "MTS-02C: P1 tier=3 Healthy (gate passes)" "tier3 Healthy log for P1 not found within 60s"
+fi
+
+# Sub-scenario 35g (pass/fail): P2 tier log appears — confirms gate passed via Healthy
+log_info "MTS-02C: Polling for P2 tier log (gate-passed via Healthy, timeout 60s, since 30s)..."
+if poll_until_log 60 5 "e2e-tenant-P2.*tier=" 30; then
+    record_pass "MTS-02C: P2 evaluated (gate passed via Healthy)" "log=P2_tier_found_healthy"
+else
+    record_fail "MTS-02C: P2 evaluated (gate passed via Healthy)" "P2 tier log not found within 60s"
 fi
 
 # ---------------------------------------------------------------------------
