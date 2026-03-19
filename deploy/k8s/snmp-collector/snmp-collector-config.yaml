@@ -27,6 +27,9 @@ data:
       "HeartbeatJob": {
         "IntervalSeconds": 15
       },
+      "SnapshotJob": {
+        "IntervalSeconds": 1
+      },
       "Liveness": {
         "GraceMultiplier": 2.0
       },

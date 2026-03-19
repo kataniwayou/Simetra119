@@ -41,7 +41,63 @@ sim_set_scenario() {
 # ---------------------------------------------------------------------------
 
 reset_scenario() {
+    reset_oid_overrides
     sim_set_scenario default
+}
+
+# ---------------------------------------------------------------------------
+# sim_set_oid <oid_suffix> <value>
+# POST to /oid/{oid}/{value}. oid_suffix is relative to E2E prefix,
+# e.g. "4.1" for T1 evaluate, "5.1" for T2 evaluate.
+# ---------------------------------------------------------------------------
+
+sim_set_oid() {
+    local oid="$1"
+    local value="$2"
+    log_info "Setting OID ${oid} = ${value}"
+    local http_code
+    http_code=$(curl -sf -o /dev/null -w '%{http_code}' \
+        -X POST "${SIM_URL}/oid/${oid}/${value}" 2>/dev/null) || {
+        log_error "curl failed setting OID ${oid}"
+        return 1
+    }
+    if [ "$http_code" = "200" ]; then
+        return 0
+    else
+        log_error "Unexpected HTTP ${http_code} setting OID ${oid}"
+        return 1
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# sim_set_oid_stale <oid_suffix>
+# POST to /oid/{oid}/stale. Makes the OID return NoSuchInstance.
+# ---------------------------------------------------------------------------
+
+sim_set_oid_stale() {
+    local oid="$1"
+    log_info "Setting OID ${oid} to stale"
+    local http_code
+    http_code=$(curl -sf -o /dev/null -w '%{http_code}' \
+        -X POST "${SIM_URL}/oid/${oid}/stale" 2>/dev/null) || {
+        log_error "curl failed setting OID ${oid} stale"
+        return 1
+    }
+    if [ "$http_code" = "200" ]; then
+        return 0
+    else
+        log_error "Unexpected HTTP ${http_code} setting OID ${oid} stale"
+        return 1
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# reset_oid_overrides
+# DELETE /oid/overrides -- clear all per-OID overrides, fall back to scenario.
+# ---------------------------------------------------------------------------
+
+reset_oid_overrides() {
+    curl -sf -o /dev/null -X DELETE "${SIM_URL}/oid/overrides" 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------

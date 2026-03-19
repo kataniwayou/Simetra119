@@ -1,0 +1,165 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simetra-tenants
+  namespace: simetra
+data:
+  tenants.json: |
+    [
+      {
+        "Name": "e2e-tenant-G1-T1",
+        "Priority": 1,
+        "SuppressionWindowSeconds": 10,
+        "Metrics": [
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_port_utilization",
+            "TimeSeriesSize": 3,
+            "GraceMultiplier": 2.0,
+            "Role": "Evaluate",
+            "Threshold": { "Min": 10.0 }
+          },
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_channel_state",
+            "Role": "Resolved",
+            "Threshold": { "Min": 1.0 }
+          },
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_bypass_status",
+            "Role": "Resolved",
+            "Threshold": { "Min": 1.0 }
+          }
+        ],
+        "Commands": [
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "CommandName": "e2e_command_response",
+            "Value": "0",
+            "ValueType": "Integer32"
+          }
+        ]
+      },
+      {
+        "Name": "e2e-tenant-G1-T2",
+        "Priority": 1,
+        "SuppressionWindowSeconds": 10,
+        "Metrics": [
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_eval_T2",
+            "TimeSeriesSize": 3,
+            "GraceMultiplier": 2.0,
+            "Role": "Evaluate",
+            "Threshold": { "Min": 10.0 }
+          },
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_res1_T2",
+            "Role": "Resolved",
+            "Threshold": { "Min": 1.0 }
+          },
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_res2_T2",
+            "Role": "Resolved",
+            "Threshold": { "Min": 1.0 }
+          }
+        ],
+        "Commands": [
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "CommandName": "e2e_command_response",
+            "Value": "0",
+            "ValueType": "Integer32"
+          }
+        ]
+      },
+      {
+        "Name": "e2e-tenant-G2-T3",
+        "Priority": 2,
+        "SuppressionWindowSeconds": 10,
+        "Metrics": [
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_eval_T3",
+            "TimeSeriesSize": 3,
+            "GraceMultiplier": 2.0,
+            "Role": "Evaluate",
+            "Threshold": { "Min": 10.0 }
+          },
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_res1_T3",
+            "Role": "Resolved",
+            "Threshold": { "Min": 1.0 }
+          },
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_res2_T3",
+            "Role": "Resolved",
+            "Threshold": { "Min": 1.0 }
+          }
+        ],
+        "Commands": [
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "CommandName": "e2e_command_response",
+            "Value": "0",
+            "ValueType": "Integer32"
+          }
+        ]
+      },
+      {
+        "Name": "e2e-tenant-G2-T4",
+        "Priority": 2,
+        "SuppressionWindowSeconds": 10,
+        "Metrics": [
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_eval_T4",
+            "TimeSeriesSize": 3,
+            "GraceMultiplier": 2.0,
+            "Role": "Evaluate",
+            "Threshold": { "Min": 10.0 }
+          },
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_res1_T4",
+            "Role": "Resolved",
+            "Threshold": { "Min": 1.0 }
+          },
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "MetricName": "e2e_res2_T4",
+            "Role": "Resolved",
+            "Threshold": { "Min": 1.0 }
+          }
+        ],
+        "Commands": [
+          {
+            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Port": 161,
+            "CommandName": "e2e_command_response",
+            "Value": "0",
+            "ValueType": "Integer32"
+          }
+        ]
+      }
+    ]
