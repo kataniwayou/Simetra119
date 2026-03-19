@@ -336,10 +336,11 @@ Plans:
   6. MTS-03 startup race is eliminated — P1 is "not ready" during fill window, not falsely Healthy
   7. All existing E2E scenarios pass with the new readiness logic
   8. All unit tests updated for sentinel removal
-**Plans**: 0 plans
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 60 to break down)
+- [ ] 60-01-PLAN.md — Remove sentinel from MetricSlotHolder, add ConstructedAt/ReadinessGrace/IsReady + update tests
+- [ ] 60-02-PLAN.md — Add readiness pre-tier check to SnapshotJob + rewrite sentinel tests + E2E comment updates
 
 ---
 
@@ -383,4 +384,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-18 after Phase 58 added*
+*Last updated: 2026-03-19 after Phase 60 planned*
