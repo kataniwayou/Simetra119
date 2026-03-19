@@ -66,8 +66,17 @@ public sealed class SnapshotJob : IJob
             foreach (var group in _registry.Groups)
             {
                 var results = new TierResult[group.Tenants.Count];
-                await Task.WhenAll(group.Tenants.Select((tenant, index) =>
-                    Task.Run(() => results[index] = EvaluateTenant(tenant))));
+                if (group.Tenants.Count == 1)
+                {
+                    // Single tenant: evaluate directly on Quartz thread — no ThreadPool hop
+                    results[0] = EvaluateTenant(group.Tenants[0]);
+                }
+                else
+                {
+                    // Multiple tenants: parallel evaluation via ThreadPool
+                    await Task.WhenAll(group.Tenants.Select((tenant, index) =>
+                        Task.Run(() => results[index] = EvaluateTenant(tenant))));
+                }
 
                 // Aggregate counters for cycle summary
                 for (var i = 0; i < results.Length; i++)
