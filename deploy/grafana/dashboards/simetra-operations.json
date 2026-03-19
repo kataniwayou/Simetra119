@@ -1289,7 +1289,7 @@
         "type": "prometheus",
         "uid": "dfg62p9s7xl34a"
       },
-      "description": "P99 duration of SnapshotJob evaluation cycles. Source: snmp_snapshot_cycle_duration_ms histogram.",
+      "description": "Average duration of SnapshotJob evaluation cycles per pod. Source: snmp_snapshot_cycle_duration_ms (sum/count).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1370,14 +1370,14 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "histogram_quantile(0.99, sum by (le, k8s_pod_name) (rate(snmp_snapshot_cycle_duration_ms_bucket{k8s_pod_name=~\"$pod\"}[$__rate_interval])))",
+          "expr": "rate(snmp_snapshot_cycle_duration_ms_sum{k8s_pod_name=~\"$pod\"}[$__rate_interval]) / rate(snmp_snapshot_cycle_duration_ms_count{k8s_pod_name=~\"$pod\"}[$__rate_interval])",
           "instant": false,
-          "legendFormat": "p99 {{k8s_pod_name}}",
+          "legendFormat": "avg {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Snapshot Cycle Duration (P99)",
+      "title": "Snapshot Cycle Duration (Avg)",
       "type": "timeseries"
     },
     {
