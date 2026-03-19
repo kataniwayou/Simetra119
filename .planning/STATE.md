@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 61 of 61
-Plan: 01 of 3 complete
-Status: v2.1 in progress (Phases 51-61)
-Last activity: 2026-03-19 — Completed 61-01-PLAN.md (E2E snapshot suite infrastructure)
+Plan: 03 of 3 complete
+Status: v2.1 COMPLETE (all phases done)
+Last activity: 2026-03-19 — Completed 61-03-PLAN.md (advance gate scenarios 46-52)
 
-Progress: [█████████░] v2.1 Phase 61 in progress (01/03)
+Progress: [██████████] v2.1 Phase 61 complete (03/03)
 
 ## Performance Metrics
 
@@ -96,6 +96,9 @@ Progress: [█████████░] v2.1 Phase 61 in progress (01/03)
 | 61-01 | All 4 tenants use Min:10 for evaluate threshold (not Max:80) | Symmetric with resolved Min:1; value=0 always violated, value>=10 always healthy |
 | 61-01 | reset_scenario calls reset_oid_overrides before sim_set_scenario default | Prevents per-OID state leakage across scenarios |
 | 61-01 | T1 reuses existing .999.4.x OIDs, no new OID map entries for T1 | e2e_port_utilization/.channel_state/.bypass_status already in OID map |
+| 61-03 | Gate-block scripts assert G1 state first, then sleep 10 + check G2 absent | Prevents false pass if G2 had stale logs from prior scenarios in pod buffer |
+| 61-03 | SNS-B2 uses 5s poll, no sleep-8 | ReadinessGrace = 6s; must catch "not ready" before grace expires (time-based IsReady becomes true after 6s) |
+| 61-03 | Negative G2 assertion uses --since=15s (B1/B3/B4) or --since=10s (B2) | Isolates current observation window from prior scenario log residue |
 
 ### Quick Tasks Completed
 
@@ -116,6 +119,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T20:10:35Z
-Stopped at: Completed 61-01-PLAN.md (E2E snapshot suite infrastructure — simulator, OID map, fixture, helpers, config)
+Last session: 2026-03-19T20:15:58Z
+Stopped at: Completed 61-03-PLAN.md (advance gate scenarios 46-52 — all 7 gate combinations)
 Resume file: None
