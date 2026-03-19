@@ -5,11 +5,12 @@ Provides a controllable, deterministic SNMP device for E2E pipeline testing.
 All values are driven by a named scenario registry — switch scenarios at runtime
 via the HTTP control endpoint on port 8080.
 
-Serves 15 OIDs total:
+Serves 24 OIDs total:
   7 mapped      (.999.1.x) -- Gauge32, Integer32, Counter32, Counter64, TimeTicks,
                               OctetString, IpAddress
   2 unmapped    (.999.2.x) -- Gauge32, OctetString (outside oidmaps.json)
   6 test-purpose(.999.4.x) -- Gauge32 x5, Integer32 x1 (writable command target)
+  9 tenant-OIDs (.999.5.x, .999.6.x, .999.7.x) -- Gauge32, per-tenant T2-T4
 
 Sends two trap streams:
   - Valid traps   with community Simetra.E2E-SIM  every TRAP_INTERVAL seconds
@@ -19,6 +20,9 @@ HTTP control endpoint (aiohttp, port 8080):
   POST /scenario/{name}  -- switch active scenario
   GET  /scenario         -- return current scenario name
   GET  /scenarios        -- return sorted list of all scenario names
+  POST /oid/{oid}/stale  -- set OID to return NoSuchInstance (stale)
+  POST /oid/{oid}/{value} -- set OID to return a fixed integer value
+  DELETE /oid/overrides  -- clear all per-OID overrides, revert to scenario
 
 OID tree: 1.3.6.1.4.1.47477.999.{subtree}.{suffix}.0
 Community string: Simetra.{DEVICE_NAME} (default: Simetra.E2E-SIM)
@@ -99,6 +103,16 @@ def _make_scenario(overrides: dict) -> dict:
         f"{E2E_PREFIX}.4.4": 0,                 # e2e_command_response  Integer32 (writable)
         f"{E2E_PREFIX}.4.5": 0,                 # e2e_agg_source_a      Gauge32
         f"{E2E_PREFIX}.4.6": 0,                 # e2e_agg_source_b      Gauge32
+        # Phase 61: per-tenant OIDs for T2-T4 (subtrees .999.5.x, .999.6.x, .999.7.x)
+        f"{E2E_PREFIX}.5.1": 0,                 # e2e_eval_T2   Gauge32
+        f"{E2E_PREFIX}.5.2": 0,                 # e2e_res1_T2   Gauge32
+        f"{E2E_PREFIX}.5.3": 0,                 # e2e_res2_T2   Gauge32
+        f"{E2E_PREFIX}.6.1": 0,                 # e2e_eval_T3   Gauge32
+        f"{E2E_PREFIX}.6.2": 0,                 # e2e_res1_T3   Gauge32
+        f"{E2E_PREFIX}.6.3": 0,                 # e2e_res2_T3   Gauge32
+        f"{E2E_PREFIX}.7.1": 0,                 # e2e_eval_T4   Gauge32
+        f"{E2E_PREFIX}.7.2": 0,                 # e2e_res1_T4   Gauge32
+        f"{E2E_PREFIX}.7.3": 0,                 # e2e_res2_T4   Gauge32
     }
     baseline.update(overrides)
     return baseline
@@ -134,6 +148,8 @@ SCENARIOS: dict[str, dict] = {
 }
 
 _active_scenario: str = "default"
+_oid_overrides: dict[str, int] = {}   # OID string -> integer value
+_stale_oids: set[str] = set()         # OIDs that should return NoSuchInstance
 
 # ---------------------------------------------------------------------------
 # OID definitions -- for documentation and registration
@@ -165,6 +181,19 @@ TEST_OIDS = [
     (f"{E2E_PREFIX}.4.4", "e2e_command_response",  v2c.Integer32, True),   # writable
     (f"{E2E_PREFIX}.4.5", "e2e_agg_source_a",      v2c.Gauge32,   False),
     (f"{E2E_PREFIX}.4.6", "e2e_agg_source_b",      v2c.Gauge32,   False),
+]
+
+# Phase 61: Per-tenant OIDs for T2-T4 (subtrees .999.5.x, .999.6.x, .999.7.x)
+TENANT_OIDS = [
+    (f"{E2E_PREFIX}.5.1", "e2e_eval_T2",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.5.2", "e2e_res1_T2",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.5.3", "e2e_res2_T2",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.6.1", "e2e_eval_T3",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.6.2", "e2e_res1_T3",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.6.3", "e2e_res2_T3",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.7.1", "e2e_eval_T4",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.7.2", "e2e_res1_T4",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.7.3", "e2e_res2_T4",  v2c.Gauge32, False),
 ]
 
 # Trap configuration
@@ -212,6 +241,13 @@ class DynamicInstance(MibScalarInstance):
         self._oid_str = oid_str
 
     def getValue(self, name, **ctx):
+        # Per-OID stale override (highest priority)
+        if self._oid_str in _stale_oids:
+            raise NoSuchInstanceError(name=name, idx=(0,))
+        # Per-OID value override
+        if self._oid_str in _oid_overrides:
+            return self.getSyntax().clone(_oid_overrides[self._oid_str])
+        # Fall back to active scenario
         val = SCENARIOS[_active_scenario].get(self._oid_str, STALE)
         if val is STALE:
             raise NoSuchInstanceError(name=name, idx=(0,))
@@ -235,7 +271,7 @@ def oid_str_to_tuple(oid_str):
 
 
 # ---------------------------------------------------------------------------
-# OID registration: 15 OIDs (7 mapped + 2 unmapped + 6 test-purpose)
+# OID registration: 24 OIDs (7 mapped + 2 unmapped + 6 test-purpose + 9 tenant)
 # ---------------------------------------------------------------------------
 
 symbols = {}
@@ -252,8 +288,8 @@ for oid_str, label, syntax_cls, _static_value in MAPPED_OIDS + UNMAPPED_OIDS:
     )
     registered_oids.append(f"{oid_str}.0")
 
-# Register 6 new test-purpose OIDs
-for oid_str, label, syntax_cls, writable in TEST_OIDS:
+# Register 15 test-purpose and tenant OIDs
+for oid_str, label, syntax_cls, writable in TEST_OIDS + TENANT_OIDS:
     oid_tuple = oid_str_to_tuple(oid_str)
     safe_label = label.replace("-", "_")
 
@@ -381,11 +417,46 @@ async def get_scenarios(request: web.Request) -> web.Response:
     return web.json_response({"scenarios": sorted(SCENARIOS.keys())})
 
 
+async def post_oid_value(request: web.Request) -> web.Response:
+    """Set a specific OID to return a fixed integer value."""
+    oid_suffix = request.match_info["oid"]
+    value = int(request.match_info["value"])
+    # Normalize: ensure full OID string with E2E_PREFIX
+    full_oid = f"{E2E_PREFIX}.{oid_suffix.lstrip('.')}"
+    _stale_oids.discard(full_oid)  # clear any stale override
+    _oid_overrides[full_oid] = value
+    log.info("OID override set: %s = %d", full_oid, value)
+    return web.json_response({"oid": full_oid, "value": value})
+
+
+async def post_oid_stale(request: web.Request) -> web.Response:
+    """Set a specific OID to return NoSuchInstance (stale)."""
+    oid_suffix = request.match_info["oid"]
+    full_oid = f"{E2E_PREFIX}.{oid_suffix.lstrip('.')}"
+    _oid_overrides.pop(full_oid, None)  # clear any value override
+    _stale_oids.add(full_oid)
+    log.info("OID stale override set: %s", full_oid)
+    return web.json_response({"oid": full_oid, "stale": True})
+
+
+async def delete_oid_overrides(request: web.Request) -> web.Response:
+    """Clear all per-OID overrides (value and stale), revert to scenario."""
+    _oid_overrides.clear()
+    _stale_oids.clear()
+    log.info("All OID overrides cleared (%d value, %d stale)", 0, 0)
+    return web.json_response({"cleared": True})
+
+
 async def start_http_server() -> web.AppRunner:
     app = web.Application()
     app.router.add_post("/scenario/{name}", post_scenario)
     app.router.add_get("/scenario", get_scenario)
     app.router.add_get("/scenarios", get_scenarios)
+    # IMPORTANT: /oid/{oid}/stale must be registered BEFORE /oid/{oid}/{value}
+    # so that the literal "stale" segment matches the stale handler first.
+    app.router.add_post("/oid/{oid}/stale", post_oid_stale)
+    app.router.add_post("/oid/{oid}/{value}", post_oid_value)
+    app.router.add_delete("/oid/overrides", delete_oid_overrides)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", 8080)
@@ -400,7 +471,7 @@ async def start_http_server() -> web.AppRunner:
 
 
 def main():
-    log.info("E2E Test Simulator starting (15 OIDs, dual trap loops, HTTP control)...")
+    log.info("E2E Test Simulator starting (24 OIDs, dual trap loops, HTTP control)...")
     log.info("PID: %d", os.getpid())
     log.info("Community string: %s", COMMUNITY)
     log.info(
