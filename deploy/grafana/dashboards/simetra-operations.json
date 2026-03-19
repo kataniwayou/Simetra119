@@ -1,40 +1,4 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_PROMETHEUS",
-      "label": "Prometheus",
-      "description": "",
-      "type": "datasource",
-      "pluginId": "prometheus",
-      "pluginName": "Prometheus"
-    }
-  ],
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "11.0.0"
-    },
-    {
-      "type": "datasource",
-      "id": "prometheus",
-      "name": "Prometheus",
-      "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "timeseries",
-      "name": "Time series",
-      "version": ""
-    },
-    {
-      "type": "panel",
-      "id": "table",
-      "name": "Table",
-      "version": ""
-    }
-  ],
   "annotations": {
     "list": [
       {
@@ -54,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": null,
+  "id": 10,
   "links": [],
   "panels": [
     {
@@ -72,8 +36,9 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Lists all running SnmpCollector pods with their instance ID, hostname, and Kubernetes node. Confirms replica count and distribution.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -214,7 +179,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "count by (service_instance_id, k8s_pod_name) (snmp_event_published_total{k8s_pod_name=~\"$pod\"})",
           "format": "table",
@@ -224,7 +189,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "clamp_max(count by (service_instance_id, k8s_pod_name) (snmp_gauge{k8s_pod_name=~\"$pod\"}), 1)",
           "format": "table",
@@ -242,15 +207,14 @@
           "id": "organize",
           "options": {
             "indexByName": {
-              "service_instance_id": 0,
+              "Value #B": 2,
               "k8s_pod_name": 1,
-              "Value #B": 2
+              "service_instance_id": 0
             }
           }
         }
       ],
-      "type": "table",
-      "description": "Lists all running SnmpCollector pods with their instance ID, hostname, and Kubernetes node. Confirms replica count and distribution."
+      "type": "table"
     },
     {
       "collapsed": false,
@@ -267,8 +231,9 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of SNMP events published to the processing channel by MetricPollJob and SnmpTrapListenerService. Source: snmp_event_published_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -347,24 +312,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(snmp_event_published_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Events Published",
-      "type": "timeseries",
-      "description": "Rate of SNMP events published to the processing channel by MetricPollJob and SnmpTrapListenerService. Source: snmp_event_published_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of events successfully processed through the MediatR pipeline. Source: snmp_event_handled_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -443,24 +408,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(snmp_event_handled_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Events Handled",
-      "type": "timeseries",
-      "description": "Rate of events successfully processed through the MediatR pipeline. Source: snmp_event_handled_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of events that threw exceptions during pipeline processing, caught by ExceptionBehavior. Source: snmp_event_errors_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -539,24 +504,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(snmp_event_errors_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Event Errors",
-      "type": "timeseries",
-      "description": "Rate of events that threw exceptions during pipeline processing, caught by ExceptionBehavior. Source: snmp_event_errors_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of events that failed MediatR validation (e.g. missing OID, empty value). Source: snmp_event_rejected_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -635,24 +600,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(snmp_event_rejected_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Events Rejected",
-      "type": "timeseries",
-      "description": "Rate of events that failed MediatR validation (e.g. missing OID, empty value). Source: snmp_event_rejected_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of SNMP GET poll cycles completed by MetricPollJob. Source: snmp_poll_executed_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -731,24 +696,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(snmp_poll_executed_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Polls Executed",
-      "type": "timeseries",
-      "description": "Rate of SNMP GET poll cycles completed by MetricPollJob. Source: snmp_poll_executed_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of SNMP trap PDUs received by SnmpTrapListenerService. Source: snmp_trap_received_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -827,24 +792,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(snmp_trap_received_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Traps Received",
-      "type": "timeseries",
-      "description": "Rate of SNMP trap PDUs received by SnmpTrapListenerService. Source: snmp_trap_received_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of traps rejected due to SNMP community string mismatch. Source: snmp_trap_auth_failed_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -923,24 +888,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(snmp_trap_auth_failed_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Trap Auth Failed",
-      "type": "timeseries",
-      "description": "Rate of traps rejected due to SNMP community string mismatch. Source: snmp_trap_auth_failed_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of traps dropped because the processing channel was full. Source: snmp_trap_dropped_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1019,24 +984,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(snmp_trap_dropped_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Traps Dropped",
-      "type": "timeseries",
-      "description": "Rate of traps dropped because the processing channel was full. Source: snmp_trap_dropped_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of poll attempts where the target device did not respond (SNMP timeout). Source: snmp_poll_unreachable_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1115,24 +1080,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(snmp_poll_unreachable_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Poll Unreachable",
-      "type": "timeseries",
-      "description": "Rate of poll attempts where the target device did not respond (SNMP timeout). Source: snmp_poll_unreachable_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of polls that succeeded after a device was previously marked unreachable. Source: snmp_poll_recovered_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1211,24 +1176,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(snmp_poll_recovered_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Poll Recovered",
-      "type": "timeseries",
-      "description": "Rate of polls that succeeded after a device was previously marked unreachable. Source: snmp_poll_recovered_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of SNMP samples routed to tenant vector metric slots by TenantVectorFanOutBehavior. Source: snmp_tenantvector_routed_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1307,24 +1272,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(snmp_tenantvector_routed_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Tenant Vector Routed",
-      "type": "timeseries",
-      "description": "Rate of SNMP samples routed to tenant vector metric slots by TenantVectorFanOutBehavior. Source: snmp_tenantvector_routed_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "P99 duration of SnapshotJob evaluation cycles. Source: snmp_snapshot_cycle_duration_ms histogram.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1403,24 +1368,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "histogram_quantile(0.99, sum by (le, k8s_pod_name) (rate(snmp_snapshot_cycle_duration_ms_bucket{k8s_pod_name=~\"$pod\"}[$__rate_interval])))",
+          "instant": false,
           "legendFormat": "p99 {{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
-      "title": "Snapshot Cycle Duration",
-      "type": "timeseries",
-      "description": "P99 duration of SnapshotJob evaluation cycles. Source: snmp_snapshot_cycle_duration_ms histogram."
+      "title": "Snapshot Cycle Duration (P99)",
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of SNMP SET commands successfully executed by CommandWorkerService. Source: snmp_command_sent_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1499,24 +1464,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(snmp_command_sent_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Command Sent",
-      "type": "timeseries",
-      "description": "Rate of SNMP SET commands successfully executed by CommandWorkerService. Source: snmp_command_sent_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of SNMP SET commands that failed (timeout, SNMP error, or device not found). Source: snmp_command_failed_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1595,24 +1560,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(snmp_command_failed_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Command Failed",
-      "type": "timeseries",
-      "description": "Rate of SNMP SET commands that failed (timeout, SNMP error, or device not found). Source: snmp_command_failed_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of SNMP SET commands skipped by the suppression cache. Source: snmp_command_suppressed_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1691,18 +1656,17 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(snmp_command_suppressed_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Command Suppressed",
-      "type": "timeseries",
-      "description": "Rate of SNMP SET commands skipped by the suppression cache. Source: snmp_command_suppressed_total."
+      "type": "timeseries"
     },
     {
       "collapsed": false,
@@ -1719,8 +1683,9 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of .NET garbage collections by generation (Gen0, Gen1, Gen2). High Gen2 rates may indicate memory pressure. Source: dotnet_gc_collections_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1799,24 +1764,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(dotnet_gc_collections_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "GC Collections Rate",
-      "type": "timeseries",
-      "description": "Rate of .NET garbage collections by generation (Gen0, Gen1, Gen2). High Gen2 rates may indicate memory pressure. Source: dotnet_gc_collections_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of CPU time consumed per pod. Sustained spikes indicate runaway loops, stuck polls, or GC thrashing.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1895,24 +1860,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(dotnet_process_cpu_time_seconds_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "CPU Time",
-      "type": "timeseries",
-      "description": "Rate of CPU time consumed per pod. Sustained spikes indicate runaway loops, stuck polls, or GC thrashing."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Total physical memory (RSS) used by each pod. Source: dotnet_process_memory_working_set_bytes.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1987,24 +1952,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "dotnet_process_memory_working_set_bytes{k8s_pod_name=~\"$pod\"}",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Process Working Set",
-      "type": "timeseries",
-      "description": "Total physical memory (RSS) used by each pod. Source: dotnet_process_memory_working_set_bytes."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Rate of exceptions thrown per pod. Spikes indicate something broke - fastest anomaly detection signal.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2083,24 +2048,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "sum by (k8s_pod_name) (rate(dotnet_exceptions_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Exceptions",
-      "type": "timeseries",
-      "description": "Rate of exceptions thrown per pod. Spikes indicate something broke - fastest anomaly detection signal."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Number of active .NET thread pool threads. Source: dotnet_thread_pool_thread_count_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2175,24 +2140,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "dotnet_thread_pool_thread_count_total{k8s_pod_name=~\"$pod\"}",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Thread Pool Threads",
-      "type": "timeseries",
-      "description": "Number of active .NET thread pool threads. Source: dotnet_thread_pool_thread_count_total."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "dfg62p9s7xl34a"
       },
+      "description": "Number of work items queued to the .NET thread pool. Sustained non-zero values indicate thread starvation. Source: dotnet_thread_pool_queue_length_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2267,18 +2232,17 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "dfg62p9s7xl34a"
           },
           "expr": "dotnet_thread_pool_queue_length_total{k8s_pod_name=~\"$pod\"}",
+          "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
-          "refId": "A",
           "range": true,
-          "instant": false
+          "refId": "A"
         }
       ],
       "title": "Thread Pool Queue Length",
-      "type": "timeseries",
-      "description": "Number of work items queued to the .NET thread pool. Sustained non-zero values indicate thread starvation. Source: dotnet_thread_pool_queue_length_total."
+      "type": "timeseries"
     }
   ],
   "refresh": "5s",
@@ -2298,7 +2262,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "${DS_PROMETHEUS}"
+          "uid": "dfg62p9s7xl34a"
         },
         "definition": "label_values(snmp_event_published_total, service_instance_id)",
         "includeAll": true,
@@ -2321,7 +2285,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "${DS_PROMETHEUS}"
+          "uid": "dfg62p9s7xl34a"
         },
         "definition": "label_values(snmp_event_published_total{service_instance_id=~\"$host\"}, k8s_pod_name)",
         "includeAll": true,
@@ -2344,5 +2308,5 @@
   "timezone": "browser",
   "title": "Simetra Operations",
   "uid": "simetra-operations",
-  "version": 0
+  "version": 1
 }
