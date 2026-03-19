@@ -315,10 +315,11 @@ Plans:
   3. E2E simulation with 1s snapshot interval and 10s suppression window proves P2 starvation pattern: P2 never fires commands while P1 is in active command cycle
   4. Command sent and suppressed counters are observable per tenant in Prometheus
   5. All existing E2E scenarios (1-39) continue to pass unchanged
-**Plans**: 0 plans
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 59 to break down)
+- [x] 59-01-PLAN.md — Rename TierResult enum + fix tier=4 advance gate bug + update unit tests
+- [x] 59-02-PLAN.md — Rewrite MTS-02 gate-pass + new MTS-03 starvation proof scenario
 
 ---
 
