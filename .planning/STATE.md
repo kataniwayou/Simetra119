@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 58 — SnapshotJob Tier Simulation Tests
+**Current focus:** Phase 59 — Advance Gate Fix & Priority Starvation Simulation
 
 ## Current Position
 
-Phase: 58 of 58 (all phases complete)
-Plan: N/A
-Status: v2.1 milestone complete (Phases 51-58)
+Phase: 59 of 59
+Plan: N/A — not yet planned
+Status: v2.1 in progress (Phases 51-59)
 Last activity: 2026-03-19 — Completed quick task 077: Direct EvaluateTenant for single-tenant groups
 
-Progress: [██████████] v2.1 complete
+Progress: [█████████░] v2.1 Phase 59 pending
 
 ## Performance Metrics
 

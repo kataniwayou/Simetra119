@@ -14,7 +14,7 @@
 - ✅ **v1.9 Metric Threshold Structure & Validation** - Phases 41-42 (shipped 2026-03-15)
 - ✅ **v1.10 Heartbeat Refactor & Pipeline Liveness** - Phases 43-44 (shipped 2026-03-15)
 - ✅ **v2.0 Tenant Evaluation & Control** - Phases 45-50 (shipped 2026-03-17)
-- 🚧 **v2.1 E2E Tenant Evaluation Tests** - Phases 51-58 (in progress)
+- 🚧 **v2.1 E2E Tenant Evaluation Tests** - Phases 51-59 (in progress)
 
 ## Phases
 
@@ -302,6 +302,23 @@ Plans:
 - [x] 58-01-PLAN.md — Fix scenarios 31/33 log patterns + staleness behavior + report.sh range
 - [x] 58-02-PLAN.md — New STS-06 staleness-to-commands scenario (Poll source)
 - [x] 58-03-PLAN.md — New STS-07 synthetic staleness-to-commands scenario + report.sh range update
+
+---
+
+#### Phase 59: Advance Gate Fix & Priority Starvation Simulation
+
+**Goal**: Fix the advance gate to block lower-priority groups whenever a tenant reaches tier=4 command intent (regardless of suppression), and prove via E2E simulation that P2 is starved when P1 is in an active command cycle
+**Depends on**: Phase 58 (tier simulation tests), Quick task 076 (staleness fix)
+**Success Criteria** (what must be TRUE):
+  1. When P1 reaches tier=4 and all commands are suppressed (count=0), the advance gate still blocks — P2 is NOT evaluated
+  2. P2 is only evaluated when P1's resolved metrics are all violated (tier=2 stop) — meaning the device condition is confirmed
+  3. E2E simulation with 1s snapshot interval and 10s suppression window proves P2 starvation pattern: P2 never fires commands while P1 is in active command cycle
+  4. Command sent and suppressed counters are observable per tenant in Prometheus
+  5. All existing E2E scenarios (1-39) continue to pass unchanged
+**Plans**: 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 59 to break down)
 
 ---
 
