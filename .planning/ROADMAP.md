@@ -14,7 +14,7 @@
 - ✅ **v1.9 Metric Threshold Structure & Validation** - Phases 41-42 (shipped 2026-03-15)
 - ✅ **v1.10 Heartbeat Refactor & Pipeline Liveness** - Phases 43-44 (shipped 2026-03-15)
 - ✅ **v2.0 Tenant Evaluation & Control** - Phases 45-50 (shipped 2026-03-17)
-- 🚧 **v2.1 E2E Tenant Evaluation Tests** - Phases 51-60 (in progress)
+- 🚧 **v2.1 E2E Tenant Evaluation Tests** - Phases 51-61 (in progress)
 
 ## Phases
 
@@ -341,6 +341,47 @@ Plans:
 Plans:
 - [x] 60-01-PLAN.md — Remove sentinel from MetricSlotHolder, add ConstructedAt/ReadinessGrace/IsReady + update tests
 - [x] 60-02-PLAN.md — Add readiness pre-tier check to SnapshotJob + rewrite sentinel tests + E2E comment updates
+
+---
+
+#### Phase 61: New E2E Suite Snapshot
+
+**Goal**: Comprehensive E2E test suite covering all tenant evaluation state combinations and snapshot job advance gate logic — proving every path through the 4-tier evaluation tree and priority group gate with a 4-tenant setup (2 groups × 2 tenants)
+**Depends on**: Phase 60 (readiness window and advance gate must be stable)
+
+**Test Setup** (shared across all scenarios):
+  - 4 tenants: 2 in group 1 (priority 1), 2 in group 2 (priority 2)
+  - SnapshotJob interval: 1 second
+  - Suppression window: 10 seconds
+  - Same metrics for all tenants (tests focus on evaluation logic, not metric diversity)
+
+**Part 1 — Tenant Evaluation States** (all cases of single tenant visit):
+  - Not ready — grace window hasn't ended
+  - Stale/null data — poll and synthetic sources; verify trap and command sources are not affected
+  - All resolved violated vs any resolved not violated
+  - All evaluate violated vs any evaluate not violated
+  - Tenant result states: Healthy, Unresolved, Resolved, Not Ready
+  - All combinations tested
+
+**Part 2 — Snapshot Job Advance Gate Logic** (priority group interactions):
+  - All tenants group 1 Resolved → gate passes → group 2 evaluated
+  - Any tenant group 1 Resolved (mixed) → gate behavior
+  - All tenants group 1 Unresolved → gate blocks → group 2 not evaluated
+  - Any tenant group 1 Unresolved (mixed) → gate blocks → group 2 not evaluated
+
+**Success Criteria** (what must be TRUE):
+  1. Every tenant evaluation state (not-ready, stale, resolved, healthy, unresolved) is tested individually with observable pod log evidence
+  2. Stale/null affects only poll and synthetic holders — trap and command holders are unaffected
+  3. Threshold evaluation covers: all resolved violated, partial resolved violated, all evaluate violated, partial evaluate violated
+  4. Advance gate blocks group 2 when ANY group 1 tenant is Unresolved
+  5. Advance gate passes group 2 when ALL group 1 tenants are Resolved or Healthy
+  6. Mixed group 1 results (one Resolved + one Unresolved) correctly blocks group 2
+  7. All scenarios use 1s snapshot interval for fast cycle times
+  8. All new E2E scenarios pass consistently
+**Plans**: 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 61 to break down)
 
 ---
 
