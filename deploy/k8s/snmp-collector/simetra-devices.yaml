@@ -223,6 +223,21 @@ data:
             ]
           },
           {
+            "IntervalSeconds": 1,
+            "GraceMultiplier": 2.0,
+            "MetricNames": [
+              "e2e_eval_T2",
+              "e2e_res1_T2",
+              "e2e_res2_T2",
+              "e2e_eval_T3",
+              "e2e_res1_T3",
+              "e2e_res2_T3",
+              "e2e_eval_T4",
+              "e2e_res1_T4",
+              "e2e_res2_T4"
+            ]
+          },
+          {
             "IntervalSeconds": 10,
             "GraceMultiplier": 2.0,
             "MetricNames": ["e2e_agg_source_a", "e2e_agg_source_b"],
