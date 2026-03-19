@@ -1090,7 +1090,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "count by (source) ({source=~\".+\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "sum by (source) (increase(snmp_gauge{source=~\".+\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__range]))",
           "instant": true,
           "legendFormat": "{{source}}",
           "refId": "A"
