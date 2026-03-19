@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 Phase: 61 of 61
 Plan: 03 of 3 complete
 Status: v2.1 COMPLETE (all phases done)
-Last activity: 2026-03-19 — Completed 61-03-PLAN.md (advance gate scenarios 46-52)
+Last activity: 2026-03-20 — Completed quick task 079: SnapCycle debug logging for advance gate diagnosis
 
 Progress: [██████████] v2.1 Phase 61 complete (03/03)
 
@@ -116,6 +116,7 @@ Progress: [██████████] v2.1 Phase 61 complete (03/03)
 | 075 | Add error sentinel filter to CommandWorkerService | 2026-03-18 | 34e67eb | [075-command-error-sentinel-filter](./quick/075-command-error-sentinel-filter/) |
 | 076 | Snapshot tier fixes — staleness to commands, rename ConfirmedBad | 2026-03-18 | 911dd08 | [076-snapshot-tier-fixes](./quick/076-snapshot-tier-fixes/) |
 | 077 | Direct EvaluateTenant for single-tenant groups — skip ThreadPool | 2026-03-19 | 9410015 | [077-snapshot-direct-eval-single-tenant](./quick/077-snapshot-direct-eval-single-tenant/) |
+| 079 | SnapCycle debug logging for advance gate diagnosis | 2026-03-20 | 527c41c | [079-snapshot-gate-debug-logging](./quick/079-snapshot-gate-debug-logging/) |
 
 ### Blockers/Concerns
 
