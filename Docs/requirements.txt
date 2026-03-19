@@ -1,0 +1,196 @@
+# SNMP Monitoring System — Architecture Design
+
+---
+
+## Overview
+
+Every OID received — from a trap or a poll — is looked up in a single shared OID map. If found, it gets a human name. If not, it is labelled `Unknown`. The value is recorded as a gauge and pushed to Prometheus via OpenTelemetry.
+
+**Stack:**
+- **C# .NET 9** — runtime
+- **MediatR** — routes SNMP events to the metric handler
+- **OpenTelemetry SDK** — metrics push
+- **OTel Collector** — receives OTLP, pushes via `remote_write`
+- **Prometheus** — time-series storage
+- **Grafana** — dashboards and alerts
+
+> **Full push pipeline:** App → OTLP → Collector → `remote_write` → Prometheus. Nothing pulls.
+
+---
+
+## The Complete Stack
+
+```
+SNMP Device
+    ↓
+UDP:162 (trap) / Poll GET
+    ↓
+C# .NET 9 Background Service
+    ↓
+MediatR → OtelMetricHandler
+    ↓
+OTel SDK  →  OTLP gRPC push  →  OTel Collector (:4317)
+                                       ↓  remote_write
+                                 Prometheus (:9090)
+                                       ↓
+                                 Grafana
+```
+
+---
+
+## OID Map
+
+One map, shared by traps and polls. Maps OID string to metric name.
+
+
+
+
+
+```json
+{
+  "1.3.6.1.2.1.1.3.0":       "sysUpTime",
+  "1.3.6.1.2.1.2.2.1.10":    "ifInOctets",
+  "1.3.6.1.2.1.2.2.1.16":    "ifOutOctets",
+  "1.3.6.1.2.1.2.2.1.14":    "ifInErrors",
+  "1.3.6.1.2.1.25.3.3.1.2":  "hrProcessorLoad",
+  "1.3.6.1.2.1.25.2.3.1.6":  "hrStorageUsed",
+  "1.3.6.1.6.3.1.1.5.3":     "linkDown",
+  "1.3.6.1.6.3.1.1.5.4":     "linkUp",
+  "1.3.6.1.6.3.1.1.5.1":     "coldStart",
+  "1.3.6.1.6.3.1.1.5.2":     "warmStart"
+}
+```
+
+OID in map → `metric_name = "linkDown"`. OID not in map → `metric_name = "Unknown"`. Same logic for traps and polls.
+
+---
+
+## MediatR — The Core
+
+The listener publishes an event. MediatR routes it to `OtelMetricHandler`. The listener knows nothing about metrics.
+
+
+MediatR is the extension point. When a second handler is needed  it is added here without touching the listener or the metric handler.
+
+---
+
+## Metrics Design
+
+One gauge. Every OID sets it with its latest value.
+
+
+
+### Prometheus Output
+
+```prometheus
+snmp_oid{oid="1.3.6.1.2.1.25.3.3.1.2", human_name="hrProcessorLoad",
+  agent="192.168.1.1", source="poll", raw_value="73"} 73
+
+snmp_oid{oid="1.3.6.1.6.3.1.1.5.3", human_name="linkDown",
+  agent="192.168.1.1", source="trap", raw_value="1"} 1
+
+snmp_oid{oid="1.3.6.1.4.1.9999.1.2.3", human_name="Unknown",
+  agent="172.16.0.5", source="trap", raw_value="42"} 42
+```
+
+---
+
+## Pipeline Design
+
+Behaviors run before the handler on every event. Each owns one concern.
+
+```
+OID arrives (trap or poll)
+      ↓
+① LoggingBehavior        — log OID + agent
+      ↓
+② ExceptionBehavior      — catch all failures, never crash
+      ↓
+③ ValidationBehavior     — reject malformed OID or IP
+      ↓
+④ OidResolutionBehavior  — OidMap.Resolve() → sets MetricName
+      ↓
+OtelMetricHandler        — record gauge
+```
+
+
+
+| # | Behavior | Responsibility |
+|---|----------|----------------|
+| ① | Logging | Log every OID received |
+| ② | Exception | Catch all errors, return default |
+| ③ | Validation | Reject invalid OID / IP format |
+| ④ | OidResolution | Resolve metric name from map |
+
+---
+`
+
+## Complete Flow
+
+```
+Trap / Poll arrives
+      ↓
+Background Service
+      ↓
+IMediator.Publish(new SnmpOidReceived { OID, Agent, Value, Source })
+      ↓
+① LoggingBehavior      — "OID=1.3.6.1.6.3.1.1.5.3 Agent=192.168.1.1"
+② ExceptionBehavior    — try/catch wrapper
+③ ValidationBehavior   — valid OID and IP?  ✗ → discard
+④ OidResolutionBehavior— OidMap.Resolve() → HumanName = "linkDown" | "Unknown"
+      ↓
+OtelMetricHandler
+      ↓
+SnmpMetric.Record() → OidGaugeCache.Set()
+      ↓
+OTel SDK export (every 5s)
+      ↓
+OTLP push → Collector → remote_write → Prometheus → Grafana
+```
+
+---
+
+## Program.cs
+
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+
+// OpenTelemetry
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(metrics =>
+    {
+        metrics
+            .AddMeter("Snmp.Oid")
+            .AddOtlpExporter(otlp =>
+            {
+                otlp.Endpoint = new Uri(
+                    builder.Configuration["OtelCollector:Endpoint"]
+                    ?? "http://otel-collector:4317");
+                otlp.Protocol = OtlpExportProtocol.Grpc;
+            });
+    });
+
+// MediatR
+builder.Services.AddMediatR(cfg =>
+    cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+
+// Pipeline — outermost to innermost
+builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ExceptionBehavior<,>));
+builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(OidResolutionBehavior<,>));
+
+// SNMP
+builder.Services.AddSingleton<OidMap>();
+builder.Services.AddSingleton<SnmpMetric>();
+builder.Services.AddSingleton<OidGaugeCache>();
+
+// Background services
+builder.Services.AddHostedService<SnmpTrapListener>();
+builder.Services.AddHostedService<SnmpPoller>();
+
+var app = builder.Build();
+app.Run();
+```
+
+

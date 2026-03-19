@@ -56,12 +56,18 @@ fi
 
 SCENARIO_NAME="STS-02: Command sent counter incremented"
 
-AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
-DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
-
-log_info "After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
-
-assert_delta_gt "$DELTA_SENT" 0 "$SCENARIO_NAME" "log=tier4_found sent_delta=${DELTA_SENT}"
+# Poll for counter — SNMP SET round-trip + OTel export + Prometheus scrape takes time.
+if poll_until 45 5 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
+    AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
+    log_info "After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
+    record_pass "$SCENARIO_NAME" "sent_delta=${DELTA_SENT}"
+else
+    AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
+    log_info "After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
+    record_fail "$SCENARIO_NAME" "sent_delta=${DELTA_SENT} after 45s polling"
+fi
 
 # ---------------------------------------------------------------------------
 # Cleanup: reset simulator, restore original ConfigMap

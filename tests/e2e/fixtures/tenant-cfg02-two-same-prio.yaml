@@ -7,7 +7,7 @@ data:
   tenants.json: |
     [
       {
-        "Id": "e2e-tenant-A",
+        "Name": "e2e-tenant-A",
         "Priority": 1,
         "SuppressionWindowSeconds": 10,
         "Metrics": [
@@ -46,7 +46,7 @@ data:
         ]
       },
       {
-        "Id": "e2e-tenant-B",
+        "Name": "e2e-tenant-B",
         "Priority": 1,
         "SuppressionWindowSeconds": 10,
         "Metrics": [

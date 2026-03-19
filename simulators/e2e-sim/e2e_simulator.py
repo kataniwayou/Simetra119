@@ -182,7 +182,7 @@ config.add_transport(
     udp.UdpTransport().open_server_mode(("0.0.0.0", 161)),
 )
 config.add_v1_system(snmpEngine, "my-area", COMMUNITY)
-config.add_vacm_user(snmpEngine, 2, "my-area", "noAuthNoPriv", (1, 3, 6, 1, 4, 1))
+config.add_vacm_user(snmpEngine, 2, "my-area", "noAuthNoPriv", (1, 3, 6, 1, 4, 1), (1, 3, 6, 1, 4, 1))
 
 # Additional community strings for E2E test scenarios (device-add, recovery tests)
 for extra_community in [
@@ -191,7 +191,7 @@ for extra_community in [
 ]:
     area_name = f"area-{extra_community}"
     config.add_v1_system(snmpEngine, area_name, extra_community)
-    config.add_vacm_user(snmpEngine, 2, area_name, "noAuthNoPriv", (1, 3, 6, 1, 4, 1))
+    config.add_vacm_user(snmpEngine, 2, area_name, "noAuthNoPriv", (1, 3, 6, 1, 4, 1), (1, 3, 6, 1, 4, 1))
 snmpContext = context.SnmpContext(snmpEngine)
 cmdrsp.GetCommandResponder(snmpEngine, snmpContext)
 cmdrsp.NextCommandResponder(snmpEngine, snmpContext)
@@ -221,13 +221,12 @@ class DynamicInstance(MibScalarInstance):
 class WritableDynamicInstance(DynamicInstance):
     """DynamicInstance that accepts SNMP SET, storing value in active scenario."""
 
-    def writeTest(self, varBind, **ctx):
-        ctx['cbFun'](varBind, **ctx)  # MUST always call cbFun
-
-    def writeCommit(self, varBind, **ctx):
+    def writeCommit(self, varBind, **context):
+        # Store the SET value in the active scenario dict
         name, value = varBind
         SCENARIOS[_active_scenario][self._oid_str] = value
-        ctx['cbFun'](varBind, **ctx)  # MUST always call cbFun
+        # Call super to let pysnmp 7.x complete the transaction
+        super().writeCommit(varBind, **context)
 
 
 def oid_str_to_tuple(oid_str):
@@ -262,7 +261,7 @@ for oid_str, label, syntax_cls, writable in TEST_OIDS:
     if writable:
         # CRITICAL: MibScalar must be readwrite so VACM permits SET before
         # ever reaching writeCommit on the instance
-        scalar = scalar.setMaxAccess("readwrite")
+        scalar = scalar.setMaxAccess("read-write")
         instance_cls = WritableDynamicInstance
     else:
         instance_cls = DynamicInstance

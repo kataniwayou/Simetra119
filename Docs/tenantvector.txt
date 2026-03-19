@@ -1,0 +1,136 @@
+================================================================================
+  PRIORITY VECTOR — DESIGN SPECIFICATION
+  SNMP Metric Prioritization System
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+  OVERVIEW
+────────────────────────────────────────────────────────────────────────────────
+
+The system receives SNMP data from two sources:
+  - Traps   : unsolicited event notifications pushed by devices
+  - Polls   : periodic GET requests issued by the system
+
+The goal is to prioritize decisions and commands derived from these metrics.
+High-priority decisions must be fully resolved before low-priority ones are
+even considered. The structure that organizes this is called the Priority Vector.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  1. PRIORITY VECTOR
+────────────────────────────────────────────────────────────────────────────────
+
+The Priority Vector is an ordered collection of Tenants. Multiple tenants may
+share the same priority value. Tenants with the same priority form a Priority
+Group and are treated as peers.
+
+  Vector structure:
+
+    Priority 1  ┌─ Tenant A ─┐  ┌─ Tenant B ─┐        ← Group 1 (2 tenants)
+                └────────────┘  └────────────┘
+                        ↓ (only when entire Group 1 is clear)
+    Priority 2  ┌─ Tenant C ─┐                          ← Group 2 (1 tenant)
+                └────────────┘
+                        ↓ (only when entire Group 2 is clear)
+    Priority 3  ┌─ Tenant D ─┐  ┌─ Tenant E ─┐  ┌─ Tenant F ─┐  ← Group 3
+                └────────────┘  └────────────┘  └────────────┘
+
+Evaluation is serial across groups — Group 1 before Group 2 before Group 3.
+Within a group, tenants are evaluated serially in the order they appear in
+the configuration.
+
+────────────────────────────────────────────────────────────────────────────────
+  3. TENANT
+────────────────────────────────────────────────────────────────────────────────
+
+A Tenant is a self-contained decision node. Its identity is its declared id,
+which must be unique within the vector. A tenant hosts metrics — each metric
+carries its own (ip, port, oid) address key. The tenant does not inherit or
+derive its identity from those addresses.
+
+The same (ip, port, oid) address may be hosted by multiple tenants
+simultaneously. This is by design — different tenants may observe the same
+device endpoint and make independent decisions from it.
+
+Each tenant has exactly 7 properties:
+
+  ┌─────────────────────┬──────────────────────────────────────────────────────┐
+  │ Property            │ Description                                          │
+  ├─────────────────────┼──────────────────────────────────────────────────────┤
+  │ id                  │ String. Unique within the vector. Human-declared.    │
+  │ priority            │ Integer. -100 = highest. May be shared with peers.      │
+  │ metrics[]           │ List of metric slots. Each carries its own address and polling interval.  │
+  │GraceMultiplier
+  └─────────────────────┴──────────────────────────────────────────────────────┘
+
+Each tenant operates independently within its group. A tenant belongs to exactly one
+group — the group in which it is declared.
+
+
+────────────────────────────────────────────────────────────────────────────────
+  4. METRICS — SINGLE LIVE CELL WITH ADDRESS
+────────────────────────────────────────────────────────────────────────────────
+
+Each metric carries its own network address — it knows exactly where to go to
+collect its value. The composite key (ip, port, oid) uniquely identifies a
+data source on the network. This is the metric's key, not the tenant's.
+
+  Metric {
+      ip            : string       — device IP address
+      port          : int          — SNMP port (trap source or poll target)
+      oid           : string       — SNMP OID, fully qualified
+      source        : trap | poll  — how this metric is collected
+      IntervalSeconds : duration     — e.g. "30s", "60s"
+      value         : any          — latest received sample (int, float, string)
+      updated_at    : timestamp    — time the last sample arrived
+  }
+
+  metric_key = (ip, port, oid)     — identifies the data source on the network
+  
+
+The same (ip, port, oid) address may be hosted as a metric slot in multiple
+tenants at the same time. Each tenant maintains its own independent slot for
+that address — its own value cell, its own updated_at, and its own
+GraceMultiplier. When a sample arrives for an address, every tenant that hosts
+a metric with that address gets its slot updated independently.
+
+The address tuple (ip, port, oid) serves two purposes:
+
+  1. Routing — when a trap arrives or a poll response is received, the system
+     looks up which metric slots registered for that address and writes the
+     value to each of them. A single incoming sample updates all matching
+     slots across all tenants simultaneously.
+
+  2. Polling — for source=poll metrics, the scheduler uses ip, port, and oid
+     to know where to issue the SNMP GET request.
+
+When a new sample arrives, the value and updated_at are overwritten in place.
+The previous value is discarded. There is no per-metric history buffer —
+history is the job of the decision_series.
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+  11. SAMPLE ROUTING
+────────────────────────────────────────────────────────────────────────────────
+
+Because each metric carries its own (ip, port, oid) address, the system routes
+any incoming sample directly to all metric slots that registered for that
+address — across all tenants, regardless of group or priority.
+
+Routing index:
+
+  At load time, the evaluator builds a routing index over all metrics in all
+  tenants across all groups:
+
+    index[ (ip, port, oid) ] → list of (tenant_id, metric_slot)
+
+  This is a one-to-many map. The same (ip, port, oid) may appear in multiple
+  tenants. Every matching slot receives the update — tenants are independent
+  observers of the same data source.
+
+================================================================================
+  END OF SPECIFICATION
+================================================================================

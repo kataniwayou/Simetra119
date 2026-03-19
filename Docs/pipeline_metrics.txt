@@ -1,0 +1,126 @@
+Here's the full pipeline metrics flow:
+
+                           ┌─────────────────────────┐
+                           │      ENTRY POINTS        │
+                           └─────────────────────────┘
+
+      ┌──────────────┐                          ┌──────────────────┐
+      │  SNMP Poll   │                          │   SNMP Trap      │
+      │ MetricPollJob│                          │ TrapListenerSvc  │
+      └──────┬───────┘                          └────────┬─────────┘
+             │                                      │    │
+             │                          auth fail?──┘    │
+             │                    ┌─────────────┐        │
+             │                    │snmp.trap.    │        │
+             │                    │auth_failed   │        │
+             │                    └─────────────┘        ▼
+             │                                    ┌────────────┐
+             │                                    │ TrapChannel│──backpressure──▶ snmp.trap.dropped
+             │                                    └──────┬─────┘
+             │                                           ▼
+             │                                  ┌──────────────────┐
+             │                                  │ChannelConsumerSvc│
+             │                                  └────────┬─────────┘
+             │                                           │
+             │                                    snmp.trap.received
+             │                                           │
+             ▼                                           ▼
+      ┌──────────────────────────────────────────────────────────────┐
+      │                    ISender.Send(SnmpOidReceived)             │
+      └──────────────────────────┬───────────────────────────────────┘
+                                 │
+      ═══════════════════════════╪═══════════════════════════════════
+                       PIPELINE CHAIN
+      ═══════════════════════════╪═══════════════════════════════════
+                                 │
+                                 ▼
+      ┌──────────────────────────────────────────────────────────────┐
+      │ 1. LoggingBehavior                                          │
+      │    ├─ Logs SnmpOidReceived at Debug                         │
+      │    └─ ▶ snmp.event.published (+1)                           │
+      └──────────────────────────┬───────────────────────────────────┘
+                                 │ next()
+                                 ▼
+      ┌──────────────────────────────────────────────────────────────┐
+      │ 2. ExceptionBehavior                                        │
+      │    ├─ try { next() } catch { log + swallow }                │
+      │    └─ on exception ▶ snmp.event.errors (+1)                 │
+      └──────────────────────────┬───────────────────────────────────┘
+                                 │ next()
+                                 ▼
+      ┌──────────────────────────────────────────────────────────────┐
+      │ 3. ValidationBehavior                                       │
+      │    ├─ Validates OID format (regex) + DeviceName not null     │
+      │    ├─ FAIL ▶ snmp.event.rejected (+1) ── SHORT-CIRCUITS ──╳ │
+      │    └─ PASS → next()                                         │
+      └──────────────────────────┬───────────────────────────────────┘
+                                 │ next()
+                                 ▼
+      ┌──────────────────────────────────────────────────────────────┐
+      │ 4. OidResolutionBehavior                                    │
+      │    ├─ Resolves OID → MetricName via IOidMapService          │
+      │    └─ Sets msg.MetricName (or "unknown")                    │
+      │    (no metric)                                              │
+      └──────────────────────────┬───────────────────────────────────┘
+                                 │ next()
+                                 ▼
+      ┌──────────────────────────────────────────────────────────────┐
+      │ 5. ValueExtractionBehavior                                  │
+      │    ├─ Extracts numeric → msg.ExtractedValue (double)        │
+      │    └─ Extracts string → msg.ExtractedStringValue            │
+      │    (no metric)                                              │
+      └──────────────────────────┬───────────────────────────────────┘
+                                 │ next()
+                                 ▼
+      ┌──────────────────────────────────────────────────────────────┐
+      │ 6. TenantVectorFanOutBehavior                               │
+      │    ├─ TryRoute(ip, port, metricName) → slot holders         │
+      │    ├─ Writes value into matching MetricSlotHolders           │
+      │    ├─ on match ▶ snmp.tenantvector.routed (+1)              │
+      │    └─ Catches own exceptions, always calls next()           │
+      └──────────────────────────┬───────────────────────────────────┘
+                                 │ next()
+                                 ▼
+      ┌──────────────────────────────────────────────────────────────┐
+      │ 7. OtelMetricHandler (terminal)                             │
+      │    ├─ Numeric types → snmp_gauge (leader-gated)             │
+      │    ├─ String types  → snmp_info  (leader-gated)             │
+      │    └─ ▶ snmp.event.handled (+1)                             │
+      └──────────────────────────────────────────────────────────────┘
+
+      ═══════════════════════════════════════════════════════════════
+
+                        SIDE CHANNELS
+
+      ┌────────────────────────────────────────┐
+      │ MetricPollJob (finally block)          │
+      │  ▶ snmp.poll.executed (+1 per poll)    │
+      │                                        │
+      │ DeviceUnreachabilityTracker:            │
+      │  ▶ snmp.poll.unreachable (3+ failures) │
+      │  ▶ snmp.poll.recovered  (back to OK)   │
+      └────────────────────────────────────────┘
+
+      ═══════════════════════════════════════════════════════════════
+
+                       EXPORT STRATEGY
+
+      ┌────────────────────────┐    ┌───────────────────────────┐
+      │ Meter: SnmpCollector   │    │ Meter: SnmpCollector.Leader│
+      │ (pipeline counters)    │    │ (business data)            │
+      │                        │    │                            │
+      │ ALL pods export        │    │ LEADER-ONLY export         │
+      │                        │    │ (MetricRoleGatedExporter)  │
+      │ • snmp.event.published │    │                            │
+      │ • snmp.event.handled   │    │ • snmp_gauge               │
+      │ • snmp.event.errors    │    │ • snmp_info                │
+      │ • snmp.event.rejected  │    │                            │
+      │ • snmp.poll.executed   │    └───────────────────────────┘
+      │ • snmp.poll.unreachable│
+      │ • snmp.poll.recovered  │
+      │ • snmp.trap.received   │
+      │ • snmp.trap.auth_failed│
+      │ • snmp.trap.dropped    │
+      │ • snmp.tenantvector.   │
+      │   routed               │
+      └────────────────────────┘

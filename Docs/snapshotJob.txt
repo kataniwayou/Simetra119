@@ -1,0 +1,39 @@
+This milestone will be focused on new quartz job named SnapshotJob.
+the snapshot job "IntervalSeconds": 15 will be configured on appsettings.
+the job stamps timetamp in liveness vector same as others scheduled jobs.
+Snapshot job visits tenants by priority order. when number of tenants with the same priority are existed then parallel visit spawning.
+the job contains number of tiers:
+First tier is a built-in tier(not configurable) that responsible on metric staleness, excluding traps since they are unpredictable.
+The metric slot holder holds the interval and grace multiplier of the metric which can calculates staleness of the newest sample on the time series vector.(if newest stale no point to go on)
+Second tier is threshold check of all metrics by the following order:
+Start checking the Resolved metrics threshold then the Evaluate metrics threshold.
+The third tier complex by cache suppression which avoiding duplicate commands(ip port command_name) , tenant should have configurable suppression windows in seconds property
+then enquing commands to queue for background worker snmp SET commands sending. 
+the response of snmp SET command will be metricized to snmp_info or snmp_gauge as noraml behavior of snmp response with source=command.
+(there is oid_command_map for resolving source=command)
+My recommendation is to create three pipeline metrics snmp.command.* same as snmp.poll.*  - same consistency labels.-analyze and suggest for confirmation.
+need to create symetric design pattern and consistency for snmp SET. analyze and suggest for confirmation
+
+process clarification:
+the metrics are arrived by traps or polls then they are routed to the corresponded tenant. the snapshot job visit perodically the tenants by priority order.
+the snapshot job never blocked or wait for response.
+each priority group tenants being visited by the snapshot job parallely. 
+
+metric is violated means that metric's threshold meets the condition and it returns true.
+
+the tenant's visit ends with command execution only if stale metric detected or all Evaluate metrics violated.
+the tenant's visit ends with no command execution only if no stale metric detected and all Resolved metrics violated.
+the tenant's visit ends with no command execution only if no stale metric detected and all Evaluate metrics not violated.
+
+scopes:
+tenant scope flow ordering:
+1)check stale metrics- is stale skip to last tier.
+2)check resolved metrics violated- if all violated end task otherwise continue to evaluate metrics check.
+3)check evaluate metrics violated- if all violated continue to last tier otherwise end task.
+4)last tier is command queueing
+5)end task
+
+same priority tenants group scope:
+1)wait for all
+snapshot scope:
+1)if all tasks violated move to next lower priority.

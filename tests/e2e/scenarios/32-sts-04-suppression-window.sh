@@ -48,14 +48,20 @@ else
     record_fail "$SCENARIO_NAME" "tier=4 log not found within 90s"
 fi
 
-AFTER_SENT_W1=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
-DELTA_SENT_W1=$(( AFTER_SENT_W1 - BEFORE_SENT_W1 ))
-log_info "STS-04 W1 sent delta: ${DELTA_SENT_W1} (before=${BEFORE_SENT_W1} after=${AFTER_SENT_W1})"
-
 # Sub-scenario 32b: sent counter incremented in Window 1
+# Poll for counter — the SNMP SET round-trip + OTel export + Prometheus scrape takes time.
 SCENARIO_NAME="STS-04: Window 1 — command sent counter incremented"
-assert_delta_gt "$DELTA_SENT_W1" 0 "$SCENARIO_NAME" \
-    "$(get_evidence "snmp_command_sent_total" 'device_name="E2E-SIM"')"
+if poll_until 45 5 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$BEFORE_SENT_W1"; then
+    AFTER_SENT_W1=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    DELTA_SENT_W1=$(( AFTER_SENT_W1 - BEFORE_SENT_W1 ))
+    log_info "STS-04 W1 sent delta: ${DELTA_SENT_W1} (before=${BEFORE_SENT_W1} after=${AFTER_SENT_W1})"
+    record_pass "$SCENARIO_NAME" "sent_delta=${DELTA_SENT_W1}"
+else
+    AFTER_SENT_W1=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    DELTA_SENT_W1=$(( AFTER_SENT_W1 - BEFORE_SENT_W1 ))
+    log_info "STS-04 W1 sent delta: ${DELTA_SENT_W1} (before=${BEFORE_SENT_W1} after=${AFTER_SENT_W1})"
+    record_fail "$SCENARIO_NAME" "sent_delta=${DELTA_SENT_W1} after 45s polling"
+fi
 
 # ---------------------------------------------------------------------------
 # Window 2: Second cycle -- SUPPRESSED (within 30s window)
@@ -120,14 +126,20 @@ else
     record_fail "$SCENARIO_NAME" "tier=4 log not found within 60s after window expiry"
 fi
 
-AFTER_SENT_W3=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
-DELTA_SENT_W3=$(( AFTER_SENT_W3 - BEFORE_SENT_W3 ))
-log_info "STS-04 W3 sent delta: ${DELTA_SENT_W3} (before=${BEFORE_SENT_W3} after=${AFTER_SENT_W3})"
-
 # Sub-scenario 32f: sent counter incremented again after window expiry
+# Poll for counter — same timing as W1.
 SCENARIO_NAME="STS-04: Window 3 — command sent again after suppression window expired"
-assert_delta_gt "$DELTA_SENT_W3" 0 "$SCENARIO_NAME" \
-    "$(get_evidence "snmp_command_sent_total" 'device_name="E2E-SIM"')"
+if poll_until 45 5 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$BEFORE_SENT_W3"; then
+    AFTER_SENT_W3=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    DELTA_SENT_W3=$(( AFTER_SENT_W3 - BEFORE_SENT_W3 ))
+    log_info "STS-04 W3 sent delta: ${DELTA_SENT_W3} (before=${BEFORE_SENT_W3} after=${AFTER_SENT_W3})"
+    record_pass "$SCENARIO_NAME" "sent_delta=${DELTA_SENT_W3}"
+else
+    AFTER_SENT_W3=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    DELTA_SENT_W3=$(( AFTER_SENT_W3 - BEFORE_SENT_W3 ))
+    log_info "STS-04 W3 sent delta: ${DELTA_SENT_W3} (before=${BEFORE_SENT_W3} after=${AFTER_SENT_W3})"
+    record_fail "$SCENARIO_NAME" "sent_delta=${DELTA_SENT_W3} after 45s polling"
+fi
 
 # ---------------------------------------------------------------------------
 # Cleanup

@@ -7,7 +7,7 @@ data:
   tenants.json: |
     [
       {
-        "Id": "e2e-tenant-agg",
+        "Name": "e2e-tenant-agg",
         "Priority": 1,
         "SuppressionWindowSeconds": 10,
         "Metrics": [
