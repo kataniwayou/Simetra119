@@ -39,7 +39,7 @@ data:
           {
             "Ip": "e2e-simulator.simetra.svc.cluster.local",
             "Port": 161,
-            "CommandName": "e2e_command_response",
+            "CommandName": "e2e_set_bypass",
             "Value": "0",
             "ValueType": "Integer32"
           }
@@ -78,7 +78,7 @@ data:
           {
             "Ip": "e2e-simulator.simetra.svc.cluster.local",
             "Port": 161,
-            "CommandName": "e2e_command_response",
+            "CommandName": "e2e_set_bypass",
             "Value": "0",
             "ValueType": "Integer32"
           }
@@ -117,7 +117,7 @@ data:
           {
             "Ip": "e2e-simulator.simetra.svc.cluster.local",
             "Port": 161,
-            "CommandName": "e2e_command_response",
+            "CommandName": "e2e_set_bypass",
             "Value": "0",
             "ValueType": "Integer32"
           }
@@ -156,7 +156,7 @@ data:
           {
             "Ip": "e2e-simulator.simetra.svc.cluster.local",
             "Port": 161,
-            "CommandName": "e2e_command_response",
+            "CommandName": "e2e_set_bypass",
             "Value": "0",
             "ValueType": "Integer32"
           }
