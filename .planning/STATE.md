@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 59 of 59
-Plan: N/A — not yet planned
+Plan: 01 of 2
 Status: v2.1 in progress (Phases 51-59)
-Last activity: 2026-03-19 — Completed quick task 077: Direct EvaluateTenant for single-tenant groups
+Last activity: 2026-03-19 — Completed 59-01-PLAN.md (TierResult rename + advance gate bug fix)
 
-Progress: [█████████░] v2.1 Phase 59 pending
+Progress: [█████████▌] v2.1 Phase 59 plan 1/2 complete
 
 ## Performance Metrics
 
@@ -81,6 +81,8 @@ Progress: [█████████░] v2.1 Phase 59 pending
 | 58-02 | STS-06 baseline captured after priming, before stale switch | Delta measures only post-stale dispatches, not priming phase commands |
 | 58-03 | STS-07 primes with agg_breach (not healthy) before stale switch | Synthetic holder needs agg_breach OID values to populate timestamps; null slots never age out |
 | 58-03 | STS-07 tier=1 log grep scoped to e2e-tenant-agg | Prior tenant tier=1 logs may still be in pod buffer; tenant-scope prevents false positives |
+| 59-01 | Tier=4 always returns TierResult.Unresolved | Command intent (reaching tier=4) = device unresolved; suppression/channel-full are operational, not correctness states |
+| 59-01 | Advance gate blocks on TierResult.Unresolved (not Commanded) | Fixes bug where suppressed P1 commands allowed P2 to evaluate, defeating priority starvation |
 
 ### Quick Tasks Completed
 
@@ -101,6 +103,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T08:34:12Z
-Stopped at: Completed 58-03-PLAN.md (STS-07 synthetic staleness-to-commands scenario)
+Last session: 2026-03-19T15:17:00Z
+Stopped at: Completed 59-01-PLAN.md (TierResult rename + advance gate bug fix)
 Resume file: None
