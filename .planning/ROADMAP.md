@@ -299,9 +299,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 58-01-PLAN.md — Fix scenarios 31/33 log patterns + staleness behavior + report.sh range
-- [ ] 58-02-PLAN.md — New STS-06 staleness-to-commands scenario (Poll source)
-- [ ] 58-03-PLAN.md — New STS-07 synthetic staleness-to-commands scenario + report.sh range update
+- [x] 58-01-PLAN.md — Fix scenarios 31/33 log patterns + staleness behavior + report.sh range
+- [x] 58-02-PLAN.md — New STS-06 staleness-to-commands scenario (Poll source)
+- [x] 58-03-PLAN.md — New STS-07 synthetic staleness-to-commands scenario + report.sh range update
 
 ---
 
