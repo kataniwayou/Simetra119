@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 58 of 58
-Plan: 02 of N (in progress)
+Plan: 03 of N (in progress)
 Status: v2.1 in progress (Phases 51-58)
-Last activity: 2026-03-19 — Completed 58-02-PLAN.md (STS-06 staleness-to-commands scenario)
+Last activity: 2026-03-19 — Completed 58-03-PLAN.md (STS-07 synthetic staleness-to-commands scenario)
 
 Progress: [█████████░] v2.1 Phase 58 in progress
 
@@ -79,6 +79,8 @@ Progress: [█████████░] v2.1 Phase 58 in progress
 | 58-01 | Old 33c (no suppressions while stale) removed | Stale now dispatches commands; suppression-while-stale is no longer the expected behavior |
 | 58-02 | STS-06 38b tier=4 log scoped to e2e-tenant-A prefix | Avoids false positives from tier=4 logs in prior scenarios still in pod log buffer |
 | 58-02 | STS-06 baseline captured after priming, before stale switch | Delta measures only post-stale dispatches, not priming phase commands |
+| 58-03 | STS-07 primes with agg_breach (not healthy) before stale switch | Synthetic holder needs agg_breach OID values to populate timestamps; null slots never age out |
+| 58-03 | STS-07 tier=1 log grep scoped to e2e-tenant-agg | Prior tenant tier=1 logs may still be in pod buffer; tenant-scope prevents false positives |
 
 ### Quick Tasks Completed
 
@@ -98,6 +100,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T08:30:53Z
-Stopped at: Completed 58-01-PLAN.md (scenario 31/33 fixes + report.sh range) and 58-02-PLAN.md (STS-06 staleness-to-commands scenario)
+Last session: 2026-03-19T08:34:12Z
+Stopped at: Completed 58-03-PLAN.md (STS-07 synthetic staleness-to-commands scenario)
 Resume file: None
