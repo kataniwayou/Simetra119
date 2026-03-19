@@ -7,9 +7,13 @@ namespace SnmpCollector.Pipeline;
 /// <summary>
 /// Volatile wrapper around an ImmutableArray of MetricSlot samples (cyclic time series).
 /// WriteValue/ReadSlot encapsulate atomic field swaps so callers never touch the field directly.
-/// ReadSlot returns a sentinel (Value=0, Timestamp=construction time) before any real write.
-/// ReadSeries returns the full ImmutableArray of samples.
+/// ReadSlot returns null before any real write has occurred.
+/// ReadSeries returns the full ImmutableArray of samples (empty before first write).
 /// TypeCode and Source are promoted to holder-level mutable properties.
+/// IsReady determines whether the holder should participate in threshold evaluation and
+/// staleness detection. A fresh holder is not ready until ReadinessGrace has elapsed,
+/// unless data has already been written (CopyFrom or WriteValue), in which case it is
+/// immediately ready.
 /// </summary>
 public sealed class MetricSlotHolder
 {
@@ -38,6 +42,26 @@ public sealed class MetricSlotHolder
     public SnmpSource Source { get; private set; }
     public ThresholdOptions? Threshold { get; }
 
+    /// <summary>
+    /// The UTC time at which this holder was constructed. Used to compute readiness.
+    /// </summary>
+    public DateTimeOffset ConstructedAt { get; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// The duration a fresh holder must wait before being considered ready for evaluation.
+    /// Computed as TimeSeriesSize * IntervalSeconds * GraceMultiplier.
+    /// </summary>
+    public TimeSpan ReadinessGrace =>
+        TimeSpan.FromSeconds(TimeSeriesSize * IntervalSeconds * GraceMultiplier);
+
+    /// <summary>
+    /// True when the holder should participate in threshold evaluation and staleness detection.
+    /// Returns true immediately when data is present (WriteValue or CopyFrom already called).
+    /// Returns true after ReadinessGrace has elapsed since construction.
+    /// </summary>
+    public bool IsReady =>
+        ReadSeries().Length > 0 || DateTimeOffset.UtcNow - ConstructedAt > ReadinessGrace;
+
     public MetricSlotHolder(string ip, int port, string metricName, int intervalSeconds,
         string role, int timeSeriesSize = 1, double graceMultiplier = 2.0,
         ThresholdOptions? threshold = null)
@@ -50,10 +74,6 @@ public sealed class MetricSlotHolder
         TimeSeriesSize = timeSeriesSize;
         GraceMultiplier = graceMultiplier;
         Threshold = threshold;
-
-        // Start staleness clock from construction — first real WriteValue overwrites this.
-        var sentinel = new MetricSlot(0, null, DateTimeOffset.UtcNow);
-        Volatile.Write(ref _box, new SeriesBox(ImmutableArray.Create(sentinel)));
     }
 
     /// <summary>
@@ -76,7 +96,7 @@ public sealed class MetricSlotHolder
     }
 
     /// <summary>
-    /// Returns the most recently written MetricSlot (sentinel if no real write has occurred).
+    /// Returns the most recently written MetricSlot, or null if no real write has occurred.
     /// </summary>
     public MetricSlot? ReadSlot()
     {
