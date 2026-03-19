@@ -75,6 +75,8 @@ Progress: [█████████░] v2.1 Phase 58 in progress
 | 56-02 | Command IP resolution mirrors metric pattern | Identical AllDevices loop + unresolved skip for consistency |
 | 57-02 | CancellationToken.None for pre-host InitialLoadAsync | Host stoppingToken not available before app.RunAsync |
 | 57-02 | No try/catch around InitialLoadAsync in K8s block | Crash-the-pod semantics — K8s restarts on failure |
+| 58-01 | Scenario 33 uses poll_until 45 5 for counter-increment | Mirrors STS-02 30b; SNMP SET + OTel export + scrape requires polling, not immediate snapshot |
+| 58-01 | Old 33c (no suppressions while stale) removed | Stale now dispatches commands; suppression-while-stale is no longer the expected behavior |
 | 58-02 | STS-06 38b tier=4 log scoped to e2e-tenant-A prefix | Avoids false positives from tier=4 logs in prior scenarios still in pod log buffer |
 | 58-02 | STS-06 baseline captured after priming, before stale switch | Delta measures only post-stale dispatches, not priming phase commands |
 
@@ -96,6 +98,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T08:30:31Z
-Stopped at: Completed 58-02-PLAN.md (STS-06 staleness-to-commands scenario)
+Last session: 2026-03-19T08:30:53Z
+Stopped at: Completed 58-01-PLAN.md (scenario 31/33 fixes + report.sh range) and 58-02-PLAN.md (STS-06 staleness-to-commands scenario)
 Resume file: None
