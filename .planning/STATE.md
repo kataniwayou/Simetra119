@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Phase 59 — Advance Gate Fix & Priority Starvation Simulation
+**Current focus:** Phase 59 complete — v2.1 complete
 
 ## Current Position
 
 Phase: 59 of 59
-Plan: 01 of 2
-Status: v2.1 in progress (Phases 51-59)
-Last activity: 2026-03-19 — Completed 59-01-PLAN.md (TierResult rename + advance gate bug fix)
+Plan: 02 of 2
+Status: v2.1 COMPLETE (Phases 51-59)
+Last activity: 2026-03-19 — Completed 59-02-PLAN.md (MTS-02 rewrite + MTS-03 starvation proof)
 
-Progress: [█████████▌] v2.1 Phase 59 plan 1/2 complete
+Progress: [██████████] v2.1 Phase 59 complete — all plans done
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 129 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02)
+- Total plans completed: 130 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02 + 59-01 + 59-02)
 - Average duration: ~25 min
-- Total execution time: ~39.4 hours
+- Total execution time: ~39.5 hours
 
 *Updated after each plan completion*
 
@@ -35,7 +35,7 @@ Progress: [█████████▌] v2.1 Phase 59 plan 1/2 complete
 - Use distinct tenant names per scenario fixture to prevent suppression cache bleed between scenarios
 - Port 8080 for HTTP endpoint — no collision confirmed (collector health port is per-pod, separate Deployment; e2e-sim pod port 8080 is free)
 - MTS-01 multi-tenant log polling: use two separate poll_until_log calls (one per tenant) since poll_until_log checks one pattern at a time
-- tenant-cfg03-two-diff-prio-mts.yaml has P1 SuppressionWindowSeconds=30; required for MTS-02B gate-pass (P1 suppressed at T=15s → ConfirmedBad → gate passes → P2 commanded)
+- tenant-cfg03-two-diff-prio-mts.yaml has P1 SuppressionWindowSeconds=30; required for MTS-02B gate-pass — after 59-01 fix, gate-pass is triggered by sim_set_scenario default (P1 Healthy), not suppression
 - ValidateAndBuildTenants now takes snapshotIntervalSeconds and ICommandMapService parameters
 - IntervalSeconds=0 after poll group resolution now SKIPS metric (was: preserved as default)
 - Threshold Min>Max now SKIPS metric (was: clear threshold + keep metric)
@@ -83,6 +83,8 @@ Progress: [█████████▌] v2.1 Phase 59 plan 1/2 complete
 | 58-03 | STS-07 tier=1 log grep scoped to e2e-tenant-agg | Prior tenant tier=1 logs may still be in pod buffer; tenant-scope prevents false positives |
 | 59-01 | Tier=4 always returns TierResult.Unresolved | Command intent (reaching tier=4) = device unresolved; suppression/channel-full are operational, not correctness states |
 | 59-01 | Advance gate blocks on TierResult.Unresolved (not Commanded) | Fixes bug where suppressed P1 commands allowed P2 to evaluate, defeating priority starvation |
+| 59-02 | MTS-02B gate-pass via sim_set_scenario default (P1 Healthy) | Corrected advance gate blocks on Unresolved; gate-pass must come from P1 transitioning to tier=3 Healthy, not from suppression |
+| 59-02 | report.sh range |28|40| unchanged | New scenario 40 is at 0-based index 39, already within existing range; no extension required |
 
 ### Quick Tasks Completed
 
@@ -103,6 +105,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T15:17:00Z
-Stopped at: Completed 59-01-PLAN.md (TierResult rename + advance gate bug fix)
+Last session: 2026-03-19T15:19:39Z
+Stopped at: Completed 59-02-PLAN.md (MTS-02 rewrite + MTS-03 starvation proof) — v2.1 COMPLETE
 Resume file: None
