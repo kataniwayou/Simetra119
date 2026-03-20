@@ -111,15 +111,15 @@ public sealed class PipelineMetricServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
-    // 5. IncrementCommandSent records with device_name tag (PMET-13)
+    // 5. IncrementCommandDispatched records with device_name tag (PMET-13)
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IncrementCommandSent_RecordsWithDeviceNameTag()
+    public void IncrementCommandDispatched_RecordsWithDeviceNameTag()
     {
-        _service.IncrementCommandSent("device-01");
+        _service.IncrementCommandDispatched("device-01");
 
-        var match = _measurements.Single(m => m.InstrumentName == "snmp.command.sent");
+        var match = _measurements.Single(m => m.InstrumentName == "snmp.command.dispatched");
 
         Assert.Equal(1L, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);

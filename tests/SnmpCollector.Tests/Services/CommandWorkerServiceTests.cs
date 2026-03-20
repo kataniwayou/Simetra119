@@ -281,11 +281,11 @@ public sealed class CommandWorkerServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
-    // 9. IncrementsCommandSentOnSuccess
+    // 9. NoCommandDispatchedCounter (dispatch counted in SnapshotJob, not here)
     // -----------------------------------------------------------------------
 
     [Fact]
-    public async Task IncrementsCommandSentOnSuccess()
+    public async Task NoCommandDispatchedCounter_OnSuccess()
     {
         var sender = new CapturingSender();
         var channel = CreateCommandChannel([MakeRequest()]);
@@ -295,8 +295,8 @@ public sealed class CommandWorkerServiceTests : IDisposable
         await WaitForAsync(() => sender.Calls.Count >= 1, TimeSpan.FromSeconds(5));
         await service.StopAsync(CancellationToken.None);
 
-        var sentCount = _measurements.Count(m => m.InstrumentName == "snmp.command.sent");
-        Assert.Equal(1, sentCount);
+        var dispatchedCount = _measurements.Count(m => m.InstrumentName == "snmp.command.dispatched");
+        Assert.Equal(0, dispatchedCount); // dispatch counter moved to SnapshotJob
     }
 
     // -----------------------------------------------------------------------

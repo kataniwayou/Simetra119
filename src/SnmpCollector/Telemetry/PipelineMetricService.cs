@@ -45,8 +45,8 @@ public sealed class PipelineMetricService : IDisposable
     // Phase 27: counts successful fan-out writes to tenant vector metric slots
     private readonly Counter<long> _tenantVectorRouted;
 
-    // PMET-13: counts SNMP SET commands dispatched to CommandWorkerService
-    private readonly Counter<long> _commandSent;
+    // PMET-13: counts SNMP SET commands dispatched to the command channel
+    private readonly Counter<long> _commandDispatched;
 
     // PMET-14: counts SNMP SET commands that failed (timeout, error response, OID not found)
     private readonly Counter<long> _commandFailed;
@@ -75,7 +75,7 @@ public sealed class PipelineMetricService : IDisposable
 
         _tenantVectorRouted = _meter.CreateCounter<long>("snmp.tenantvector.routed");
 
-        _commandSent       = _meter.CreateCounter<long>("snmp.command.sent");
+        _commandDispatched = _meter.CreateCounter<long>("snmp.command.dispatched");
         _commandFailed     = _meter.CreateCounter<long>("snmp.command.failed");
         _commandSuppressed = _meter.CreateCounter<long>("snmp.command.suppressed");
 
@@ -142,9 +142,9 @@ public sealed class PipelineMetricService : IDisposable
     public void IncrementTenantVectorRouted(string deviceName)
         => _tenantVectorRouted.Add(1, new TagList { { "device_name", deviceName } });
 
-    /// <summary>PMET-13: Increment the count of dispatched SET commands by 1.</summary>
-    public void IncrementCommandSent(string deviceName)
-        => _commandSent.Add(1, new TagList { { "device_name", deviceName } });
+    /// <summary>PMET-13: Increment the count of commands dispatched to the channel by 1.</summary>
+    public void IncrementCommandDispatched(string deviceName)
+        => _commandDispatched.Add(1, new TagList { { "device_name", deviceName } });
 
     /// <summary>PMET-14: Increment the count of failed SET commands by 1.</summary>
     public void IncrementCommandFailed(string deviceName)

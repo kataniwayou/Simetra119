@@ -198,6 +198,7 @@ public sealed class SnapshotJob : IJob
             if (_commandChannel.Writer.TryWrite(request))
             {
                 enqueueCount++;
+                _pipelineMetrics.IncrementCommandDispatched(tenant.Id);
             }
             else
             {

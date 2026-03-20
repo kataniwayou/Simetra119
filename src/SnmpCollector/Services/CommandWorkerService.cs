@@ -190,9 +190,6 @@ public sealed class CommandWorkerService : BackgroundService
             await _sender.Send(msg, stoppingToken);
         }
 
-        // 6. Increment success counter after all varbinds dispatched
-        _pipelineMetrics.IncrementCommandSent(device.Name);
-
         _logger.LogInformation(
             "Command {CommandName} completed for {DeviceName} in {DurationMs:F1}ms",
             req.CommandName, device.Name, sw.Elapsed.TotalMilliseconds);
