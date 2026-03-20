@@ -13,44 +13,42 @@ data:
         "Polls": [
           {
             "IntervalSeconds": 10,
-            "MetricNames": [
-              "obp_channel_L1",
-              "obp_r1_power_L1",
-              "obp_r2_power_L1",
-              "obp_r3_power_L1",
-              "obp_r4_power_L1",
-              "obp_link_state_L2",
-              "obp_channel_L2",
-              "obp_r1_power_L2",
-              "obp_r2_power_L2",
-              "obp_r3_power_L2",
-              "obp_r4_power_L2",
-              "obp_link_state_L3",
-              "obp_channel_L3",
-              "obp_r1_power_L3",
-              "obp_r2_power_L3",
-              "obp_r3_power_L3",
-              "obp_r4_power_L3",
-              "obp_link_state_L4",
-              "obp_channel_L4",
-              "obp_r1_power_L4",
-              "obp_r2_power_L4",
-              "obp_r3_power_L4",
-              "obp_r4_power_L4"
+            "Metrics": [
+              {"MetricName": "obp_channel_L1"},
+              {"MetricName": "obp_r1_power_L1"},
+              {"MetricName": "obp_r2_power_L1"},
+              {"MetricName": "obp_r3_power_L1"},
+              {"MetricName": "obp_r4_power_L1"},
+              {"MetricName": "obp_link_state_L2"},
+              {"MetricName": "obp_channel_L2"},
+              {"MetricName": "obp_r1_power_L2"},
+              {"MetricName": "obp_r2_power_L2"},
+              {"MetricName": "obp_r3_power_L2"},
+              {"MetricName": "obp_r4_power_L2"},
+              {"MetricName": "obp_link_state_L3"},
+              {"MetricName": "obp_channel_L3"},
+              {"MetricName": "obp_r1_power_L3"},
+              {"MetricName": "obp_r2_power_L3"},
+              {"MetricName": "obp_r3_power_L3"},
+              {"MetricName": "obp_r4_power_L3"},
+              {"MetricName": "obp_link_state_L4"},
+              {"MetricName": "obp_channel_L4"},
+              {"MetricName": "obp_r1_power_L4"},
+              {"MetricName": "obp_r2_power_L4"},
+              {"MetricName": "obp_r3_power_L4"},
+              {"MetricName": "obp_r4_power_L4"}
             ]
           },
           {
             "IntervalSeconds": 30,
-            "MetricNames": [
-              "obp_link_state_L1"
-            ]
+            "Metrics": [{"MetricName": "obp_link_state_L1"}]
           },
           {
             "IntervalSeconds": 60,
-            "MetricNames": [
-              "obp_device_type",
-              "obp_sw_version",
-              "obp_serial"
+            "Metrics": [
+              {"MetricName": "obp_device_type"},
+              {"MetricName": "obp_sw_version"},
+              {"MetricName": "obp_serial"}
             ]
           }
         ]
@@ -62,83 +60,83 @@ data:
         "Polls": [
           {
             "IntervalSeconds": 10,
-            "MetricNames": [
-              "npb_cpu_util",
-              "npb_mem_util",
-              "npb_sys_temp",
-              "npb_uptime",
-              "npb_port_status_P1",
-              "npb_port_rx_octets_P1",
-              "npb_port_tx_octets_P1",
-              "npb_port_rx_packets_P1",
-              "npb_port_tx_packets_P1",
-              "npb_port_rx_errors_P1",
-              "npb_port_tx_errors_P1",
-              "npb_port_rx_drops_P1",
-              "npb_port_status_P2",
-              "npb_port_rx_octets_P2",
-              "npb_port_tx_octets_P2",
-              "npb_port_rx_packets_P2",
-              "npb_port_tx_packets_P2",
-              "npb_port_rx_errors_P2",
-              "npb_port_tx_errors_P2",
-              "npb_port_rx_drops_P2",
-              "npb_port_status_P3",
-              "npb_port_rx_octets_P3",
-              "npb_port_tx_octets_P3",
-              "npb_port_rx_packets_P3",
-              "npb_port_tx_packets_P3",
-              "npb_port_rx_errors_P3",
-              "npb_port_tx_errors_P3",
-              "npb_port_rx_drops_P3",
-              "npb_port_status_P4",
-              "npb_port_rx_octets_P4",
-              "npb_port_tx_octets_P4",
-              "npb_port_rx_packets_P4",
-              "npb_port_tx_packets_P4",
-              "npb_port_rx_errors_P4",
-              "npb_port_tx_errors_P4",
-              "npb_port_rx_drops_P4",
-              "npb_port_status_P5",
-              "npb_port_rx_octets_P5",
-              "npb_port_tx_octets_P5",
-              "npb_port_rx_packets_P5",
-              "npb_port_tx_packets_P5",
-              "npb_port_rx_errors_P5",
-              "npb_port_tx_errors_P5",
-              "npb_port_rx_drops_P5",
-              "npb_port_status_P6",
-              "npb_port_rx_octets_P6",
-              "npb_port_tx_octets_P6",
-              "npb_port_rx_packets_P6",
-              "npb_port_tx_packets_P6",
-              "npb_port_rx_errors_P6",
-              "npb_port_tx_errors_P6",
-              "npb_port_rx_drops_P6",
-              "npb_port_status_P7",
-              "npb_port_rx_octets_P7",
-              "npb_port_tx_octets_P7",
-              "npb_port_rx_packets_P7",
-              "npb_port_tx_packets_P7",
-              "npb_port_rx_errors_P7",
-              "npb_port_tx_errors_P7",
-              "npb_port_rx_drops_P7",
-              "npb_port_status_P8",
-              "npb_port_rx_octets_P8",
-              "npb_port_tx_octets_P8",
-              "npb_port_rx_packets_P8",
-              "npb_port_tx_packets_P8",
-              "npb_port_rx_errors_P8",
-              "npb_port_tx_errors_P8",
-              "npb_port_rx_drops_P8"
+            "Metrics": [
+              {"MetricName": "npb_cpu_util"},
+              {"MetricName": "npb_mem_util"},
+              {"MetricName": "npb_sys_temp"},
+              {"MetricName": "npb_uptime"},
+              {"MetricName": "npb_port_status_P1"},
+              {"MetricName": "npb_port_rx_octets_P1"},
+              {"MetricName": "npb_port_tx_octets_P1"},
+              {"MetricName": "npb_port_rx_packets_P1"},
+              {"MetricName": "npb_port_tx_packets_P1"},
+              {"MetricName": "npb_port_rx_errors_P1"},
+              {"MetricName": "npb_port_tx_errors_P1"},
+              {"MetricName": "npb_port_rx_drops_P1"},
+              {"MetricName": "npb_port_status_P2"},
+              {"MetricName": "npb_port_rx_octets_P2"},
+              {"MetricName": "npb_port_tx_octets_P2"},
+              {"MetricName": "npb_port_rx_packets_P2"},
+              {"MetricName": "npb_port_tx_packets_P2"},
+              {"MetricName": "npb_port_rx_errors_P2"},
+              {"MetricName": "npb_port_tx_errors_P2"},
+              {"MetricName": "npb_port_rx_drops_P2"},
+              {"MetricName": "npb_port_status_P3"},
+              {"MetricName": "npb_port_rx_octets_P3"},
+              {"MetricName": "npb_port_tx_octets_P3"},
+              {"MetricName": "npb_port_rx_packets_P3"},
+              {"MetricName": "npb_port_tx_packets_P3"},
+              {"MetricName": "npb_port_rx_errors_P3"},
+              {"MetricName": "npb_port_tx_errors_P3"},
+              {"MetricName": "npb_port_rx_drops_P3"},
+              {"MetricName": "npb_port_status_P4"},
+              {"MetricName": "npb_port_rx_octets_P4"},
+              {"MetricName": "npb_port_tx_octets_P4"},
+              {"MetricName": "npb_port_rx_packets_P4"},
+              {"MetricName": "npb_port_tx_packets_P4"},
+              {"MetricName": "npb_port_rx_errors_P4"},
+              {"MetricName": "npb_port_tx_errors_P4"},
+              {"MetricName": "npb_port_rx_drops_P4"},
+              {"MetricName": "npb_port_status_P5"},
+              {"MetricName": "npb_port_rx_octets_P5"},
+              {"MetricName": "npb_port_tx_octets_P5"},
+              {"MetricName": "npb_port_rx_packets_P5"},
+              {"MetricName": "npb_port_tx_packets_P5"},
+              {"MetricName": "npb_port_rx_errors_P5"},
+              {"MetricName": "npb_port_tx_errors_P5"},
+              {"MetricName": "npb_port_rx_drops_P5"},
+              {"MetricName": "npb_port_status_P6"},
+              {"MetricName": "npb_port_rx_octets_P6"},
+              {"MetricName": "npb_port_tx_octets_P6"},
+              {"MetricName": "npb_port_rx_packets_P6"},
+              {"MetricName": "npb_port_tx_packets_P6"},
+              {"MetricName": "npb_port_rx_errors_P6"},
+              {"MetricName": "npb_port_tx_errors_P6"},
+              {"MetricName": "npb_port_rx_drops_P6"},
+              {"MetricName": "npb_port_status_P7"},
+              {"MetricName": "npb_port_rx_octets_P7"},
+              {"MetricName": "npb_port_tx_octets_P7"},
+              {"MetricName": "npb_port_rx_packets_P7"},
+              {"MetricName": "npb_port_tx_packets_P7"},
+              {"MetricName": "npb_port_rx_errors_P7"},
+              {"MetricName": "npb_port_tx_errors_P7"},
+              {"MetricName": "npb_port_rx_drops_P7"},
+              {"MetricName": "npb_port_status_P8"},
+              {"MetricName": "npb_port_rx_octets_P8"},
+              {"MetricName": "npb_port_tx_octets_P8"},
+              {"MetricName": "npb_port_rx_packets_P8"},
+              {"MetricName": "npb_port_tx_packets_P8"},
+              {"MetricName": "npb_port_rx_errors_P8"},
+              {"MetricName": "npb_port_tx_errors_P8"},
+              {"MetricName": "npb_port_rx_drops_P8"}
             ]
           },
           {
             "IntervalSeconds": 60,
-            "MetricNames": [
-              "npb_model",
-              "npb_serial",
-              "npb_sw_version"
+            "Metrics": [
+              {"MetricName": "npb_model"},
+              {"MetricName": "npb_serial"},
+              {"MetricName": "npb_sw_version"}
             ]
           }
         ]
@@ -150,14 +148,14 @@ data:
         "Polls": [
           {
             "IntervalSeconds": 5,
-            "MetricNames": [
-              "e2e_gauge_test",
-              "e2e_integer_test",
-              "e2e_counter32_test",
-              "e2e_counter64_test",
-              "e2e_timeticks_test",
-              "e2e_info_test",
-              "e2e_ip_test"
+            "Metrics": [
+              {"MetricName": "e2e_gauge_test"},
+              {"MetricName": "e2e_integer_test"},
+              {"MetricName": "e2e_counter32_test"},
+              {"MetricName": "e2e_counter64_test"},
+              {"MetricName": "e2e_timeticks_test"},
+              {"MetricName": "e2e_info_test"},
+              {"MetricName": "e2e_ip_test"}
             ]
           }
         ]
@@ -169,9 +167,7 @@ data:
         "Polls": [
           {
             "IntervalSeconds": 10,
-            "MetricNames": [
-              "e2e_gauge_test"
-            ]
+            "Metrics": [{"MetricName": "e2e_gauge_test"}]
           }
         ]
       }
