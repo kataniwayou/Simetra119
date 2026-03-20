@@ -136,7 +136,13 @@ See `.planning/milestones/v2.1-REQUIREMENTS.md` for full requirement details.
 
 ### Active
 
-(No active requirements — next milestone not started)
+**v2.2 Progressive E2E Snapshot Suite (in progress)**
+
+- Progressive 3-stage E2E test suite: single tenant -> two tenants -> four tenants with gate
+- Stage gating: each stage only runs if previous passes
+- All evaluation states tested: Not Ready, Stale (Poll/Synthetic/Trap/Command immunity), Resolved, Unresolved, Healthy
+- Multi-tenant independence: per-tenant results don't interfere
+- Advance gate: all combinations of G1 Resolved/Healthy/Unresolved/Not Ready
 
 ### Out of Scope
 
@@ -206,4 +212,4 @@ See `.planning/milestones/v2.1-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-20 after v2.1 milestone shipped*
+*Last updated: 2026-03-20 after v2.2 milestone started*
