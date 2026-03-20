@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 Phase: 61 of 61
 Plan: 03 of 3 complete
 Status: v2.1 COMPLETE (all phases done)
-Last activity: 2026-03-20 — Completed quick task 079: SnapCycle debug logging for advance gate diagnosis
+Last activity: 2026-03-20 — Completed quick task 080: Fix configmap restore double-reload
 
 Progress: [██████████] v2.1 Phase 61 complete (03/03)
 
@@ -117,6 +117,7 @@ Progress: [██████████] v2.1 Phase 61 complete (03/03)
 | 076 | Snapshot tier fixes — staleness to commands, rename ConfirmedBad | 2026-03-18 | 911dd08 | [076-snapshot-tier-fixes](./quick/076-snapshot-tier-fixes/) |
 | 077 | Direct EvaluateTenant for single-tenant groups — skip ThreadPool | 2026-03-19 | 9410015 | [077-snapshot-direct-eval-single-tenant](./quick/077-snapshot-direct-eval-single-tenant/) |
 | 079 | SnapCycle debug logging for advance gate diagnosis | 2026-03-20 | 527c41c | [079-snapshot-gate-debug-logging](./quick/079-snapshot-gate-debug-logging/) |
+| 080 | Fix configmap restore double-reload (strip annotations, use replace) | 2026-03-20 | baea8ae | [080-fix-configmap-restore-double-reload](./quick/080-fix-configmap-restore-double-reload/) |
 
 ### Blockers/Concerns
 

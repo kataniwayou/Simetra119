@@ -88,20 +88,22 @@ save_configmap() {
     local namespace="$2"
     local output_file="$3"
 
+    # Remove the last-applied-configuration annotation before saving to prevent
+    # kubectl apply from firing a second Modified event with stale annotation data.
+    kubectl annotate configmap "$name" -n "$namespace" \
+        kubectl.kubernetes.io/last-applied-configuration- 2>/dev/null || true
+
     kubectl get configmap "$name" -n "$namespace" -o yaml \
         | sed '/resourceVersion:/d' \
         | sed '/uid:/d' \
         | sed '/creationTimestamp:/d' \
-        | sed '/kubectl\.kubernetes\.io/d' \
-        | sed '/^  annotations: {}$/d' \
         > "$output_file"
 }
 
 restore_configmap() {
     local file="$1"
 
-    kubectl replace -f "$file" 2>/dev/null \
-        || kubectl apply -f "$file"
+    kubectl apply -f "$file"
 }
 
 # ---------------------------------------------------------------------------
