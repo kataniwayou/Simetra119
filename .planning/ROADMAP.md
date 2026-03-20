@@ -15,7 +15,7 @@
 - ✅ **v1.10 Heartbeat Refactor & Pipeline Liveness** - Phases 43-44 (shipped 2026-03-15)
 - ✅ **v2.0 Tenant Evaluation & Control** - Phases 45-50 (shipped 2026-03-17)
 - ✅ **v2.1 E2E Tenant Evaluation Tests** - Phases 51-61 (shipped 2026-03-20)
-- ✅ **v2.2 Progressive E2E Snapshot Suite** - Phases 62-64 (shipped 2026-03-20)
+- **v2.2 Progressive E2E Snapshot Suite** - Phases 62-65 (gap closure in progress)
 
 ## Phases
 
@@ -96,7 +96,7 @@ See `.planning/milestones/v2.1-ROADMAP.md` for details.
 
 ---
 
-### ✅ v2.2 Progressive E2E Snapshot Suite (Shipped 2026-03-20)
+### v2.2 Progressive E2E Snapshot Suite (In Progress — Gap Closure)
 
 **Milestone Goal:** Progressive 3-stage E2E test suite that validates every SnapshotJob evaluation state with a single tenant, proves two-tenant independence, and exercises all advance gate combinations with four tenants -- each stage gated on the previous passing.
 
@@ -160,6 +160,24 @@ Plans:
 
 ---
 
+#### Phase 65: E2E Runner Fixes & Flaky Test Stabilization
+
+**Goal**: Fix run-stage2.sh stale filenames, add cleanup trap, stabilize PSS-18c/PSS-19c flaky assertions, and fix standalone runner report category
+**Depends on**: Phase 64 (all scenarios exist with correct names)
+**Gap Closure**: Closes tech debt from v2.2-MILESTONE-AUDIT.md
+**Success Criteria** (what must be TRUE):
+  1. `run-stage2.sh` references correct scenario filenames (53-pss-01-not-ready.sh, 54-pss-02-stale-to-commands.sh, 55-pss-03-resolved.sh) and all 6 Stage 1 scenarios execute in standalone mode
+  2. `run-stage2.sh` has a cleanup trap that restores the tenant ConfigMap on unexpected exit
+  3. PSS-18c and PSS-19c log-absence assertions use a `--since` window that matches or exceeds the observation sleep, eliminating the 2s overlap that causes false positives
+  4. Standalone `run-stage3.sh` and `run-stage2.sh` generate reports with the PSS category correctly rendered (not silently skipped due to index mismatch)
+
+**Plans**: 1 plan
+
+Plans:
+- [ ] 65-01-PLAN.md -- Runner fixes, flaky assertion stabilization, report category fix
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -204,6 +222,7 @@ Plans:
 | 62. Single Tenant Evaluation States | v2.2 | 2/2 | Complete | 2026-03-20 |
 | 63. Two Tenant Independence | v2.2 | 2/2 | Complete | 2026-03-20 |
 | 64. Advance Gate Logic | v2.2 | 3/3 | Complete | 2026-03-20 |
+| 65. E2E Runner Fixes & Flaky Stabilization | v2.2 | 0/1 | Planned | - |
 
 ---
 *Roadmap created: 2026-03-10*
