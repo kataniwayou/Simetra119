@@ -15,6 +15,7 @@
 - ✅ **v1.10 Heartbeat Refactor & Pipeline Liveness** - Phases 43-44 (shipped 2026-03-15)
 - ✅ **v2.0 Tenant Evaluation & Control** - Phases 45-50 (shipped 2026-03-17)
 - ✅ **v2.1 E2E Tenant Evaluation Tests** - Phases 51-61 (shipped 2026-03-20)
+- 🚧 **v2.2 Progressive E2E Snapshot Suite** - Phases 62-64 (in progress)
 
 ## Phases
 
@@ -35,64 +36,7 @@ See `.planning/MILESTONES.md` for details.
 <details>
 <summary>✅ v1.6 Organization & Command Map Foundation (Phases 30-32) - SHIPPED 2026-03-13</summary>
 
-#### Phase 30: OID Map Integrity
-
-**Goal**: Operators can detect configuration errors in oidmaps.json at load time, and any code that needs to reverse-resolve a metric name to its OID can do so via a stable interface method
-**Depends on**: Nothing (foundation for Phase 31)
-**Requirements**: MAP-01, MAP-02, MAP-03, MAP-04
-**Success Criteria** (what must be TRUE):
-  1. Loading an oidmaps.json with a duplicate OID key produces a structured log warning per duplicate that names the OID, both conflicting metric names, and which name was retained — no silent last-write-wins clobber
-  2. Loading an oidmaps.json with a duplicate metric name value produces a structured log warning per duplicate that names the conflicting OIDs — both map entries remain visible in logs
-  3. `IOidMapService.ResolveToOid("obp_channel_L1")` returns the correct OID string; `ResolveToOid("no-such-name")` returns null
-  4. The reverse index is rebuilt atomically alongside the forward map on every hot-reload — a caller reading immediately after reload sees the new reverse map, never a partial state
-  5. Validation runs before `OidMapService.UpdateMap` is called so that duplicate-warning log entries are never followed by contradictory "added" diff entries for the same load event
-
-**Plans:** 2 plans
-
-Plans:
-- [x] 30-01-PLAN.md — Reverse index and ResolveToOid (OidMapService + IOidMapService + tests)
-- [x] 30-02-PLAN.md — Duplicate OID/name validation in OidMapWatcherService + tests
-
----
-
-#### Phase 31: Human-Name Device Config
-
-**Goal**: Operators can reference metric names like "obp_channel_L1" instead of raw OID strings in devices.json poll entries, with full replacement of the Oids field by MetricNames and graceful handling of unresolvable names. Restructure oidmaps.json from flat dictionary to array of objects with explicit Oid/MetricName fields.
-**Depends on**: Phase 30 (`IOidMapService.ResolveToOid` must exist before DeviceRegistry can call it)
-**Requirements**: DEV-01, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06, DEV-07
-**Success Criteria** (what must be TRUE):
-  1. A devices.json poll entry with `MetricNames: ["obp_channel_L1", "obp_r1_power_L1"]` starts polling both OIDs after device config load — MetricPollJob never receives metric name strings as OID arguments
-  2. A MetricNames[] entry that has no match in the current OID map logs a structured warning with device name and metric name, and that entry is silently skipped — the device's other poll entries still register normally
-  3. When device config reloads, names are resolved against the current OID map state at that moment (point-in-time resolution)
-  4. Reload diff logging includes per-name resolution detail (resolved count, unresolved names listed)
-
-**Plans:** 3 plans
-
-Plans:
-- [x] 31-01-PLAN.md — OidMap array restructure + C# model rename (PollOptions, Polls, MetricNames)
-- [x] 31-02-PLAN.md — Name resolution in DeviceRegistry via IOidMapService + unit tests
-- [x] 31-03-PLAN.md — Config file rewrite (devices.json, K8s ConfigMaps, E2E fixtures, E2E scenarios)
-
----
-
-#### Phase 32: Command Map Infrastructure
-
-**Goal**: A command map lookup table is operational — operators can load commandmaps.json via ConfigMap hot-reload or local file, and any in-process code can resolve a command name to its SET OID or vice versa
-**Depends on**: Nothing (fully independent of Phases 30 and 31)
-**Requirements**: CMD-01, CMD-02, CMD-03, CMD-04, CMD-05, CMD-06
-**Success Criteria** (what must be TRUE):
-  1. `CommandMapService.ResolveCommandOid("set-power-threshold")` returns the correct OID string; an unknown name returns null — both forward (OID → name) and reverse (name → OID) lookups work without throwing
-  2. Updating the simetra-commandmaps ConfigMap in K8s triggers a hot-reload within seconds — structured diff log entries appear in pod logs showing added, removed, and changed command entries, plus total entry count
-  3. In local dev mode (no K8s cluster), `CommandMapService` is populated from `config/commandmaps.json` on startup — no empty-map silent failure
-  4. Loading a commandmaps.json with a duplicate OID key or a duplicate command name produces a structured warning per duplicate — same validation behavior as OID map integrity (Phase 30)
-  5. The simetra-commandmaps ConfigMap manifest exists in the deploy directory and is ready to apply to the cluster
-
-**Plans:** 3 plans
-
-Plans:
-- [x] 32-01-PLAN.md — ICommandMapService + CommandMapService + commandmaps.json + 12 unit tests
-- [x] 32-02-PLAN.md — simetra-commandmaps K8s ConfigMap manifests (standalone + production)
-- [x] 32-03-PLAN.md — CommandMapWatcherService + DI wiring + local dev fallback + 10 validation tests
+See `.planning/milestones/v1.6-ROADMAP.md` for details.
 
 </details>
 
@@ -150,9 +94,59 @@ See `.planning/milestones/v2.1-ROADMAP.md` for details.
 
 </details>
 
-<!-- Placeholder for next milestone -->
+---
 
-<!-- residual content removed -->
+### 🚧 v2.2 Progressive E2E Snapshot Suite (In Progress)
+
+**Milestone Goal:** Progressive 3-stage E2E test suite that validates every SnapshotJob evaluation state with a single tenant, proves two-tenant independence, and exercises all advance gate combinations with four tenants -- each stage gated on the previous passing.
+
+#### Phase 62: Single Tenant Evaluation States
+
+**Goal**: Every SnapshotJob evaluation outcome (Not Ready, Stale, Resolved, Unresolved, Healthy, Suppressed) is observable and verified through a single-tenant fixture with one priority group
+**Depends on**: Phase 61 (v2.1 E2E infrastructure: simulator HTTP endpoints, sim.sh helpers, OID map)
+**Requirements**: PSS-01, PSS-02, PSS-03, PSS-04, PSS-05, PSS-06, PSS-07, PSS-08, PSS-09, PSS-10, PSS-INF-02, PSS-INF-03
+**Success Criteria** (what must be TRUE):
+  1. A scenario script applies a 1-tenant configmap fixture, waits less than the grace window (6s = TimeSeriesSize(3) x IntervalSeconds(1) x GraceMultiplier(2)), and the snapshot log shows "Not Ready" for that tenant -- confirming the readiness gate fires before enough samples accumulate
+  2. After priming a tenant to healthy, calling sim_set_oid_stale on poll-sourced OIDs causes the snapshot log to show tier=1 Stale followed by tier=4 Unresolved with command dispatch -- and the same sequence works for synthetic-sourced OIDs, while trap-sourced and command-sourced holders remain unaffected by poll staleness (immunity verified by absence of tier=1 for those holders)
+  3. Setting all resolved-role metrics out of range produces a tier=2 Resolved log with zero command dispatches, while setting only some resolved-role metrics out of range causes evaluation to continue past tier=2 to tier=3
+  4. Setting all evaluate-role metrics out of range produces tier=4 Unresolved with commands dispatched (snmp_command_sent_total increments), while setting all metrics in-range produces tier=3 Healthy with no commands dispatched
+  5. Triggering tier=4 Unresolved twice within the suppression window shows snmp_command_suppressed_total incrementing on the second cycle -- commands are suppressed, not re-dispatched
+
+**Plans**: TBD
+
+---
+
+#### Phase 63: Two Tenant Independence
+
+**Goal**: Two tenants in the same priority group evaluate independently -- one tenant's state does not affect the other's evaluation result or command dispatch
+**Depends on**: Phase 62 (1-tenant fixture and scenario patterns established)
+**Requirements**: PSS-11, PSS-12, PSS-13, PSS-INF-01
+**Success Criteria** (what must be TRUE):
+  1. With a 2-tenant fixture, setting T1 metrics to healthy and T2 metrics to evaluate-violated produces T1=Healthy and T2=Unresolved in snapshot logs within the same evaluation cycle -- T1 has no commands dispatched while T2 does
+  2. Setting T1 to resolved-violated and T2 to healthy produces T1=Resolved (tier=2) and T2=Healthy (tier=3) in snapshot logs -- each tenant's tier is determined solely by its own metric values
+  3. Setting both tenants to evaluate-violated produces both T1=Unresolved and T2=Unresolved with independent command dispatch (snmp_command_sent_total increments for both tenant device targets)
+  4. The Stage 2 runner script checks FAIL_COUNT from Stage 1 and exits without running any Stage 2 scenarios if Stage 1 had failures
+
+**Plans**: TBD
+
+---
+
+#### Phase 64: Advance Gate Logic
+
+**Goal**: All seven advance gate combinations (3 pass, 4 block) are verified with a 4-tenant 2-group fixture -- gate-pass means G2 is evaluated, gate-block means G2 is never evaluated
+**Depends on**: Phase 63 (2-tenant independence proven, stage gating infrastructure)
+**Requirements**: PSS-14, PSS-15, PSS-16, PSS-17, PSS-18, PSS-19, PSS-20
+**Success Criteria** (what must be TRUE):
+  1. When all G1 tenants are Resolved (tier=2) or all are Healthy (tier=3), the advance gate passes and G2 tenants appear in snapshot evaluation logs -- confirming gate-pass for uniform non-Unresolved G1 states
+  2. When G1 has a mix of Resolved and Healthy tenants (no Unresolved), the advance gate still passes and G2 is evaluated -- confirming mixed non-Unresolved states do not block
+  3. When any G1 tenant is Unresolved (tier=4) -- whether all G1 are Unresolved, or mixed with Resolved, or mixed with Healthy -- the advance gate blocks and G2 tenants do NOT appear in snapshot evaluation logs (verified by absence of G2 tenant tier logs within a 10-15s observation window)
+  4. When all G1 tenants are Not Ready (before grace window ends), the advance gate blocks and G2 tenants are not evaluated -- confirming Not Ready is treated as a blocking state
+  5. The Stage 3 runner script checks FAIL_COUNT from Stage 2 and exits without running any Stage 3 scenarios if Stage 2 had failures
+
+**Plans**: TBD
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -194,7 +188,10 @@ See `.planning/milestones/v2.1-ROADMAP.md` for details.
 | 59. Advance Gate Fix & Starvation Sim | v2.1 | 2/2 | Complete | 2026-03-19 |
 | 60. Readiness Window for Holders | v2.1 | 2/2 | Complete | 2026-03-19 |
 | 61. New E2E Suite Snapshot | v2.1 | 3/3 | Complete | 2026-03-19 |
+| 62. Single Tenant Evaluation States | v2.2 | 0/TBD | Not started | - |
+| 63. Two Tenant Independence | v2.2 | 0/TBD | Not started | - |
+| 64. Advance Gate Logic | v2.2 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-19 after Phase 61 complete*
+*Last updated: 2026-03-20 after v2.2 roadmap created*

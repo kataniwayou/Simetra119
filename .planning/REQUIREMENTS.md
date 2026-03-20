@@ -56,15 +56,34 @@ Requirements for Progressive E2E Snapshot Suite milestone. Each maps to roadmap 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PSS-01 through PSS-10 | TBD | Pending |
-| PSS-11 through PSS-13 | TBD | Pending |
-| PSS-14 through PSS-20 | TBD | Pending |
-| PSS-INF-01 through PSS-INF-03 | TBD | Pending |
+| PSS-01 | Phase 62 | Pending |
+| PSS-02 | Phase 62 | Pending |
+| PSS-03 | Phase 62 | Pending |
+| PSS-04 | Phase 62 | Pending |
+| PSS-05 | Phase 62 | Pending |
+| PSS-06 | Phase 62 | Pending |
+| PSS-07 | Phase 62 | Pending |
+| PSS-08 | Phase 62 | Pending |
+| PSS-09 | Phase 62 | Pending |
+| PSS-10 | Phase 62 | Pending |
+| PSS-11 | Phase 63 | Pending |
+| PSS-12 | Phase 63 | Pending |
+| PSS-13 | Phase 63 | Pending |
+| PSS-14 | Phase 64 | Pending |
+| PSS-15 | Phase 64 | Pending |
+| PSS-16 | Phase 64 | Pending |
+| PSS-17 | Phase 64 | Pending |
+| PSS-18 | Phase 64 | Pending |
+| PSS-19 | Phase 64 | Pending |
+| PSS-20 | Phase 64 | Pending |
+| PSS-INF-01 | Phase 63 | Pending |
+| PSS-INF-02 | Phase 62 | Pending |
+| PSS-INF-03 | Phase 62 | Pending |
 
 **Coverage:**
 - v2.2 requirements: 23 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 23
+- Mapped to phases: 23
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-20*
