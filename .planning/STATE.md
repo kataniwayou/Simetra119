@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 64 of 64 (Advance Gate Logic — In Progress)
-Plan: 01 of 02
-Status: In progress
-Last activity: 2026-03-20 — Completed 64-01-PLAN.md (PSS Stage 3 infrastructure)
+Plan: 02 of 02
+Status: Phase 64 plan 02 complete (gate-pass scenarios done; gate-block scenarios TBD)
+Last activity: 2026-03-20 — Completed 64-02-PLAN.md (PSS-14/15/16 gate-pass scenarios)
 
-Progress: [███████░░░] v2.2 Phase 64 plan 01 complete (2/3 phases, 1/2 plans in phase 64)
+Progress: [████████░░] v2.2 Phase 64 plan 02 complete (2/3 phases, 2/2 plans in phase 64)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 136 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02 + 59-01 + 59-02 + 62-01 + 62-02 + quick-081 + 63-01 + 63-02 + 64-01)
+- Total plans completed: 137 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02 + 59-01 + 59-02 + 62-01 + 62-02 + quick-081 + 63-01 + 63-02 + 64-01 + 64-02)
 - Average duration: ~25 min
 - Total execution time: ~39.5 hours
 
@@ -51,6 +51,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 | 63-02 | All 6 OIDs primed in all two-tenant scenarios | Both tenants must pass their own readiness grace; priming only one tenant leaves the other indeterminate |
 | 64-01 | run-stage3.sh manages Stage 3 fixture lifecycle (not individual scenarios) | 7 scenarios share identical setup; per-scenario apply would add 7 duplicate reload cycles |
 | 64-01 | _STAGE3_CONFIGMAP_SAVED flag guards cleanup trap | Prevents restoring configmap that was never saved (early exit via Stage 1/2 gate) |
+| 64-02 | G2 assertions use tier=3 (not just tier=) | Proves gate passed AND G2 reached Healthy; SNS templates used weaker tier= match |
+| 64-02 | Re-prime at scenario start (not OID reset at end) | Ensures clean state regardless of prior scenario; avoids extra grace wait between scenarios |
 
 ### Blockers/Concerns
 
@@ -58,6 +60,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T12:27:00Z
-Stopped at: Completed 64-01-PLAN.md (PSS Stage 3 infrastructure: fixture, runner, report, run-all summary)
+Last session: 2026-03-20T12:32:58Z
+Stopped at: Completed 64-02-PLAN.md (PSS-14/15/16 gate-pass scenarios: all G1 Resolved, all G1 Healthy, G1 mixed Resolved+Healthy)
 Resume file: None
