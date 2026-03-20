@@ -104,15 +104,19 @@ See `.planning/milestones/v2.1-ROADMAP.md` for details.
 
 **Goal**: Every SnapshotJob evaluation outcome (Not Ready, Stale, Resolved, Unresolved, Healthy, Suppressed) is observable and verified through a single-tenant fixture with one priority group
 **Depends on**: Phase 61 (v2.1 E2E infrastructure: simulator HTTP endpoints, sim.sh helpers, OID map)
-**Requirements**: PSS-01, PSS-02, PSS-03, PSS-04, PSS-05, PSS-06, PSS-07, PSS-08, PSS-09, PSS-10, PSS-INF-02, PSS-INF-03
+**Requirements**: PSS-01, PSS-02, PSS-06, PSS-07, PSS-08, PSS-09, PSS-10, PSS-INF-02, PSS-INF-03 (PSS-03/04/05 deferred per research)
 **Success Criteria** (what must be TRUE):
   1. A scenario script applies a 1-tenant configmap fixture, waits less than the grace window (6s = TimeSeriesSize(3) x IntervalSeconds(1) x GraceMultiplier(2)), and the snapshot log shows "Not Ready" for that tenant -- confirming the readiness gate fires before enough samples accumulate
-  2. After priming a tenant to healthy, calling sim_set_oid_stale on poll-sourced OIDs causes the snapshot log to show tier=1 Stale followed by tier=4 Unresolved with command dispatch -- and the same sequence works for synthetic-sourced OIDs, while trap-sourced and command-sourced holders remain unaffected by poll staleness (immunity verified by absence of tier=1 for those holders)
+  2. After priming a tenant to healthy, calling sim_set_oid_stale on poll-sourced OIDs causes the snapshot log to show tier=1 Stale followed by tier=4 Unresolved with command dispatch
   3. Setting all resolved-role metrics out of range produces a tier=2 Resolved log with zero command dispatches, while setting only some resolved-role metrics out of range causes evaluation to continue past tier=2 to tier=3
   4. Setting all evaluate-role metrics out of range produces tier=4 Unresolved with commands dispatched (snmp_command_sent_total increments), while setting all metrics in-range produces tier=3 Healthy with no commands dispatched
   5. Triggering tier=4 Unresolved twice within the suppression window shows snmp_command_suppressed_total incrementing on the second cycle -- commands are suppressed, not re-dispatched
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 62-01-PLAN.md -- Fixture, report category, scenarios 53-55 (Not Ready, Stale, Resolved)
+- [ ] 62-02-PLAN.md -- Scenarios 56-58 (Unresolved, Healthy, Suppression)
 
 ---
 
@@ -188,10 +192,10 @@ See `.planning/milestones/v2.1-ROADMAP.md` for details.
 | 59. Advance Gate Fix & Starvation Sim | v2.1 | 2/2 | Complete | 2026-03-19 |
 | 60. Readiness Window for Holders | v2.1 | 2/2 | Complete | 2026-03-19 |
 | 61. New E2E Suite Snapshot | v2.1 | 3/3 | Complete | 2026-03-19 |
-| 62. Single Tenant Evaluation States | v2.2 | 0/TBD | Not started | - |
+| 62. Single Tenant Evaluation States | v2.2 | 0/2 | In progress | - |
 | 63. Two Tenant Independence | v2.2 | 0/TBD | Not started | - |
 | 64. Advance Gate Logic | v2.2 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-20 after v2.2 roadmap created*
+*Last updated: 2026-03-20 after Phase 62 planning*
