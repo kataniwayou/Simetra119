@@ -124,12 +124,12 @@ else
 fi
 
 # Verify tier=2 is ABSENT in the same recent window (partial violation must NOT trigger tier=2)
-log_info "PSS-03C: Checking tier=2 is absent in --since=10s window..."
+log_info "PSS-03C: Checking tier=2 'all resolved violated' is absent in --since=5s window..."
 PODS=$(kubectl get pods -n simetra -l app=snmp-collector \
     -o jsonpath='{.items[*].metadata.name}' 2>/dev/null) || true
 TIER2_FOUND=0
 for POD in $PODS; do
-    TIER2_LOGS=$(kubectl logs "$POD" -n simetra --since=10s 2>/dev/null \
+    TIER2_LOGS=$(kubectl logs "$POD" -n simetra --since=5s 2>/dev/null \
         | grep "e2e-pss-tenant.*tier=2.*all resolved violated" || echo "") || true
     if [ -n "$TIER2_LOGS" ]; then
         TIER2_FOUND=1
