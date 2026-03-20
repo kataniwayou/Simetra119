@@ -122,16 +122,21 @@ See `.planning/milestones/v1.10-REQUIREMENTS.md` for full requirement details.
 
 See `.planning/milestones/v2.0-REQUIREMENTS.md` for full requirement details.
 
+**v2.1 E2E Tenant Evaluation Tests (shipped 2026-03-20)**
+
+- HTTP-controlled E2E simulator with 24 OIDs, per-OID override endpoints, and named scenario switching
+- 52 E2E scenario scripts across 6 categories producing 113 test results
+- 4-tenant 2-group fixture testing all advance gate combinations (3 pass + 4 block)
+- Tenant validation hardening: 8 new checks with per-entry skip semantics
+- Deterministic watcher startup order: OidMap -> Devices -> CommandMap -> Tenants
+- Advance gate fix: tier=4 always returns Unresolved (suppressed commands block gate)
+- Readiness window: grace = TimeSeriesSize x IntervalSeconds x GraceMultiplier
+
+See `.planning/milestones/v2.1-REQUIREMENTS.md` for full requirement details.
+
 ### Active
 
-**v2.1 E2E Tenant Evaluation Tests (in progress)**
-
-- E2E simulator rework with HTTP scenario control endpoint for test-driven OID value changes
-- Purpose-built OIDs, tenant configs, and OID maps for SnapshotJob evaluation testing
-- Test scripts validating 4-tier evaluation flow: staleness, resolved gate, evaluate gate, command dispatch
-- Multi-tenant tests: same-priority parallel eval, different-priority sequential advance gate
-- Aggregate metric evaluate tests: synthetic pipeline through threshold check
-- Validation via pod logs (tier debug lines) and Prometheus metrics (command counters)
+(No active requirements — next milestone not started)
 
 ### Out of Scope
 
@@ -146,7 +151,7 @@ See `.planning/milestones/v2.0-REQUIREMENTS.md` for full requirement details.
 
 ## Context
 
-**Current state:** v2.0 shipped. 8,163 LOC C# source + 11,244 LOC C# tests + 783 LOC Python simulators + ~1,848 LOC bash/python E2E test infrastructure. 424 unit tests passing. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. Full E2E test harness with 28 scenarios. Two Grafana dashboards shipped. All 4 watchers follow watcher-validates-registry-stores pattern. Closed-loop tenant evaluation with SNMP SET command execution operational.
+**Current state:** v2.1 shipped. 8,471 LOC C# source + 12,166 LOC C# tests + 1,338 LOC Python simulators + 5,088 LOC bash E2E test infrastructure. 462 unit tests passing, 113 E2E tests. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. Full E2E test harness with 28 scenarios. Two Grafana dashboards shipped. All 4 watchers follow watcher-validates-registry-stores pattern. Closed-loop tenant evaluation with SNMP SET command execution operational.
 
 **Reference project:** `src/Simetra/` is an existing SNMP monitoring system used as architectural reference. Key patterns adopted: structured logging, OTel setup, console formatter, correlation IDs, leader election, role-gated export. Key patterns replaced: custom middleware -> MediatR, device modules -> flat OID map, channels -> single shared trap channel.
 
@@ -201,4 +206,4 @@ See `.planning/milestones/v2.0-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-17 after v2.1 milestone started*
+*Last updated: 2026-03-20 after v2.1 milestone shipped*

@@ -1,5 +1,33 @@
 # Project Milestones: SNMP Monitoring System
 
+## v2.1 E2E Tenant Evaluation Tests (Shipped: 2026-03-20)
+
+**Delivered:** Comprehensive E2E test suite validating every path through the SnapshotJob 4-tier evaluation tree and priority group advance gate, using an HTTP-controlled SNMP simulator with per-OID runtime control and a 4-tenant 2-group fixture.
+
+**Phases completed:** 51-61 (26 plans total, 4 quick tasks)
+
+**Key accomplishments:**
+- HTTP-controlled E2E simulator with 24 OIDs, per-OID override endpoints, and named scenario switching
+- 52 E2E scenario scripts across 6 categories producing 113 test results
+- 4-tenant 2-group fixture testing all advance gate combinations (3 pass + 4 block)
+- Tenant validation hardening: 8 new validation checks with per-entry skip semantics
+- Deterministic watcher startup order: OidMap -> Devices -> CommandMap -> Tenants
+- Advance gate bug fix: tier=4 always returns Unresolved (suppressed commands no longer pass gate)
+- Readiness window replacing sentinel samples: grace = TimeSeriesSize x IntervalSeconds x GraceMultiplier
+
+**Stats:**
+- 114 commits in milestone range
+- 8,471 LOC C# source + 12,166 LOC C# tests + 1,338 LOC Python simulators + 5,088 LOC bash E2E
+- 11 phases, 26 plans, 4 quick tasks (077-080)
+- 3 days (2026-03-17 -> 2026-03-20)
+- 462 unit tests passing, 113 E2E tests (101 passing)
+
+**Git range:** `v2.0` -> `v2.1`
+
+**What's next:** TBD — next milestone planning
+
+---
+
 ## v2.0 Tenant Evaluation & Control (Shipped: 2026-03-17)
 
 **Delivered:** SnapshotJob evaluates tenants by priority with 4-tier logic (staleness, resolved thresholds, evaluate thresholds, command dispatch) and issues SNMP SET commands through a Channel-backed worker with leader gate and suppression cache. Label rename: metric_name -> resolved_name across all instruments and dashboards.
