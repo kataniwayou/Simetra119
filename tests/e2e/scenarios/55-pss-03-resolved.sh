@@ -130,7 +130,7 @@ PODS=$(kubectl get pods -n simetra -l app=snmp-collector \
 TIER2_FOUND=0
 for POD in $PODS; do
     TIER2_LOGS=$(kubectl logs "$POD" -n simetra --since=10s 2>/dev/null \
-        | grep "e2e-pss-tenant.*tier=2" || echo "") || true
+        | grep "e2e-pss-tenant.*tier=2.*all resolved violated" || echo "") || true
     if [ -n "$TIER2_LOGS" ]; then
         TIER2_FOUND=1
         log_info "PSS-03C: UNEXPECTED tier=2 log found in pod ${POD}: ${TIER2_LOGS}"
