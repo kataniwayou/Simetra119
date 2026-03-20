@@ -106,4 +106,64 @@ log_info "Report saved to: $REPORT_FILE"
 
 print_summary
 
+# ---------------------------------------------------------------------------
+# Cross-Stage PSS Summary
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "============================================="
+echo "  Cross-Stage PSS Summary"
+echo "============================================="
+echo ""
+
+# PSS stage indices (0-based in SCENARIO_RESULTS):
+#   Stage 1: indices 52-57  (scenarios 53-58, 6 scenarios)
+#   Stage 2: indices 58-60  (scenarios 59-61, 3 scenarios)
+#   Stage 3: indices 61-67  (scenarios 62-68, 7 scenarios)
+
+_pss_total_results=${#SCENARIO_RESULTS[@]}
+
+_pss_count_stage() {
+    local start="$1"
+    local end="$2"
+    local pass=0
+    local fail=0
+    local ran=0
+    for i in $(seq "$start" "$end"); do
+        if [ "$i" -ge "$_pss_total_results" ]; then
+            break
+        fi
+        local entry="${SCENARIO_RESULTS[$i]:-}"
+        if [ -z "$entry" ]; then
+            continue
+        fi
+        ran=$((ran + 1))
+        local status="${entry%%|*}"
+        if [ "$status" = "PASS" ]; then
+            pass=$((pass + 1))
+        elif [ "$status" = "FAIL" ]; then
+            fail=$((fail + 1))
+        fi
+    done
+    echo "$pass $fail $ran"
+}
+
+read -r _pss_s1_pass _pss_s1_fail _pss_s1_ran <<< "$(_pss_count_stage 52 57)"
+read -r _pss_s2_pass _pss_s2_fail _pss_s2_ran <<< "$(_pss_count_stage 58 60)"
+read -r _pss_s3_pass _pss_s3_fail _pss_s3_ran <<< "$(_pss_count_stage 61 67)"
+
+if [ "$_pss_s1_ran" -gt 0 ]; then
+    printf "  Stage 1 (53-58 Single Tenant):      PASS=%-3s FAIL=%s\n" "$_pss_s1_pass" "$_pss_s1_fail"
+fi
+if [ "$_pss_s2_ran" -gt 0 ]; then
+    printf "  Stage 2 (59-61 Two Tenant):         PASS=%-3s FAIL=%s\n" "$_pss_s2_pass" "$_pss_s2_fail"
+fi
+if [ "$_pss_s3_ran" -gt 0 ]; then
+    printf "  Stage 3 (62-68 Advance Gate):       PASS=%-3s FAIL=%s\n" "$_pss_s3_pass" "$_pss_s3_fail"
+fi
+if [ "$_pss_s1_ran" -eq 0 ] && [ "$_pss_s2_ran" -eq 0 ] && [ "$_pss_s3_ran" -eq 0 ]; then
+    echo "  No PSS scenarios ran."
+fi
+echo ""
+
 [ "$FAIL_COUNT" -eq 0 ]
