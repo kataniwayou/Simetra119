@@ -92,13 +92,16 @@ save_configmap() {
         | sed '/resourceVersion:/d' \
         | sed '/uid:/d' \
         | sed '/creationTimestamp:/d' \
+        | sed '/kubectl\.kubernetes\.io/d' \
+        | sed '/^  annotations: {}$/d' \
         > "$output_file"
 }
 
 restore_configmap() {
     local file="$1"
 
-    kubectl apply -f "$file"
+    kubectl replace -f "$file" 2>/dev/null \
+        || kubectl apply -f "$file"
 }
 
 # ---------------------------------------------------------------------------
