@@ -23,7 +23,7 @@ REACHABLE_JSON=$(echo "$CURRENT_JSON" | jq '. + [{
     "CommunityString": "Simetra.FAKE-UNREACHABLE",
     "IpAddress": "e2e-simulator.simetra.svc.cluster.local",
     "Port": 161,
-    "Polls": [{"IntervalSeconds": 10, "MetricNames": ["e2e_gauge_test"]}]
+    "Polls": [{"IntervalSeconds": 10, "Metrics": [{"MetricName": "e2e_gauge_test"}]}]
 }]')
 
 RECOVERY_FILE=$(mktemp)
