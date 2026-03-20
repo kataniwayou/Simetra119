@@ -108,8 +108,8 @@ sim_set_oid "5.1" "10"   # T2 eval in-range
 sim_set_oid "5.2" "1"    # T2 res1 in-range
 sim_set_oid "5.3" "1"    # T2 res2 in-range
 
-log_info "PSS-03C: Waiting 3s for healthy cycles to flush prior tier=2 logs..."
-sleep 3
+log_info "PSS-03C: Waiting 8s for healthy cycles to flush prior tier=2 logs from --since=10s window..."
+sleep 8
 
 # Set partial violation: res1=0 (violated), res2=1 (not violated)
 log_info "PSS-03C: Setting partial violation: res1=0, res2=1..."
