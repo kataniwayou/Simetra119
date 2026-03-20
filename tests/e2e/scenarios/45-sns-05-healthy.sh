@@ -15,7 +15,7 @@
 #
 # Sub-assertions:
 #   45a: tier=3 healthy log with G1-T1 scope
-#   45b: snmp_command_sent_total does NOT increment (negative assertion, delta=0)
+#   45b: snmp_command_dispatched_total does NOT increment (negative assertion, delta=0)
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
@@ -66,7 +66,7 @@ sleep 8
 # Delta over observation window must be 0 (no evaluate violation, no commands).
 # ---------------------------------------------------------------------------
 
-BEFORE_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 log_info "SNS-05: Baseline sent=${BEFORE_SENT} (after priming sleep)"
 
 # ---------------------------------------------------------------------------
@@ -91,7 +91,7 @@ fi
 log_info "SNS-05: Waiting 10s to confirm no command dispatch at tier=3..."
 sleep 10
 
-AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
 log_info "SNS-05: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
 

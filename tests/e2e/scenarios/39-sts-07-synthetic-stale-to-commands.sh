@@ -16,7 +16,7 @@
 # Sub-assertions:
 #   39a: tier=1 stale log with "skipping to commands" text
 #   39b: tier=4 commands enqueued log for e2e-tenant-agg
-#   39c: snmp_command_sent_total counter increments
+#   39c: snmp_command_dispatched_total counter increments
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
@@ -55,7 +55,7 @@ sleep 20
 # ---------------------------------------------------------------------------
 
 log_info "STS-07: Baselining command counters BEFORE switching to stale..."
-BEFORE_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 log_info "STS-07: Baseline sent=${BEFORE_SENT}"
 
 log_info "STS-07: Switching to stale scenario (source OIDs return NoSuchInstance)..."
@@ -92,20 +92,20 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Sub-scenario 39c: snmp_command_sent_total counter increments
+# Sub-scenario 39c: snmp_command_dispatched_total counter increments
 # SNMP SET round-trip + OTel export + Prometheus scrape takes time — use poll_until
 # ---------------------------------------------------------------------------
 
 SCENARIO_NAME="STS-07: Command sent counter after synthetic staleness"
 
 log_info "STS-07: Polling for command sent counter increment (45s timeout)..."
-if poll_until 45 5 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
-    AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+if poll_until 45 5 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "STS-07: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
     record_pass "$SCENARIO_NAME" "sent_delta=${DELTA_SENT}"
 else
-    AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "STS-07: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
     record_fail "$SCENARIO_NAME" "sent_delta=${DELTA_SENT} expected > 0 after 45s polling"

@@ -40,7 +40,7 @@ fi
 log_info "MTS-03: Setting simulator to command_trigger scenario..."
 sim_set_scenario command_trigger
 
-BEFORE_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 BEFORE_SUPP=$(snapshot_counter "snmp_command_suppressed_total" 'device_name="e2e-tenant-P1"')
 log_info "MTS-03: Baselines: sent=${BEFORE_SENT}, suppressed_P1=${BEFORE_SUPP}"
 
@@ -57,12 +57,12 @@ fi
 
 # Sub-scenario 40b: P1 sent counter incremented
 log_info "MTS-03A: Polling for P1 sent counter increment..."
-if poll_until 45 5 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
-    AFTER_SENT_A=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+if poll_until 45 5 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
+    AFTER_SENT_A=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
     DELTA_SENT_A=$((AFTER_SENT_A - BEFORE_SENT))
     record_pass "MTS-03A: P1 sent counter incremented" "sent_delta=${DELTA_SENT_A}"
 else
-    AFTER_SENT_A=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    AFTER_SENT_A=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
     DELTA_SENT_A=$((AFTER_SENT_A - BEFORE_SENT))
     record_fail "MTS-03A: P1 sent counter incremented" "sent_delta=${DELTA_SENT_A} after 45s polling"
 fi

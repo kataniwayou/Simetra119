@@ -7,7 +7,7 @@
 #
 # Sub-assertions:
 #   55a: tier=2 log with e2e-pss-tenant scope (all resolved violated)
-#   55b: snmp_command_sent_total does NOT increment (negative assertion, delta=0)
+#   55b: snmp_command_dispatched_total does NOT increment (negative assertion, delta=0)
 #   55c: partial resolved violation (one=0, one=1) does NOT produce tier=2 but continues to tier=3
 #
 # For 55c: only ONE resolved OID is violated (res1=0). res2 remains 1 (not violated).
@@ -50,7 +50,7 @@ sleep 8
 # Delta after tier=2 fires must be 0 (no commands at tier=2)
 # ---------------------------------------------------------------------------
 
-BEFORE_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 log_info "PSS-03: Baseline sent=${BEFORE_SENT}"
 
 # ---------------------------------------------------------------------------
@@ -83,7 +83,7 @@ fi
 log_info "PSS-03: Waiting 10s to confirm no command dispatch at tier=2..."
 sleep 10
 
-AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
 log_info "PSS-03: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
 

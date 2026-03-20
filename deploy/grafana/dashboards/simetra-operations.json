@@ -1385,7 +1385,7 @@
         "type": "prometheus",
         "uid": "dfg62p9s7xl34a"
       },
-      "description": "Rate of SNMP SET commands successfully executed by CommandWorkerService. Source: snmp_command_sent_total.",
+      "description": "Rate of SNMP SET commands dispatched to the command channel. Source: snmp_command_dispatched_total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1466,14 +1466,14 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (k8s_pod_name) (rate(snmp_command_sent_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(snmp_command_dispatched_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Command Sent",
+      "title": "Command Dispatched",
       "type": "timeseries"
     },
     {

@@ -31,7 +31,7 @@ sim_set_scenario default
 # Baseline: snapshot counters BEFORE the assertion window
 # ---------------------------------------------------------------------------
 
-BEFORE_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 BEFORE_SUPP=$(snapshot_counter "snmp_command_suppressed_total" 'device_name="e2e-tenant-A"')
 log_info "Baseline sent=${BEFORE_SENT} suppressed=${BEFORE_SUPP}"
 
@@ -55,7 +55,7 @@ fi
 
 SCENARIO_NAME="STS-03: Zero command counters while Violated"
 
-AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 AFTER_SUPP=$(snapshot_counter "snmp_command_suppressed_total" 'device_name="e2e-tenant-A"')
 
 DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))

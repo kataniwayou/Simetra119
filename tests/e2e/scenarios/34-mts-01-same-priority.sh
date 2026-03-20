@@ -1,7 +1,7 @@
 # Scenario 34: MTS-01 Same-priority independence -- both P1 tenants produce independent tier=4 log lines and command counters
 # Validates that two tenants at Priority 1 (e2e-tenant-A and e2e-tenant-B) are evaluated
 # independently in the same SnapshotJob cycle, each emitting their own tier=4 log line and
-# each contributing to the snmp_command_sent_total counter.
+# each contributing to the snmp_command_dispatched_total counter.
 #
 # Fixture: tenant-cfg02-two-same-prio.yaml (both tenants Priority 1, SuppressionWindowSeconds=10)
 # Scenario: command_trigger (.4.1=90 > Max:80 → both tenants reach tier=4)
@@ -39,7 +39,7 @@ sim_set_scenario command_trigger
 # Baseline: snapshot command_sent counter BEFORE the assertion window
 # ---------------------------------------------------------------------------
 
-BEFORE_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 log_info "MTS-01: Baseline sent=${BEFORE_SENT}"
 
 # ---------------------------------------------------------------------------
@@ -76,14 +76,14 @@ fi
 # Poll for counter — need delta >= 2, so poll until at least baseline+2 (i.e. baseline+1 exceeded).
 # poll_until checks > baseline, so use baseline+1 to ensure delta >= 2.
 NEED_AT_LEAST=$((BEFORE_SENT + 1))
-if poll_until 45 5 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$NEED_AT_LEAST"; then
-    AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+if poll_until 45 5 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$NEED_AT_LEAST"; then
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
     DELTA=$((AFTER_SENT - BEFORE_SENT))
     log_info "MTS-01: After: sent=${AFTER_SENT} delta=${DELTA}"
     assert_delta_gt "$DELTA" 1 "MTS-01: Both tenants commanded — sent delta >= 2" \
         "sent_delta=${DELTA}"
 else
-    AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
     DELTA=$((AFTER_SENT - BEFORE_SENT))
     log_info "MTS-01: After: sent=${AFTER_SENT} delta=${DELTA}"
     record_fail "MTS-01: Both tenants commanded — sent delta >= 2" \

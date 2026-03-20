@@ -12,14 +12,14 @@
 # Skipping Window 3 saves 20+ seconds of dead wait.
 #
 # Counter labels:
-#   snmp_command_sent_total:       device_name="E2E-SIM" (actual device name)
+#   snmp_command_dispatched_total:       device_name="E2E-SIM" (actual device name)
 #   snmp_command_suppressed_total: device_name="e2e-pss-tenant-supp" (tenant ID)
 #
 # Sub-assertions:
 #   58a: tier=4 "commands enqueued" log (Window 1)
-#   58b: snmp_command_sent_total counter increment (Window 1)
+#   58b: snmp_command_dispatched_total counter increment (Window 1)
 #   58c: snmp_command_suppressed_total counter increment (Window 2)
-#   58d: snmp_command_sent_total unchanged during Window 2
+#   58d: snmp_command_dispatched_total unchanged during Window 2
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
@@ -59,7 +59,7 @@ sleep 8
 
 log_info "PSS-06 Window 1: Triggering first tier=4 command dispatch..."
 
-BEFORE_SENT_W1=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+BEFORE_SENT_W1=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 log_info "PSS-06 W1 baseline sent=${BEFORE_SENT_W1}"
 
 # Stimulus: set evaluate to violated (< Min:10)
@@ -81,13 +81,13 @@ fi
 # ---------------------------------------------------------------------------
 
 log_info "PSS-06: Polling for sent counter increment (30s timeout)..."
-if poll_until 30 2 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$BEFORE_SENT_W1"; then
-    AFTER_SENT_W1=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+if poll_until 30 2 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$BEFORE_SENT_W1"; then
+    AFTER_SENT_W1=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
     DELTA_SENT_W1=$((AFTER_SENT_W1 - BEFORE_SENT_W1))
     log_info "PSS-06 W1: sent=${AFTER_SENT_W1} delta_sent=${DELTA_SENT_W1}"
     record_pass "PSS-06B: Sent counter incremented (Window 1)" "sent_delta=${DELTA_SENT_W1}"
 else
-    AFTER_SENT_W1=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    AFTER_SENT_W1=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
     DELTA_SENT_W1=$((AFTER_SENT_W1 - BEFORE_SENT_W1))
     log_info "PSS-06 W1: sent=${AFTER_SENT_W1} delta_sent=${DELTA_SENT_W1}"
     record_fail "PSS-06B: Sent counter incremented (Window 1)" "sent_delta=${DELTA_SENT_W1} expected > 0 after 30s polling"
@@ -102,7 +102,7 @@ fi
 log_info "PSS-06 Window 2: Watching for suppression within the 30s window..."
 
 BEFORE_SUPP_W2=$(snapshot_counter "snmp_command_suppressed_total" 'device_name="e2e-pss-tenant-supp"')
-BEFORE_SENT_W2=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+BEFORE_SENT_W2=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 log_info "PSS-06 W2 baseline suppressed=${BEFORE_SUPP_W2} sent=${BEFORE_SENT_W2}"
 
 # Poll until suppressed counter increments (next SnapshotJob cycle)
@@ -113,7 +113,7 @@ fi
 
 AFTER_SUPP_W2=$(snapshot_counter "snmp_command_suppressed_total" 'device_name="e2e-pss-tenant-supp"')
 DELTA_SUPP_W2=$((AFTER_SUPP_W2 - BEFORE_SUPP_W2))
-AFTER_SENT_W2=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+AFTER_SENT_W2=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 DELTA_SENT_W2=$((AFTER_SENT_W2 - BEFORE_SENT_W2))
 log_info "PSS-06 W2: suppressed_delta=${DELTA_SUPP_W2} sent_delta=${DELTA_SENT_W2}"
 

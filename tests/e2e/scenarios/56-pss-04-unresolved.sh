@@ -11,7 +11,7 @@
 #
 # Sub-assertions:
 #   56a: tier=4 "commands enqueued" log with e2e-pss-tenant scope
-#   56b: snmp_command_sent_total counter increment (command dispatch confirmed)
+#   56b: snmp_command_dispatched_total counter increment (command dispatch confirmed)
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
@@ -50,7 +50,7 @@ sleep 8
 # Delta after tier=4 fires must be > 0 (commands dispatched)
 # ---------------------------------------------------------------------------
 
-BEFORE_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 log_info "PSS-04: Baseline sent=${BEFORE_SENT}"
 
 # ---------------------------------------------------------------------------
@@ -75,18 +75,18 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Sub-scenario 56b: snmp_command_sent_total counter increment
+# Sub-scenario 56b: snmp_command_dispatched_total counter increment
 # Command dispatch confirmed via Prometheus counter
 # ---------------------------------------------------------------------------
 
 log_info "PSS-04: Polling for sent counter increment (30s timeout)..."
-if poll_until 30 2 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
-    AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+if poll_until 30 2 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "PSS-04: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
     record_pass "PSS-04B: Sent counter incremented after evaluate violated" "sent_delta=${DELTA_SENT}"
 else
-    AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "PSS-04: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
     record_fail "PSS-04B: Sent counter incremented after evaluate violated" "sent_delta=${DELTA_SENT} expected > 0 after 30s polling"

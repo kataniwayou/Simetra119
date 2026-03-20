@@ -30,7 +30,7 @@ else
     log_warn "MTS-02: Tenant vector reload log not found within 60s — proceeding anyway"
 fi
 
-BEFORE_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 log_info "MTS-02: Initial sent baseline=${BEFORE_SENT}"
 
 # ---------------------------------------------------------------------------
@@ -73,15 +73,15 @@ fi
 # Sub-scenario 35c (pass/fail): sent counter delta > 0 -- confirms P1 actually sent a command
 # Re-capture baseline now (after P1 tier=4 confirmed) to guard against counter resets
 # from prior scenario pod restarts (scenario 28 does rollout restart).
-FRESH_BASELINE=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+FRESH_BASELINE=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 # Poll for counter — SNMP SET round-trip + OTel export + Prometheus scrape takes time.
-if poll_until 45 5 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$FRESH_BASELINE"; then
-    AFTER_SENT_A=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+if poll_until 45 5 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$FRESH_BASELINE"; then
+    AFTER_SENT_A=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
     DELTA_A=$((AFTER_SENT_A - FRESH_BASELINE))
     log_info "MTS-02A: sent delta after P1 command: ${DELTA_A} (before=${FRESH_BASELINE} after=${AFTER_SENT_A})"
     record_pass "MTS-02A: P1 sent counter incremented" "sent_delta=${DELTA_A}"
 else
-    AFTER_SENT_A=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    AFTER_SENT_A=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
     DELTA_A=$((AFTER_SENT_A - FRESH_BASELINE))
     log_info "MTS-02A: sent delta after P1 command: ${DELTA_A} (before=${FRESH_BASELINE} after=${AFTER_SENT_A})"
     record_fail "MTS-02A: P1 sent counter incremented" "sent_delta=${DELTA_A} after 45s polling"

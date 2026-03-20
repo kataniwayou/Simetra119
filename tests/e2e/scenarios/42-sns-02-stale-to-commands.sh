@@ -18,7 +18,7 @@
 # Sub-assertions:
 #   42a: tier=1 stale log with G1-T1 scope
 #   42b: tier=4 commands enqueued log with G1-T1 scope
-#   42c: snmp_command_sent_total counter increment
+#   42c: snmp_command_dispatched_total counter increment
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
@@ -58,7 +58,7 @@ sleep 8
 # post-stale dispatches (not any commands from the priming phase).
 # ---------------------------------------------------------------------------
 
-BEFORE_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
 log_info "SNS-02: Baseline sent=${BEFORE_SENT}"
 
 # ---------------------------------------------------------------------------
@@ -104,18 +104,18 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Sub-scenario 42c: snmp_command_sent_total counter increment
+# Sub-scenario 42c: snmp_command_dispatched_total counter increment
 # Proves command-holder was evaluated and dispatched (not skipped) despite staleness
 # ---------------------------------------------------------------------------
 
 log_info "SNS-02: Polling for sent counter increment (30s timeout)..."
-if poll_until 30 2 "snmp_command_sent_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
-    AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+if poll_until 30 2 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "SNS-02: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
     record_pass "SNS-02C: Sent counter incremented after stale switch" "sent_delta=${DELTA_SENT}"
 else
-    AFTER_SENT=$(snapshot_counter "snmp_command_sent_total" 'device_name="E2E-SIM"')
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "SNS-02: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
     record_fail "SNS-02C: Sent counter incremented after stale switch" "sent_delta=${DELTA_SENT} expected > 0 after 30s polling"
