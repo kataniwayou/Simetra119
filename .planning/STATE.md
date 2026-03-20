@@ -9,17 +9,17 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 ## Current Position
 
-Phase: 64 of 64 (Advance Gate Logic — In Progress)
-Plan: 02 of 02
-Status: Phase 64 plan 02 complete (gate-pass scenarios done; gate-block scenarios TBD)
-Last activity: 2026-03-20 — Completed 64-02-PLAN.md (PSS-14/15/16 gate-pass scenarios)
+Phase: 64 of 64 (Advance Gate Logic — Complete)
+Plan: 03 of 03
+Status: Phase complete
+Last activity: 2026-03-20 — Completed 64-03-PLAN.md (PSS-17/18/19/20 gate-block scenarios)
 
-Progress: [████████░░] v2.2 Phase 64 plan 02 complete (2/3 phases, 2/2 plans in phase 64)
+Progress: [██████████] v2.2 Phase 64 complete (all phases and plans done)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 137 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02 + 59-01 + 59-02 + 62-01 + 62-02 + quick-081 + 63-01 + 63-02 + 64-01 + 64-02)
+- Total plans completed: 138 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02 + 59-01 + 59-02 + 62-01 + 62-02 + quick-081 + 63-01 + 63-02 + 64-01 + 64-02 + 64-03)
 - Average duration: ~25 min
 - Total execution time: ~39.5 hours
 
@@ -53,6 +53,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 | 64-01 | _STAGE3_CONFIGMAP_SAVED flag guards cleanup trap | Prevents restoring configmap that was never saved (early exit via Stage 1/2 gate) |
 | 64-02 | G2 assertions use tier=3 (not just tier=) | Proves gate passed AND G2 reached Healthy; SNS templates used weaker tier= match |
 | 64-02 | Re-prime at scenario start (not OID reset at end) | Ensures clean state regardless of prior scenario; avoids extra grace wait between scenarios |
+| 64-03 | PSS-20 re-applies fixture (not just reset_oid_overrides) | reset_oid_overrides alone doesn't empty populated series; fixture re-apply forces fresh holders with empty G1 series |
+| 64-03 | BEFORE snapshots taken after G1 assertions confirmed | Ensures BEFORE baseline is post-gate-block-establishment; prior scenario activity doesn't inflate BEFORE |
 
 ### Blockers/Concerns
 
@@ -60,6 +62,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T12:32:58Z
-Stopped at: Completed 64-02-PLAN.md (PSS-14/15/16 gate-pass scenarios: all G1 Resolved, all G1 Healthy, G1 mixed Resolved+Healthy)
+Last session: 2026-03-20T12:37:00Z
+Stopped at: Completed 64-03-PLAN.md (PSS-17/18/19/20 gate-block scenarios; Phase 64 complete)
 Resume file: None
