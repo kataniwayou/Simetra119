@@ -15,7 +15,7 @@
 - ✅ **v1.10 Heartbeat Refactor & Pipeline Liveness** - Phases 43-44 (shipped 2026-03-15)
 - ✅ **v2.0 Tenant Evaluation & Control** - Phases 45-50 (shipped 2026-03-17)
 - ✅ **v2.1 E2E Tenant Evaluation Tests** - Phases 51-61 (shipped 2026-03-20)
-- 🚧 **v2.2 Progressive E2E Snapshot Suite** - Phases 62-64 (in progress)
+- ✅ **v2.2 Progressive E2E Snapshot Suite** - Phases 62-64 (shipped 2026-03-20)
 
 ## Phases
 
@@ -96,7 +96,7 @@ See `.planning/milestones/v2.1-ROADMAP.md` for details.
 
 ---
 
-### v2.2 Progressive E2E Snapshot Suite (In Progress)
+### ✅ v2.2 Progressive E2E Snapshot Suite (Shipped 2026-03-20)
 
 **Milestone Goal:** Progressive 3-stage E2E test suite that validates every SnapshotJob evaluation state with a single tenant, proves two-tenant independence, and exercises all advance gate combinations with four tenants -- each stage gated on the previous passing.
 
@@ -154,9 +154,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 64-01-PLAN.md -- 4-tenant PSS fixture, report category update, Stage 3 runner with 3-stage gating
-- [ ] 64-02-PLAN.md -- Gate-pass scenarios 62-64 (PSS-14 all Resolved, PSS-15 all Healthy, PSS-16 mixed pass)
-- [ ] 64-03-PLAN.md -- Gate-block scenarios 65-68 (PSS-17 all Unresolved, PSS-18/19 mixed block, PSS-20 not ready)
+- [x] 64-01-PLAN.md -- 4-tenant PSS fixture, report category update, Stage 3 runner with 3-stage gating
+- [x] 64-02-PLAN.md -- Gate-pass scenarios 62-64 (PSS-14 all Resolved, PSS-15 all Healthy, PSS-16 mixed pass)
+- [x] 64-03-PLAN.md -- Gate-block scenarios 65-68 (PSS-17 all Unresolved, PSS-18/19 mixed block, PSS-20 not ready)
 
 ---
 
@@ -203,8 +203,8 @@ Plans:
 | 61. New E2E Suite Snapshot | v2.1 | 3/3 | Complete | 2026-03-19 |
 | 62. Single Tenant Evaluation States | v2.2 | 2/2 | Complete | 2026-03-20 |
 | 63. Two Tenant Independence | v2.2 | 2/2 | Complete | 2026-03-20 |
-| 64. Advance Gate Logic | v2.2 | 0/3 | Not started | - |
+| 64. Advance Gate Logic | v2.2 | 3/3 | Complete | 2026-03-20 |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-20 after Phase 64 planned*
+*Last updated: 2026-03-20 after Phase 64 complete — v2.2 milestone shipped*

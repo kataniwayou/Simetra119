@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.2 Progressive E2E Snapshot Suite
+**Current focus:** v2.2 Progressive E2E Snapshot Suite (complete)
 
 ## Current Position
 
