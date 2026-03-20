@@ -5,12 +5,13 @@
 #
 # Independence property: BOTH tenants' evaluate OIDs violated simultaneously.
 # Both reach tier=4 independently and each dispatches commands.
-# Counter delta >= 2 (shared device_name="E2E-SIM") proves both tenants dispatched.
+# Per-tenant counter (device_name=tenant ID) proves each tenant dispatched independently.
 #
 # Sub-assertions:
 #   61a: e2e-pss-t1 logs tier=4 (unresolved)
 #   61b: e2e-pss-t2 logs tier=4 (unresolved)
-#   61c: snmp_command_dispatched_total counter delta >= 2 (both tenants dispatched commands)
+#   61c: snmp_command_dispatched_total{device_name="e2e-pss-t1"} delta > 0
+#   61d: snmp_command_dispatched_total{device_name="e2e-pss-t2"} delta > 0
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
@@ -49,13 +50,13 @@ log_info "PSS-13: Waiting 8s for readiness grace (6s grace + 2s margin)..."
 sleep 8
 
 # ---------------------------------------------------------------------------
-# Capture sent counter baseline BEFORE stimulus
-# Both tenants will dispatch commands -- delta >= 2 proves independence
-# Counter label device_name="E2E-SIM" is shared across both tenants
+# Capture per-tenant sent counter baselines BEFORE stimulus
+# Counter label device_name = tenant ID (per-tenant, not shared)
 # ---------------------------------------------------------------------------
 
-BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
-log_info "PSS-13: Baseline sent=${BEFORE_SENT}"
+BEFORE_T1=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-pss-t1"')
+BEFORE_T2=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-pss-t2"')
+log_info "PSS-13: Baseline T1=${BEFORE_T1} T2=${BEFORE_T2}"
 
 # ---------------------------------------------------------------------------
 # Stimulus: set BOTH tenants' eval OIDs to violated
@@ -92,26 +93,39 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Sub-scenario 61c: snmp_command_dispatched_total counter delta >= 2
-# Both tenants dispatched commands -- shared device_name="E2E-SIM" counter
-# delta >= 2 proves both tenants contributed at least one command dispatch each
+# Sub-scenario 61c: T1 command dispatch counter incremented
+# Per-tenant counter: device_name="e2e-pss-t1"
 # ---------------------------------------------------------------------------
 
-log_info "PSS-13: Polling for sent counter increment by both tenants (30s timeout)..."
-if poll_until 30 2 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
-    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
-    DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
-    log_info "PSS-13: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
-    if [ "$DELTA_SENT" -ge 2 ]; then
-        record_pass "PSS-13C: Both tenants dispatched commands (delta >= 2)" "sent_delta=${DELTA_SENT}"
-    else
-        record_fail "PSS-13C: Both tenants dispatched commands (delta >= 2)" "sent_delta=${DELTA_SENT} expected >= 2 (only one tenant dispatched)"
-    fi
+log_info "PSS-13: Polling for T1 sent counter increment (30s timeout)..."
+if poll_until 30 2 "snmp_command_dispatched_total" 'device_name="e2e-pss-t1"' "$BEFORE_T1"; then
+    AFTER_T1=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-pss-t1"')
+    DELTA_T1=$((AFTER_T1 - BEFORE_T1))
+    log_info "PSS-13: T1 after: sent=${AFTER_T1} delta=${DELTA_T1}"
+    record_pass "PSS-13C: e2e-pss-t1 dispatched commands independently" "t1_sent_delta=${DELTA_T1}"
 else
-    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
-    DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
-    log_info "PSS-13: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
-    record_fail "PSS-13C: Both tenants dispatched commands (delta >= 2)" "sent_delta=${DELTA_SENT} expected >= 2 after 30s polling"
+    AFTER_T1=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-pss-t1"')
+    DELTA_T1=$((AFTER_T1 - BEFORE_T1))
+    log_info "PSS-13: T1 after: sent=${AFTER_T1} delta=${DELTA_T1}"
+    record_fail "PSS-13C: e2e-pss-t1 dispatched commands independently" "t1_sent_delta=${DELTA_T1} expected > 0 after 30s polling"
+fi
+
+# ---------------------------------------------------------------------------
+# Sub-scenario 61d: T2 command dispatch counter incremented
+# Per-tenant counter: device_name="e2e-pss-t2"
+# ---------------------------------------------------------------------------
+
+log_info "PSS-13: Polling for T2 sent counter increment (30s timeout)..."
+if poll_until 30 2 "snmp_command_dispatched_total" 'device_name="e2e-pss-t2"' "$BEFORE_T2"; then
+    AFTER_T2=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-pss-t2"')
+    DELTA_T2=$((AFTER_T2 - BEFORE_T2))
+    log_info "PSS-13: T2 after: sent=${AFTER_T2} delta=${DELTA_T2}"
+    record_pass "PSS-13D: e2e-pss-t2 dispatched commands independently" "t2_sent_delta=${DELTA_T2}"
+else
+    AFTER_T2=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-pss-t2"')
+    DELTA_T2=$((AFTER_T2 - BEFORE_T2))
+    log_info "PSS-13: T2 after: sent=${AFTER_T2} delta=${DELTA_T2}"
+    record_fail "PSS-13D: e2e-pss-t2 dispatched commands independently" "t2_sent_delta=${DELTA_T2} expected > 0 after 30s polling"
 fi
 
 # ---------------------------------------------------------------------------

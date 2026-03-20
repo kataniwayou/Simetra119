@@ -48,7 +48,7 @@ fi
 log_info "ADV-02: Setting simulator to agg_breach scenario (.4.5=50 + .4.6=50 = sum 100 > Max:80)..."
 sim_set_scenario agg_breach
 
-BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-agg"')
 log_info "ADV-02: Initial sent baseline=${BEFORE_SENT}"
 
 # ---------------------------------------------------------------------------
@@ -69,18 +69,18 @@ fi
 # Poll for counter — SNMP SET round-trip + OTel export + Prometheus scrape takes time.
 # ---------------------------------------------------------------------------
 
-if poll_until 45 5 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
-    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+if poll_until 45 5 "snmp_command_dispatched_total" 'device_name="e2e-tenant-agg"' "$BEFORE_SENT"; then
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-agg"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "ADV-02: Sent counter after tier=4: before=${BEFORE_SENT} after=${AFTER_SENT} delta=${DELTA_SENT}"
     record_pass "ADV-02: Command sent counter incremented" \
-        "sent_delta=${DELTA_SENT} $(get_evidence "snmp_command_dispatched_total" 'device_name="E2E-SIM"')"
+        "sent_delta=${DELTA_SENT} $(get_evidence "snmp_command_dispatched_total" 'device_name="e2e-tenant-agg"')"
 else
-    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-agg"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "ADV-02: Sent counter after tier=4: before=${BEFORE_SENT} after=${AFTER_SENT} delta=${DELTA_SENT}"
     record_fail "ADV-02: Command sent counter incremented" \
-        "sent_delta=${DELTA_SENT} expected > 0 after 45s polling $(get_evidence "snmp_command_dispatched_total" 'device_name="E2E-SIM"')"
+        "sent_delta=${DELTA_SENT} expected > 0 after 45s polling $(get_evidence "snmp_command_dispatched_total" 'device_name="e2e-tenant-agg"')"
 fi
 
 # ---------------------------------------------------------------------------
@@ -92,7 +92,7 @@ fi
 log_info "ADV-02: Switching to healthy scenario for recovery phase..."
 sim_set_scenario healthy
 
-RECOVERY_BASELINE=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+RECOVERY_BASELINE=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-agg"')
 log_info "ADV-02: Recovery baseline captured: recovery_baseline=${RECOVERY_BASELINE}"
 
 # ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ fi
 # A delta > 0 would mean tier-4 fired again during recovery (partial violation should not fire).
 # ---------------------------------------------------------------------------
 
-RECOVERY_AFTER=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+RECOVERY_AFTER=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-agg"')
 RECOVERY_DELTA=$((RECOVERY_AFTER - RECOVERY_BASELINE))
 log_info "ADV-02: Recovery counter delta: recovery_baseline=${RECOVERY_BASELINE} recovery_after=${RECOVERY_AFTER} recovery_delta=${RECOVERY_DELTA}"
 

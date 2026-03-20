@@ -50,7 +50,7 @@ sleep 8
 # Delta after tier=4 fires must be > 0 (commands dispatched)
 # ---------------------------------------------------------------------------
 
-BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-pss-tenant"')
 log_info "PSS-04: Baseline sent=${BEFORE_SENT}"
 
 # ---------------------------------------------------------------------------
@@ -80,13 +80,13 @@ fi
 # ---------------------------------------------------------------------------
 
 log_info "PSS-04: Polling for sent counter increment (30s timeout)..."
-if poll_until 30 2 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
-    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+if poll_until 30 2 "snmp_command_dispatched_total" 'device_name="e2e-pss-tenant"' "$BEFORE_SENT"; then
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-pss-tenant"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "PSS-04: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
     record_pass "PSS-04B: Sent counter incremented after evaluate violated" "sent_delta=${DELTA_SENT}"
 else
-    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-pss-tenant"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "PSS-04: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
     record_fail "PSS-04B: Sent counter incremented after evaluate violated" "sent_delta=${DELTA_SENT} expected > 0 after 30s polling"

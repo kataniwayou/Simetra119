@@ -32,7 +32,7 @@ sim_set_scenario command_trigger
 
 log_info "STS-04 Window 1: Waiting for first tier=4 command dispatch..."
 
-BEFORE_SENT_W1=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+BEFORE_SENT_W1=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-A-supp"')
 log_info "STS-04 W1 baseline snmp_command_dispatched_total: ${BEFORE_SENT_W1}"
 
 WINDOW1_LOG_FOUND=0
@@ -51,13 +51,13 @@ fi
 # Sub-scenario 32b: sent counter incremented in Window 1
 # Poll for counter — the SNMP SET round-trip + OTel export + Prometheus scrape takes time.
 SCENARIO_NAME="STS-04: Window 1 — command sent counter incremented"
-if poll_until 45 5 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$BEFORE_SENT_W1"; then
-    AFTER_SENT_W1=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+if poll_until 45 5 "snmp_command_dispatched_total" 'device_name="e2e-tenant-A-supp"' "$BEFORE_SENT_W1"; then
+    AFTER_SENT_W1=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-A-supp"')
     DELTA_SENT_W1=$(( AFTER_SENT_W1 - BEFORE_SENT_W1 ))
     log_info "STS-04 W1 sent delta: ${DELTA_SENT_W1} (before=${BEFORE_SENT_W1} after=${AFTER_SENT_W1})"
     record_pass "$SCENARIO_NAME" "sent_delta=${DELTA_SENT_W1}"
 else
-    AFTER_SENT_W1=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+    AFTER_SENT_W1=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-A-supp"')
     DELTA_SENT_W1=$(( AFTER_SENT_W1 - BEFORE_SENT_W1 ))
     log_info "STS-04 W1 sent delta: ${DELTA_SENT_W1} (before=${BEFORE_SENT_W1} after=${AFTER_SENT_W1})"
     record_fail "$SCENARIO_NAME" "sent_delta=${DELTA_SENT_W1} after 45s polling"
@@ -72,7 +72,7 @@ fi
 log_info "STS-04 Window 2: Watching for suppression within the 30s window..."
 
 BEFORE_SUPP_W2=$(snapshot_counter "snmp_command_suppressed_total" 'device_name="e2e-tenant-A-supp"')
-BEFORE_SENT_W2=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+BEFORE_SENT_W2=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-A-supp"')
 log_info "STS-04 W2 baseline suppressed: ${BEFORE_SUPP_W2}  sent: ${BEFORE_SENT_W2}"
 
 # Poll until suppressed counter increments (next SnapshotJob cycle, ~15s)
@@ -83,7 +83,7 @@ fi
 
 AFTER_SUPP_W2=$(snapshot_counter "snmp_command_suppressed_total" 'device_name="e2e-tenant-A-supp"')
 DELTA_SUPP_W2=$(( AFTER_SUPP_W2 - BEFORE_SUPP_W2 ))
-AFTER_SENT_W2=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+AFTER_SENT_W2=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-A-supp"')
 DELTA_SENT_W2=$(( AFTER_SENT_W2 - BEFORE_SENT_W2 ))
 log_info "STS-04 W2 suppressed delta: ${DELTA_SUPP_W2}  sent delta: ${DELTA_SENT_W2}"
 
@@ -110,7 +110,7 @@ fi
 log_info "STS-04 Window 3: Waiting 20s for suppression window to expire..."
 sleep 20
 
-BEFORE_SENT_W3=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+BEFORE_SENT_W3=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-A-supp"')
 log_info "STS-04 W3 baseline sent: ${BEFORE_SENT_W3}"
 
 WINDOW3_LOG_FOUND=0
@@ -129,13 +129,13 @@ fi
 # Sub-scenario 32f: sent counter incremented again after window expiry
 # Poll for counter — same timing as W1.
 SCENARIO_NAME="STS-04: Window 3 — command sent again after suppression window expired"
-if poll_until 45 5 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$BEFORE_SENT_W3"; then
-    AFTER_SENT_W3=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+if poll_until 45 5 "snmp_command_dispatched_total" 'device_name="e2e-tenant-A-supp"' "$BEFORE_SENT_W3"; then
+    AFTER_SENT_W3=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-A-supp"')
     DELTA_SENT_W3=$(( AFTER_SENT_W3 - BEFORE_SENT_W3 ))
     log_info "STS-04 W3 sent delta: ${DELTA_SENT_W3} (before=${BEFORE_SENT_W3} after=${AFTER_SENT_W3})"
     record_pass "$SCENARIO_NAME" "sent_delta=${DELTA_SENT_W3}"
 else
-    AFTER_SENT_W3=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+    AFTER_SENT_W3=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-A-supp"')
     DELTA_SENT_W3=$(( AFTER_SENT_W3 - BEFORE_SENT_W3 ))
     log_info "STS-04 W3 sent delta: ${DELTA_SENT_W3} (before=${BEFORE_SENT_W3} after=${AFTER_SENT_W3})"
     record_fail "$SCENARIO_NAME" "sent_delta=${DELTA_SENT_W3} after 45s polling"

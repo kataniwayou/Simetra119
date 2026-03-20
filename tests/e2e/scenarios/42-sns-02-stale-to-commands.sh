@@ -58,7 +58,7 @@ sleep 8
 # post-stale dispatches (not any commands from the priming phase).
 # ---------------------------------------------------------------------------
 
-BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-G1-T1"')
 log_info "SNS-02: Baseline sent=${BEFORE_SENT}"
 
 # ---------------------------------------------------------------------------
@@ -109,13 +109,13 @@ fi
 # ---------------------------------------------------------------------------
 
 log_info "SNS-02: Polling for sent counter increment (30s timeout)..."
-if poll_until 30 2 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
-    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+if poll_until 30 2 "snmp_command_dispatched_total" 'device_name="e2e-tenant-G1-T1"' "$BEFORE_SENT"; then
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-G1-T1"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "SNS-02: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
     record_pass "SNS-02C: Sent counter incremented after stale switch" "sent_delta=${DELTA_SENT}"
 else
-    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-G1-T1"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "SNS-02: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
     record_fail "SNS-02C: Sent counter incremented after stale switch" "sent_delta=${DELTA_SENT} expected > 0 after 30s polling"

@@ -32,7 +32,7 @@ sim_set_scenario command_trigger
 # Baseline: snapshot command_sent counter BEFORE the assertion window
 # ---------------------------------------------------------------------------
 
-BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-A"')
 log_info "Baseline sent=${BEFORE_SENT}"
 
 # ---------------------------------------------------------------------------
@@ -57,13 +57,13 @@ fi
 SCENARIO_NAME="STS-02: Command sent counter incremented"
 
 # Poll for counter — SNMP SET round-trip + OTel export + Prometheus scrape takes time.
-if poll_until 45 5 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
-    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+if poll_until 45 5 "snmp_command_dispatched_total" 'device_name="e2e-tenant-A"' "$BEFORE_SENT"; then
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-A"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
     record_pass "$SCENARIO_NAME" "sent_delta=${DELTA_SENT}"
 else
-    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-A"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
     record_fail "$SCENARIO_NAME" "sent_delta=${DELTA_SENT} after 45s polling"

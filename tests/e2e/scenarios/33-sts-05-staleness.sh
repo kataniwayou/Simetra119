@@ -45,7 +45,7 @@ sleep 20
 # ---------------------------------------------------------------------------
 
 log_info "STS-05: Baselining command counters BEFORE switching to stale..."
-BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-A"')
 log_info "STS-05 baseline sent=${BEFORE_SENT}"
 
 # ---------------------------------------------------------------------------
@@ -76,13 +76,13 @@ fi
 
 SCENARIO_NAME="STS-05: Commands dispatched when data is stale"
 log_info "STS-05: Polling for command sent counter to increment (45s timeout)..."
-if poll_until 45 5 "snmp_command_dispatched_total" 'device_name="E2E-SIM"' "$BEFORE_SENT"; then
-    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+if poll_until 45 5 "snmp_command_dispatched_total" 'device_name="e2e-tenant-A"' "$BEFORE_SENT"; then
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-A"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "STS-05: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
     record_pass "$SCENARIO_NAME" "sent_delta=${DELTA_SENT}"
 else
-    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="E2E-SIM"')
+    AFTER_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-tenant-A"')
     DELTA_SENT=$((AFTER_SENT - BEFORE_SENT))
     log_info "STS-05: After: sent=${AFTER_SENT} delta_sent=${DELTA_SENT}"
     record_fail "$SCENARIO_NAME" "sent_delta=${DELTA_SENT} expected > 0 after 45s polling"
