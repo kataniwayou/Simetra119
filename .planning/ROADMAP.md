@@ -134,8 +134,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 63-01-PLAN.md -- 2-tenant fixture, report category update, Stage 2 runner with FAIL_COUNT gating
-- [ ] 63-02-PLAN.md -- Scenarios 59-61 (T1 Healthy/T2 Unresolved, T1 Resolved/T2 Healthy, Both Unresolved)
+- [x] 63-01-PLAN.md -- 2-tenant fixture, report category update, Stage 2 runner with FAIL_COUNT gating
+- [x] 63-02-PLAN.md -- Scenarios 59-61 (T1 Healthy/T2 Unresolved, T1 Resolved/T2 Healthy, Both Unresolved)
 
 ---
 
@@ -197,9 +197,9 @@ Plans:
 | 60. Readiness Window for Holders | v2.1 | 2/2 | Complete | 2026-03-19 |
 | 61. New E2E Suite Snapshot | v2.1 | 3/3 | Complete | 2026-03-19 |
 | 62. Single Tenant Evaluation States | v2.2 | 2/2 | Complete | 2026-03-20 |
-| 63. Two Tenant Independence | v2.2 | 0/2 | Not started | - |
+| 63. Two Tenant Independence | v2.2 | 2/2 | Complete | 2026-03-20 |
 | 64. Advance Gate Logic | v2.2 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-20 after Phase 63 planned*
+*Last updated: 2026-03-20 after Phase 63 complete*

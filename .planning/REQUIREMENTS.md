@@ -66,9 +66,9 @@ Requirements for Progressive E2E Snapshot Suite milestone. Each maps to roadmap 
 | PSS-08 | Phase 62 | Complete |
 | PSS-09 | Phase 62 | Complete |
 | PSS-10 | Phase 62 | Complete |
-| PSS-11 | Phase 63 | Pending |
-| PSS-12 | Phase 63 | Pending |
-| PSS-13 | Phase 63 | Pending |
+| PSS-11 | Phase 63 | Complete |
+| PSS-12 | Phase 63 | Complete |
+| PSS-13 | Phase 63 | Complete |
 | PSS-14 | Phase 64 | Pending |
 | PSS-15 | Phase 64 | Pending |
 | PSS-16 | Phase 64 | Pending |
@@ -76,7 +76,7 @@ Requirements for Progressive E2E Snapshot Suite milestone. Each maps to roadmap 
 | PSS-18 | Phase 64 | Pending |
 | PSS-19 | Phase 64 | Pending |
 | PSS-20 | Phase 64 | Pending |
-| PSS-INF-01 | Phase 63 | Pending |
+| PSS-INF-01 | Phase 63 | Complete |
 | PSS-INF-02 | Phase 62 | Complete |
 | PSS-INF-03 | Phase 62 | Complete |
 
