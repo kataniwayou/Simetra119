@@ -13,7 +13,7 @@ _REPORT_CATEGORIES=(
     "Device Lifecycle|26|27"
     "Snapshot Evaluation|28|39"
     "Snapshot State Suite|40|51"
-    "Progressive Snapshot Suite|52|57"
+    "Progressive Snapshot Suite|52|60"
 )
 
 generate_report() {
