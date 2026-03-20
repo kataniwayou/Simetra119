@@ -46,14 +46,6 @@ log_info "PSS-03: Waiting 8s for readiness grace..."
 sleep 8
 
 # ---------------------------------------------------------------------------
-# Capture sent counter baseline BEFORE setting resolved OIDs to violated
-# Delta after tier=2 fires must be 0 (no commands at tier=2)
-# ---------------------------------------------------------------------------
-
-BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-pss-tenant"')
-log_info "PSS-03: Baseline sent=${BEFORE_SENT}"
-
-# ---------------------------------------------------------------------------
 # Set T2 resolved OIDs to violated (both < Min:1 = value 0)
 # T2 eval stays at 10 (in-range) -- tier=2 fires before tier=3 check
 # ---------------------------------------------------------------------------
@@ -77,8 +69,12 @@ fi
 # ---------------------------------------------------------------------------
 # Sub-scenario 55b: No command dispatch at tier=2 (negative assertion)
 # Tier=2 returns early -- no tier=4 evaluation, no commands enqueued.
-# Sleep 10s then compare counter. Delta must be 0.
+# Capture baseline AFTER tier=2 is confirmed (not before OID change) to avoid
+# counting commands dispatched during the healthy→resolved transition window.
 # ---------------------------------------------------------------------------
+
+BEFORE_SENT=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-pss-tenant"')
+log_info "PSS-03: Baseline sent=${BEFORE_SENT} (captured after tier=2 confirmed)"
 
 log_info "PSS-03: Waiting 10s to confirm no command dispatch at tier=2..."
 sleep 10
