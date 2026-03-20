@@ -44,7 +44,7 @@ public sealed class DeviceWatcherValidationTests
                 Port = 161,
                 Polls =
                 [
-                    new PollOptions { MetricNames = ["1.3.6.1.2.1.25.3.3.1.2"], IntervalSeconds = 30 }
+                    new PollOptions { Metrics = [new PollMetricOptions { MetricName = "1.3.6.1.2.1.25.3.3.1.2" }], IntervalSeconds = 30 }
                 ]
             },
             new()
@@ -280,7 +280,7 @@ public sealed class DeviceWatcherValidationTests
                 Port = 161,
                 Polls =
                 [
-                    new PollOptions { MetricNames = ["known", "unknown"], IntervalSeconds = 10 }
+                    new PollOptions { Metrics = [new PollMetricOptions { MetricName = "known" }, new PollMetricOptions { MetricName = "unknown" }], IntervalSeconds = 10 }
                 ]
             }
         };
@@ -294,7 +294,7 @@ public sealed class DeviceWatcherValidationTests
     }
 
     // -------------------------------------------------------------------------
-    // 6. All MetricNames unresolvable: poll group excluded, device still in result
+    // 6. All Metrics unresolvable: poll group excluded, device still in result
     // -------------------------------------------------------------------------
 
     [Fact]
@@ -312,7 +312,7 @@ public sealed class DeviceWatcherValidationTests
                 Port = 161,
                 Polls =
                 [
-                    new PollOptions { MetricNames = ["no_match_1", "no_match_2"], IntervalSeconds = 30 }
+                    new PollOptions { Metrics = [new PollMetricOptions { MetricName = "no_match_1" }, new PollMetricOptions { MetricName = "no_match_2" }], IntervalSeconds = 30 }
                 ]
             }
         };
@@ -423,8 +423,8 @@ public sealed class DeviceWatcherValidationTests
                 Port = 161,
                 Polls =
                 [
-                    new PollOptions { MetricNames = ["metric_a"], IntervalSeconds = 10 },
-                    new PollOptions { MetricNames = ["metric_b"], IntervalSeconds = 30 }
+                    new PollOptions { Metrics = [new PollMetricOptions { MetricName = "metric_a" }], IntervalSeconds = 10 },
+                    new PollOptions { Metrics = [new PollMetricOptions { MetricName = "metric_b" }], IntervalSeconds = 30 }
                 ]
             }
         };
@@ -480,7 +480,7 @@ public sealed class DeviceWatcherValidationTests
                 Port = 161,
                 Polls =
                 [
-                    new PollOptions { MetricNames = ["unresolvable_metric"], IntervalSeconds = 15 }
+                    new PollOptions { Metrics = [new PollMetricOptions { MetricName = "unresolvable_metric" }], IntervalSeconds = 15 }
                 ]
             }
         };
@@ -521,7 +521,7 @@ public sealed class DeviceWatcherValidationTests
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
-            MetricNames = ["m1", "m2"],
+            Metrics = [new PollMetricOptions { MetricName = "m1" }, new PollMetricOptions { MetricName = "m2" }],
             AggregatedMetricName = "combined_power",
             Aggregator = "sum",
             IntervalSeconds = 10
@@ -542,7 +542,7 @@ public sealed class DeviceWatcherValidationTests
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
-            MetricNames = ["m1", "m2"],
+            Metrics = [new PollMetricOptions { MetricName = "m1" }, new PollMetricOptions { MetricName = "m2" }],
             AggregatedMetricName = "combined",
             Aggregator = "invalid",
             IntervalSeconds = 10
@@ -573,7 +573,7 @@ public sealed class DeviceWatcherValidationTests
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
-            MetricNames = ["m1", "m2"],
+            Metrics = [new PollMetricOptions { MetricName = "m1" }, new PollMetricOptions { MetricName = "m2" }],
             AggregatedMetricName = "combined",
             Aggregator = null,
             IntervalSeconds = 10
@@ -602,7 +602,7 @@ public sealed class DeviceWatcherValidationTests
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
-            MetricNames = ["m1", "m2"],
+            Metrics = [new PollMetricOptions { MetricName = "m1" }, new PollMetricOptions { MetricName = "m2" }],
             AggregatedMetricName = null,
             Aggregator = "sum",
             IntervalSeconds = 10
@@ -631,7 +631,7 @@ public sealed class DeviceWatcherValidationTests
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
-            MetricNames = ["m1"],
+            Metrics = [new PollMetricOptions { MetricName = "m1" }],
             AggregatedMetricName = "combined",
             Aggregator = "sum",
             IntervalSeconds = 10
@@ -660,14 +660,14 @@ public sealed class DeviceWatcherValidationTests
     {
         var poll1 = new PollOptions
         {
-            MetricNames = ["m1", "m2"],
+            Metrics = [new PollMetricOptions { MetricName = "m1" }, new PollMetricOptions { MetricName = "m2" }],
             AggregatedMetricName = "combined",
             Aggregator = "sum",
             IntervalSeconds = 10
         };
         var poll2 = new PollOptions
         {
-            MetricNames = ["m1", "m2"],
+            Metrics = [new PollMetricOptions { MetricName = "m1" }, new PollMetricOptions { MetricName = "m2" }],
             AggregatedMetricName = "combined",
             Aggregator = "sum",
             IntervalSeconds = 10
@@ -712,7 +712,7 @@ public sealed class DeviceWatcherValidationTests
 
         var devices = SingleDeviceWithPoll(new PollOptions
         {
-            MetricNames = ["m1", "m2"],
+            Metrics = [new PollMetricOptions { MetricName = "m1" }, new PollMetricOptions { MetricName = "m2" }],
             AggregatedMetricName = "colliding_name",
             Aggregator = "sum",
             IntervalSeconds = 10
@@ -741,7 +741,7 @@ public sealed class DeviceWatcherValidationTests
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
-            MetricNames = ["m1", "m2"],
+            Metrics = [new PollMetricOptions { MetricName = "m1" }, new PollMetricOptions { MetricName = "m2" }],
             AggregatedMetricName = null,
             Aggregator = null,
             IntervalSeconds = 10
@@ -774,7 +774,7 @@ public sealed class DeviceWatcherValidationTests
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
-            MetricNames = ["m1", "m2"],
+            Metrics = [new PollMetricOptions { MetricName = "m1" }, new PollMetricOptions { MetricName = "m2" }],
             AggregatedMetricName = "combined",
             Aggregator = aggregator,
             IntervalSeconds = 10
@@ -791,7 +791,7 @@ public sealed class DeviceWatcherValidationTests
     {
         var devices = SingleDeviceWithPoll(new PollOptions
         {
-            MetricNames = ["m1", "m2"],
+            Metrics = [new PollMetricOptions { MetricName = "m1" }, new PollMetricOptions { MetricName = "m2" }],
             AggregatedMetricName = "combined",
             Aggregator = "invalid",
             IntervalSeconds = 10

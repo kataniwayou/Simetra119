@@ -107,7 +107,7 @@ public class AggregatedMetricModelTests
     [Fact]
     public void PollOptions_Deserialization_WithoutAggregation_DefaultsNull()
     {
-        const string json = """{"MetricNames":["m1"],"IntervalSeconds":10}""";
+        const string json = """{"Metrics":[{"MetricName":"m1"}],"IntervalSeconds":10}""";
         var options = JsonSerializer.Deserialize<PollOptions>(
             json,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -120,7 +120,7 @@ public class AggregatedMetricModelTests
     [Fact]
     public void PollOptions_Deserialization_WithAggregation_BothPopulated()
     {
-        const string json = """{"MetricNames":["m1","m2"],"IntervalSeconds":10,"AggregatedMetricName":"combined","Aggregator":"sum"}""";
+        const string json = """{"Metrics":[{"MetricName":"m1"},{"MetricName":"m2"}],"IntervalSeconds":10,"AggregatedMetricName":"combined","Aggregator":"sum"}""";
         var options = JsonSerializer.Deserialize<PollOptions>(
             json,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
