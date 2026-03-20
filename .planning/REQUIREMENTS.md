@@ -56,16 +56,16 @@ Requirements for Progressive E2E Snapshot Suite milestone. Each maps to roadmap 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PSS-01 | Phase 62 | Pending |
-| PSS-02 | Phase 62 | Pending |
-| PSS-03 | Phase 62 | Pending |
-| PSS-04 | Phase 62 | Pending |
-| PSS-05 | Phase 62 | Pending |
-| PSS-06 | Phase 62 | Pending |
-| PSS-07 | Phase 62 | Pending |
-| PSS-08 | Phase 62 | Pending |
-| PSS-09 | Phase 62 | Pending |
-| PSS-10 | Phase 62 | Pending |
+| PSS-01 | Phase 62 | Complete |
+| PSS-02 | Phase 62 | Complete |
+| PSS-03 | Phase 62 | Deferred |
+| PSS-04 | Phase 62 | Deferred |
+| PSS-05 | Phase 62 | Deferred |
+| PSS-06 | Phase 62 | Complete |
+| PSS-07 | Phase 62 | Complete |
+| PSS-08 | Phase 62 | Complete |
+| PSS-09 | Phase 62 | Complete |
+| PSS-10 | Phase 62 | Complete |
 | PSS-11 | Phase 63 | Pending |
 | PSS-12 | Phase 63 | Pending |
 | PSS-13 | Phase 63 | Pending |
@@ -77,8 +77,8 @@ Requirements for Progressive E2E Snapshot Suite milestone. Each maps to roadmap 
 | PSS-19 | Phase 64 | Pending |
 | PSS-20 | Phase 64 | Pending |
 | PSS-INF-01 | Phase 63 | Pending |
-| PSS-INF-02 | Phase 62 | Pending |
-| PSS-INF-03 | Phase 62 | Pending |
+| PSS-INF-02 | Phase 62 | Complete |
+| PSS-INF-03 | Phase 62 | Complete |
 
 **Coverage:**
 - v2.2 requirements: 23 total

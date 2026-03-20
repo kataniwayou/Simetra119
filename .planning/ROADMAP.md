@@ -115,8 +115,8 @@ See `.planning/milestones/v2.1-ROADMAP.md` for details.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 62-01-PLAN.md -- Fixture, report category, scenarios 53-55 (Not Ready, Stale, Resolved)
-- [ ] 62-02-PLAN.md -- Scenarios 56-58 (Unresolved, Healthy, Suppression)
+- [x] 62-01-PLAN.md -- Fixture, report category, scenarios 53-55 (Not Ready, Stale, Resolved)
+- [x] 62-02-PLAN.md -- Scenarios 56-58 (Unresolved, Healthy, Suppression)
 
 ---
 
@@ -192,10 +192,10 @@ Plans:
 | 59. Advance Gate Fix & Starvation Sim | v2.1 | 2/2 | Complete | 2026-03-19 |
 | 60. Readiness Window for Holders | v2.1 | 2/2 | Complete | 2026-03-19 |
 | 61. New E2E Suite Snapshot | v2.1 | 3/3 | Complete | 2026-03-19 |
-| 62. Single Tenant Evaluation States | v2.2 | 0/2 | In progress | - |
+| 62. Single Tenant Evaluation States | v2.2 | 2/2 | Complete | 2026-03-20 |
 | 63. Two Tenant Independence | v2.2 | 0/TBD | Not started | - |
 | 64. Advance Gate Logic | v2.2 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-20 after Phase 62 planning*
+*Last updated: 2026-03-20 after Phase 62 complete*
