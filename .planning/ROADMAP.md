@@ -96,7 +96,7 @@ See `.planning/milestones/v2.1-ROADMAP.md` for details.
 
 ---
 
-### 🚧 v2.2 Progressive E2E Snapshot Suite (In Progress)
+### v2.2 Progressive E2E Snapshot Suite (In Progress)
 
 **Milestone Goal:** Progressive 3-stage E2E test suite that validates every SnapshotJob evaluation state with a single tenant, proves two-tenant independence, and exercises all advance gate combinations with four tenants -- each stage gated on the previous passing.
 
@@ -151,7 +151,12 @@ Plans:
   4. When all G1 tenants are Not Ready (before grace window ends), the advance gate blocks and G2 tenants are not evaluated -- confirming Not Ready is treated as a blocking state
   5. The Stage 3 runner script checks FAIL_COUNT from Stage 2 and exits without running any Stage 3 scenarios if Stage 2 had failures
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 64-01-PLAN.md -- 4-tenant PSS fixture, report category update, Stage 3 runner with 3-stage gating
+- [ ] 64-02-PLAN.md -- Gate-pass scenarios 62-64 (PSS-14 all Resolved, PSS-15 all Healthy, PSS-16 mixed pass)
+- [ ] 64-03-PLAN.md -- Gate-block scenarios 65-68 (PSS-17 all Unresolved, PSS-18/19 mixed block, PSS-20 not ready)
 
 ---
 
@@ -198,8 +203,8 @@ Plans:
 | 61. New E2E Suite Snapshot | v2.1 | 3/3 | Complete | 2026-03-19 |
 | 62. Single Tenant Evaluation States | v2.2 | 2/2 | Complete | 2026-03-20 |
 | 63. Two Tenant Independence | v2.2 | 2/2 | Complete | 2026-03-20 |
-| 64. Advance Gate Logic | v2.2 | 0/TBD | Not started | - |
+| 64. Advance Gate Logic | v2.2 | 0/3 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-20 after Phase 63 complete*
+*Last updated: 2026-03-20 after Phase 64 planned*
