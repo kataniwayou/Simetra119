@@ -99,7 +99,8 @@ fi
 # command is suppressed (not re-sent).
 # ===========================================================================
 
-log_info "PSS-06 Window 2: Watching for suppression within the 30s window..."
+log_info "PSS-06 Window 2: Stabilizing counters (15s) before suppression observation..."
+sleep 15
 
 BEFORE_SUPP_W2=$(snapshot_counter "snmp_command_suppressed_total" 'device_name="e2e-pss-tenant-supp"')
 BEFORE_SENT_W2=$(snapshot_counter "snmp_command_dispatched_total" 'device_name="e2e-pss-tenant-supp"')
