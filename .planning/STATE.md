@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 Phase: 64 of 64 (Advance Gate Logic — Complete)
 Plan: 03 of 03
 Status: Phase complete
-Last activity: 2026-03-20 — Completed 64-03-PLAN.md (PSS-17/18/19/20 gate-block scenarios)
+Last activity: 2026-03-20 — Completed quick task 082: MetricNames → PollMetricOptions refactor
 
 Progress: [██████████] v2.2 Phase 64 complete (all phases and plans done)
 
@@ -59,6 +59,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ### Blockers/Concerns
 
 None.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 082 | Refactor PollOptions.MetricNames to Metrics object wrapper | 2026-03-20 | 7205c05 | [082-metricnames-to-polloptions-object](./quick/082-metricnames-to-polloptions-object/) |
 
 ## Session Continuity
 
