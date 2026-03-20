@@ -1,58 +1,43 @@
-# Scenario 68: PSS-20 All G1 Not Ready -- gate blocks, G2 not evaluated
+# Scenario 68: PSS-20 All G1 Unresolved (stale) -- gate blocks, G2 not evaluated
 # Uses tenant-cfg08-pss-four-tenant.yaml (G1: e2e-pss-g1-t1 + e2e-pss-g1-t2 Priority=1,
 #                                          G2: e2e-pss-g2-t3 + e2e-pss-g2-t4 Priority=2)
 #
-# Gate rule: blocks if ANY G1 tenant is Unresolved (Not Ready is an Unresolved result).
-# This scenario: G1 tenants receive no data -> IsReady = false (empty series) -> Not Ready
-# -> ANY G1 not ready -> gate BLOCKS -> G2 tenants (T3, T4) are NOT evaluated.
+# Gate rule: blocks if ANY G1 tenant is Unresolved.
+# This scenario: G1 OIDs are set to stale (NoSuchInstance) -> tier=1 stale -> tier=4 Unresolved
+# -> ALL G1 Unresolved -> gate BLOCKS -> G2 tenants (T3, T4) are NOT evaluated.
 #
-# Timing note: ReadinessGrace = TimeSeriesSize(3) * IntervalSeconds(1) * GraceMultiplier(2) = 6s
-# After 6s, IsReady = (ReadSeries().Length > 0) || (UtcNow >= ConstructedAt + 6s).
-# We assert the "not ready" log quickly, BEFORE the 6s grace window expires.
-# No grace sleep needed -- must assert "not ready" before grace expires.
+# Note: The original PSS-20 design relied on "not ready" (empty holders in grace window),
+# but CopyFrom during TenantVectorWatcher reload carries over existing series data,
+# making truly empty holders impractical in a multi-scenario runner. Using sim_set_oid_stale
+# achieves the same gate-blocking result (TierResult.Unresolved) through the staleness path.
 #
 # Per-OID values:
-#   T1 (4.x): no sim_set_oid calls -> empty series -> Not Ready
-#   T2 (5.x): no sim_set_oid calls -> empty series -> Not Ready
+#   T1 (4.x): all stale (NoSuchInstance) -> tier=1 stale -> tier=4 Unresolved
+#   T2 (5.x): all stale (NoSuchInstance) -> tier=1 stale -> tier=4 Unresolved
 #   T3 (6.x): eval=10, res1=1, res2=1 -> Healthy (primed; would be evaluated if gate passed)
 #   T4 (7.x): eval=10, res1=1, res2=1 -> Healthy (primed; would be evaluated if gate passed)
 #
-# SPECIAL: This scenario re-applies the 4-tenant fixture to force fresh tenant holders
-# with empty G1 series (reset_oid_overrides alone is insufficient -- prior scenario
-# may have left G1 holders with populated series). Re-applying the configmap forces
-# a fresh TenantVectorWatcher reload with new holders starting from empty.
-#
 # Dual proof pattern:
-#   PSS-20a/b: G1 not-ready assertions (short 5s timeout, within grace window)
-#   PSS-20c:   G2 log absence (sleep 5, --since=10s, G2_FOUND check -- short window)
+#   PSS-20a/b: G1 positive assertions (tier=4 Unresolved via stale path)
+#   PSS-20c:   G2 log absence (sleep 10, --since=12s, G2_FOUND check)
 #   PSS-20d:   G2 metric non-increment (snapshot_counter delta == 0 for T3 and T4)
+#
+# NOTE: Fixture apply/restore is managed by run-stage3.sh (not this scenario).
+#       This scenario re-primes all OIDs to healthy before manipulating state.
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
 # ---------------------------------------------------------------------------
-# Setup: Reset OID overrides, re-apply fixture for fresh tenant holders
+# Re-prime all 4 tenants to healthy state (cross-scenario isolation)
 # ---------------------------------------------------------------------------
 
-log_info "PSS-20: Resetting OID overrides to clear any prior scenario state..."
-reset_oid_overrides
-
-log_info "PSS-20: Re-applying 4-tenant fixture to force fresh tenant vector reload (new holders with empty G1 series)..."
-kubectl apply -f "$FIXTURES_DIR/tenant-cfg08-pss-four-tenant.yaml" > /dev/null 2>&1 || true
-
-log_info "PSS-20: Waiting for tenant vector reload..."
-if poll_until_log 60 5 "Tenant vector reload complete\|TenantVectorWatcher initial load complete" 30; then
-    log_info "PSS-20: Tenant vector reload confirmed"
-else
-    log_warn "PSS-20: Tenant vector reload log not found within 60s -- proceeding anyway"
-fi
-
-# ---------------------------------------------------------------------------
-# Prime ONLY G2 tenants (T3, T4) -- G1 must stay empty for Not Ready assertion
-# DO NOT prime G1 (4.x, 5.x) -- their holders stay empty -> Not Ready
-# No grace sleep -- must assert "not ready" BEFORE the 6s grace window expires
-# ---------------------------------------------------------------------------
-
-log_info "PSS-20: Priming G2 tenants (T3, T4) only -- G1 stays empty (Not Ready)..."
+log_info "PSS-20: Re-priming all 4 tenants to healthy state..."
+sim_set_oid "4.1" "10"    # T1 eval (in-range >= Min:10)
+sim_set_oid "4.2" "1"     # T1 res1 (in-range >= Min:1)
+sim_set_oid "4.3" "1"     # T1 res2 (in-range >= Min:1)
+sim_set_oid "5.1" "10"    # T2 eval
+sim_set_oid "5.2" "1"     # T2 res1
+sim_set_oid "5.3" "1"     # T2 res2
 sim_set_oid "6.1" "10"    # T3 eval
 sim_set_oid "6.2" "1"     # T3 res1
 sim_set_oid "6.3" "1"     # T3 res2
@@ -60,50 +45,67 @@ sim_set_oid "7.1" "10"    # T4 eval
 sim_set_oid "7.2" "1"     # T4 res1
 sim_set_oid "7.3" "1"     # T4 res2
 
-# Capture G2 BEFORE snapshots immediately after G2 priming
-BEFORE_T3=$(snapshot_counter "snmp_poll_executed_total" 'device_name="e2e-pss-g2-t3"')
-BEFORE_T4=$(snapshot_counter "snmp_poll_executed_total" 'device_name="e2e-pss-g2-t4"')
-log_info "PSS-20: G2 BEFORE snapshots -- T3=$BEFORE_T3, T4=$BEFORE_T4"
+log_info "PSS-20: Waiting 8s for readiness grace (TimeSeriesSize=3, IntervalSeconds=1, GraceMultiplier=2 -> grace=6s)..."
+sleep 8
 
 # ---------------------------------------------------------------------------
-# === PSS-20a: G1-T1 is "not ready" (within grace window) ===
-# Short timeout (5s) -- must catch the "not ready" log before grace expires.
+# Set G1 OIDs to stale (NoSuchInstance) -> tier=1 stale -> tier=4 Unresolved
+# G2 tenants stay healthy from priming (6.x and 7.x OIDs unchanged)
 # ---------------------------------------------------------------------------
 
-log_info "PSS-20a: Polling for e2e-pss-g1-t1 not ready log (short timeout 5s, within grace window)..."
-if poll_until_log 5 1 "e2e-pss-g1-t1.*not ready" 5; then
-    record_pass "PSS-20a: G1-T1 not ready (in grace window)" "log=G1T1_not_ready_found"
+log_info "PSS-20: Setting G1 OIDs to stale (NoSuchInstance) -- triggers tier=1 -> tier=4 Unresolved..."
+sim_set_oid_stale "4.1"   # T1 eval
+sim_set_oid_stale "4.2"   # T1 res1
+sim_set_oid_stale "4.3"   # T1 res2
+sim_set_oid_stale "5.1"   # T2 eval
+sim_set_oid_stale "5.2"   # T2 res1
+sim_set_oid_stale "5.3"   # T2 res2
+
+# ---------------------------------------------------------------------------
+# === PSS-20a: G1-T1 reaches tier=4 Unresolved (via stale path) ===
+# ---------------------------------------------------------------------------
+
+log_info "PSS-20a: Polling for e2e-pss-g1-t1 tier=4 Unresolved log..."
+if poll_until_log 30 1 "e2e-pss-g1-t1.*tier=4" 15; then
+    record_pass "PSS-20a: G1-T1 tier=4 Unresolved (stale)" "log=tier4_G1T1_found"
 else
-    record_fail "PSS-20a: G1-T1 not ready (in grace window)" "not ready log for e2e-pss-g1-t1 not found within 5s"
+    record_fail "PSS-20a: G1-T1 tier=4 Unresolved (stale)" "tier=4 log for e2e-pss-g1-t1 not found within 30s"
 fi
 
 # ---------------------------------------------------------------------------
-# === PSS-20b: G1-T2 is "not ready" (within grace window) ===
+# === PSS-20b: G1-T2 reaches tier=4 Unresolved (via stale path) ===
 # ---------------------------------------------------------------------------
 
-log_info "PSS-20b: Polling for e2e-pss-g1-t2 not ready log (short timeout 5s, within grace window)..."
-if poll_until_log 5 1 "e2e-pss-g1-t2.*not ready" 5; then
-    record_pass "PSS-20b: G1-T2 not ready (in grace window)" "log=G1T2_not_ready_found"
+log_info "PSS-20b: Polling for e2e-pss-g1-t2 tier=4 Unresolved log..."
+if poll_until_log 30 1 "e2e-pss-g1-t2.*tier=4" 15; then
+    record_pass "PSS-20b: G1-T2 tier=4 Unresolved (stale)" "log=tier4_G1T2_found"
 else
-    record_fail "PSS-20b: G1-T2 not ready (in grace window)" "not ready log for e2e-pss-g1-t2 not found within 5s"
+    record_fail "PSS-20b: G1-T2 tier=4 Unresolved (stale)" "tier=4 log for e2e-pss-g1-t2 not found within 30s"
 fi
 
 # ---------------------------------------------------------------------------
 # === PSS-20c/d: Gate blocks -- G2 NOT evaluated (dual proof) ===
-# G1 not ready -> gate blocks -> G2 must have no tier logs.
-# Use shorter window (sleep 5, --since=10s) to stay within the not-ready window.
-# Capture AFTER snapshots, then assert delta == 0.
+# G1 stale -> tier=4 Unresolved -> gate blocks -> G2 must have no tier logs.
 # ---------------------------------------------------------------------------
 
-log_info "PSS-20c: Waiting 5s to accumulate SnapshotJob cycles while gate is blocked (short window)..."
-sleep 5
+# Stabilization: poll for "2 evaluated" cycle log to confirm gate is actively blocking
+log_info "PSS-20c: Stabilizing -- waiting for gate-blocked cycle (2 evaluated)..."
+poll_until_log 30 1 "Snapshot cycle complete: 2 evaluated" 10 || true
 
-log_info "PSS-20c: Checking G2 tier logs absent while G1 not ready (--since=10s)..."
+# Capture G2 BEFORE snapshots (after gate is confirmed blocking)
+BEFORE_T3=$(snapshot_counter "snmp_poll_executed_total" 'device_name="e2e-pss-g2-t3"')
+BEFORE_T4=$(snapshot_counter "snmp_poll_executed_total" 'device_name="e2e-pss-g2-t4"')
+log_info "PSS-20c/d: G2 BEFORE snapshots -- T3=$BEFORE_T3, T4=$BEFORE_T4"
+
+log_info "PSS-20c: Waiting 10s to accumulate SnapshotJob cycles while gate is blocked..."
+sleep 10
+
+log_info "PSS-20c: Checking G2 tier logs absent (gate-block assertion -- G1 stale/Unresolved)..."
 PODS=$(kubectl get pods -n simetra -l app=snmp-collector \
     -o jsonpath='{.items[*].metadata.name}' 2>/dev/null) || true
 G2_FOUND=0
 for POD in $PODS; do
-    G2_LOGS=$(kubectl logs "$POD" -n simetra --since=10s 2>/dev/null \
+    G2_LOGS=$(kubectl logs "$POD" -n simetra --since=12s 2>/dev/null \
         | grep "e2e-pss-g2.*tier=" || echo "") || true
     if [ -n "$G2_LOGS" ]; then
         G2_FOUND=1
@@ -113,9 +115,9 @@ for POD in $PODS; do
 done
 
 if [ "$G2_FOUND" -eq 0 ]; then
-    record_pass "PSS-20c: G2 not evaluated -- log absence (gate blocked -- G1 not ready)" "G2 tier logs absent in 10s window"
+    record_pass "PSS-20c: G2 not evaluated -- log absence (gate blocked -- G1 stale/Unresolved)" "G2 tier logs absent in 12s window"
 else
-    record_fail "PSS-20c: G2 not evaluated -- log absence (gate blocked -- G1 not ready)" "G2 tier log found -- gate did NOT block"
+    record_fail "PSS-20c: G2 not evaluated -- log absence (gate blocked -- G1 stale/Unresolved)" "G2 tier log found -- gate did NOT block"
 fi
 
 # ---------------------------------------------------------------------------

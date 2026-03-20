@@ -82,7 +82,12 @@ fi
 # Capture BEFORE snapshots, wait 10s, check log absence, then capture AFTER snapshots.
 # ---------------------------------------------------------------------------
 
-# Capture G2 BEFORE snapshots (right after G1 positive assertions confirmed)
+# Stabilization: poll for "2 evaluated" cycle log to confirm gate is actively blocking
+# before starting the observation window (avoids capturing G2 logs from transition period)
+log_info "PSS-19c: Stabilizing -- waiting for gate-blocked cycle (2 evaluated)..."
+poll_until_log 30 1 "Snapshot cycle complete: 2 evaluated" 10 || true
+
+# Capture G2 BEFORE snapshots (after gate is confirmed blocking)
 BEFORE_T3=$(snapshot_counter "snmp_poll_executed_total" 'device_name="e2e-pss-g2-t3"')
 BEFORE_T4=$(snapshot_counter "snmp_poll_executed_total" 'device_name="e2e-pss-g2-t4"')
 log_info "PSS-19c/d: G2 BEFORE snapshots -- T3=$BEFORE_T3, T4=$BEFORE_T4"
@@ -95,7 +100,7 @@ PODS=$(kubectl get pods -n simetra -l app=snmp-collector \
     -o jsonpath='{.items[*].metadata.name}' 2>/dev/null) || true
 G2_FOUND=0
 for POD in $PODS; do
-    G2_LOGS=$(kubectl logs "$POD" -n simetra --since=15s 2>/dev/null \
+    G2_LOGS=$(kubectl logs "$POD" -n simetra --since=12s 2>/dev/null \
         | grep "e2e-pss-g2.*tier=" || echo "") || true
     if [ -n "$G2_LOGS" ]; then
         G2_FOUND=1
