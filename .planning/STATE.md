@@ -9,17 +9,17 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 ## Current Position
 
-Phase: 62 of 64 (Single Tenant Evaluation States — COMPLETE)
-Plan: 02 of 02
-Status: Phase 62 verified, Phase 63 ready
-Last activity: 2026-03-20 — Quick-081 complete (command_sent -> command_dispatched rename)
+Phase: 63 of 64 (Two Tenant Independence — In Progress)
+Plan: 01 of 02
+Status: Phase 63 Plan 01 complete, Plan 02 ready
+Last activity: 2026-03-20 — 63-01 complete (2-tenant fixture, report extension, stage-gated runner)
 
-Progress: [███░░░░░░░] v2.2 Phase 62 complete (1/3)
+Progress: [████░░░░░░] v2.2 Phase 63 Plan 01 complete (2/3)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 133 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02 + 59-01 + 59-02 + 62-01 + 62-02 + quick-081)
+- Total plans completed: 134 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02 + 59-01 + 59-02 + 62-01 + 62-02 + quick-081 + 63-01)
 - Average duration: ~25 min
 - Total execution time: ~39.5 hours
 
@@ -40,7 +40,12 @@ Progress: [███░░░░░░░] v2.2 Phase 62 complete (1/3)
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-No v2.2 decisions yet.
+
+| Plan | Decision | Rationale |
+|------|----------|-----------|
+| 63-01 | run-stage2.sh is PSS-only (53-61), not full suite | Avoids non-PSS failures contaminating PSS stage gate; run-all.sh handles full suite |
+| 63-01 | Stage gate checks raw FAIL_COUNT (not delta) | Runner only sources PSS scenarios before gate -- no prior contamination possible |
+| 63-01 | Explicit scenario list in runner (not glob) | Clarity; prevents unexpected file pickup |
 
 ### Blockers/Concerns
 
@@ -48,6 +53,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20
-Stopped at: Completed quick-081 (align command counter metrics)
+Last session: 2026-03-20T11:16:38Z
+Stopped at: Completed 63-01 (2-tenant PSS fixture, report extension, run-stage2.sh)
 Resume file: None
