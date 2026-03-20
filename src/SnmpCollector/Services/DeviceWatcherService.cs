@@ -300,7 +300,7 @@ public sealed class DeviceWatcherService : BackgroundService
     }
 
     /// <summary>
-    /// Resolves MetricNames in each poll group to OIDs via <see cref="IOidMapService.ResolveToOid"/>.
+    /// Resolves Metrics in each poll group to OIDs via <see cref="IOidMapService.ResolveToOid"/>.
     /// Unresolvable names are logged as warnings and excluded. Resolution summary is always logged
     /// per poll group for reload diff visibility. Poll groups with zero resolved OIDs are excluded
     /// entirely (logged as Warning); devices with all-zero-OID poll groups are still registered for
@@ -320,23 +320,23 @@ public sealed class DeviceWatcherService : BackgroundService
             var resolvedOids = new List<string>();
             var unresolvedNames = new List<string>();
 
-            foreach (var name in poll.MetricNames)
+            foreach (var m in poll.Metrics)
             {
-                var oid = oidMapService.ResolveToOid(name);
+                var oid = oidMapService.ResolveToOid(m.MetricName);
                 if (oid is not null)
                     resolvedOids.Add(oid);
                 else
                 {
-                    unresolvedNames.Add(name);
+                    unresolvedNames.Add(m.MetricName);
                     logger.LogWarning(
                         "MetricName '{MetricName}' on device '{DeviceName}' poll {PollIndex} not found in OID map -- skipping",
-                        name, deviceName, index);
+                        m.MetricName, deviceName, index);
                 }
             }
 
             logger.LogInformation(
                 "Device '{DeviceName}' poll {PollIndex}: resolved {ResolvedCount}/{TotalCount} metric names{UnresolvedDetail}",
-                deviceName, index, resolvedOids.Count, poll.MetricNames.Count,
+                deviceName, index, resolvedOids.Count, poll.Metrics.Count,
                 unresolvedNames.Count > 0 ? $"; unresolved: [{string.Join(", ", unresolvedNames)}]" : "");
 
             if (resolvedOids.Count == 0)

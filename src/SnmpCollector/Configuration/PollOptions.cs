@@ -9,11 +9,11 @@ namespace SnmpCollector.Configuration;
 public sealed class PollOptions
 {
     /// <summary>
-    /// Metric names to poll in this group. Resolved to OIDs at device config load time
+    /// Metrics to poll in this group. Resolved to OIDs at device config load time
     /// via IOidMapService.ResolveToOid.
     /// Must contain at least one entry.
     /// </summary>
-    public List<string> MetricNames { get; set; } = [];
+    public List<PollMetricOptions> Metrics { get; set; } = [];
 
     /// <summary>
     /// Polling interval in seconds. Must be greater than zero.
