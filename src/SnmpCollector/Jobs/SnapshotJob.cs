@@ -57,10 +57,6 @@ public sealed class SnapshotJob : IJob
         _correlation.OperationCorrelationId = _correlation.CurrentCorrelationId;
         var jobKey = context.JobDetail.Key.Name;
         var sw = Stopwatch.StartNew();
-        var cycleId = Guid.NewGuid().ToString("N")[..8];
-        _logger.LogDebug(
-            "[SnapCycle:{CycleId}] Execute started at {UtcNow:O}",
-            cycleId, DateTimeOffset.UtcNow);
 
         try
         {
@@ -82,14 +78,6 @@ public sealed class SnapshotJob : IJob
                         Task.Run(() => results[index] = EvaluateTenant(tenant))));
                 }
 
-                // Per-tenant TierResult diagnostic log
-                for (var i = 0; i < results.Length; i++)
-                {
-                    _logger.LogDebug(
-                        "[SnapCycle:{CycleId}] Group={GroupPriority} Tenant={TenantId} TierResult={TierResult}",
-                        cycleId, group.Priority, group.Tenants[i].Id, results[i]);
-                }
-
                 // Aggregate counters for cycle summary
                 for (var i = 0; i < results.Length; i++)
                 {
@@ -108,11 +96,6 @@ public sealed class SnapshotJob : IJob
                     }
                 }
 
-                _logger.LogDebug(
-                    "[SnapCycle:{CycleId}] Group={GroupPriority} tenants={TenantCount} gate={GateDecision}",
-                    cycleId, group.Priority, group.Tenants.Count,
-                    shouldAdvance ? "PASS" : "BLOCK");
-
                 if (!shouldAdvance)
                     break;
             }
@@ -121,8 +104,8 @@ public sealed class SnapshotJob : IJob
             _pipelineMetrics.RecordSnapshotCycleDuration(sw.Elapsed.TotalMilliseconds);
 
             _logger.LogDebug(
-                "[SnapCycle:{CycleId}] Snapshot cycle complete: {TenantsEvaluated} evaluated, {Unresolved} unresolved, {DurationMs:F1}ms",
-                cycleId, totalEvaluated, totalUnresolved, sw.Elapsed.TotalMilliseconds);
+                "Snapshot cycle complete: {TenantsEvaluated} evaluated, {Unresolved} unresolved, {DurationMs:F1}ms",
+                totalEvaluated, totalUnresolved, sw.Elapsed.TotalMilliseconds);
         }
         catch (OperationCanceledException)
         {
