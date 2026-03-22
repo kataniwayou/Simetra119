@@ -106,7 +106,7 @@ See `.planning/milestones/v2.2-ROADMAP.md` for details.
 
 ---
 
-### 🚧 v2.3 Metric Validity & Correctness (In Progress)
+### v2.3 Metric Validity & Correctness (In Progress)
 
 **Milestone Goal:** Every pipeline counter, command counter, business metric value, metric label, and negative-path assertion is verified by E2E scenarios against the live SNMP simulator and Prometheus.
 
@@ -195,12 +195,14 @@ Plans:
 **Depends on**: Phase 70
 **Requirements**: MNP-01, MNP-02, MNP-03, MNP-04, MNP-05
 **Success Criteria** (what must be TRUE):
-  1. The heartbeat OID never appears as a `snmp_gauge` or `snmp_info` series in Prometheus.
+  1. The heartbeat OID never appears as `snmp_info` and never has `resolved_name="Unknown"` in `snmp_gauge` (heartbeat is Counter32, correctly mapped as "Heartbeat" by OidMapService seed).
   2. An OID that is not in oidmaps.json produces no `snmp_gauge` or `snmp_info` series in Prometheus.
-  3. A trap with a bad community string produces no increment to `snmp.trap.received`.
+  3. A trap with a bad community string produces no `snmp_gauge` or `snmp_info` business metrics.
   4. `snmp.trap.dropped` reads 0 after a complete normal E2E run.
-  5. Querying Prometheus on a follower pod's scrape target returns no `snmp_gauge` or `snmp_info` series.
-**Plans**: TBD
+  5. Follower pods export no `snmp_gauge` or `snmp_info` series (verified via `k8s_pod_name` Prometheus label).
+**Plans:** 1 plan
+Plans:
+- [ ] 71-01-PLAN.md — Scenarios 102-106: heartbeat snmp_info absence, unmapped OID absence, bad-community no business metric, trap.dropped stays zero, follower no snmp_gauge + report category
 
 ---
 
@@ -254,8 +256,8 @@ Plans:
 | 68. Command Counters | v2.3 | 4/4 | Complete | 2026-03-22 |
 | 69. Business Metric Value Correctness | v2.3 | 2/2 | Complete | 2026-03-22 |
 | 70. Label Correctness | v2.3 | 2/2 | Complete | 2026-03-22 |
-| 71. Negative Proofs | v2.3 | 0/? | Not started | - |
+| 71. Negative Proofs | v2.3 | 0/1 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-22 -- Phase 70 complete (2/2 plans, 8 scenarios 94-101, sort -V fix)*
+*Last updated: 2026-03-22 -- Phase 71 planned (1 plan, 5 scenarios 102-106, MNP-01 reframed for heartbeat reality)*
