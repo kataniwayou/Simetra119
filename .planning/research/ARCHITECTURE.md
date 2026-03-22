@@ -1,612 +1,370 @@
-# Architecture Patterns: HTTP-Controllable E2E Simulator
+# Architecture Research
 
-**Domain:** E2E tenant evaluation test infrastructure
-**Researched:** 2026-03-17
-**Scope:** HTTP scenario control endpoint + test script orchestration for tenant evaluation testing
-
----
-
-## Existing Architecture (Baseline)
-
-All claims in this section derive from direct reading of source files.
-
-### Simulator process (`simulators/e2e-sim/e2e_simulator.py`)
-
-The simulator is a single Python 3.12 process. Its runtime topology is:
-
-```
-Process
-  asyncio event loop  (driven by snmpEngine.open_dispatcher())
-    SNMP engine          UDP/161, driven by open_dispatcher() — blocking call
-    supervised_task: valid_trap_loop           (asyncio task)
-    supervised_task: bad_community_trap_loop   (asyncio task)
-```
-
-Key facts:
-- `snmpEngine.open_dispatcher()` is the last call in `main()`. It is a **blocking
-  call** that hands control to pysnmp's asyncio transport and does not return until
-  `snmpEngine.close_dispatcher()` is called via the shutdown signal handler.
-- OID values are fixed at module load time. Each of the 9 OIDs gets a
-  `DynamicInstance` whose `_get_value_fn` is a frozen closure:
-  `lambda v=static_value: v`. The SNMP engine calls `getValue()` on every
-  GET/GETNEXT/GETBULK request.
-- There is no existing HTTP server, no scenario concept, and no runtime-mutable
-  state other than the trap interval counters.
-- The only Python dependency is `pysnmp==7.1.22`.
-
-### OID surface served
-
-```
-Prefix: 1.3.6.1.4.1.47477.999
-  .1.1.0  gauge_test       Gauge32       42
-  .1.2.0  integer_test     Integer32     100
-  .1.3.0  counter32_test   Counter32     5000
-  .1.4.0  counter64_test   Counter64     1000000
-  .1.5.0  timeticks_test   TimeTicks     360000
-  .1.6.0  info_test        OctetString   "E2E-TEST-VALUE"
-  .1.7.0  ip_test          IpAddress     "10.0.0.1"
-  .2.1.0  unmapped_gauge   Gauge32       99         (not in oid map)
-  .2.2.0  unmapped_info    OctetString   "UNMAPPED"  (not in oid map)
-```
-
-All 7 mapped OIDs are registered in `simetra-oid-metric-map` ConfigMap
-(`e2e_gauge_test` ... `e2e_ip_test`) and the e2e device in `simetra-devices`
-ConfigMap uses community `Simetra.E2E-SIM`, polls at 10s, and requests all 7.
-
-### K8s deployment
-
-- Pod: `e2e-simulator`, namespace `simetra`
-- Exposes UDP/161 only. No TCP port exposed today.
-- Liveness and readiness probes: SNMP GET to `127.0.0.1:161` for OID `.999.1.1.0`.
-
-### Test runner (`tests/e2e/`)
-
-```
-run-all.sh
-  sources: lib/common.sh  lib/prometheus.sh  lib/kubectl.sh  lib/report.sh
-  for each scenarios/NN-*.sh:
-    source scenario   (runs in the same bash shell, sharing all variables)
-```
-
-All scenario scripts share a single shell session. Each script is responsible
-for its own setup and cleanup. Currently there is no HTTP contact with the
-simulator — all scenario variation is done by mutating K8s ConfigMaps.
-
-The runner has two live integration points:
-1. **Prometheus** — queried via `curl` to `localhost:9090` (port-forwarded by
-   `start_port_forward prometheus 9090 9090` in `run-all.sh`)
-2. **kubectl** — applied directly against the `simetra` namespace
+**Domain:** Tenant-level observability metrics — SNMP monitoring system
+**Researched:** 2026-03-22
+**Confidence:** HIGH (all claims derived from direct inspection of named source files)
 
 ---
 
-## Recommended Architecture for HTTP Control
+## System Overview
 
-### Core integration decision: aiohttp on the shared asyncio event loop
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          OTel MeterProvider                              │
+│                                                                          │
+│  AddMeter("SnmpCollector")          PipelineMetricService                │
+│  AddMeter("SnmpCollector.Leader")   SnmpMetricFactory                    │
+│  AddMeter("SnmpCollector.Tenant")   TenantMetricService  ← NEW           │
+│  AddMeter("System.Runtime")         (runtime instrumentation)            │
+│                                                                          │
+│  PeriodicExportingMetricReader (15s, Cumulative)                         │
+│       │                                                                  │
+│       ▼                                                                  │
+│  MetricRoleGatedExporter(gatedMeterName = "SnmpCollector.Leader")        │
+│  ┌───────────────────────────────────────────────────────────────────┐   │
+│  │  IsLeader = true  → forward full batch to OtlpMetricExporter      │   │
+│  │  IsLeader = false → drop "SnmpCollector.Leader" metrics only      │   │
+│  │                     pass all other meters through unchanged        │   │
+│  └───────────────────────────────────────────────────────────────────┘   │
+│       │                                                                  │
+│       ▼                                                                  │
+│  OtlpMetricExporter → Grafana Alloy → Prometheus remote_write → Grafana  │
+└─────────────────────────────────────────────────────────────────────────┘
 
-The blocking constraint is `snmpEngine.open_dispatcher()`. Any HTTP server
-must share the same asyncio event loop. Use **aiohttp.web** with `AppRunner`.
+Meter ownership and export behavior:
 
-Do not use:
-- Flask, FastAPI, or any WSGI/ASGI framework — they require a separate server
-  process or threads, adding synchronization complexity that is not needed here.
-- `asyncio.start_server` (raw streams) — aiohttp.web provides cleaner routing
-  and JSON handling with no additional conceptual overhead.
+  "SnmpCollector"         PipelineMetricService   ALL instances export
+  "SnmpCollector.Leader"  SnmpMetricFactory        leader-only export
+  "SnmpCollector.Tenant"  TenantMetricService       ALL instances export  ← NEW
+```
 
-Rationale for aiohttp:
-- aiohttp.web's `AppRunner` + `TCPSite.start()` are coroutines that integrate
-  with an existing event loop before handing it to pysnmp.
-- HTTP handlers and `DynamicInstance.getValue()` run on the same event loop
-  thread (asyncio is single-threaded). A plain Python module-level variable
-  for scenario state is safe — no locking needed because concurrent mutation
-  from the HTTP handler and concurrent reads from `getValue()` cannot interleave
-  within a single-threaded event loop.
-- `aiohttp` is the standard asyncio HTTP library in the Python ecosystem and
-  has no transitive dependency conflicts with pysnmp.
+### Component Responsibilities
+
+| Component | Responsibility | Export behavior |
+|-----------|---------------|-----------------|
+| `PipelineMetricService` | 14 pipeline counters + 1 histogram on `"SnmpCollector"` meter | All instances |
+| `SnmpMetricFactory` | `snmp_gauge`, `snmp_info` instruments on `"SnmpCollector.Leader"` meter | Leader only |
+| `MetricRoleGatedExporter` | Drops `"SnmpCollector.Leader"` metrics on followers; forwards all other meters | — |
+| `TenantMetricService` (NEW) | 8 tenant instruments on `"SnmpCollector.Tenant"` meter | All instances |
+| `SnapshotJob` | 4-tier evaluation loop; calls both `PipelineMetricService` and `TenantMetricService` | — |
+| `CommandWorkerService` | SET execution; calls `PipelineMetricService` for command outcomes; no tenant identity | — |
+| `TenantVectorRegistry` | Holds tenant config; exposes `TenantCount`; no metric knowledge | — |
 
 ---
 
-## Component Map: New vs Modified
+## MetricRoleGatedExporter: Bypass Strategy
 
-| Component | File | Status | Nature of Change |
-|-----------|------|--------|-----------------|
-| `SCENARIOS` dict | `e2e_simulator.py` | New (inline) | Module-level dict: name → per-OID values |
-| `_active_scenario` | `e2e_simulator.py` | New (inline) | Module-level string variable |
-| `DynamicInstance` callbacks | `e2e_simulator.py` | Modified | Closures read `_active_scenario` instead of frozen value |
-| HTTP server coroutine | `e2e_simulator.py` | New | `start_http_server()` using aiohttp AppRunner |
-| HTTP request handlers | `e2e_simulator.py` | New | `handle_set_scenario`, `handle_get_scenario`, `handle_reset_scenario` |
-| `requirements.txt` | `simulators/e2e-sim/requirements.txt` | Modified | Add `aiohttp` |
-| K8s Deployment (HTTP port) | `deploy/k8s/simulators/e2e-sim-deployment.yaml` | Modified | Add `containerPort: 8080` |
-| K8s Service (HTTP port) | `deploy/k8s/simulators/e2e-sim-deployment.yaml` | Modified | Add TCP/8080 port to Service |
-| `lib/simulator.sh` | `tests/e2e/lib/simulator.sh` | New | `curl` wrappers: `set_scenario`, `reset_scenario`, `get_active_scenario` |
-| `run-all.sh` | `tests/e2e/run-all.sh` | Modified | Source `simulator.sh`; add `start_port_forward e2e-simulator 8080 8080` |
-| Tenant fixture files | `tests/e2e/fixtures/tenant-eval-*.yaml` | New | Per-test-scenario `simetra-tenants` ConfigMaps |
-| Scenario scripts | `tests/e2e/scenarios/29-*.sh` and higher | New | Tenant evaluation test scenarios |
-| OID map ConfigMap | `deploy/k8s/snmp-collector/simetra-oid-metric-map.yaml` | Possibly extended | Only if new scenarios need OIDs beyond existing 7 mapped |
+### How the gate works today
+
+`MetricRoleGatedExporter` is constructed with one `_gatedMeterName = "SnmpCollector.Leader"`. On follower instances, the `Export` method iterates the batch and forwards only metrics whose `MeterName` does not equal `_gatedMeterName`. Every other meter — including any future meter — passes through unconditionally.
+
+This means the bypass for tenant metrics is already implemented. **No changes to `MetricRoleGatedExporter` are required.**
+
+### Recommended strategy: third meter name in `TelemetryConstants`
+
+Add one constant:
+
+```csharp
+// TelemetryConstants.cs
+/// <summary>
+/// Tenant observability meter — exported by ALL instances.
+/// Used by TenantMetricService for per-tenant vector instruments.
+/// </summary>
+public const string TenantMeterName = "SnmpCollector.Tenant";
+```
+
+Register the meter in `ServiceCollectionExtensions.AddSnmpTelemetry`:
+
+```csharp
+metrics.AddMeter(TelemetryConstants.MeterName);        // existing
+metrics.AddMeter(TelemetryConstants.LeaderMeterName);  // existing
+metrics.AddMeter(TelemetryConstants.TenantMeterName);  // ADD
+```
+
+No other wiring changes. The gated exporter already passes any meter that is not `"SnmpCollector.Leader"`.
+
+### Why the other options are rejected
+
+| Option | Verdict | Reason |
+|--------|---------|--------|
+| Add tenant instruments to `PipelineMetricService` | Reject | Technically works (same all-instances meter) but conflates pipeline telemetry with tenant evaluation telemetry. The boundary between these two concerns is already respected in the existing design (`PipelineMetricService` vs `SnmpMetricFactory`). A new service maintains that pattern. |
+| Metric-name prefix filtering in `MetricRoleGatedExporter` | Reject | The exporter is meter-name scoped by design. Adding name-prefix logic couples it to naming conventions and would silently break if names drifted. Meter-based filtering is the OTel-intended discrimination axis. |
+| Separate OTel `MeterProvider` | Reject | Two providers means two OTLP exporters, two `PeriodicExportingMetricReader` instances, and duplicated resource-attribute configuration. Significant overhead for a problem the existing gated exporter already solves with zero changes. |
 
 ---
 
-## Scenario Registry Data Model
+## New Component: TenantMetricService
 
-The registry lives in `e2e_simulator.py` as a plain Python dict. Every scenario
-defines the return value for all 7 mapped OIDs. Unmapped OIDs are excluded
-because they are intentionally constant for the "unmapped OID" test
-(scenario 15).
+### Location
 
-```python
-# Conceptual structure — lives in e2e_simulator.py
+`src/SnmpCollector/Telemetry/TenantMetricService.cs`
 
-SCENARIOS = {
-    "default": {
-        "gauge_test":     42,
-        "integer_test":   100,
-        "counter32_test": 5000,
-        "counter64_test": 1_000_000,
-        "timeticks_test": 360_000,
-        "info_test":      "E2E-TEST-VALUE",
-        "ip_test":        "10.0.0.1",
-    },
-    # Tenant evaluation scenarios define values that exercise specific
-    # threshold / routing paths. Example:
-    "tenant-eval-threshold-breach": {
-        "gauge_test":     0,       # triggers configured threshold
-        "integer_test":   100,
-        "counter32_test": 5000,
-        "counter64_test": 1_000_000,
-        "timeticks_test": 360_000,
-        "info_test":      "E2E-TEST-VALUE",
-        "ip_test":        "10.0.0.1",
-    },
-}
+Mirrors `PipelineMetricService` exactly in structure: one `Meter` created via `IMeterFactory`, all instruments created in the constructor, public named increment/record methods.
 
-_active_scenario = "default"
+### DI registration
+
+In `ServiceCollectionExtensions.AddSnmpPipeline`, alongside `PipelineMetricService`:
+
+```csharp
+services.AddSingleton<TenantMetricService>();
 ```
 
-Design rules:
-1. Every scenario must define all 7 mapped OID labels. A missing key causes a
-   `KeyError` in `getValue()` at poll time, which the SNMP engine converts to a
-   `noSuchObject` response — indistinguishable from a genuine OID resolution
-   failure in collector logs.
-2. The `"default"` scenario must reproduce the current static values exactly so
-   existing scenarios 01–28 pass without modification.
-3. Scenario definitions are code, not config. Adding a new scenario requires a
-   Dockerfile rebuild and image push, which is intentional — test scenarios are
-   versioned with the code.
+### Instrument definitions
 
-### DynamicInstance callback rewiring
+| ID | OTel name (proposed) | Type | Tags |
+|----|----------------------|------|------|
+| TMET-01 | `snmp.tenant.evaluations` | `Counter<long>` | `tenant_id`, `result` |
+| TMET-02 | `snmp.tenant.stale` | `Counter<long>` | `tenant_id` |
+| TMET-03 | `snmp.tenant.resolved` | `Counter<long>` | `tenant_id` |
+| TMET-04 | `snmp.tenant.commands_dispatched` | `Counter<long>` | `tenant_id` |
+| TMET-05 | `snmp.tenant.commands_suppressed` | `Counter<long>` | `tenant_id` |
+| TMET-06 | `snmp.tenant.commands_failed` | `Counter<long>` | `tenant_id` |
+| TMET-07 | `snmp.tenant.priority_group_advance_blocks` | `Counter<long>` | `priority` |
+| TMET-08 | `snmp.tenant.active` | `Gauge<long>` | _(none)_ |
+| TMET-09 | `snmp.tenant.cycle_duration_ms` | `Histogram<double>` | `tenant_id` |
 
-Currently frozen:
-
-```python
-DynamicInstance(oid_tuple, (0,), syntax_cls(), lambda v=static_value: v)
-```
-
-Replace with a factory function that reads the active scenario at call time:
-
-```python
-def make_getter(label):
-    def getter():
-        return SCENARIOS[_active_scenario][label]
-    return getter
-
-# In the OID registration loop:
-symbols[f"instance_{safe_label}"] = DynamicInstance(
-    oid_tuple, (0,), syntax_cls(), make_getter(label)
-)
-```
-
-`make_getter` captures `label` (a string) by value at registration time. At GET
-time, `getter()` reads `_active_scenario` from the module's global namespace and
-looks up the current scenario dict. This is safe because the asyncio event loop
-is single-threaded: `getter()` (called by the SNMP engine) and the HTTP handler
-(which writes `_active_scenario`) cannot execute concurrently.
+Tag notes:
+- `result` on TMET-01 takes values: `"resolved"`, `"healthy"`, `"unresolved"` — matching `TierResult` enum members.
+- TMET-08 records a point-in-time count of configured tenants; it reads `ITenantVectorRegistry.TenantCount` once per cycle from `SnapshotJob.Execute`.
+- TMET-09 requires per-tenant timing inside `EvaluateTenant` (see below).
 
 ---
 
-## HTTP Server Integration
+## Increment Locations: Where Each Instrument Is Called
 
-### Startup sequence
+The following maps directly to the current `SnapshotJob` control flow. All instrument calls are additions; no existing calls are moved or removed.
 
-The critical constraint: `open_dispatcher()` blocks the event loop. The HTTP
-server must be started and bound before that call.
-
-```python
-async def start_http_server():
-    app = aiohttp.web.Application()
-    app.router.add_get("/scenario", handle_get_scenario)
-    app.router.add_post("/scenario", handle_set_scenario)
-    app.router.add_post("/scenario/reset", handle_reset_scenario)
-    runner = aiohttp.web.AppRunner(app)
-    await runner.setup()
-    site = aiohttp.web.TCPSite(runner, "0.0.0.0", 8080)
-    await site.start()
-    log.info("HTTP control server listening on 0.0.0.0:8080")
-
-def main():
-    loop = asyncio.get_event_loop()
-
-    # Start HTTP before handing loop to pysnmp
-    loop.run_until_complete(start_http_server())
-
-    tasks = [
-        loop.create_task(supervised_task("valid_trap_loop", valid_trap_loop)),
-        loop.create_task(supervised_task("bad_community_trap_loop", bad_community_trap_loop)),
-    ]
-
-    # ... signal handler setup unchanged ...
-
-    snmpEngine.open_dispatcher()   # blocking; HTTP server is live inside this loop
+```
+SnapshotJob.Execute
+│
+├── [start of cycle]
+│       TMET-08: tenantMetrics.SetActive(_registry.TenantCount)
+│
+├── foreach group in _registry.Groups
+│     │
+│     ├── EvaluateTenant(tenant)   [called per tenant, possibly parallel]
+│     │     │
+│     │     ├── Pre-tier: not ready → return Unresolved
+│     │     │       [no new TMET increment — grace window, not an evaluation event]
+│     │     │
+│     │     ├── Tier 1: HasStaleness = true
+│     │     │       TMET-02: IncrementStale(tenant.Id)
+│     │     │       [falls through to Tier 4]
+│     │     │
+│     │     ├── Tier 2: AreAllResolvedViolated = true → return Resolved
+│     │     │       TMET-03: IncrementResolved(tenant.Id)
+│     │     │       TMET-01: IncrementEvaluation(tenant.Id, "resolved")
+│     │     │       TMET-09: RecordCycleDuration(tenant.Id, elapsed)
+│     │     │
+│     │     ├── Tier 3: AreAllEvaluateViolated = false → return Healthy
+│     │     │       TMET-01: IncrementEvaluation(tenant.Id, "healthy")
+│     │     │       TMET-09: RecordCycleDuration(tenant.Id, elapsed)
+│     │     │
+│     │     └── Tier 4: command dispatch → return Unresolved
+│     │           ├── per cmd: suppressed
+│     │           │       TMET-05: IncrementCommandsSuppressed(tenant.Id)
+│     │           ├── per cmd: TryWrite = true
+│     │           │       TMET-04: IncrementCommandsDispatched(tenant.Id)
+│     │           └── per cmd: TryWrite = false (channel full)
+│     │                   TMET-06: IncrementCommandsFailed(tenant.Id)
+│     │           TMET-01: IncrementEvaluation(tenant.Id, "unresolved")
+│     │           TMET-09: RecordCycleDuration(tenant.Id, elapsed)
+│     │
+│     └── advance gate: shouldAdvance = false → break
+│             TMET-07: IncrementAdvanceBlocks(group.Priority)
+│
+└── [existing] _pipelineMetrics.RecordSnapshotCycleDuration(sw.Elapsed.TotalMilliseconds)
 ```
 
-### HTTP API
+### Per-tenant timing (TMET-09)
 
-All endpoints return JSON. Authentication is not needed — the API is
-cluster-internal and only reachable via port-forward during tests.
+`EvaluateTenant` is currently synchronous with no timing. Add a `Stopwatch` at the top of `EvaluateTenant` and record before each `return`. Because `EvaluateTenant` has 4 return points (`Unresolved` from pre-tier, `Resolved` from Tier 2, `Healthy` from Tier 3, `Unresolved` from Tier 4), each must record before returning. The pre-tier `Unresolved` (grace window) should also record — it still consumes evaluation time.
 
-**GET /scenario**
+`TenantMetricService` must be passed into `EvaluateTenant` (currently `internal`) either as a parameter or as a constructor-injected field. Using it as an injected field (same pattern as `_pipelineMetrics`) is the cleanest approach: add `TenantMetricService _tenantMetrics` to `SnapshotJob` constructor alongside `PipelineMetricService _pipelineMetrics`.
+
+### CommandWorkerService: no changes
+
+`CommandWorkerService` operates on individual `CommandRequest` items after dequeuing. At that point, `tenant_id` is not available — the channel carries only `(Ip, Port, CommandName, Value, ValueType)`. The TMET-04 through TMET-06 tenant-scoped command counters are incremented in `SnapshotJob.EvaluateTenant` at the dispatch decision site, where `tenant.Id` is in scope.
+
+The existing `PipelineMetricService` counters in `CommandWorkerService` (`IncrementCommandFailed` with `device.Name` tag) remain unchanged and complementary: they cover SET execution failures at the worker level with a `device_name` tag.
+
+---
+
+## Integration Points Summary
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `src/SnmpCollector/Telemetry/TelemetryConstants.cs` | Add `TenantMeterName = "SnmpCollector.Tenant"` |
+| `src/SnmpCollector/Extensions/ServiceCollectionExtensions.cs` | `AddMeter(TelemetryConstants.TenantMeterName)` in `AddSnmpTelemetry`; `AddSingleton<TenantMetricService>()` in `AddSnmpPipeline` |
+| `src/SnmpCollector/Jobs/SnapshotJob.cs` | Inject `TenantMetricService`; add per-tier increment calls; add per-tenant stopwatch |
+
+### Files created
+
+| File | Description |
+|------|-------------|
+| `src/SnmpCollector/Telemetry/TenantMetricService.cs` | New singleton; 8 instruments on `"SnmpCollector.Tenant"` meter |
+
+### Files not modified
+
+| File | Reason unchanged |
+|------|-----------------|
+| `MetricRoleGatedExporter.cs` | Bypass already works; no code change needed |
+| `PipelineMetricService.cs` | No new instruments added here |
+| `CommandWorkerService.cs` | No tenant identity available; existing counters unchanged |
+| `TenantVectorRegistry.cs` | Read-only from metric perspective; `TenantCount` already public |
+| `SnmpMetricFactory.cs` | Leader-gated instruments unaffected |
+
+---
+
+## Data Flow: SnapshotJob Evaluation to Grafana
+
 ```
-Response 200: {"active": "default", "available": ["default", "tenant-eval-..."]}
-```
-
-**POST /scenario**
-```
-Request:  {"name": "tenant-eval-threshold-breach"}
-Response 200: {"active": "tenant-eval-threshold-breach"}
-Response 404: {"error": "unknown scenario", "available": [...]}
-```
-
-**POST /scenario/reset**
-```
-Response 200: {"active": "default"}
-```
-
-`reset` is a dedicated endpoint rather than `POST /scenario {"name":"default"}`
-to allow test cleanup scripts to reset without knowing the scenario name and
-without risk of a typo in the default name constant.
-
-### Kubernetes changes
-
-Add a TCP port to both the Deployment and the Service in
-`deploy/k8s/simulators/e2e-sim-deployment.yaml`:
-
-```yaml
-# In container spec:
-ports:
-- containerPort: 161
-  name: snmp
-  protocol: UDP
-- containerPort: 8080
-  name: http
-  protocol: TCP
-
-# In Service spec:
-ports:
-- name: snmp
-  port: 161
-  targetPort: snmp
-  protocol: UDP
-- name: http
-  port: 8080
-  targetPort: http
-  protocol: TCP
-```
-
-The test runner reaches this via port-forward (same pattern as Prometheus):
-
-```bash
-start_port_forward e2e-simulator 8080 8080
+Quartz 15s trigger
+    │
+    ▼
+SnapshotJob.Execute
+    │  iterates ITenantVectorRegistry.Groups (priority-sorted)
+    │  calls EvaluateTenant(tenant) per tenant
+    │
+    ├── TierResult outcome known per tenant
+    │       TenantMetricService.Increment*(tenant.Id)   ← TMET-01..07, 09
+    │       TenantMetricService.SetActive(TenantCount)  ← TMET-08
+    │
+    ▼
+OTel SDK accumulates Cumulative counters in-process
+    │
+    ▼
+PeriodicExportingMetricReader (15s interval, Cumulative temporality)
+    │
+    ▼
+MetricRoleGatedExporter
+    │  IsLeader=true  → full batch to OtlpMetricExporter
+    │  IsLeader=false → "SnmpCollector.Leader" dropped
+    │                   "SnmpCollector.Tenant" forwarded (all instances)
+    │
+    ▼
+OtlpMetricExporter → Grafana Alloy
+    │
+    ▼
+Prometheus (scrape from Alloy or remote_write)
+    │
+    ▼
+Grafana table panel
+  Example queries:
+    sum by (tenant_id) (rate(snmp_tenant_evaluations_total{result="unresolved"}[1m]))
+    sum by (tenant_id) (snmp_tenant_commands_dispatched_total)
+    snmp_tenant_active
 ```
 
 ---
 
-## Test Script Orchestration Flow
+## Architectural Patterns
 
-### New library: `tests/e2e/lib/simulator.sh`
+### Pattern 1: Meter-per-export-category
 
-Follows the same sourced-library pattern as `kubectl.sh` and `prometheus.sh`.
-The runner sources it once; all scenario scripts call its functions directly.
+**What:** Each logical observability category (pipeline health, business/leader-gated, tenant evaluation) owns a distinct `Meter` with a name constant in `TelemetryConstants`. `MetricRoleGatedExporter` gates by meter name.
 
-```bash
-SIM_URL="http://localhost:8080"
+**When to use:** Whenever instruments in the same service have different export requirements (all-instances vs leader-only).
 
-set_scenario() {
-    local name="$1"
-    curl -sf -X POST "${SIM_URL}/scenario" \
-        -H "Content-Type: application/json" \
-        -d "{\"name\": \"${name}\"}" > /dev/null || {
-        log_error "Failed to set scenario: ${name}"
-        return 1
-    }
-    log_info "Simulator scenario: ${name}"
-}
+**Trade-offs:** Requires one `AddMeter` call per category at startup. Names must be documented centrally to stay consistent. The upside is that gating logic is decoupled from individual metric names and never needs to know about new instruments.
 
-reset_scenario() {
-    curl -sf -X POST "${SIM_URL}/scenario/reset" > /dev/null || true
-    log_info "Simulator scenario reset to default"
-}
+### Pattern 2: Singleton metric service per meter
 
-get_active_scenario() {
-    curl -sf "${SIM_URL}/scenario" | jq -r '.active'
-}
-```
+**What:** Each `Meter` is wrapped in a singleton service. Instruments are created once in the constructor via `IMeterFactory`. Public methods name the increment/record operations explicitly.
 
-### Five-phase scenario pattern
+**When to use:** Always, for this codebase. Prevents duplicate instrument registration (OTel throws on duplicate names within the same meter), makes the metric surface explicit and mockable, and provides a single injection point.
 
-New tenant evaluation scenario scripts follow this structure:
+**Trade-offs:** One DI registration and constructor call per meter. Negligible cost.
 
-```
-Phase 1: SETUP
-  - Snapshot ConfigMaps that will be mutated
-    (simetra-tenants, possibly simetra-devices)
-  - Apply test-specific fixture YAML
-  - Call set_scenario for the simulator value set under test
-  - If tenant config change requires deployment restart:
-      kubectl rollout restart deployment/snmp-collector -n simetra
-      kubectl rollout status deployment/snmp-collector -n simetra --timeout=90s
+### Pattern 3: Increment at the decision site, not the execution site
 
-Phase 2: STABILIZE
-  - SnapshotJob fires every 15s by default.
-    Wait at minimum 2 × 15s = 30s for the evaluation cycle to run.
-  - Prometheus scrapes every 15s; add ~15s for metric propagation.
-  - Recommended minimum: poll_until for any detectable signal, plus
-    sleep 15 for the scrape propagation gap.
-  - Total practical wait without restart: ~45s
-  - Total practical wait with deployment restart: ~90s rollout + 45s
+**What:** Tenant-scoped command counters (TMET-04 through TMET-06) are incremented in `SnapshotJob.EvaluateTenant` where `tenant.Id` is known, not in `CommandWorkerService` where the dequeued `CommandRequest` carries no tenant identity.
 
-Phase 3: ASSERT
-  - Query Prometheus for expected metric values and labels
-  - Check collector pod logs for expected log lines
-  - Use existing assert_delta_gt / assert_exists helpers from common.sh
+**When to use:** Whenever a metric tag value is only available at the decision site, not at the downstream executor.
 
-Phase 4: TEARDOWN
-  - reset_scenario (HTTP POST /scenario/reset)
-  - restore_configmap for each mutated ConfigMap
-  - kubectl rollout restart if the deployment was touched
-  - These run unconditionally (not gated on pass/fail)
-
-Phase 5: VERIFY CLEAN (optional but recommended)
-  - Confirm Prometheus metrics return to pre-test baseline
-  - Prevents scenario state from contaminating subsequent scenarios
-  - Skip if the cost of waiting is not justified by isolation risk
-```
-
-### Cleanup on early exit
-
-The sourced-script pattern means an exit from a scenario script exits the entire
-runner (`set -euo pipefail` propagates). The simulator is left in whatever
-scenario was active. Add a `trap` at the top of every scenario that calls
-`set_scenario`:
-
-```bash
-# At top of scenario file
-_sim_cleanup() { reset_scenario || true; }
-trap _sim_cleanup EXIT
-```
-
-This fires on both normal completion and early exit. ConfigMap restore is
-handled by the same pattern already used in scenarios 18–28 (they save on entry
-and restore on exit or failure).
-
-### Concrete example: single-tenant evaluation scenario
-
-```bash
-# 29-tenant-eval-single.sh
-
-FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
-
-# Cleanup trap
-_cleanup() {
-    reset_scenario || true
-    if [ -f "$FIXTURES_DIR/.original-tenants-configmap.yaml" ]; then
-        restore_configmap "$FIXTURES_DIR/.original-tenants-configmap.yaml" || true
-    fi
-}
-trap _cleanup EXIT
-
-# Phase 1: Setup
-save_configmap "simetra-tenants" "simetra" \
-    "$FIXTURES_DIR/.original-tenants-configmap.yaml"
-kubectl apply -f "$FIXTURES_DIR/tenant-eval-single.yaml"
-set_scenario "tenant-eval-threshold-breach"
-
-# Phase 2: Stabilize — 2 SnapshotJob cycles + scrape window
-log_info "Waiting 45s for SnapshotJob cycles and Prometheus scrape..."
-sleep 45
-
-# Phase 3: Assert
-METRIC="snmp_tenantvector_routed_total"
-BEFORE=$(snapshot_counter "$METRIC" "")
-poll_until 60 5 "$METRIC" "" "$BEFORE" || true
-AFTER=$(query_counter "$METRIC" "")
-DELTA=$((AFTER - BEFORE))
-assert_delta_gt "$DELTA" 0 \
-    "Routing counter increments with single tenant" \
-    "$(get_evidence "$METRIC" "")"
-```
+**Trade-offs:** The pipeline-level `PipelineMetricService.IncrementCommandDispatched(device.Name)` and the tenant-level TMET-04 overlap in what they count. This is intentional: one carries `device_name`, the other carries `tenant_id`. Both cardinality dimensions are useful for different query shapes.
 
 ---
 
-## Config Artifact Organization
+## Anti-Patterns
 
-### Tenant fixture files
+### Anti-Pattern 1: Adding tenant instruments to PipelineMetricService
 
-New fixtures use a `tenant-eval-` prefix to distinguish them from the existing
-device/OID mutation fixtures:
+**What people do:** Append TMET-01 through TMET-09 methods to `PipelineMetricService` because it uses the already all-instances `"SnmpCollector"` meter.
 
-```
-tests/e2e/fixtures/
-  tenant-eval-single.yaml        # 1 tenant, minimal metric set
-  tenant-eval-two-priority.yaml  # 2 tenants at different priorities
-  tenant-eval-high-count.yaml    # 3+ tenants, stress test for group ordering
-```
+**Why it's wrong:** `PipelineMetricService` owns pipeline-health telemetry (event counts, trap counts, poll counts). Tenant evaluation outcomes are a different concern. Mixing them creates a service with two unrelated responsibilities and makes future extraction harder. The existing design already enforces this boundary (pipeline metrics in one service, business metrics in another).
 
-Each fixture is a **complete** `simetra-tenants` ConfigMap with all required
-fields. Do not use partial overrides — the watcher replaces the full tenant list
-on any ConfigMap change.
+**Do this instead:** New `TenantMetricService` on `"SnmpCollector.Tenant"` meter. Same pattern, clean boundary.
 
-The tenants in these fixtures must reference device IPs and metric names that
-are resolvable with the existing `simetra-devices` and `simetra-oid-metric-map`
-ConfigMaps, or provide matching fixture overrides for those too.
+### Anti-Pattern 2: Metric-name prefix filtering in MetricRoleGatedExporter
 
-### Simulator scenario definitions
+**What people do:** Add `!metric.Name.StartsWith("snmp_tenant_")` inside the follower filter to pass tenant metrics through.
 
-Scenarios are defined inline in `e2e_simulator.py`, not in external files. This
-is deliberate: test scenarios are code. The `SCENARIOS` dict is versioned in git
-alongside the simulator source. Adding a new scenario requires a rebuild of the
-simulator image and a pod restart (same as any other simulator code change).
+**Why it's wrong:** The exporter's logic is entirely meter-name-based — the OTel-intended axis. Switching to metric-name-based filtering couples the exporter to naming conventions, bypasses the `TelemetryConstants` contract, and silently breaks if naming drifts. It also requires touching a working, tested component.
 
-### OID map extensions
+**Do this instead:** New meter name. Zero changes to `MetricRoleGatedExporter`.
 
-If new tenant evaluation scenarios require OID values beyond the existing 7
-mapped e2e OIDs, extend `simetra-oid-metric-map.yaml` with additional entries
-under `1.3.6.1.4.1.47477.999.1.x.0` and add corresponding entries to the
-device's poll list in `simetra-devices.yaml`. The simulator's `SCENARIOS` dict
-must define values for those labels in every scenario entry.
+### Anti-Pattern 3: Recording per-tenant duration from outside EvaluateTenant
 
-Do not add OIDs outside the `.999.` subtree to e2e scenarios — the e2e device
-community string `Simetra.E2E-SIM` routes only to that device, and mixing
-with real NPB/OBP OIDs under `.100.` or `.10.` would pollute existing tests.
+**What people do:** Wrap the `Task.WhenAll` group call with a stopwatch and associate elapsed time with each tenant.
+
+**Why it's wrong:** `Task.WhenAll` measures wall-clock time for the entire group, not per-tenant CPU time. Tenants within a group run in parallel; one slow tenant inflates the duration attributed to all others. The `tenant_id` tag on TMET-09 becomes meaningless.
+
+**Do this instead:** Stopwatch inside `EvaluateTenant`, recorded before each return point.
+
+### Anti-Pattern 4: Deriving tenant-scoped command counters from CommandWorkerService
+
+**What people do:** Add a `tenant_id` field to `CommandRequest` and increment TMET-04/05/06 inside `CommandWorkerService.ExecuteCommandAsync`.
+
+**Why it's wrong:** The suppression decision and channel-full detection already happen in `SnapshotJob.EvaluateTenant`. Threading `tenant_id` through `CommandRequest` propagates a concern across a boundary for metrics only. The channel is intentionally a value-type transport with no tenant metadata. The dispatch decision site already has everything needed.
+
+**Do this instead:** Increment TMET-04/05/06 in `EvaluateTenant` at each dispatch decision.
 
 ---
 
-## Suggested Build Order
+## Build Order
 
-Dependencies are explicit. Each step must be complete and validated before the
-next begins to avoid blocked work.
+Each step has an explicit dependency on the previous one.
 
-**Step 1 — Simulator: Add scenario state and callback rewiring**
+**Step 1: `TelemetryConstants`**
 
-Modify `simulators/e2e-sim/e2e_simulator.py`:
-1. Define `SCENARIOS` dict with a `"default"` entry that matches current static
-   values exactly.
-2. Add `_active_scenario = "default"` module variable.
-3. Replace frozen `lambda v=static_value: v` closures with `make_getter(label)`
-   factory function.
+Add `TenantMeterName = "SnmpCollector.Tenant"`. No dependencies. No behavioral change.
 
-This step is zero-risk: the behavior is identical unless `_active_scenario` is
-changed. Verify by running scenario 11 (`gauge-labels-e2e-sim`) — it asserts
-exact OID values that must still be `42`, `100`, etc.
+**Step 2: `TenantMetricService`**
 
-**Step 2 — Simulator: Add HTTP server**
+New file. Depends on `TelemetryConstants.TenantMeterName` and `IMeterFactory`. No callers yet. Constructor creates all 8 instruments. Can be verified standalone with a unit test (construct, verify no exceptions thrown).
 
-Continue in `e2e_simulator.py`:
-4. Add `aiohttp` to `requirements.txt`.
-5. Implement `start_http_server()` coroutine.
-6. Implement the three HTTP handlers.
-7. Call `loop.run_until_complete(start_http_server())` in `main()` before
-   `open_dispatcher()`.
+**Step 3: `ServiceCollectionExtensions`**
 
-Modify `deploy/k8s/simulators/e2e-sim-deployment.yaml`:
-8. Add `containerPort: 8080` and TCP/8080 Service port.
+Two one-line additions: `AddMeter` in `AddSnmpTelemetry`, `AddSingleton<TenantMetricService>()` in `AddSnmpPipeline`. Depends on steps 1 and 2. No behavioral change until `SnapshotJob` calls the methods.
 
-Rebuild the image, push, and restart the e2e-simulator pod. Verify:
-- `curl -sf http://localhost:8080/scenario` (via port-forward) returns
-  `{"active": "default", ...}`.
-- Scenario 11 still passes (default OID values unchanged).
+**Step 4: `SnapshotJob`**
 
-**Step 3 — Test library: `simulator.sh`**
+Inject `TenantMetricService` as constructor parameter (alongside existing `PipelineMetricService`). Add increment calls at each tier exit. Add `Stopwatch` inside `EvaluateTenant`. Depends on step 2. This is the only step with observable behavioral change (new metrics begin flowing).
 
-New file: `tests/e2e/lib/simulator.sh`
-9. Implement `set_scenario`, `reset_scenario`, `get_active_scenario`.
+**Step 5: Tests**
 
-Modify `tests/e2e/run-all.sh`:
-10. Add `source "$SCRIPT_DIR/lib/simulator.sh"` after existing lib sources.
-11. Add `start_port_forward e2e-simulator 8080 8080` after the Prometheus
-    port-forward.
-
-Verify: `run-all.sh` still passes all 28 existing scenarios unchanged.
-
-**Step 4 — Tenant fixtures**
-
-New YAML files in `tests/e2e/fixtures/`:
-12. Create one fixture per distinct tenant topology needed by planned scenarios.
-13. Verify each fixture parses correctly with `kubectl apply --dry-run=client`.
-
-This step can be done in parallel with Step 3.
-
-**Step 5 — Scenario scripts**
-
-New files `tests/e2e/scenarios/29-*.sh` and higher:
-14. One script per E2E scenario.
-15. Each script follows the five-phase pattern (setup, stabilize, assert,
-    teardown, verify-clean).
-16. Each script that calls `set_scenario` includes a `trap _cleanup EXIT`.
-
-Run `tests/e2e/run-all.sh` end-to-end after each new scenario is added to
-catch interference with existing scenarios before accumulation.
-
----
-
-## Anti-Patterns to Avoid
-
-### Threading the HTTP server
-
-Do not use `threading.Thread` to run Flask or any WSGI framework alongside
-pysnmp. The SNMP engine's asyncio event loop is not thread-safe. Writing
-`_active_scenario` from a Flask thread while `getValue()` is executing in the
-asyncio thread would be a data race (even though CPython's GIL reduces the
-practical risk, relying on GIL behavior for correctness is fragile). Use
-aiohttp.web on the existing event loop.
-
-### Using `sleep` as the sole wait mechanism
-
-`sleep 30` passes today because the cluster is healthy and timings are
-predictable. A slow node or a rescheduled pod can make a fixed sleep produce
-false failures. Use `poll_until` for any condition that Prometheus can signal,
-and reserve `sleep` for the scrape propagation gap (which has no queryable
-signal).
-
-### Leaving the simulator in a non-default scenario on test failure
-
-If a scenario script exits early via `set -e`, the simulator retains the active
-scenario. The next scenario runs against wrong OID values and fails for an
-unrelated reason. Always add `trap _cleanup EXIT` in every scenario that calls
-`set_scenario`.
-
-### Partial scenario definitions
-
-If `SCENARIOS["my-scenario"]` omits a key, `make_getter(label)()` raises
-`KeyError`. The SNMP engine converts this to `noSuchObject` in the GET response.
-The collector logs an OID resolution failure with no indication that the
-simulator is misconfigured. Always define all 7 mapped OID labels in every
-scenario entry.
-
-### Modifying ConfigMaps without saving first
-
-Scenarios 18–27 all follow the `save_configmap` / `restore_configmap` pattern.
-Tenant evaluation scenarios must do the same for `simetra-tenants`. A missing
-restore leaves all subsequent scenarios running against the test tenant topology,
-which changes routing behavior and invalidates all later counter assertions.
-
-### Defining test OIDs outside the `.999.` subtree
-
-The e2e device community string `Simetra.E2E-SIM` and its device entry in
-`simetra-devices` point to `e2e-simulator.simetra.svc.cluster.local`. Using
-OIDs from the NPB (`.100.`) or OBP (`.10.`) prefixes in e2e simulator scenarios
-would require that the e2e device poll those OIDs — contaminating the poll log
-and metric export for all NPB/OBP assertions.
+Unit tests for `TenantMetricService` (no exceptions on construction). Unit tests for `SnapshotJob` verifying increment calls via mock `TenantMetricService`. Integration test confirming the metric names appear in the OTel export.
 
 ---
 
 ## Sources
 
-All findings are from direct inspection of:
-- `simulators/e2e-sim/e2e_simulator.py` (full file read)
-- `simulators/e2e-sim/requirements.txt`
-- `simulators/e2e-sim/Dockerfile`
-- `deploy/k8s/simulators/e2e-sim-deployment.yaml`
-- `deploy/k8s/snmp-collector/simetra-devices.yaml`
-- `deploy/k8s/snmp-collector/simetra-tenants.yaml`
-- `deploy/k8s/snmp-collector/simetra-oid-metric-map.yaml`
-- `tests/e2e/run-all.sh`
-- `tests/e2e/lib/common.sh`, `kubectl.sh`, `prometheus.sh`
-- `tests/e2e/scenarios/01-poll-executed.sh`, `11-gauge-labels-e2e-sim.sh`,
-  `28-tenantvector-routing.sh`
+All claims derive from direct inspection of:
+- `src/SnmpCollector/Telemetry/PipelineMetricService.cs` — existing instrument list, meter name, increment method signatures
+- `src/SnmpCollector/Telemetry/MetricRoleGatedExporter.cs` — `_gatedMeterName` field, follower filter logic (line 56: `metric.MeterName` comparison)
+- `src/SnmpCollector/Telemetry/TelemetryConstants.cs` — `MeterName` and `LeaderMeterName` constants
+- `src/SnmpCollector/Telemetry/SnmpMetricFactory.cs` — leader-gated meter pattern, `IMeterFactory` usage
+- `src/SnmpCollector/Extensions/ServiceCollectionExtensions.cs` — `AddSnmpTelemetry` meter registration, `AddSnmpPipeline` singleton registrations
+- `src/SnmpCollector/Jobs/SnapshotJob.cs` — 4-tier evaluation flow, all return sites, existing `_pipelineMetrics` call sites, constructor parameter list
+- `src/SnmpCollector/Services/CommandWorkerService.cs` — `CommandRequest` structure, no `tenant_id` in channel items, existing metric call sites
+- `src/SnmpCollector/Pipeline/TenantVectorRegistry.cs` — `TenantCount` property, `Groups` iteration
+- `src/SnmpCollector/Pipeline/MetricSlotHolder.cs` — data model confirming no tenant identity on individual holders
 
 Confidence: HIGH for all integration points — derived from code, not inference.
 
-The aiohttp `AppRunner` + `TCPSite` pattern for integrating with an existing
-event loop is the documented approach in the aiohttp library. The specific
-aiohttp version should be determined at implementation time by checking current
-aiohttp release compatibility with Python 3.12 — the API has been stable since
-aiohttp 3.x and no breaking changes are expected, but the version pin in
-`requirements.txt` should be explicit.
+---
+*Architecture research for: tenant vector metrics integration — SnmpCollector*
+*Researched: 2026-03-22*

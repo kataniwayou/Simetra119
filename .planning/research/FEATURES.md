@@ -1,660 +1,267 @@
-# Feature Landscape: E2E Test Scenarios for SnapshotJob 4-Tier Tenant Evaluation
+# Feature Research
 
-**Domain:** SNMP monitoring agent — E2E test infrastructure for closed-loop tenant evaluation
-**Researched:** 2026-03-17
-**Confidence:** HIGH — derived from full source analysis of SnapshotJob, MetricSlotHolder,
-PriorityGroup, SuppressionCache, PipelineMetricService, existing E2E simulator, and all 28
-existing E2E test scenarios.
+**Domain:** Tenant-level observability metrics — real-time per-tenant state monitoring in a
+multi-tier SNMP evaluation system
+**Researched:** 2026-03-22
+**Confidence:** HIGH — derived from full source reads of SnapshotJob.cs, PipelineMetricService.cs,
+simetra-business.json, simetra-operations.json, PROJECT.md (v2.4 milestone requirements), and the
+existing label taxonomy established across v1.0 through v2.3.
 
 ---
 
 ## Scope
 
-This research defines test scenarios for E2E validation of the already-built SnapshotJob 4-tier
-evaluation flow. The system under test is running in a K8s cluster. Validation is via pod logs
-(structured Debug/Information lines emitted by SnapshotJob) and Prometheus metrics
-(`snmp.command.sent`, `snmp.command.failed`, `snmp.command.suppressed`, plus existing counters).
+This research defines the feature landscape for v2.4: adding 6 counters, 1 gauge, and 1 histogram
+that expose per-tenant internal evaluation state, plus a new Grafana dashboard table showing
+real-time per-tenant status across all pods.
 
-The E2E simulator (`simulators/e2e-sim/e2e_simulator.py`) needs an HTTP control endpoint added
-so test scripts can switch OID values between scenarios without restarting the pod. All
-scenarios share a single tenant config applied as a K8s ConfigMap.
+The system under test is a 3-replica K8s deployment where SnapshotJob evaluates every tenant every
+15 seconds through a 4-tier logic tree. The existing `snmp.command.*` counters are keyed by
+`device_name`, which is the SNMP device name — not the tenant. Operators cannot currently answer
+"which tenants are stale right now?" or "which tenant triggered commands last cycle?" without
+grepping pod logs. The v2.4 instruments close that gap.
 
-**What already exists (infrastructure the new tests depend on):**
-- SnapshotJob with full 4-tier evaluation, advance gate, liveness stamping
-- MetricSlotHolder with cyclic time series (`TimeSeriesSize`), atomic `ReadSeries()`
-- PriorityGroup traversal: parallel within group, sequential across groups
-- CommandWorkerService executing SNMP SET via `Messenger.SetAsync`
-- SuppressionCache keyed by `{tenantId}:{Ip}:{Port}:{CommandName}`
-- PipelineMetricService with `snmp.command.sent/failed/suppressed` and
-  `snmp.snapshot.cycle_duration_ms`
-- E2E simulator with 9 static OIDs, no HTTP control endpoint yet
-- 28 existing E2E bash scenarios using Prometheus polling and log grep patterns
+**What already exists (features the new milestone depends on):**
 
-**What is new for this milestone:**
-- HTTP control endpoint on the E2E simulator (switch scenario state via `POST /scenario/{name}`)
-- Tenant ConfigMap definitions for each test scenario
-- Bash E2E scenario scripts (following patterns in `tests/e2e/scenarios/`)
-- Prometheus and log assertion helpers as needed
+- 14 pipeline counters on `snmp.*` instruments with `device_name` label — all leader-gated
+- `snmp.snapshot.cycle_duration_ms` histogram (no labels) — per-job total duration
+- `MetricRoleGatedExporter` — gates `snmp_gauge`/`snmp_info` to leader only; pipeline counters are
+  NOT gated (all instances export)
+- Operations dashboard: time-series panels for all pipeline counters; command panels at row 5
+- Business dashboard: instant-query table with Host/Pod/Device cascading filter, Trend (delta arrow)
+  column, PromQL copyable-query column
+- `TelemetryConstants.MeterName` — the single meter name all existing instruments share
+- `PipelineMetricService` — singleton that owns all instruments; inject as single point
 
 ---
 
-## Table Stakes
-
-Scenarios that MUST pass for the milestone to be complete. Each scenario corresponds to an
-observable, unambiguous contract in the 4-tier evaluation code.
-
----
-
-### TS-SC-01: Single Tenant — Healthy (No Violations)
-
-**What this validates:** Tier 3 evaluate gate correctly returns `Healthy` when all Evaluate
-holders are in range. No commands issued.
-
-**Pre-conditions:**
-- One tenant, one Evaluate metric with `Threshold: { Min: 0, Max: 100 }`, one Resolved metric
-  with `Threshold: { Min: 0, Max: 1 }` (link-up check pattern)
-- Simulator serving Evaluate OID value `50` (in range), Resolved OID value `1` (in range)
-- Suppression window: 60s
-
-**Trigger:** Wait two full SnapshotJob cycles (at least 30s for a 15s interval job)
-
-**Expected tier flow:**
-1. Tier 1: all holders fresh → pass
-2. Tier 2: Resolved value `1` in `[0,1]` → NOT violated → not all Resolved violated → continue
-3. Tier 3: Evaluate value `50` in `[0,100]` → NOT violated → not all Evaluate violated → Healthy
-4. Tier 4: not reached
-
-**Log assertions (pod logs):**
-- Must contain: `tier=3 — not all evaluate metrics violated, no action` for this tenant
-- Must NOT contain: `tier=4` for this tenant
-
-**Metric assertions:**
-- `snmp_command_sent_total` delta = 0 over test window
-- `snmp_command_suppressed_total` delta = 0 over test window
-
-**Edge cases:**
-- `TimeSeriesSize: 1` (default) — single sample; result must be identical whether series has one
-  or multiple samples
-- Boundary value: Evaluate value exactly at `Max=100` — still not violated (strict inequality)
-
----
-
-### TS-SC-02: Single Tenant — Evaluate Violated (All Samples)
-
-**What this validates:** Tier 3 fires correctly, Tier 4 enqueues command and counter increments.
-
-**Pre-conditions:**
-- One tenant, one Evaluate metric with `Threshold: { Max: 95 }` (CPU headroom pattern),
-  `TimeSeriesSize: 1`, one Resolved metric with `Threshold: { Min: 0, Max: 1 }`
-- Simulator serving Evaluate OID value `97` (above Max=95 → violated), Resolved value `1`
-- Suppression window: 300s (long, so suppression does not interfere with first-fire assertion)
-
-**Trigger:** Wait for first SnapshotJob cycle to complete after OID value is set
-
-**Expected tier flow:**
-1. Tier 1: fresh → pass
-2. Tier 2: Resolved value `1` in `[0,1]` → not violated → continue
-3. Tier 3: Evaluate value `97` > Max `95` → violated → all Evaluate violated → proceed to Tier 4
-4. Tier 4: command not in suppression cache → enqueue → `snmp.command.sent` incremented
-
-**Log assertions:**
-- Must contain: `tier=4 — commands enqueued, count=1` for this tenant
-- Must contain: `tier=2 — resolved not all violated, proceeding to evaluate check`
-- Must NOT contain: `tier=1 stale`
-
-**Metric assertions:**
-- `snmp_command_sent_total` delta >= 1 within 60s of scenario start
-- `snmp_command_failed_total` delta = 0
-- `snmp_command_suppressed_total` delta = 0
-
-**Edge cases:**
-- Boundary: Evaluate value exactly at `Max=95` — NOT violated (strict inequality `>` not `>=`)
-  so command must NOT fire when simulator serves `95`
-
----
-
-### TS-SC-03: Single Tenant — Resolved Gate Fires (ConfirmedBad, No Command)
-
-**What this validates:** Tier 2 resolved gate correctly stops evaluation when ALL Resolved holders
-are violated. No command must be issued even though device is clearly in bad state.
-
-**Pre-conditions:**
-- One tenant, one Resolved metric with `Threshold: { Min: 1 }` (link-up: value 0 = link down =
-  all bad), one Evaluate metric with `Threshold: { Max: 95 }`
-- Simulator serving Resolved OID value `0` (below Min=1 → violated), Evaluate OID value `97`
-- Suppression window: 300s
-
-**Trigger:** Wait for first SnapshotJob cycle
-
-**Expected tier flow:**
-1. Tier 1: fresh → pass
-2. Tier 2: Resolved value `0` < Min `1` → violated. All Resolved violated → ConfirmedBad. Stop.
-3. Tier 3: NOT reached
-4. Tier 4: NOT reached
-
-**Log assertions:**
-- Must contain: `tier=2 — all resolved violated, device confirmed bad, no commands`
-- Must NOT contain: `tier=4`
-- Must NOT contain: `tier=3`
-
-**Metric assertions:**
-- `snmp_command_sent_total` delta = 0
-- `snmp_command_suppressed_total` delta = 0
-
-**Edge cases:**
-- Resolved exactly at Min=1 (boundary): NOT violated, so Tier 2 does not block, Tier 3 fires
-
----
-
-### TS-SC-04: Single Tenant — Suppression Window Prevents Repeat Command
-
-**What this validates:** After a command fires, the suppression cache prevents it from firing
-again within the window. After the window expires, it fires again.
-
-**Pre-conditions:**
-- Same as TS-SC-02 (evaluate violated, healthy Resolved)
-- Suppression window: 30s (short window, detectable in test)
-
-**Trigger phase A:** Allow one command to fire (verify `snmp.command.sent` delta >= 1)
-
-**Trigger phase B:** Immediately check next 2 cycles while Evaluate is still violated
-
-**Expected behavior phase B:**
-- `snmp.command.suppressed` increments on subsequent cycles within the window
-- `snmp.command.sent` does NOT increment a second time during the window
-
-**Trigger phase C:** Wait for suppression window to expire (>30s). Evaluate still violated.
-
-**Expected behavior phase C:**
-- `snmp.command.sent` increments again (second fire)
-
-**Log assertions phase B:**
-- Must contain: `Command {CommandName} suppressed for tenant {TenantId}`
-
-**Metric assertions phase B:**
-- `snmp_command_suppressed_total` delta >= 1 while in window
-- `snmp_command_sent_total` no additional increment during window
-
----
-
-### TS-SC-05: Single Tenant — Staleness Detection Blocks All Tiers
-
-**What this validates:** Tier 1 staleness check correctly blocks evaluation when any holder
-has data older than `IntervalSeconds * GraceMultiplier`. No command, no threshold check.
-
-**Pre-conditions:**
-- One tenant, one Evaluate metric with `IntervalSeconds: 10`, `GraceMultiplier: 2.0`
-  (staleness threshold = 20s), `Threshold: { Max: 95 }`
-- Simulator serving Evaluate OID value `97` (violated)
-- SnapshotJob running normally (Evaluate is violated, command fires)
-
-**Trigger:** Stop the poll job for this device (or change device config so no new polls arrive)
-and wait 25s (beyond the 20s staleness threshold)
-
-**Expected behavior after staleness onset:**
-1. Tier 1: holder age > 20s → Stale → stop evaluation
-2. Tier 3: NOT reached
-3. Tier 4: NOT reached — no new commands even though Evaluate value is still violated
-
-**Log assertions:**
-- Must contain: `tier=1 stale — skipping threshold checks` for this tenant
-
-**Metric assertions:**
-- `snmp_command_sent_total` stops incrementing after staleness onset
-- Counter plateau confirms no new commands issued
-
-**Staleness recovery:**
-- Resume polling. Within one poll cycle + one SnapshotJob cycle, staleness clears.
-- Must contain: `tier=2 — resolved not all violated` (back to normal flow)
-- `snmp_command_sent_total` resumes incrementing
-
-**Implementation constraint:** This scenario requires the E2E simulator to stop serving responses
-for a specific OID (or the poll job to be paused). The HTTP control endpoint on the simulator
-should support a `stale` scenario that stops responding, with a timeout.
-
----
-
-### TS-SC-06: Two Tenants Same Priority — Independent Evaluation
-
-**What this validates:** Within a single priority group, two tenants are evaluated in parallel
-and their results are independent. Healthy tenant does not suppress Commanded tenant.
-
-**Pre-conditions:**
-- Two tenants at Priority=1 (same group):
-  - Tenant A: Evaluate OID in range (healthy) — no command expected
-  - Tenant B: Evaluate OID violated — command expected
-- Both tenants have Resolved metrics in range
-
-**Trigger:** Wait for one SnapshotJob cycle
-
-**Expected behavior:**
-- Tenant A: Tier 3 — Healthy, no command
-- Tenant B: Tier 3/4 — Commanded, command enqueued
-
-**Advance gate check:**
-- After this group: Tenant A = Healthy (NOT Commanded), so advance gate fails
-- No lower-priority group should be evaluated in this cycle
-
-**Log assertions:**
-- Tenant A: `tier=3 — not all evaluate metrics violated, no action`
-- Tenant B: `tier=4 — commands enqueued, count=1`
-- If a priority 2 group exists: must NOT see any tier logs for that group in this cycle
-
-**Metric assertions:**
-- `snmp_command_sent_total` delta = 1 (only Tenant B fires)
-
----
-
-### TS-SC-07: Two Tenants Different Priority — Advance Gate
-
-**What this validates:** Sequential priority group traversal. Lower-priority group is only
-evaluated when ALL tenants in higher-priority group are Commanded.
-
-**Sub-scenario A — Higher priority Healthy, lower priority NOT evaluated:**
-
-**Pre-conditions:**
-- Tenant A at Priority=1: Evaluate OID in range (Healthy)
-- Tenant B at Priority=2: Evaluate OID violated (would command)
-
-**Expected behavior:**
-- Group 1 evaluated: Tenant A = Healthy → advance gate fails → Group 2 NOT evaluated
-- Tenant B does NOT receive commands
-
-**Log assertions:**
-- Tenant A: `tier=3` Healthy log
-- Tenant B: NO tier logs (group never evaluated)
-
-**Metric assertions:**
-- `snmp_command_sent_total` delta = 0
-
-**Sub-scenario B — Higher priority Commanded, lower priority evaluated:**
-
-**Pre-conditions (switch simulator):**
-- Tenant A at Priority=1: Evaluate OID now violated (will command)
-- Tenant B at Priority=2: Evaluate OID violated (will command)
-
-**Expected behavior:**
-- Group 1: Tenant A = Commanded → advance gate passes
-- Group 2: Tenant B = Commanded → command enqueued
-
-**Log assertions:**
-- Tenant A: `tier=4 — commands enqueued`
-- Tenant B: `tier=4 — commands enqueued`
-
-**Metric assertions:**
-- `snmp_command_sent_total` delta = 2 (both tenants)
-
----
-
-### TS-SC-08: Time Series All-Samples Check — Not All Samples Violated
-
-**What this validates:** With `TimeSeriesSize > 1`, evaluation requires ALL samples in the
-series to be violated, not just the most recent. One in-range sample prevents Tier 4 fire.
-
-**Pre-conditions:**
-- One tenant, Evaluate metric with `TimeSeriesSize: 3`, `Threshold: { Max: 95 }`
-- Simulator serving OID value `97` (violated for 3 full poll cycles — fills series with all-violated)
-- Suppression window: 300s
-
-**Trigger phase A:** Verify command fires (all 3 samples in series are violated)
-- `snmp_command_sent_total` delta >= 1
-
-**Trigger phase B:** Change simulator OID to `50` (in range). Wait 2 poll cycles.
-- Series now contains: `[97, 97, 50]` (most recent in-range)
-
-**Expected behavior phase B:**
-- Tier 3: series has one in-range sample → NOT all violated → Healthy
-- No command fires
-
-**Log assertions phase B:**
-- `tier=3 — not all evaluate metrics violated, no action`
-
-**Trigger phase C:** Change simulator OID back to `97`. Wait 3 poll cycles.
-- Series now refilled: `[97, 97, 97]`
-
-**Expected behavior phase C:**
-- Tier 3: all 3 samples violated → proceed to Tier 4
-- Command fires again (after suppression window if still active)
-
-**Why this matters:** The all-samples check prevents transient single-cycle violations from
-triggering commands. It is the primary false-positive suppression mechanism at the series level.
-
----
-
-### TS-SC-09: Aggregate Metric as Evaluate Holder
-
-**What this validates:** Aggregated metrics (sum/mean computed from multiple OIDs, written to a
-synthetic MetricSlot via `SnmpSource.Synthetic`) work correctly as Evaluate holders in the
-4-tier flow. Aggregated metrics are not polled directly — their slot is written by the
-`AggregatedMetricDefinition` pipeline after raw OIDs are resolved.
-
-**Pre-conditions:**
-- One tenant, Evaluate metric referencing an aggregated metric name (e.g., `npb_total_rx_octets`
-  — sum of per-port octets), `Threshold: { Max: 1000000 }`
-- Simulator serving constituent OID values that produce an aggregate above the threshold
-
-**Expected behavior:**
-- Aggregate slot is written by the pipeline as `SnmpSource.Synthetic`
-- Tier 1 staleness: `Synthetic` source is NOT excluded from staleness check (unlike `Trap`).
-  If constituent polls stop, the aggregate goes stale within `IntervalSeconds * GraceMultiplier`.
-- Tier 3: aggregate value > Max → violated → command fires
-
-**Log assertions:**
-- Normal Tier 3/4 logs, no special aggregate-specific lines expected
-
-**Note:** This scenario confirms that the `Trap` staleness exclusion does not incorrectly apply
-to `Synthetic` sources. The staleness code explicitly checks `Source == SnmpSource.Trap` only.
-
----
-
-## Differentiators
-
-Features that strengthen test coverage without being strictly required for correctness.
-
----
-
-### D-SC-01: Cycle Duration Histogram Observable
-
-**What:** Verify `snmp.snapshot.cycle_duration_ms` histogram is populated and reports sane values.
-
-**Why:** The cycle duration is the only observable measure of SnapshotJob performance. If the job
-is unexpectedly slow (blocking on I/O), this metric surfaces it.
-
-**Validation:** Query Prometheus `histogram_quantile(0.99, snmp_snapshot_cycle_duration_ms_bucket)`
-and assert value < 1000ms (1 second) for a cluster with 2 tenants. This is a sanity check, not
-a strict SLA assertion.
-
----
-
-### D-SC-02: Multiple Commands per Tenant (Partial Suppression)
-
-**What:** One tenant with two commands. First command is in suppression window (from a prior
-cycle), second command is not. Verify partial suppression: one fires, one is suppressed.
-
-**Pre-conditions:** Manually set up suppression state by running one cycle, then verify that on
-the next cycle within the suppression window only the second (not-yet-suppressed) command fires.
-
-**Why differentiator:** This is covered by unit test `Execute_MultipleCommands_EachCheckedIndependently`
-in `SnapshotJobTests.cs`. The E2E scenario adds confidence that the suppression key composition
-(`{tenantId}:{Ip}:{Port}:{CommandName}`) is correctly formed end-to-end.
-
----
-
-### D-SC-03: Liveness Not Broken by Evaluation Errors
-
-**What:** Verify that the pod's liveness health check remains healthy across multiple SnapshotJob
-cycles, including cycles where tenants are stale or ConfirmedBad.
-
-**Why:** SnapshotJob stamps liveness in its `finally` block regardless of evaluation outcome.
-If an exception escapes the evaluation loop without being caught, liveness would go stale and
-K8s would restart the pod. This scenario confirms the `try/catch/finally` structure is intact.
-
-**Validation:** Pod stays Running (not CrashLoopBackOff) after running scenarios 01-08 in
-sequence. Liveness endpoint returns `200 OK` throughout.
-
----
-
-## Anti-Features
-
-Things to explicitly NOT include in the E2E test suite.
-
----
-
-### AF-SC-01: Timing-Based Assertions Without Retry Loops
-
-**What:** Do NOT assert that a command fires within a fixed `sleep N` seconds.
-
-**Why Avoid:** The existing 28 E2E scenarios all use `poll_until` retry loops (checking
-Prometheus every 5s for up to 90s). Sleeping a fixed duration (e.g., `sleep 20`) makes tests
-brittle on slow clusters and unnecessarily slow on fast ones.
-
-**What to Do Instead:** Use the `poll_until` helper from `tests/e2e/lib/common.sh` for all
-counter-based assertions. For log assertions, use a polling grep loop with a timeout.
-
----
-
-### AF-SC-02: SNMP SET Side-Effect Verification on Real Device
-
-**What:** Do NOT attempt to verify that the SNMP SET command was actually applied on the
-simulator (i.e., do not poll the OID after SET to confirm the value changed).
-
-**Why Avoid:** The simulator's OID values are controlled by the HTTP control endpoint (test
-pre-conditions), not by incoming SET commands. Verifying SET application would require the
-simulator to act on SET requests, coupling test assertions to simulator behavior rather than
-to the system under test (the SnapshotJob evaluation and dispatch path).
-
-**What to Do Instead:** Validate via `snmp.command.sent` counter increment and `tier=4` log
-presence. This confirms the full pipeline through command dispatch. The SNMP SET execution path
-is separately validated by the existing `CommandWorkerService` unit tests.
-
----
-
-### AF-SC-03: Testing With Production Tenant Config
-
-**What:** Do NOT run E2E snapshot scenarios using the production `simetra-tenants.yaml` tenant
-config (which references `obp-simulator` and `npb-simulator`).
-
-**Why Avoid:** The production config includes thresholds tuned for specific simulator-generated
-values (e.g., `obp_mean_power_L1` with `Threshold: { Min: -10, Max: 3 }`). Changing simulator
-values to exercise tier transitions would disrupt other E2E scenarios running in the same cluster.
-
-**What to Do Instead:** Deploy a separate `simetra-tenants-e2e-snapshot.yaml` ConfigMap that
-references E2E simulator OIDs exclusively. Apply and restore around each snapshot scenario using
-the same save/restore pattern as scenario 28.
-
----
-
-### AF-SC-04: Validating ConfirmedBad Cascade (Multi-Group When Group-1 Is ConfirmedBad)
-
-**What:** Do NOT build a test scenario where a ConfirmedBad tenant in Group 1 is expected to
-allow cascade to Group 2.
-
-**Why Avoid:** The advance gate blocks on `Stale OR Commanded`. `ConfirmedBad` is NOT `Commanded`,
-so a group with any `ConfirmedBad` result does NOT advance to Group 2. This is correct behavior
-and is covered by the unit tests. The E2E test for priority groups (TS-SC-07) is sufficient;
-adding a ConfirmedBad cascade E2E adds complexity and misrepresents the intended semantics.
-
-**What to Do Instead:** Document this as a code comment in TS-SC-07. The unit test
-`Execute_CommandNotSuppressed_TryWriteWithCorrectFields` and related tests cover ConfirmedBad
-return paths exhaustively.
+## Feature Landscape
+
+### Table Stakes (Users Expect These)
+
+Features that an operator administering a multi-tenant SNMP monitoring system will expect. Missing
+any of these leaves the tenant dashboard half-functional or misleading.
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| tenant_state gauge (enum) | Without a state indicator the table has no single answer to "is this tenant OK?" — operators need one column that tells them NotReady/Healthy/Resolved/Unresolved at a glance | LOW | One gauge per tenantId+priority+pod combination. Values: NotReady=0, Healthy=1, Resolved=2, Unresolved=3. Set inside EvaluateTenant after TierResult is known. |
+| tenantId + priority labels | Tenant metrics without the tenant identifier and its priority are unqueryable — every filter and every dashboard join requires these two labels | LOW | Labels: `tenantId`, `priority`. No device_name (tenant metrics are not device metrics). Consistent with PROJECT.md v2.4 requirement. |
+| All-instances export (not leader-gated) | Each pod runs SnapshotJob independently. Each pod evaluates every tenant. If only the leader exports, 2 of 3 pod perspectives are invisible. Operators need per-pod tenant state to diagnose split-brain or follower evaluation divergence | MEDIUM | Requires separate Meter (or same meter but NOT passed through MetricRoleGatedExporter). The snmp_gauge/snmp_info instruments are leader-gated because duplicate export causes double-counting. Tenant counters are per-pod-per-cycle totals, so all-instances export is correct and does not double-count. |
+| tenant_tier1_stale counter | Operators need to know which tenants are staleness-blocked this cycle and how many holders are stale. Without this they must infer staleness from the absence of command activity. | LOW | Increment by count of stale holders (not 1 per tenant). Incremented only when HasStaleness returns true. Reflects tier-1 path. |
+| tenant_tier2_resolved counter | Operators need visibility into the resolved-gate outcome — how many resolved-role metrics are confirmed bad. Resolved state means "device is known-bad, no commands". Without this metric, Resolved state looks identical to Healthy from the outside. | LOW | Increment by count of resolved holders checked. Incremented when AreAllResolvedViolated returns true (tier-2 stop path). |
+| tenant_tier3_evaluate counter | Operators need to see how many evaluate-role metrics are currently violated per tenant per cycle. This is the decision signal for command dispatch. | LOW | Increment by count of violated evaluate holders. Incremented on tier-3 path (both Healthy exit and Unresolved/proceed-to-tier-4 exit). |
+| tenant_command_dispatched counter | Already exists as snmp.command.dispatched with device_name label. The new tenant-labeled version enables per-tenant command dispatch tracking without joining on device names. This is the tenant-centric view of what the command counters already show. | LOW | Increment by 1 per command successfully enqueued in tier-4. Labels: tenantId, priority. Parallels existing IncrementCommandDispatched. |
+| tenant_command_suppressed counter | Same rationale as dispatched — operators need to see which tenants are suppression-heavy. High suppression on a specific tenant indicates the evaluation fires faster than the device can be corrected, which is a configuration signal. | LOW | Increment by 1 per suppressed command. Parallels existing IncrementCommandSuppressed. |
+| tenant_command_failed counter | Failed commands (channel full) are rare but critical. Without a tenant-labeled failed counter, operators cannot tell which tenant is experiencing the channel-full condition. | LOW | Increment by 1 per failed enqueue (channel full). Parallels existing IncrementCommandFailed. |
+| tenant_gauge_duration_milliseconds histogram | SnapshotJob already records cycle duration for the whole job. Per-tenant duration is necessary to diagnose which specific tenant is slow (blocking on holders or causing evaluation divergence). | LOW | Stopwatch wrapping EvaluateTenant. Per-tenant duration is a subset of the existing cycle_duration_ms which covers the full group traversal. |
+| Dashboard table with tenantId + priority + state columns | Without a table panel that shows all tenants, the metrics are only queryable via raw PromQL. Operators need the "current state at a glance" view that the business dashboard provides for SNMP metrics. | MEDIUM | One row per tenantId+priority+pod combination. State column from tenant_state gauge value (0-3 mapped to labels). Depends on instant-query table pattern from simetra-business.json. |
+| Per-pod rows in dashboard (not aggregated) | Tenant evaluation runs independently on each pod. Aggregating across pods (sum/max) would hide per-pod disagreements. Operators need to see that pod-A thinks a tenant is Healthy while pod-B thinks it is Unresolved. | LOW | Filter by k8s_pod_name via $pod template variable, same as operations dashboard. Do NOT use sum() for state columns. |
+
+### Differentiators (Competitive Advantage)
+
+Features that go beyond basic visibility and enable faster diagnosis or proactive monitoring.
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| State enum value mapped to text in dashboard | tenant_state emits 0/1/2/3 as raw numbers. Mapping these to "NotReady", "Healthy", "Resolved", "Unresolved" in the dashboard cell lets operators read the table without memorizing the encoding. Grafana value mappings accomplish this as a field override on the state column. | LOW | Grafana "Value mappings" field override: 0->NotReady, 1->Healthy, 2->Resolved, 3->Unresolved. Same mechanism as existing snmp_type and source label display in business dashboard. |
+| P99 duration column (histogram_quantile from tenant_gauge_duration_ms) | The Dispatched/Failed/Suppressed columns show what happened. The P99 column shows how long each tenant took to evaluate. A tenant with P99 > 500ms is a candidate for threshold misconfiguration or SNMP device latency investigation. | LOW | PromQL: `histogram_quantile(0.99, sum by (le, tenantId, k8s_pod_name) (rate(tenant_gauge_duration_milliseconds_bucket[5m])))`. Column header: "P99 (ms)". Same as the existing snapshot cycle histogram but per-tenant. |
+| Trend column (delta direction arrow) | Same pattern as the existing business dashboard gauge table Trend column. Shows whether the tenant's dispatched command count is rising, flat, or falling over the last 30s. A rising dispatch trend with flat-or-falling suppressed means commands are actually getting through — healthy remediation. A rising suppression trend means the suppression window is too short or the device is not responding. | MEDIUM | Requires a second query (delta over 30s) joined to the primary instant query, using Grafana "Join by field" transformation keyed on tenantId+pod. This is the same technique used in simetra-business.json for the Trend column on snmp_gauge. Complexity is the join transformation, not the PromQL. |
+| PromQL column (copyable query per row) | Operators can click the PromQL column and copy a query to PromQL explorer for deep-dive on a specific tenant+pod combination. Same pattern as the business dashboard. | MEDIUM | Uses `label_replace(label_join(...), "promql", ...)` to construct a per-row PromQL string in the metric itself. Exact pattern from lines 458 and 864 of simetra-business.json. Requires knowing the right join labels (tenantId, k8s_pod_name, service_instance_id). |
+| NotReady state filtering | Tenants in the readiness window (grace period at startup) are not evaluating yet. Showing them as Unresolved would be misleading. The NotReady=0 enum value lets operators filter them out of alerting and distinguish startup noise from real evaluation problems. | LOW | Feature is free once the state gauge emits NotReady=0. Dashboard can add a filter row, or the operator can use `tenant_state != 0` in alert rules. No extra work beyond correct state assignment. |
+| Alert rule templates in documentation | Alert rule templates (not in-dashboard alerts, but external Prometheus rules) for "any tenant Unresolved for > 3 cycles" or "tenant_command_failed_total rising" give operators a starting point for productionizing the observability. | LOW | Not code — documentation-only. Produces no dashboard JSON or C# changes. Worth noting in implementation summary as a "next step" for operators. |
+
+### Anti-Features (Commonly Requested, Often Problematic)
+
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Leader-gate the tenant metrics | Someone might suggest tenant metrics should follow the same leader-gate pattern as snmp_gauge/snmp_info to "avoid duplicate data" | Tenant counters are per-pod per-cycle. Gating to leader hides 2/3 of the evaluation picture. Unlike snmp_gauge (which has the same value on all pods), tenant_tier1_stale on pod-A may be 3 while on pod-B it is 0 due to a stale holder that hasn't propagated. All-instances export is the correct model for job-generated per-pod metrics. | All-instances export via a meter that is NOT passed through MetricRoleGatedExporter. Create a second Meter for tenant metrics, or register tenant instruments on the same meter but ensure the exporter does not filter them. |
+| Aggregate tenant state across pods (single-row-per-tenant view) | Operators may ask for "one row per tenant" instead of "one row per tenant+pod" to reduce table verbosity | Aggregating state across pods (e.g., max() across pods) hides per-pod divergence. If pod-A evaluates a tenant as Unresolved because its holder is stale and pod-B evaluates it as Healthy, the max() would show Healthy and mask the staleness issue on pod-A. | Keep per-pod rows. Use the $pod template variable to filter down to a specific pod when the operator wants a single-pod view. Document this in the dashboard description. |
+| Histogram buckets for tier counts (instead of counters) | Some observability systems use histograms for "how many X per cycle" distribution tracking | For this system, tier counts per cycle are small integers (0-10 typically). Histogram bucket cardinality would be high relative to value. A counter that increments by N per cycle already provides rate() and increase() query capability, which is all operators need. | Use Counter<long> incrementing by the count. Operators can use `rate()` for per-second rate and `increase()` for per-window total. |
+| Per-holder labels on tenant metrics (adding metric_name/oid to tenant counters) | More granular labeling would let operators see exactly which OID caused tier-1 stale | Label cardinality explosion. A tenant with 10 holders would produce 10 time series per counter per pod. At 3 pods, 6 counters, 10 holders, this is 180 series per tenant just for the tier counters. That cardinality is unjustified for a 15s cycle metric. | The counter value already tells operators "5 stale holders this cycle". If they need to know which OIDs are stale, the tier=1 pod log line names the tenant — operators can then check the tenant's MetricSlotHolder configuration. |
+| Adding device_name label to tenant metrics | tenant_command_dispatched already sounds similar to snmp.command.dispatched which has device_name | Tenant metrics are tenant-scoped, not device-scoped. A tenant can span multiple devices (multiple holders from different devices). Adding device_name would require either duplicating the counter per device (incorrect) or picking one device name arbitrarily (misleading). | Keep tenant metrics keyed only by tenantId+priority. The join between tenant activity and device activity is done in the dashboard or in PromQL when needed (cross-join on pod name). |
+| Real-time state changes via Grafana alerts at sub-15s granularity | SnapshotJob runs every 15s. Operators may ask for state-change alerts with < 15s latency | OTel export interval is 15s. Prometheus scrape interval is typically 15-30s. The metric will be stale for up to 30s after a state change. Sub-15s alerting would require streaming/events which is out of scope (project uses metrics + logs, no traces, no event streams). | For sub-15s latency, direct pod log tailing via `kubectl logs -f` is the correct tool. The dashboard provides current state within one OTel export cycle (15-30s lag), which is appropriate for operational monitoring rather than real-time incident alerting. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-Existing E2E infrastructure (tests/e2e/scenarios/, common.sh, prometheus.sh)
+existing PipelineMetricService singleton
     |
-    +--> All snapshot E2E scenarios (naming conventions, save/restore pattern, poll_until)
+    +--> new TenantMetricService (or extended PipelineMetricService)
+             |
+             +--> tenant_state gauge
+             +--> tenant_tier1_stale counter
+             +--> tenant_tier2_resolved counter
+             +--> tenant_tier3_evaluate counter
+             +--> tenant_command_dispatched counter
+             +--> tenant_command_suppressed counter
+             +--> tenant_command_failed counter
+             +--> tenant_gauge_duration_milliseconds histogram
 
-E2E simulator HTTP control endpoint (new)
+SnapshotJob.EvaluateTenant (already calls PipelineMetricService)
     |
-    +--> TS-SC-04 (suppression window timing requires switching OID values mid-test)
-    +--> TS-SC-05 (staleness requires stopping OID responses)
-    +--> TS-SC-07 (advance gate sub-scenario B requires switching values)
-    +--> TS-SC-08 (all-samples check requires switching values between phases)
-    +--> TS-SC-09 (aggregate verify requires controlling constituent OID values)
+    +--> must call TenantMetricService at each tier exit point
+    |        |
+    |        +--> Pre-tier: SetState(NotReady) on readiness-fail exit
+    |        +--> Tier 1: IncrementTier1Stale(count) on stale exit
+    |        +--> Tier 2: IncrementTier2Resolved(count) on resolved-gate exit + SetState(Resolved)
+    |        +--> Tier 3: IncrementTier3Evaluate(count) on both Healthy and Unresolved exits + SetState(Healthy)
+    |        +--> Tier 4: IncrementCommandDispatched/Suppressed/Failed per command + SetState(Unresolved)
+    |
+    +--> Stopwatch wrapping EvaluateTenant for tenant_gauge_duration_milliseconds
+             |
+             +--> Record after TierResult returned, before returning to caller
 
-simetra-tenants-e2e-snapshot.yaml ConfigMap (new)
+All-instances export (NOT leader-gated)
     |
-    +--> All TS-SC-* scenarios
+    +--> Requires tenant meter to NOT be passed through MetricRoleGatedExporter
+    +--> Depends on MetricRoleGatedExporter architecture (already built in Phase 07)
 
-New Prometheus counters (already built in v2.0)
+Operations dashboard (existing simetra-operations.json)
     |
-    snmp.command.sent/failed/suppressed
-    +--> TS-SC-02, 04, 05, 06, 07, 08 (counter delta assertions)
+    +--> New tenant metrics table is an ADDITION, not a replacement
+    +--> Follows instant-query table pattern from simetra-business.json
+    +--> Trend column requires delta(tenant_command_dispatched[30s]) second query
+    +--> PromQL column requires label_replace(label_join(...)) same pattern as simetra-business.json
 
-SnapshotJob tier debug logs (already built in v2.0)
-    |
-    tier=1/2/3/4 structured log lines
-    +--> All TS-SC-* scenarios (log grep validation)
+Dashboard Trend column
+    +--> requires: tenant_command_dispatched counter (something to trend)
+    +--> requires: Grafana "Join by field" transformation (established in simetra-business.json)
+
+Dashboard PromQL column
+    +--> requires: tenantId and k8s_pod_name labels (the join key labels)
+    +--> requires: label_replace/label_join pattern (established in simetra-business.json)
+
+State enum value mapping in dashboard
+    +--> requires: tenant_state gauge (the source instrument)
+    +--> requires: Grafana "Value mappings" field override (established in project)
 ```
 
----
+### Dependency Notes
 
-## Scenario Ordering Rationale
+- **TenantMetricService requires EvaluateTenant call sites:** The tier counters and state gauge must be set at every tier exit point inside EvaluateTenant. The method currently returns TierResult but does not record per-tenant metric breakdowns. Call sites must be added at each early-return location and at the tier-4 loop.
 
-The implementation plan should build scenarios in this order:
+- **All-instances export requires meter isolation:** MetricRoleGatedExporter was designed to gate snmp_gauge/snmp_info to the leader. If tenant instruments share the same meter, they may inadvertently be gated. The safe approach is to register tenant instruments on a separate named meter (`TenantMetrics` or `SnmpCollector.Tenants`) that is not passed through the role-gated exporter. Confirm the exporter's meter filter logic before implementation.
 
-1. **TS-SC-01 first** — establishes the baseline (no commands ever fire) and validates the full
-   E2E scaffold (ConfigMap deploy, simulator control endpoint, log grep pattern) works before
-   any positive assertion.
+- **Dashboard PromQL column requires label availability:** The `label_replace(label_join(...))` pattern in simetra-business.json joins on `resolved_name`, `device_name`, `k8s_pod_name`, and `service_instance_id`. For tenant metrics, the join labels are `tenantId`, `priority`, `k8s_pod_name`, and `service_instance_id`. The tenant metric labels must be confirmed in Prometheus before authoring the dashboard JSON, or the PromQL column will silently produce empty strings.
 
-2. **TS-SC-02 second** — first positive assertion (command fires). Builds on SC-01 scaffolding.
-   Validates the most direct path through the 4-tier tree.
-
-3. **TS-SC-03 third** — validates the Resolved gate negative path. Confirms TS-SC-02 did not
-   accidentally pass due to missing Resolved check.
-
-4. **TS-SC-04** — requires SC-02 infrastructure. Adds suppression window timing.
-
-5. **TS-SC-05** — requires simulator control endpoint to support stopping responses.
-   Most complex timing scenario; build after simpler ones are stable.
-
-6. **TS-SC-06 then TS-SC-07** — multi-tenant scenarios; require ConfigMap with 2 tenants.
-   Build after single-tenant scenarios are stable.
-
-7. **TS-SC-08** — requires `TimeSeriesSize: 3` tenant config and 3+ poll cycles per phase.
-   Slower to validate; schedule last among table stakes.
-
-8. **TS-SC-09** — aggregate metric; depends on `AggregatedMetricDefinition` pipeline already
-   working (verified by existing scenario 28's routing counter). Build after SC-01 to SC-08.
+- **Trend column requires delta query alignment:** The Trend column uses a second Prometheus query (`delta(...)`) that must match the same label set as the primary instant query. Both queries must include `tenantId` and `k8s_pod_name` for the Grafana "Join by field" transformation to correlate rows correctly.
 
 ---
 
-## Simulator HTTP Control Endpoint Design
+## MVP Definition
 
-The existing simulator has no HTTP server. A minimal control endpoint must be added.
+### Launch With (v1 — this milestone)
 
-**Recommended interface:**
+The minimum viable tenant observability capability that answers "what state are my tenants in right now, and what caused it?"
 
-```
-POST /scenario/{scenario_name}
-```
+- [x] tenant_state gauge — answers "what is each tenant's current state per pod?" without any counter math
+- [x] tenant_tier1_stale counter — answers "which tenants are staleness-blocked and how many holders?"
+- [x] tenant_tier2_resolved counter — answers "which tenants hit the resolved gate?"
+- [x] tenant_tier3_evaluate counter — answers "which tenants have violated evaluate metrics?"
+- [x] tenant_command_dispatched counter — answers "which tenants triggered commands this cycle?"
+- [x] tenant_command_failed counter — answers "which tenants are experiencing command failures?"
+- [x] tenant_command_suppressed counter — answers "which tenants are in suppression?"
+- [x] tenant_gauge_duration_milliseconds histogram — answers "which tenant is slow to evaluate?"
+- [x] Dashboard table with State, Dispatched, Failed, Suppressed, Stale, Resolved, Evaluate, P99 (ms) columns — the primary operator view
+- [x] State-to-text value mapping in dashboard — NotReady/Healthy/Resolved/Unresolved readable labels
+- [x] Trend column for dispatched commands — rising/flat/falling dispatch direction
+- [x] PromQL copyable-query column — deep-dive link per tenant+pod row
 
-Scenarios the endpoint must support:
+### Add After Validation (v1.x)
 
-| Scenario Name | OID Values Changed | Description |
-|---------------|--------------------|-------------|
-| `healthy` | Evaluate OIDs → in-range values | Default healthy state |
-| `evaluate-violated` | Evaluate OIDs → out-of-range values | All Evaluate violated |
-| `resolved-violated` | Resolved OIDs → out-of-range values | All Resolved violated |
-| `stale-start` | Simulate stopped responses (accept SNMP GETs but delay > GraceWindow) | Begin staleness scenario |
-| `stale-end` | Resume normal responses | End staleness scenario |
-| `all-violated` | All OIDs → out-of-range (for advance gate sub-scenario B) | Tier 4 fires for all tenants |
+- [ ] Prometheus alerting rule templates — once operators have used the dashboard in production and identified their threshold preferences
+- [ ] NotReady state filter UI (dashboard variable to exclude NotReady rows) — if operators report startup noise is distracting; trivial to add as a variable after validation
 
-The endpoint uses a shared in-memory state dict mapping OID → value. The `DynamicInstance` class
-already exists in the simulator and reads values via a callback. The control endpoint simply
-updates the dict that the callbacks read from.
+### Future Consideration (v2+)
 
-**Implementation approach:**
-- Add `aiohttp` HTTP server running alongside the existing asyncio SNMP engine
-- Single Python module; no production dependencies beyond `pysnmp` and `aiohttp`
-- Port: `8080` (HTTP control); `161` (SNMP, unchanged)
-- K8s deployment updated to expose port `8080` and add readiness probe on `GET /health`
+- [ ] Per-holder staleness breakdown (which specific OID is stale) — high cardinality cost outweighs benefit for current scale; pod logs provide this detail today
+- [ ] Cross-pod tenant state comparison panel — operators can manually filter by pod today; a dedicated "pod disagreement" panel requires further dashboard complexity beyond scope
 
 ---
 
-## Validation Point Matrix
+## Feature Prioritization Matrix
 
-| Scenario | Log Pattern (must contain) | Counter Asserted | Counter Direction |
-|----------|---------------------------|-----------------|-------------------|
-| TS-SC-01 | `tier=3 — not all evaluate` | `snmp_command_sent_total` | delta=0 |
-| TS-SC-02 | `tier=4 — commands enqueued` | `snmp_command_sent_total` | delta>=1 |
-| TS-SC-03 | `tier=2 — all resolved violated` | `snmp_command_sent_total` | delta=0 |
-| TS-SC-04 (B) | `Command suppressed for tenant` | `snmp_command_suppressed_total` | delta>=1 |
-| TS-SC-04 (C) | `tier=4 — commands enqueued` | `snmp_command_sent_total` | delta+1 after window |
-| TS-SC-05 | `tier=1 stale` | `snmp_command_sent_total` | plateau (stops) |
-| TS-SC-06 | both `tier=3` and `tier=4` | `snmp_command_sent_total` | delta=1 only |
-| TS-SC-07A | tenant A `tier=3`, no tenant B logs | `snmp_command_sent_total` | delta=0 |
-| TS-SC-07B | both `tier=4` | `snmp_command_sent_total` | delta=2 |
-| TS-SC-08 (B) | `tier=3 — not all evaluate` | `snmp_command_sent_total` | no increment |
-| TS-SC-08 (C) | `tier=4 — commands enqueued` | `snmp_command_sent_total` | delta>=1 |
-| TS-SC-09 | `tier=4 — commands enqueued` | `snmp_command_sent_total` | delta>=1 |
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| tenant_state gauge | HIGH | LOW | P1 |
+| tenant_tier1_stale counter | HIGH | LOW | P1 |
+| tenant_tier3_evaluate counter | HIGH | LOW | P1 |
+| tenant_command_dispatched/suppressed/failed counters | HIGH | LOW | P1 |
+| tenant_gauge_duration_milliseconds histogram | MEDIUM | LOW | P1 |
+| tenant_tier2_resolved counter | MEDIUM | LOW | P1 |
+| All-instances export (meter isolation) | HIGH | MEDIUM | P1 |
+| Dashboard table (State + counter columns) | HIGH | MEDIUM | P1 |
+| State-to-text value mapping | MEDIUM | LOW | P1 |
+| P99 column in dashboard | MEDIUM | LOW | P1 |
+| Trend column in dashboard | MEDIUM | MEDIUM | P2 |
+| PromQL column in dashboard | LOW | MEDIUM | P2 |
 
----
-
-## Time Series All-Samples Check: Implications for Test Design
-
-The `AreAllEvaluateViolated` implementation checks every sample in `ReadSeries()`, not just
-the most recent. This has concrete test design implications:
-
-1. **Wait for series to fill before asserting.** With `TimeSeriesSize: 3` and a 10s poll
-   interval, a full series takes 30s to fill. Tests must wait for this before asserting
-   "all violated" triggers a command. Use `poll_until` with a 90s timeout.
-
-2. **The sentinel participates.** `MetricSlotHolder` is constructed with a sentinel sample
-   (`Value=0`, `Timestamp=UtcNow`). Until the first real poll overwrites it, the series
-   contains the sentinel. If `Threshold: { Max: 95 }`, sentinel value `0` is NOT violated
-   (0 < 95, which is in range). This means a freshly started tenant with a violated OID
-   will NOT fire on the very first snapshot cycle if `TimeSeriesSize > 1` — the sentinel
-   keeps the series "not all violated."
-
-   Test design consequence: always wait for at least `TimeSeriesSize` poll cycles before
-   asserting that a command fires for a `TimeSeriesSize > 1` tenant.
-
-3. **Recovery is fast (single in-range sample).** One in-range poll clears the "all violated"
-   condition regardless of prior series state. TS-SC-08 phase B tests this — the series need
-   not be fully re-filled for the tenant to recover to Healthy.
-
-4. **Partial series is also fully checked.** If a tenant just reloaded (series is shorter
-   than `TimeSeriesSize`), all present samples are still checked. A 2-sample series `[97, 97]`
-   in a `TimeSeriesSize: 5` holder is fully violated and triggers Tier 4. This is correct
-   behavior documented in the unit tests (`Execute_EvaluatePartialSeriesFill_AllViolated_ProceedsToTier4`).
+**Priority key:**
+- P1: Must have for launch — dashboard is incomplete without these
+- P2: Should have, adds real operator value, not blocking
+- P3: Nice to have, future consideration
 
 ---
 
-## MVP Recommendation
+## Implementation Notes Specific to This Domain
 
-**Must build (9 table stakes scenarios):**
-1. TS-SC-01: Single tenant healthy
-2. TS-SC-02: Single tenant evaluate violated
-3. TS-SC-03: Resolved gate (ConfirmedBad)
-4. TS-SC-04: Suppression window
-5. TS-SC-05: Staleness detection
-6. TS-SC-06: Two tenants same priority
-7. TS-SC-07: Two tenants different priority (both sub-scenarios A and B)
-8. TS-SC-08: Time series all-samples check
-9. TS-SC-09: Aggregate metric as evaluate holder
+### Counter Semantics: "by N" vs "by 1"
 
-**Should build (differentiators):**
-1. D-SC-01: Cycle duration histogram sanity check (trivial Prometheus query, low effort)
-2. D-SC-02: Partial suppression (two commands, one suppressed) — extends SC-04 scaffolding
-3. D-SC-03: Liveness not broken across all scenarios (run-all validation)
+The existing pipeline counters (snmp.event.published, snmp.command.dispatched) all increment by 1
+per event. The new tenant counters increment by N (the count of stale holders, violated metrics,
+etc.) per cycle. This is intentional and documented in PROJECT.md v2.4 requirements:
 
-**Explicitly do NOT build:**
-- AF-SC-01: Fixed sleep assertions
-- AF-SC-02: SET side-effect verification on simulator
-- AF-SC-03: Using production tenant config
-- AF-SC-04: ConfirmedBad cascade multi-group scenario
+> "Per-cycle counters increment by actual metric counts (e.g., 5 stale holders = +5 to
+> tenant_tier1_stale)"
+
+This means `rate(tenant_tier1_stale_total[5m])` yields "average stale holders per second across
+all cycles", not "average stale events per second". Dashboard panels displaying these counters
+should use `increase(...)` over a time window to show "total stale holder instances in last N
+minutes" which is more intuitive than a per-second rate for a per-cycle accumulator.
+
+### State Gauge vs Counter for State
+
+`tenant_state` is a Gauge, not a Counter. It is overwritten every cycle with the current state
+value. This means:
+
+- `tenant_state` is safe for `instant: true` table queries — it always reflects the most recent
+  evaluation cycle.
+- It should NOT be used with `rate()` — state is not monotonically increasing.
+- It CAN be used with `changes()` to count how many times a tenant changed state in a window.
+
+The gauge approach is correct because state is current-value semantics (what is the state NOW),
+not accumulation semantics.
+
+### Export Architecture Decision
+
+The comment in `PipelineMetricService.cs` says it owns "all 14 pipeline counter instruments and 1
+histogram on the SnmpCollector meter." The tenant instruments are a different concern (tenant
+evaluation, not pipeline throughput). Using a separate `TenantMetricService` with a separate Meter
+name (`SnmpCollector.Tenants`) is cleaner than expanding PipelineMetricService further. This also
+makes the meter-filter decision explicit: the new meter is simply not registered with
+MetricRoleGatedExporter.
 
 ---
 
 ## Sources
 
-- Codebase: `src/SnmpCollector/Jobs/SnapshotJob.cs` — full 4-tier logic, `HasStaleness`,
-  `AreAllResolvedViolated`, `AreAllEvaluateViolated`, `IsViolated`, advance gate, log lines
-  (HIGH confidence — read directly)
-- Codebase: `src/SnmpCollector/Pipeline/MetricSlotHolder.cs` — `ReadSeries()`,
-  `TimeSeriesSize`, sentinel construction, `WriteValue` cyclic append (HIGH confidence)
-- Codebase: `src/SnmpCollector/Pipeline/SuppressionCache.cs` — key format
-  `{tenantId}:{Ip}:{Port}:{CommandName}`, window check behavior (HIGH confidence)
-- Codebase: `src/SnmpCollector/Telemetry/PipelineMetricService.cs` — counter names
-  `snmp.command.sent/failed/suppressed`, `snmp.snapshot.cycle_duration_ms` (HIGH confidence)
-- Codebase: `tests/SnmpCollector.Tests/Jobs/SnapshotJobTests.cs` — 40+ unit tests documenting
-  exact edge case behavior for all tiers, series checks, suppression, advance gate (HIGH confidence)
-- Codebase: `simulators/e2e-sim/e2e_simulator.py` — `DynamicInstance` pattern for mutable OID
-  values; existing community strings; no HTTP control endpoint yet (HIGH confidence)
-- Codebase: `tests/e2e/scenarios/28-tenantvector-routing.sh` — save/restore ConfigMap pattern,
-  `poll_until` usage, log grep pattern for validation (HIGH confidence)
-- Codebase: `tests/e2e/lib/common.sh` — `record_pass/fail`, `assert_delta_gt`, `poll_until`
-  utilities (HIGH confidence)
-- Codebase: `src/SnmpCollector/config/tenants.json` — existing tenant config structure, OID
-  names, command names for reference (HIGH confidence)
-- Codebase: `deploy/k8s/simulators/e2e-sim-deployment.yaml` — current simulator K8s deployment,
-  port structure, probe patterns (HIGH confidence)
+- `src/SnmpCollector/Jobs/SnapshotJob.cs` — full 4-tier logic, tier exit points, TierResult enum,
+  EvaluateTenant return conditions (HIGH confidence — direct read)
+- `src/SnmpCollector/Telemetry/PipelineMetricService.cs` — existing instrument naming conventions,
+  TagList usage, Meter ownership pattern (HIGH confidence — direct read)
+- `deploy/grafana/dashboards/simetra-business.json` — Trend column delta() pattern, PromQL
+  label_replace/label_join column, instant table query with format:table, field overrides for
+  hiding/renaming columns, value mappings, Join by field transformation (HIGH confidence — direct read)
+- `deploy/grafana/dashboards/simetra-operations.json` — command panel positions, template variable
+  patterns, row panel structure (HIGH confidence — direct read)
+- `.planning/PROJECT.md` v2.4 milestone requirements — exact instrument names, label names (tenantId,
+  priority), dashboard column list, all-instances export requirement (HIGH confidence — direct read)
+- `.planning/phases/07-leader-election-and-role-gated-export/` — MetricRoleGatedExporter architecture
+  and meter filter behavior (MEDIUM confidence — summary files, not source code read directly)
 
 ---
 
-*Feature research for: E2E Test Scenarios for SnapshotJob 4-Tier Tenant Evaluation*
-*Researched: 2026-03-17*
+*Feature research for: Tenant Vector Metrics (v2.4)*
+*Researched: 2026-03-22*

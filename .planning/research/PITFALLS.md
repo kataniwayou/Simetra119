@@ -267,3 +267,352 @@ Mistakes that cause confusion but are quickly fixable.
 - Source code verified: `tests/e2e/lib/prometheus.sh` (snapshot_counter, poll_until, 30s timeout, 3s interval)
 - Source code verified: `tests/e2e/scenarios/28-tenantvector-routing.sh` (multi-pod log iteration pattern)
 - Source code verified: `src/SnmpCollector/Configuration/MetricSlotOptions.cs` (GraceMultiplier field, IntervalSeconds default)
+
+---
+
+---
+
+# Pitfalls Research — Tenant Vector Metrics Milestone
+
+**Domain:** Adding tenant-level per-evaluation-cycle metrics to existing OTel/Prometheus monitoring system (3-replica K8s)
+**Researched:** 2026-03-22
+**Confidence:** HIGH — all pitfalls grounded directly in codebase: MetricRoleGatedExporter.cs, PipelineMetricService.cs, TelemetryConstants.cs, SnapshotJob.cs, ServiceCollectionExtensions.cs, TenantVectorRegistry.cs, CardinalityAuditService.cs.
+
+---
+
+## Critical Pitfalls
+
+---
+
+### Pitfall TV-1: Counter Double-Counting from All-Instances Export
+
+**What goes wrong:**
+All 3 replicas run `SnapshotJob` independently and each increments tenant counters on every 15s cycle. If Grafana queries use a raw counter value or a `rate()` expression without cross-instance aggregation, the displayed rate is 3x the true system rate. A dashboard showing "commands dispatched per minute" reads 30/min when the actual rate is 10/min.
+
+**Why it happens:**
+The new tenant counters belong on `TelemetryConstants.MeterName = "SnmpCollector"` (all-instances export, same as `snmp.command.dispatched` and all existing pipeline counters). Engineers writing PromQL apply the same patterns used for single-instance services and omit `sum by (tenant_id, priority)`. The mistake is invisible until someone notices the numbers are exactly 3x the values logged in application logs.
+
+**How to avoid:**
+All PromQL for tenant counters must aggregate across instances before presenting a per-tenant total:
+
+```promql
+# Correct: rate of commands dispatched, per tenant
+sum by (tenant_id, priority) (
+  rate(snmp_tenant_commands_dispatched_total[30s])
+)
+
+# Wrong: triple-counts without aggregation
+rate(snmp_tenant_commands_dispatched_total[30s])
+```
+
+Establish this as a standard at the start of the dashboard build phase, not after panels are written.
+
+**Warning signs:**
+- Dashboard numbers are exactly 3x values seen in application logs for a known single-tenant test.
+- Any Grafana panel on a tenant counter lacks `sum by (tenant_id)` in its PromQL.
+- `rate()` window is shorter than twice the SnapshotJob cycle interval (see Pitfall TV-7).
+
+**Phase to address:**
+Instrument definition phase — document the PromQL aggregation requirement before any dashboard panel is written.
+
+---
+
+### Pitfall TV-2: Tenant State Gauge Registered on the Wrong Meter
+
+**What goes wrong:**
+The `snmp_tenant_state` enum gauge is placed on `TelemetryConstants.MeterName` ("SnmpCollector") instead of `TelemetryConstants.LeaderMeterName` ("SnmpCollector.Leader"). All 3 replicas export the gauge. Since each replica independently evaluates tenant state via `SnapshotJob.EvaluateTenant()`, followers may export a different state integer than the leader at the same timestamp. Prometheus receives 3 conflicting series. Any aggregation over them (`max`, `min`, `avg`) produces either the wrong value or a meaningless fractional result.
+
+**Why it happens:**
+`PipelineMetricService` uses `TelemetryConstants.MeterName` for all 15 instruments. The path of least resistance when adding a new instrument is to add it to `PipelineMetricService`, which silently puts it on the wrong meter. There is no compile-time check that enforces meter assignment per instrument type.
+
+**How to avoid:**
+Tenant state gauge must be created on `LeaderMeterName`:
+- Do NOT add it to `PipelineMetricService`.
+- Create a separate `TenantMetricService` (or similar) using `meterFactory.Create(TelemetryConstants.LeaderMeterName)` for the state gauge.
+- `MetricRoleGatedExporter` will then suppress it on followers automatically — no exporter code changes needed (see Pitfall TV-3).
+
+PromQL for the leader-gated gauge is then clean:
+```promql
+snmp_tenant_state{tenant_id="alpha"}
+```
+
+**Warning signs:**
+- Prometheus shows 3 time series for `snmp_tenant_state{tenant_id="..."}` with potentially different values at the same timestamp.
+- Any `avg by (tenant_id)` on the state gauge (produces fractional values like `1.67`).
+- Dashboard state column shows unexpected values during failover (leader changes, state series briefly conflicts).
+
+**Phase to address:**
+Instrument definition phase — meter assignment per instrument type must be decided and documented before `CreateGauge` is called.
+
+---
+
+### Pitfall TV-3: Attempting to Bypass MetricRoleGatedExporter by Modifying It
+
+**What goes wrong:**
+A developer sees that new tenant instruments need to bypass gating (counters must export from all replicas) and concludes the exporter needs modification — adding an instrument-name whitelist, a second gating condition, or a flag. They change `MetricRoleGatedExporter.cs`, introducing complexity and a regression risk for all existing instruments.
+
+**Why it happens:**
+The exporter's design is meter-name-based, not instrument-name-based. The gating check at line 56 is:
+```csharp
+if (!string.Equals(metric.MeterName, _gatedMeterName, StringComparison.Ordinal))
+```
+Any instrument on `"SnmpCollector"` passes through on followers regardless of its name. Any instrument on `"SnmpCollector.Leader"` is suppressed on followers. Meter selection at instrument creation time is the complete control surface — no exporter changes are needed or desired.
+
+**How to avoid:**
+Understand the two-meter model before writing any instrument code:
+
+| Meter | Exported by | Use for |
+|-------|-------------|---------|
+| `"SnmpCollector"` | All instances | Counters, histograms where per-instance values are valid and summed in PromQL |
+| `"SnmpCollector.Leader"` | Leader only | State gauges, any instrument with a single authoritative value |
+
+New tenant instruments map as follows:
+- Counters (`commands_dispatched`, `commands_suppressed`, `commands_failed`, `cycle_count`, `stale_count`, `resolved_count`, `healthy_count`) → `MeterName`
+- Evaluation duration histogram → `MeterName` (per-replica timing is valid; aggregate with `sum by (le, tenant_id)` for P99)
+- State gauge (`tenant_state`) → `LeaderMeterName`
+
+A PR that modifies `MetricRoleGatedExporter.cs` for this milestone is a red flag.
+
+**Warning signs:**
+- `MetricRoleGatedExporter.cs` appears in the PR diff.
+- New instrument name appears in an `if` condition inside `Export()`.
+- State gauge shows 3 series in Prometheus.
+
+**Phase to address:**
+Instrument definition phase — class and meter assignment design, before any instrument creation code is written.
+
+---
+
+### Pitfall TV-4: Histogram Bucket Boundaries Don't Cover the Actual Duration Range
+
+**What goes wrong:**
+The OTel .NET SDK default histogram bucket boundaries are `[0, 5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000]` ms. For a per-tenant evaluation duration histogram, where the evaluation loop (grace check, staleness check, threshold evaluation, command dispatch) typically completes in 1–20ms, nearly all observations land in the `[0, 5]` bucket. `histogram_quantile(0.99, ...)` then returns exactly `5.0` — the bucket boundary — not a useful percentile.
+
+The existing `snmp.snapshot.cycle_duration_ms` uses default buckets (adequate for a full multi-tenant cycle that may span 1–500ms). A per-tenant evaluation histogram needs explicit fine-grained boundaries.
+
+**Why it happens:**
+`_meter.CreateHistogram<double>(name, unit: "ms")` uses defaults unless an `AddView` override is registered. Developers copy the existing histogram pattern without checking whether default buckets are appropriate for the measurement range.
+
+**How to avoid:**
+Register an `AddView` in `ServiceCollectionExtensions.AddSnmpTelemetry` before the `AddMeter` calls:
+
+```csharp
+metrics.AddView(
+    instrumentName: "snmp.tenant.eval_duration_ms",
+    new ExplicitBucketHistogramConfiguration
+    {
+        Boundaries = [0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 250.0, 500.0]
+    });
+```
+
+Rationale for these boundaries:
+- 0.5–2ms: grace check + staleness iteration only (no command)
+- 2–10ms: full tier 1–3 evaluation
+- 10–50ms: tier 4 command dispatch, including suppression cache write
+- 50–500ms: anomalously slow (worth surfacing; triggers investigation)
+
+For the histogram PromQL in Grafana to aggregate across instances correctly:
+```promql
+histogram_quantile(0.99,
+  sum by (le, tenant_id, priority) (
+    rate(snmp_tenant_eval_duration_ms_bucket[2m])
+  )
+)
+```
+
+**Warning signs:**
+- Prometheus `le` label values for `snmp_tenant_eval_duration_ms_bucket` show `5`, `10`, `25` — these are default boundaries, not the custom ones.
+- `histogram_quantile(0.99, ...)` returns exactly `5.0` or `10.0` (boundary snapping, not interpolation).
+- Grafana heatmap shows all observations concentrated in one row.
+
+**Phase to address:**
+Instrument definition phase — `AddView` registration in `AddSnmpTelemetry` must be in the same PR as the histogram instrument creation.
+
+---
+
+### Pitfall TV-5: Enum Gauge — Integer Values Not Mapped to Labels in Grafana
+
+**What goes wrong:**
+Prometheus stores gauge values as floats. `snmp_tenant_state{tenant_id="alpha"}` returns `2.0`, not `"Unresolved"`. A Grafana table showing raw numeric values is operationally useless for an on-call engineer. The correct rendering requires Grafana Value Mappings, but these are configured per panel and are easy to omit or misconfigure (wrong range, missing value).
+
+A secondary mistake: using `avg by (tenant_id)` instead of `max by (tenant_id)` on the state gauge. If the series briefly has multiple values due to export timing, `avg` returns a non-integer float.
+
+**Why it happens:**
+Two patterns for enum-as-gauge exist in the Prometheus ecosystem, and they are frequently confused:
+
+- **Approach A (recommended):** Single gauge per `(tenant_id, priority)` with integer value encoding (0=Healthy, 1=Resolved, 2=Unresolved). Grafana Value Mappings render the integer as labelled text with colour.
+- **Approach B (not recommended here):** State-set pattern — one series per possible state value, with `value=1` for the active state. Triples series count for no benefit given the state gauge is leader-gated.
+
+**How to avoid:**
+Use Approach A. Define state encoding as constants to prevent integer literals scattered through the codebase:
+
+```csharp
+// In TelemetryConstants.cs or a dedicated TenantStateConstants class
+public const double TenantStateHealthy    = 0.0;
+public const double TenantStateResolved   = 1.0;
+public const double TenantStateUnresolved = 2.0;
+```
+
+Grafana table panel configuration:
+- PromQL: `max by (tenant_id, priority) (snmp_tenant_state)` (leader-only export, `max` collapses cleanly)
+- Field override for `snmp_tenant_state`: `Unit = none`
+- Value Mappings: `0 → Healthy` (green), `1 → Resolved` (orange), `2 → Unresolved` (red)
+
+Do not use `avg` — use `max` or `last_over_time` for the state display query.
+
+**Warning signs:**
+- Grafana state column shows `0`, `1`, `2` as raw numbers.
+- State cell shows blank/null for some tenants — Value Mapping range does not cover a returned value.
+- `avg by (tenant_id)` in the state query PromQL.
+- Integer literals `0.0`, `1.0`, `2.0` appear directly in `gauge.Record()` call sites.
+
+**Phase to address:**
+Instrument definition phase (define constants) and dashboard implementation phase (configure Value Mappings).
+
+---
+
+### Pitfall TV-6: Cardinality Estimate Does Not Include Tenant Instruments
+
+**What goes wrong:**
+`CardinalityAuditService` computes `devices × oidDimension × 2 instruments × 2 sources` and warns if the estimate exceeds 10,000 series. It does not account for tenant instruments. With 4 tenants × 8 instruments, the tenant dimension adds 32 series — negligible now. However, the audit log gives a false sense of completeness: operations teams relying on it to size Prometheus storage do not see the tenant series contribution. If tenant count grows (production may have 20–50 tenants) and more instruments are added, the omission becomes material.
+
+Separately: if someone accidentally uses a high-cardinality value as a label dimension alongside `tenant_id` (e.g., adding `device_name` or `metric_name` to tenant counters), the audit will not catch it because the formula does not include tenant instruments at all.
+
+**Why it happens:**
+`CardinalityAuditService` was written before tenant instruments existed. It is not automatically updated when new instrument families are added.
+
+**How to avoid:**
+Update the cardinality formula in `CardinalityAuditService.AuditCardinality()` to include the tenant instrument contribution:
+
+```csharp
+var tenantInstrumentCount = 8;  // 6 counters + 1 histogram + 1 state gauge
+var tenantSeriesEstimate = _tenantRegistry.TenantCount * tenantInstrumentCount;
+var totalEstimate = existingEstimate + tenantSeriesEstimate;
+```
+
+Keep `tenant_id` and `priority` as the only label dimensions on tenant instruments. Do not add `device_name`, `ip`, or `metric_name` — those are already captured on `snmp_gauge`/`snmp_info`.
+
+**Warning signs:**
+- Startup cardinality log shows only the `devices × OIDs × 2 × 2` formula with no mention of tenant instruments.
+- A PR proposes adding `device_name` as a label on a tenant counter.
+- `tenant_id` values in Prometheus include dynamic strings (IPs, OID names) rather than stable configured names.
+
+**Phase to address:**
+Instrument definition phase — update `CardinalityAuditService` in the same PR as the new instrument creation.
+
+---
+
+### Pitfall TV-7: Per-Cycle Counter Rate() Window Too Narrow
+
+**What goes wrong:**
+Tenant cycle counters increment once per SnapshotJob cycle per tenant — every 15 seconds. A `rate()` window shorter than 2× the cycle interval may contain zero or one increment, producing a near-zero or spiky rate that looks like the metric is broken rather than healthy.
+
+`snmp_tenant_commands_dispatched_total` increments only when Tier 4 is reached. On a healthy system it may not increment for hours. A dashboard showing `rate(snmp_tenant_commands_dispatched_total[30s]) == 0` during normal operation will be misread as "metrics not working."
+
+**Why it happens:**
+Engineers calibrate `rate()` windows for high-frequency counters (events per second). A 2-minute window on a 15-second-cycle counter is correct; a 30-second window on the same counter may catch 0–2 increments, producing a volatile, misleading result. The mistake is applying a rate window that was right for `snmp.event.published` (high-frequency) without adjusting for the much lower frequency of per-cycle counters.
+
+**How to avoid:**
+Use `rate()` windows of at least `4 × cycle_interval` (60s for a 15s cycle) for tenant cycle counters. For cumulative totals, use the raw counter with `sum by (tenant_id)`. For increment-rate panels, document the expected zero-rate:
+
+```promql
+# Commands dispatched rate — zero on healthy system (Tier 4 only reached when threshold violated)
+sum by (tenant_id, priority) (
+  rate(snmp_tenant_commands_dispatched_total[2m])
+)
+```
+
+Add panel description: "Expected to be 0 on a healthy system. Non-zero values indicate threshold violations triggering command dispatch."
+
+**Warning signs:**
+- `rate()` window in any tenant counter panel is shorter than `2 × SnapshotJobOptions.IntervalSeconds`.
+- Dashboard shows constant zero for tenant counters and engineer concludes the metric is not recording.
+- Dashboard shows extreme spikes alternating with zero — characteristic of a rate window that catches exactly 1 increment sometimes and 0 increments other times.
+
+**Phase to address:**
+Dashboard implementation phase — PromQL window sizing and panel descriptions must account for the 15s cycle before panels are finalised.
+
+---
+
+## Technical Debt Patterns
+
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Add tenant counters to existing `PipelineMetricService` | No new class, faster to implement | Mixes pipeline metrics (no tenant label) with tenant metrics (tenant label); `PipelineMetricService` already owns 15 instruments and grows unwieldy; state gauge cannot be added here (wrong meter) | Never — create `TenantMetricService` |
+| Register state gauge on `MeterName` | Avoids meter decision | 3 conflicting series per tenant in Prometheus; PromQL requires instance filtering permanently | Never |
+| Use default histogram bucket boundaries | Zero configuration | P99 resolves to bucket boundary (5.0 or 10.0); histogram useless for percentile analysis in sub-50ms range | Never for per-tenant evaluation histogram |
+| Hardcode integer state values in `SnapshotJob` | 2 minutes saved | State encoding scattered through codebase; silent mismatch if Grafana Value Mappings are configured from a different reference | Never |
+| Skip updating `CardinalityAuditService` | ~10 lines saved | Tenant series invisible in startup audit; first indication of cardinality problem is Prometheus performance degradation | Acceptable if tenant count is documented as ≤10 and a follow-up task is filed |
+
+---
+
+## Integration Gotchas
+
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| OTel `AddView` for histogram buckets | Calling `AddView` after `AddMeter` in the `WithMetrics` lambda — OTel .NET may not apply the view to an already-registered instrument | Register `AddView` calls before the `AddMeter` calls in the same `WithMetrics` lambda |
+| Prometheus `histogram_quantile` with multi-instance histogram | `histogram_quantile(0.99, rate(bucket[2m]))` without `sum by (le, tenant_id)` — mixes buckets from 3 instances, produces incorrect percentile | Always: `histogram_quantile(0.99, sum by (le, tenant_id, priority) (rate(...bucket[2m])))` |
+| Grafana table for leader-gated state gauge | `max by (tenant_id, priority)` fails to find any series if the leader pod is not yet elected | Add `or vector(0)` fallback, or document expected blank behaviour during leader election startup |
+| `MetricRoleGatedExporter` `ParentProvider` reflection | The `_parentProviderPropagated` flag is set once per exporter instance; if any new meter is added after the flag is set, the inner exporter already has the parent provider | No action needed — the flag pattern is correct; do not attempt to reset it |
+
+---
+
+## Performance Traps
+
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| `TagList` allocation per counter increment | `TagList` with ≤8 tags is stack-allocated in OTel .NET; >8 tags falls back to heap allocation | Keep tag count on all tenant instruments to `(tenant_id, priority)` = 2 tags; do not add more | Breaks allocation budget if tag count exceeds 8 |
+| Per-tenant histogram `Record` inside `Task.WhenAll` parallel evaluation | `SnapshotJob` runs tenant evaluation in parallel; histogram `Record` must be thread-safe | OTel .NET histogram instruments are designed for concurrent use (confirmed in SDK source); safe as-is | Not a risk with current SDK |
+| `priority` label as a proxy for per-tenant unique values | If each tenant has a unique priority integer, `priority` becomes an alias for `tenant_id` and provides no grouping benefit while doubling series count | Document that `priority` reflects shared priority levels, not per-tenant unique identifiers; validate that operators do not assign unique priorities to every tenant | Breaks grouping utility as tenant count grows |
+
+---
+
+## "Looks Done But Isn't" Checklist
+
+- [ ] **State gauge meter assignment:** Confirm `snmp_tenant_state` is created on `LeaderMeterName`. Check: query Prometheus and verify `snmp_tenant_state` shows only 1 series per `(tenant_id, priority)` pair (not 3).
+- [ ] **Counter PromQL aggregation:** Every Grafana panel querying tenant counters uses `sum by (tenant_id, priority)`. Check: raw counter query returns `3 × tenant_count` series; post-aggregation returns `tenant_count` series.
+- [ ] **Histogram bucket boundaries applied:** Confirm custom boundaries are active. Check: `snmp_tenant_eval_duration_ms_bucket` in Prometheus has `le` label values matching the `AddView` boundaries (e.g., `0.5`, `1.0`), not default values (`5.0`, `10.0`, `25.0`).
+- [ ] **State encoding constants defined:** No numeric literals in `gauge.Record()` call sites. Check: grep for `gauge.Record` invocations in `TenantMetricService` — all use named constants.
+- [ ] **`CardinalityAuditService` updated:** Startup log shows tenant instrument series estimate alongside existing device/OID estimate. Check: `kubectl logs` on fresh start and grep for "tenant" in cardinality log line.
+- [ ] **MetricRoleGatedExporter unchanged:** `MetricRoleGatedExporter.cs` not modified in this milestone's PR. Check: `git diff HEAD~1 -- src/SnmpCollector/Telemetry/MetricRoleGatedExporter.cs` shows no changes.
+- [ ] **Rate window documented on dashboard panels:** Each counter panel PromQL uses `[2m]` or longer window; panel description states "zero rate = healthy system" for dispatch/failure counters.
+
+---
+
+## Recovery Strategies
+
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| Counter double-counting (TV-1) | LOW | Update Grafana dashboard PromQL to add `sum by (tenant_id, priority)`; no code or redeploy needed |
+| State gauge on wrong meter (TV-2) | MEDIUM | Move gauge creation to `LeaderMeterName` service; redeploy; old 3-series data persists in Prometheus until retention expires |
+| Wrong histogram buckets (TV-4) | MEDIUM | Add `AddView` with correct boundaries; redeploy; historical histogram data is incompatible with new bucket layout — old percentiles are incorrect until data rolls off |
+| State encoding undocumented (TV-5) | LOW | Define constants in `TelemetryConstants.cs`; replace literals; Prometheus history unaffected |
+| Cardinality estimate incomplete (TV-6) | LOW | Update `CardinalityAuditService` formula; redeploy; no data loss |
+| Cardinality explosion from unbounded label (TV-6 variant) | HIGH | Remove high-cardinality label; redeploy; Prometheus TSDB may require manual series deletion or compaction to recover memory |
+
+---
+
+## Pitfall-to-Phase Mapping
+
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| Counter double-counting (TV-1) | Instrument definition — PromQL standards doc | Raw counter query returns 3× tenant count; aggregated query returns tenant count |
+| State gauge on wrong meter (TV-2) | Instrument definition — meter assignment decision | Prometheus shows exactly 1 series per tenant for state gauge |
+| MetricRoleGatedExporter unchanged (TV-3) | Instrument definition — no exporter code changes | `git diff` shows no changes to `MetricRoleGatedExporter.cs` |
+| Histogram bucket sizing (TV-4) | Instrument definition — `AddView` in `AddSnmpTelemetry` | Prometheus `le` values for eval histogram match custom boundaries |
+| Enum gauge integer mapping (TV-5) | Instrument definition (constants) + dashboard (Value Mappings) | Grafana state column shows text labels with correct colours |
+| Cardinality audit update (TV-6) | Instrument definition — same PR as instrument creation | Startup log includes tenant series count |
+| Rate window sizing (TV-7) | Dashboard implementation — window and description per panel | All tenant counter panels use `[2m]` or longer; no panel uses window < 30s |
+
+---
+
+## Sources (Tenant Vector Metrics section)
+
+- `src/SnmpCollector/Telemetry/MetricRoleGatedExporter.cs` — meter-name gating logic (line 56), leader-only vs. all-instances design
+- `src/SnmpCollector/Telemetry/TelemetryConstants.cs` — `MeterName` and `LeaderMeterName` constants
+- `src/SnmpCollector/Telemetry/PipelineMetricService.cs` — existing 15 instruments all on `MeterName`; counter tag pattern (`device_name` tag, `Add(1, tagList)`)
+- `src/SnmpCollector/Jobs/SnapshotJob.cs` — `TierResult` enum (Healthy/Resolved/Unresolved), 15s cycle, parallel tenant evaluation via `Task.WhenAll`
+- `src/SnmpCollector/Extensions/ServiceCollectionExtensions.cs` — `PeriodicExportingMetricReader` at 15s; `MetricReaderTemporalityPreference.Cumulative` (required for Prometheus `rate()`); `AddView` hook point in `WithMetrics` lambda
+- `src/SnmpCollector/Pipeline/CardinalityAuditService.cs` — existing cardinality formula (devices × OIDs × 2 × 2); does not include tenant instruments
+- `src/SnmpCollector/Pipeline/TenantVectorRegistry.cs` — `Tenant.Id` source (configured name or `"tenant-{i}"` fallback); tenant count bounded by configuration
+- OTel .NET SDK default histogram boundaries: `[0,5,10,25,50,75,100,250,500,750,1000,2500,5000,7500,10000]` — HIGH confidence, cross-referenced with OTel specification and Prometheus default bucket behaviour
