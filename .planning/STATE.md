@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.3 Metric Validity & Correctness — Phase 69: Business Metric Value Correctness
+**Current focus:** v2.3 Metric Validity & Correctness — Phase 70: Label Correctness
 
 ## Current Position
 
-Phase: 69 of 71 (Business Metric Value Correctness)
+Phase: 70 of 71 (Label Correctness)
 Plan: 2 of 2 in current phase
 Status: Phase complete
-Last activity: 2026-03-22 — Completed 69-02-PLAN.md (MVC-08 value-change scenario; MVC suite complete at indices 88-95)
+Last activity: 2026-03-22 — Completed 70-02-PLAN.md (MLC-03 source=command scenario 96; phase 70 label correctness complete)
 
-Progress: [████░░░░░░] v2.3 phase 69 complete (2/2 plans in phase)
+Progress: [█████░░░░░] v2.3 phase 70 complete (2/2 plans in phase)
 
 ## Performance Metrics
 
@@ -47,6 +47,8 @@ Progress: [████░░░░░░] v2.3 phase 69 complete (2/2 plans in 
 - MVC SCENARIO_RESULTS: 7 entries at indices 88-94 (MVC-01 through MVC-07); index 95 reserved for MVC-08
 - Counter32/Counter64 arrive in snmp_gauge as raw gauge values (no rate conversion) -- OtelMetricHandler calls RecordGauge for all 5 numeric SNMP types
 - IpAddress snmp_info value label: MEDIUM confidence on exact format; MVC-07 asserts "10.0.0.1" and logs actual value in EVIDENCE
+- MLC SCENARIO_RESULTS: 8 entries at indices 96-103 (MLC-01 through MLC-08); MLC-03=index 96 (source=command), MLC-01/02/04-08 in plan 01 at 94-95/97-103
+- device_name on snmp_gauge is community-derived (e.g. "E2E-SIM"), NOT tenant name (e.g. "e2e-pss-tenant"); dispatch counter uses tenant name, gauge series use device name
 
 ### Decisions
 
@@ -66,6 +68,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T18:07:18Z
-Stopped at: Completed 69-02-PLAN.md — MVC-08 value-change scenario (93); MVC suite complete at indices 88-95; phase 69 fully complete
+Last session: 2026-03-22T18:35:03Z
+Stopped at: Completed 70-02-PLAN.md — MLC-03 source=command scenario (96); MLC and phase 70 label correctness fully complete
 Resume file: None
