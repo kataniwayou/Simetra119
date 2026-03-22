@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.3 Metric Validity & Correctness — Phase 66: Pipeline Event Counters
+**Current focus:** v2.3 Metric Validity & Correctness — Phase 67: Poll & Trap Infrastructure Counters
 
 ## Current Position
 
-Phase: 66 of 71 (Pipeline Event Counters)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-03-22 — Completed 66-03-PLAN.md (MCV-05/06/07 safety-net counter scenarios 73-75)
+Phase: 67 of 71 (Poll & Trap Infrastructure Counters)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-03-22 — Completed 67-01-PLAN.md (MCV-08/09/09b/10 scenarios 76-79, report.sh extended to 81)
 
-Progress: [███░░░░░░░] v2.3 phase 66 complete (3/3 plans)
+Progress: [███░░░░░░░] v2.3 phase 67 in progress (1/2 plans)
 
 ## Performance Metrics
 
@@ -60,6 +60,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T15:03:34Z
-Stopped at: Completed 66-03-PLAN.md — MCV-05/06/07 safety-net counter scenarios (73-75); Phase 66 complete
+Last session: 2026-03-22T15:33:58Z
+Stopped at: Completed 67-01-PLAN.md — MCV-08/09/09b/10 scenarios 76-79; report.sh extended to index 81
 Resume file: None
