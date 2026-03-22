@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 Phase: 65 of 65 (E2E Runner Fixes — Complete)
 Plan: 01 of 01
 Status: Phase complete
-Last activity: 2026-03-22 — Completed 65-01: E2E runner fixes (stale filenames, cleanup trap, flaky PSS-18c/19c, standalone report categories)
+Last activity: 2026-03-22 — Completed quick task 084: PSS-17c/20c --since=10s alignment
 
 Progress: [██████████] v2.2 Phase 65 complete (all phases and plans done)
 
