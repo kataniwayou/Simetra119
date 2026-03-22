@@ -121,7 +121,11 @@ See `.planning/milestones/v2.2-ROADMAP.md` for details.
   3. `snmp.event.handled` increases only for OIDs that are mapped in oidmaps.json; unmapped OIDs produce no handled increment.
   4. `snmp.event.rejected` increases only for OIDs not in oidmaps.json; mapped OIDs produce no rejected increment.
   5. `snmp.event.errors` reads 0 after a complete normal E2E run.
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 66-01-PLAN.md — Add assert_delta_eq/ge helpers and report category
+- [ ] 66-02-PLAN.md — Scenarios 69-72: poll published, trap published, handled parity, handled-not-for-rejected
+- [ ] 66-03-PLAN.md — Scenarios 73-75: rejected behavior (unmapped), rejected stays 0 (mapped), errors stays 0
 
 #### Phase 67: Poll & Trap Infrastructure Counters
 
@@ -231,7 +235,7 @@ See `.planning/milestones/v2.2-ROADMAP.md` for details.
 | 63. Two Tenant Independence | v2.2 | 2/2 | Complete | 2026-03-20 |
 | 64. Advance Gate Logic | v2.2 | 3/3 | Complete | 2026-03-20 |
 | 65. E2E Runner Fixes & Flaky Stabilization | v2.2 | 1/1 | Complete | 2026-03-22 |
-| 66. Pipeline Event Counters | v2.3 | 0/? | Not started | - |
+| 66. Pipeline Event Counters | v2.3 | 0/3 | Not started | - |
 | 67. Poll & Trap Infrastructure Counters | v2.3 | 0/? | Not started | - |
 | 68. Command Counters | v2.3 | 0/? | Not started | - |
 | 69. Business Metric Value Correctness | v2.3 | 0/? | Not started | - |
@@ -240,4 +244,4 @@ See `.planning/milestones/v2.2-ROADMAP.md` for details.
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-22 — v2.3 milestone roadmap defined (Phases 66-71)*
+*Last updated: 2026-03-22 — Phase 66 planned (3 plans, 2 waves)*
