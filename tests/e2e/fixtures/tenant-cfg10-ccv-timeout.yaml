@@ -7,7 +7,7 @@ data:
   tenants.json: |
     [
       {
-        "Name": "e2e-ccv-failed",
+        "Name": "e2e-ccv-timeout",
         "Priority": 1,
         "SuppressionWindowSeconds": 5,
         "Metrics": [
@@ -37,9 +37,9 @@ data:
         ],
         "Commands": [
           {
-            "Ip": "e2e-simulator.simetra.svc.cluster.local",
+            "Ip": "10.255.255.254",
             "Port": 161,
-            "CommandName": "e2e_set_unknown",
+            "CommandName": "e2e_set_bypass",
             "Value": "0",
             "ValueType": "Integer32"
           }
