@@ -26,11 +26,7 @@ public sealed class SnapshotJob : IJob
     private readonly SnapshotJobOptions _options;
     private readonly ILogger<SnapshotJob> _logger;
 
-    /// <summary>
-    /// Result of per-tenant 4-tier evaluation. Drives priority-group advance gate
-    /// and cycle summary logging.
-    /// </summary>
-    internal enum TierResult { Resolved, Healthy, Unresolved }
+    private readonly ITenantMetricService _tenantMetrics;
 
     public SnapshotJob(
         ITenantVectorRegistry registry,
@@ -39,6 +35,7 @@ public sealed class SnapshotJob : IJob
         ICorrelationService correlation,
         ILivenessVectorService liveness,
         PipelineMetricService pipelineMetrics,
+        ITenantMetricService tenantMetrics,
         IOptions<SnapshotJobOptions> options,
         ILogger<SnapshotJob> logger)
     {
@@ -48,6 +45,7 @@ public sealed class SnapshotJob : IJob
         _correlation = correlation;
         _liveness = liveness;
         _pipelineMetrics = pipelineMetrics;
+        _tenantMetrics = tenantMetrics;
         _options = options.Value;
         _logger = logger;
     }
@@ -65,7 +63,7 @@ public sealed class SnapshotJob : IJob
 
             foreach (var group in _registry.Groups)
             {
-                var results = new TierResult[group.Tenants.Count];
+                var results = new TenantState[group.Tenants.Count];
                 if (group.Tenants.Count == 1)
                 {
                     // Single tenant: evaluate directly on Quartz thread — no ThreadPool hop
@@ -82,14 +80,14 @@ public sealed class SnapshotJob : IJob
                 for (var i = 0; i < results.Length; i++)
                 {
                     totalEvaluated++;
-                    if (results[i] == TierResult.Unresolved) totalUnresolved++;
+                    if (results[i] == TenantState.Unresolved || results[i] == TenantState.NotReady) totalUnresolved++;
                 }
 
-                // Advance gate: block if ANY tenant is Unresolved
+                // Advance gate: block if ANY tenant is Unresolved or NotReady
                 var shouldAdvance = true;
                 for (var i = 0; i < results.Length; i++)
                 {
-                    if (results[i] == TierResult.Unresolved)
+                    if (results[i] == TenantState.Unresolved || results[i] == TenantState.NotReady)
                     {
                         shouldAdvance = false;
                         break;
@@ -131,7 +129,7 @@ public sealed class SnapshotJob : IJob
     /// Tier 3: evaluate threshold — if all violated, proceed to tier 4.
     /// Tier 4: command dispatch with suppression.
     /// </summary>
-    internal TierResult EvaluateTenant(Tenant tenant)
+    internal TenantState EvaluateTenant(Tenant tenant)
     {
         // Pre-tier: Readiness check — skip tenants where any holder is still in grace window
         if (!AreAllReady(tenant.Holders))
@@ -139,7 +137,7 @@ public sealed class SnapshotJob : IJob
             _logger.LogDebug(
                 "Tenant {TenantId} priority={Priority} not ready (in grace window) — skipping",
                 tenant.Id, tenant.Priority);
-            return TierResult.Unresolved;
+            return TenantState.NotReady;
         }
 
         // Tier 1: Staleness check — stale data skips tiers 2-3, goes straight to commands
@@ -158,7 +156,7 @@ public sealed class SnapshotJob : IJob
                 _logger.LogDebug(
                     "Tenant {TenantId} priority={Priority} tier=2 — all resolved violated, no commands",
                     tenant.Id, tenant.Priority);
-                return TierResult.Resolved;
+                return TenantState.Resolved;
             }
 
             // Not all Resolved violated — proceed to Tier 3 (evaluate check)
@@ -172,7 +170,7 @@ public sealed class SnapshotJob : IJob
                 _logger.LogDebug(
                     "Tenant {TenantId} priority={Priority} tier=3 — not all evaluate metrics violated, no action",
                     tenant.Id, tenant.Priority);
-                return TierResult.Healthy;
+                return TenantState.Healthy;
             }
         }
 
@@ -215,7 +213,7 @@ public sealed class SnapshotJob : IJob
 
         // Tier 4 reached = command intent = device state unresolved,
         // regardless of whether commands were actually dispatched (suppression/channel full)
-        return TierResult.Unresolved;
+        return TenantState.Unresolved;
     }
 
     /// <summary>
