@@ -167,14 +167,14 @@ Plans:
 **Gap Closure**: Closes tech debt from v2.2-MILESTONE-AUDIT.md
 **Success Criteria** (what must be TRUE):
   1. `run-stage2.sh` references correct scenario filenames (53-pss-01-not-ready.sh, 54-pss-02-stale-to-commands.sh, 55-pss-03-resolved.sh) and all 6 Stage 1 scenarios execute in standalone mode
-  2. `run-stage2.sh` has a cleanup trap that restores the tenant ConfigMap on unexpected exit
+  2. `run-stage2.sh` has a cleanup trap that resets OID overrides on unexpected exit (no ConfigMap save/restore needed — individual scenarios manage their own tenant ConfigMap lifecycle)
   3. PSS-18c and PSS-19c log-absence assertions use a `--since` window that matches or exceeds the observation sleep, eliminating the 2s overlap that causes false positives
   4. Standalone `run-stage3.sh` and `run-stage2.sh` generate reports with the PSS category correctly rendered (not silently skipped due to index mismatch)
 
 **Plans**: 1 plan
 
 Plans:
-- [ ] 65-01-PLAN.md -- Runner fixes, flaky assertion stabilization, report category fix
+- [x] 65-01-PLAN.md -- Runner fixes, flaky assertion stabilization, report category fix
 
 ---
 
@@ -222,8 +222,8 @@ Plans:
 | 62. Single Tenant Evaluation States | v2.2 | 2/2 | Complete | 2026-03-20 |
 | 63. Two Tenant Independence | v2.2 | 2/2 | Complete | 2026-03-20 |
 | 64. Advance Gate Logic | v2.2 | 3/3 | Complete | 2026-03-20 |
-| 65. E2E Runner Fixes & Flaky Stabilization | v2.2 | 0/1 | Planned | - |
+| 65. E2E Runner Fixes & Flaky Stabilization | v2.2 | 1/1 | Complete | 2026-03-22 |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-20 after Phase 64 complete — v2.2 milestone shipped*
+*Last updated: 2026-03-22 after Phase 65 complete — v2.2 gap closure done*
