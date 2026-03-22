@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.3 Metric Validity & Correctness
+**Current focus:** v2.3 Metric Validity & Correctness — Phase 66: Pipeline Event Counters
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-22 — Milestone v2.3 started
+Phase: 66 of 71 (Pipeline Event Counters)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-03-22 — v2.3 roadmap defined (Phases 66-71, 38 requirements)
 
-Progress: [░░░░░░░░░░] v2.3 requirements phase
+Progress: [░░░░░░░░░░] v2.3 phase 66 not started
 
 ## Performance Metrics
 
@@ -38,6 +38,9 @@ Progress: [░░░░░░░░░░] v2.3 requirements phase
 - 37 metric instruments total: 14 pipeline counters, 4 business instruments, 3 histograms, 16 test OIDs
 - snmp.event.errors and snmp.trap.dropped are safety-net counters — assert stays 0
 - Leader-gated export: snmp_gauge/snmp_info only exported by leader pod
+- E2E scenarios continue from 69 (68 existing: 01-68)
+- MCV-11/12 require fake unreachable device IP in E2E fixture config
+- CCV-04 requires triggering SET for OID not in command map
 
 ### Decisions
 
@@ -58,5 +61,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-22T16:00:00Z
-Stopped at: Defining v2.3 milestone requirements
+Stopped at: v2.3 roadmap created — ready to plan Phase 66
 Resume file: None

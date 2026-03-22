@@ -72,49 +72,50 @@ Requirements for Metric Validity & Correctness milestone. Each maps to roadmap p
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MCV-01 | Pending | Pending |
-| MCV-02 | Pending | Pending |
-| MCV-03 | Pending | Pending |
-| MCV-04 | Pending | Pending |
-| MCV-05 | Pending | Pending |
-| MCV-06 | Pending | Pending |
-| MCV-07 | Pending | Pending |
-| MCV-08 | Pending | Pending |
-| MCV-09 | Pending | Pending |
-| MCV-10 | Pending | Pending |
-| MCV-11 | Pending | Pending |
-| MCV-12 | Pending | Pending |
-| MCV-13 | Pending | Pending |
-| CCV-01 | Pending | Pending |
-| CCV-02 | Pending | Pending |
-| CCV-03 | Pending | Pending |
-| CCV-04 | Pending | Pending |
-| MVC-01 | Pending | Pending |
-| MVC-02 | Pending | Pending |
-| MVC-03 | Pending | Pending |
-| MVC-04 | Pending | Pending |
-| MVC-05 | Pending | Pending |
-| MVC-06 | Pending | Pending |
-| MVC-07 | Pending | Pending |
-| MVC-08 | Pending | Pending |
-| MLC-01 | Pending | Pending |
-| MLC-02 | Pending | Pending |
-| MLC-03 | Pending | Pending |
-| MLC-04 | Pending | Pending |
-| MLC-05 | Pending | Pending |
-| MLC-06 | Pending | Pending |
-| MLC-07 | Pending | Pending |
-| MLC-08 | Pending | Pending |
-| MNP-01 | Pending | Pending |
-| MNP-02 | Pending | Pending |
-| MNP-03 | Pending | Pending |
-| MNP-04 | Pending | Pending |
-| MNP-05 | Pending | Pending |
+| MCV-01 | Phase 66 | Pending |
+| MCV-02 | Phase 66 | Pending |
+| MCV-03 | Phase 66 | Pending |
+| MCV-04 | Phase 66 | Pending |
+| MCV-05 | Phase 66 | Pending |
+| MCV-06 | Phase 66 | Pending |
+| MCV-07 | Phase 66 | Pending |
+| MCV-08 | Phase 67 | Pending |
+| MCV-09 | Phase 67 | Pending |
+| MCV-10 | Phase 67 | Pending |
+| MCV-11 | Phase 67 | Pending |
+| MCV-12 | Phase 67 | Pending |
+| MCV-13 | Phase 67 | Pending |
+| CCV-01 | Phase 68 | Pending |
+| CCV-02 | Phase 68 | Pending |
+| CCV-03 | Phase 68 | Pending |
+| CCV-04 | Phase 68 | Pending |
+| MVC-01 | Phase 69 | Pending |
+| MVC-02 | Phase 69 | Pending |
+| MVC-03 | Phase 69 | Pending |
+| MVC-04 | Phase 69 | Pending |
+| MVC-05 | Phase 69 | Pending |
+| MVC-06 | Phase 69 | Pending |
+| MVC-07 | Phase 69 | Pending |
+| MVC-08 | Phase 69 | Pending |
+| MLC-01 | Phase 70 | Pending |
+| MLC-02 | Phase 70 | Pending |
+| MLC-03 | Phase 70 | Pending |
+| MLC-04 | Phase 70 | Pending |
+| MLC-05 | Phase 70 | Pending |
+| MLC-06 | Phase 70 | Pending |
+| MLC-07 | Phase 70 | Pending |
+| MLC-08 | Phase 70 | Pending |
+| MNP-01 | Phase 71 | Pending |
+| MNP-02 | Phase 71 | Pending |
+| MNP-03 | Phase 71 | Pending |
+| MNP-04 | Phase 71 | Pending |
+| MNP-05 | Phase 71 | Pending |
 
 **Coverage:**
 - v2.3 requirements: 38 total
-- Mapped to phases: 0
-- Unmapped: 38
+- Mapped to phases: 38
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-22*
+*Traceability updated: 2026-03-22 — all 38 requirements mapped to Phases 66-71*
