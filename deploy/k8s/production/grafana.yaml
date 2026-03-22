@@ -6,16 +6,18 @@
 # NodePort service already exists in service-nodeports.yaml (30030/TCP).
 # Operator accesses Grafana at http://<minikube-ip>:30030.
 #
-# Post-deployment setup (performed manually by operator via Grafana UI):
-#   1. Add Prometheus datasource: URL http://prometheus:9090
-#   2. Import dashboard JSONs from deploy/grafana/dashboards/
-#      - simetra-operations.json
-#      - simetra-business.json
+# Dashboards and Prometheus datasource are auto-provisioned on startup via
+# ConfigMaps defined in grafana-provisioning.yaml. Dashboard JSON files are
+# loaded from the grafana-dashboards ConfigMap.
+#
+# Setup:
+#   1. kubectl apply -f deploy/k8s/production/grafana-provisioning.yaml
+#   2. kubectl create configmap grafana-dashboards \
+#        --from-file=deploy/grafana/dashboards/ \
+#        -n simetra --dry-run=client -o yaml | kubectl apply -f -
+#   3. kubectl apply -f deploy/k8s/production/grafana.yaml
 #
 # Default credentials: admin / admin (Grafana built-in default).
-#
-# Usage:
-#   kubectl apply -f deploy/k8s/production/grafana.yaml
 # =============================================================================
 apiVersion: apps/v1
 kind: Deployment
@@ -68,3 +70,23 @@ spec:
           limits:
             cpu: 200m
             memory: 256Mi
+        volumeMounts:
+        - name: datasources
+          mountPath: /etc/grafana/provisioning/datasources
+          readOnly: true
+        - name: dashboard-provider
+          mountPath: /etc/grafana/provisioning/dashboards
+          readOnly: true
+        - name: dashboards
+          mountPath: /var/lib/grafana/dashboards
+          readOnly: true
+      volumes:
+      - name: datasources
+        configMap:
+          name: grafana-datasources
+      - name: dashboard-provider
+        configMap:
+          name: grafana-dashboard-provider
+      - name: dashboards
+        configMap:
+          name: grafana-dashboards

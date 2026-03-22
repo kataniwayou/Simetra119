@@ -1,0 +1,55 @@
+# =============================================================================
+# Grafana Provisioning -- Datasources & Dashboard Provider
+# =============================================================================
+# Automatically configures Prometheus datasource and dashboard file provider
+# so Grafana loads everything on startup without manual operator steps.
+#
+# Dashboard JSON files are loaded from a separate ConfigMap (grafana-dashboards)
+# created via:
+#   kubectl create configmap grafana-dashboards \
+#     --from-file=deploy/grafana/dashboards/ \
+#     -n simetra --dry-run=client -o yaml | kubectl apply -f -
+#
+# Usage:
+#   kubectl apply -f deploy/k8s/production/grafana-provisioning.yaml
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: simetra
+  labels:
+    app: grafana
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        uid: dfg62p9s7xl34a
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+  namespace: simetra
+  labels:
+    app: grafana
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: default
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 30
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards
+          foldersFromFilesStructure: false
