@@ -171,8 +171,8 @@ Plans:
   4. After changing a simulator value (42 to 99), `snmp_gauge` reflects the new value within the next poll cycle.
 **Plans:** 2 plans
 Plans:
-- [ ] 69-01-PLAN.md — Scenarios 86-92: static value assertions for all 7 SNMP types + report category
-- [ ] 69-02-PLAN.md — Scenario 93: value-change propagation test (42->99)
+- [x] 69-01-PLAN.md — Scenarios 86-92: static value assertions for all 7 SNMP types + report category
+- [x] 69-02-PLAN.md — Scenario 93: value-change propagation test (42->99)
 
 #### Phase 70: Label Correctness
 
@@ -249,10 +249,10 @@ Plans:
 | 66. Pipeline Event Counters | v2.3 | 3/3 | Complete | 2026-03-22 |
 | 67. Poll & Trap Infrastructure Counters | v2.3 | 2/2 | Complete | 2026-03-22 |
 | 68. Command Counters | v2.3 | 4/4 | Complete | 2026-03-22 |
-| 69. Business Metric Value Correctness | v2.3 | 0/2 | Not started | - |
+| 69. Business Metric Value Correctness | v2.3 | 2/2 | Complete | 2026-03-22 |
 | 70. Label Correctness | v2.3 | 0/? | Not started | - |
 | 71. Negative Proofs | v2.3 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-22 -- Phase 69 planned (2 plans in 2 waves)*
+*Last updated: 2026-03-22 -- Phase 69 complete (2/2 plans, 8 scenarios 86-93)*
