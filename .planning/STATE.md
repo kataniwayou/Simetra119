@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Planning next milestone
+**Current focus:** v2.3 Metric Validity & Correctness
 
 ## Current Position
 
-Phase: None (between milestones)
-Plan: N/A
-Status: v2.2 milestone complete
-Last activity: 2026-03-22 — v2.2 Progressive E2E Snapshot Suite shipped
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-22 — Milestone v2.3 started
 
-Progress: [██████████] v2.2 complete
+Progress: [░░░░░░░░░░] v2.3 requirements phase
 
 ## Performance Metrics
 
@@ -35,12 +35,13 @@ Progress: [██████████] v2.2 complete
 - Thresholds: Resolved Min:1, Evaluate Min:10
 - Grace window: TimeSeriesSize(3) * IntervalSeconds(1) * GraceMultiplier(2) = 6s
 - Stage gating: script checks FAIL_COUNT before proceeding to next stage
-- PSS-04/05 (trap/command immunity) require tenant metrics mapped to trap/command-sourced OIDs -- design decision for Phase 62
+- 37 metric instruments total: 14 pipeline counters, 4 business instruments, 3 histograms, 16 test OIDs
+- snmp.event.errors and snmp.trap.dropped are safety-net counters — assert stays 0
+- Leader-gated export: snmp_gauge/snmp_info only exported by leader pod
 
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-v2.2 decisions archived to milestones/v2.2-ROADMAP.md.
 
 ### Blockers/Concerns
 
@@ -56,6 +57,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T15:30:00Z
-Stopped at: v2.2 milestone completed and archived
+Last session: 2026-03-22T16:00:00Z
+Stopped at: Defining v2.3 milestone requirements
 Resume file: None

@@ -147,7 +147,16 @@ See `.planning/milestones/v2.2-REQUIREMENTS.md` for full requirement details.
 
 ### Active
 
-(None — next milestone TBD)
+**v2.3 Metric Validity & Correctness (in progress)**
+
+- Validate every pipeline counter increments exactly when justified and stays 0 when it shouldn't
+- Validate snmp_gauge values match what the simulator sent (all 5 numeric SNMP types)
+- Validate snmp_info labels match simulator string values (OctetString, IpAddress)
+- Validate source label correctness (poll, trap, command, synthetic)
+- Validate label correctness (resolved_name, oid, device_name, snmp_type)
+- Negative proofs: heartbeat suppression, auth rejection, unmapped OID rejection, command suppression
+- Safety-net counters (event.errors, trap.dropped) proven to stay 0 under normal operation
+- All validation via Prometheus queries against E2E simulator
 
 ### Out of Scope
 
@@ -217,4 +226,4 @@ See `.planning/milestones/v2.2-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-22 after v2.2 milestone shipped*
+*Last updated: 2026-03-22 after v2.3 milestone started*
