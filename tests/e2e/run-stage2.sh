@@ -36,6 +36,7 @@ source "$SCRIPT_DIR/lib/sim.sh"
 
 cleanup() {
     log_info "Cleaning up..."
+    reset_oid_overrides || true
     stop_port_forwards
 }
 trap cleanup EXIT
@@ -88,9 +89,9 @@ echo "============================================="
 echo ""
 
 for scenario in \
-    "$SCRIPT_DIR/scenarios/53-pss-01-readiness.sh" \
-    "$SCRIPT_DIR/scenarios/54-pss-02-resolved.sh" \
-    "$SCRIPT_DIR/scenarios/55-pss-03-healthy.sh" \
+    "$SCRIPT_DIR/scenarios/53-pss-01-not-ready.sh" \
+    "$SCRIPT_DIR/scenarios/54-pss-02-stale-to-commands.sh" \
+    "$SCRIPT_DIR/scenarios/55-pss-03-resolved.sh" \
     "$SCRIPT_DIR/scenarios/56-pss-04-unresolved.sh" \
     "$SCRIPT_DIR/scenarios/57-pss-05-healthy.sh" \
     "$SCRIPT_DIR/scenarios/58-pss-06-suppression.sh"; do
