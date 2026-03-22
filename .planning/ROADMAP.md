@@ -138,7 +138,10 @@ Plans:
   3. `snmp.trap.auth_failed` increases for every trap with a bad community string.
   4. After 3 consecutive poll failures to an unreachable IP, `snmp.poll.unreachable` has increased; once that device becomes reachable again, `snmp.poll.recovered` increases.
   5. `snmp.tenantvector.routed` increases when a tenant vector fan-out write completes.
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 67-01-PLAN.md — Scenarios 76-79: poll.executed, trap.received, trap.received negative, trap.auth_failed + report category update
+- [ ] 67-02-PLAN.md — Scenarios 80-82: poll.unreachable, poll.recovered, tenantvector.routed
 
 #### Phase 68: Command Counters
 
@@ -236,7 +239,7 @@ Plans:
 | 64. Advance Gate Logic | v2.2 | 3/3 | Complete | 2026-03-20 |
 | 65. E2E Runner Fixes & Flaky Stabilization | v2.2 | 1/1 | Complete | 2026-03-22 |
 | 66. Pipeline Event Counters | v2.3 | 3/3 | Complete | 2026-03-22 |
-| 67. Poll & Trap Infrastructure Counters | v2.3 | 0/? | Not started | - |
+| 67. Poll & Trap Infrastructure Counters | v2.3 | 0/2 | Not started | - |
 | 68. Command Counters | v2.3 | 0/? | Not started | - |
 | 69. Business Metric Value Correctness | v2.3 | 0/? | Not started | - |
 | 70. Label Correctness | v2.3 | 0/? | Not started | - |
@@ -244,4 +247,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-22 — Phase 66 complete (3/3 plans, 7 scenarios)*
+*Last updated: 2026-03-22 — Phase 67 planned (2 plans, 7 scenarios 76-82)*
