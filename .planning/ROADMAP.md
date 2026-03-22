@@ -150,12 +150,14 @@ Plans:
 **Requirements**: CCV-01, CCV-02, CCV-03, CCV-04
 **Success Criteria** (what must be TRUE):
   1. When SnapshotJob evaluates a tenant at tier=4 and enqueues a SET command, `snmp.command.dispatched` increases by 1.
-  2. A second tier=4 evaluation for the same OID within the suppression window increments `snmp.command.suppressed` and does NOT increment `snmp.command.dispatched`.
-  3. Triggering a SET command for an OID that is not in the command map causes `snmp.command.failed` to increase.
-**Plans:** 2 plans
+  2. A second tier=4 evaluation within the suppression window increments both `snmp.command.dispatched` and `snmp.command.suppressed` simultaneously (dispatched fires on every tier=4 enqueue, suppressed fires when within suppression window).
+  3. Triggering a SET command to an unreachable device causes `snmp.command.failed` to increase (timeout path).
+**Plans:** 4 plans
 Plans:
 - [x] 68-01-PLAN.md — Scenarios 83-84: command.dispatched (CCV-01), command.suppressed + dispatched-unchanged (CCV-02/03) + report category
 - [x] 68-02-PLAN.md — Scenario 85: command.failed via unmapped CommandName (CCV-04) + new fixture
+- [ ] 68-03-PLAN.md — Gap closure: fix CCV-03 assertion (dispatched fires on every tier=4, not mutually exclusive with suppression)
+- [ ] 68-04-PLAN.md — Gap closure: rewrite CCV-04 to use timeout path (unreachable IP) instead of unmapped CommandName
 
 #### Phase 69: Business Metric Value Correctness
 
@@ -243,11 +245,11 @@ Plans:
 | 65. E2E Runner Fixes & Flaky Stabilization | v2.2 | 1/1 | Complete | 2026-03-22 |
 | 66. Pipeline Event Counters | v2.3 | 3/3 | Complete | 2026-03-22 |
 | 67. Poll & Trap Infrastructure Counters | v2.3 | 2/2 | Complete | 2026-03-22 |
-| 68. Command Counters | v2.3 | 2/2 | Complete | 2026-03-22 |
+| 68. Command Counters | v2.3 | 2/4 | Gap closure | 2026-03-22 |
 | 69. Business Metric Value Correctness | v2.3 | 0/? | Not started | - |
 | 70. Label Correctness | v2.3 | 0/? | Not started | - |
 | 71. Negative Proofs | v2.3 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-22 — Phase 68 complete (2/2 plans, 3 scenarios 83-85)*
+*Last updated: 2026-03-22 -- Phase 68 gap closure (2 plans: fix CCV-03 assertion, rewrite CCV-04 timeout path)*
