@@ -186,8 +186,8 @@ Plans:
   4. `device_name` label matches the name derived from the device's community string.
 **Plans:** 2 plans
 Plans:
-- [ ] 70-01-PLAN.md — Scenarios 94-95, 97-101: source=poll/trap/synthetic, snmp_type, resolved_name, device_name + report category
-- [ ] 70-02-PLAN.md — Scenario 96: source=command with tier=4 fixture setup/teardown
+- [x] 70-01-PLAN.md — Scenarios 94-95, 97-101: source=poll/trap/synthetic, snmp_type, resolved_name, device_name + report category
+- [x] 70-02-PLAN.md — Scenario 96: source=command with tier=4 fixture setup/teardown
 
 #### Phase 71: Negative Proofs
 
@@ -253,9 +253,9 @@ Plans:
 | 67. Poll & Trap Infrastructure Counters | v2.3 | 2/2 | Complete | 2026-03-22 |
 | 68. Command Counters | v2.3 | 4/4 | Complete | 2026-03-22 |
 | 69. Business Metric Value Correctness | v2.3 | 2/2 | Complete | 2026-03-22 |
-| 70. Label Correctness | v2.3 | 0/2 | Not started | - |
+| 70. Label Correctness | v2.3 | 2/2 | Complete | 2026-03-22 |
 | 71. Negative Proofs | v2.3 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-22 -- Phase 70 planned (2 plans, 8 scenarios 94-101)*
+*Last updated: 2026-03-22 -- Phase 70 complete (2/2 plans, 8 scenarios 94-101, sort -V fix)*
