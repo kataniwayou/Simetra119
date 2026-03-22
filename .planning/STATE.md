@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-22)
+See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.4 Tenant Vector Metrics
+**Current focus:** v2.4 Tenant Vector Metrics — Phase 72
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-22 — Milestone v2.4 started
+Phase: 72 of 75 (TenantMetricService & Meter Registration)
+Plan: 0/? — ready to plan
+Status: Ready to plan
+Last activity: 2026-03-23 — v2.4 roadmap created, phases 72-75 defined
 
-Progress: [░░░░░░░░░░] v2.4 started
+Progress: [░░░░░░░░░░] v2.4 started (0/4 phases)
 
 ## Performance Metrics
 
@@ -33,6 +33,10 @@ Progress: [░░░░░░░░░░] v2.4 started
 - dispatched = evaluation decision, suppressed = execution prevention, failed = runtime error
 - snmp.event.rejected = ValidationBehavior failures only (not unmapped OIDs)
 - Heartbeat produces snmp_gauge{resolved_name="Heartbeat"} (via MergeWithHeartbeatSeed)
+- v2.4: TenantMetricService uses "SnmpCollector.Tenant" meter — NOT "SnmpCollector.Leader" (would be follower-gated)
+- v2.4: Tier counters increment by holder/command count per cycle, not by 1
+- v2.4: Duration stopwatch inside EvaluateTenant per-tenant, not around Task.WhenAll group
+- v2.4: Prometheus label casing (tenant_id vs tenantId) must be confirmed before authoring dashboard PromQL
 
 ### Decisions
 
@@ -53,6 +57,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22
-Stopped at: Milestone v2.4 initialized, defining requirements
+Last session: 2026-03-23
+Stopped at: v2.4 roadmap created — Phase 72 ready to plan
 Resume file: None

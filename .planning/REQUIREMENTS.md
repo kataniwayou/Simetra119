@@ -55,36 +55,36 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TMET-01 | — | Pending |
-| TMET-02 | — | Pending |
-| TMET-03 | — | Pending |
-| TMET-04 | — | Pending |
-| TMET-05 | — | Pending |
-| TMET-06 | — | Pending |
-| TMET-07 | — | Pending |
-| TMET-08 | — | Pending |
-| TMET-09 | — | Pending |
-| TSJI-01 | — | Pending |
-| TSJI-02 | — | Pending |
-| TSJI-03 | — | Pending |
-| TSJI-04 | — | Pending |
-| TDSH-01 | — | Pending |
-| TDSH-02 | — | Pending |
-| TDSH-03 | — | Pending |
-| TDSH-04 | — | Pending |
-| TDSH-05 | — | Pending |
-| TDSH-06 | — | Pending |
-| TE2E-01 | — | Pending |
-| TE2E-02 | — | Pending |
-| TE2E-03 | — | Pending |
-| TE2E-04 | — | Pending |
-| TE2E-05 | — | Pending |
+| TMET-01 | Phase 72 | Pending |
+| TMET-02 | Phase 72 | Pending |
+| TMET-03 | Phase 72 | Pending |
+| TMET-04 | Phase 72 | Pending |
+| TMET-05 | Phase 72 | Pending |
+| TMET-06 | Phase 72 | Pending |
+| TMET-07 | Phase 72 | Pending |
+| TMET-08 | Phase 72 | Pending |
+| TMET-09 | Phase 72 | Pending |
+| TSJI-01 | Phase 73 | Pending |
+| TSJI-02 | Phase 73 | Pending |
+| TSJI-03 | Phase 73 | Pending |
+| TSJI-04 | Phase 73 | Pending |
+| TDSH-01 | Phase 74 | Pending |
+| TDSH-02 | Phase 74 | Pending |
+| TDSH-03 | Phase 74 | Pending |
+| TDSH-04 | Phase 74 | Pending |
+| TDSH-05 | Phase 74 | Pending |
+| TDSH-06 | Phase 74 | Pending |
+| TE2E-01 | Phase 75 | Pending |
+| TE2E-02 | Phase 75 | Pending |
+| TE2E-03 | Phase 75 | Pending |
+| TE2E-04 | Phase 75 | Pending |
+| TE2E-05 | Phase 75 | Pending |
 
 **Coverage:**
 - v2.4 requirements: 24 total
-- Mapped to phases: 0
-- Unmapped: 24 ⚠️
+- Mapped to phases: 24
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-23*
-*Last updated: 2026-03-23 after initial definition*
+*Last updated: 2026-03-23 — traceability mapped to phases 72-75*
