@@ -55,15 +55,15 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TMET-01 | Phase 72 | Pending |
-| TMET-02 | Phase 72 | Pending |
-| TMET-03 | Phase 72 | Pending |
-| TMET-04 | Phase 72 | Pending |
-| TMET-05 | Phase 72 | Pending |
-| TMET-06 | Phase 72 | Pending |
-| TMET-07 | Phase 72 | Pending |
-| TMET-08 | Phase 72 | Pending |
-| TMET-09 | Phase 72 | Pending |
+| TMET-01 | Phase 72 | Complete |
+| TMET-02 | Phase 72 | Complete |
+| TMET-03 | Phase 72 | Complete |
+| TMET-04 | Phase 72 | Complete |
+| TMET-05 | Phase 72 | Complete |
+| TMET-06 | Phase 72 | Complete |
+| TMET-07 | Phase 72 | Complete |
+| TMET-08 | Phase 72 | Complete |
+| TMET-09 | Phase 72 | Complete |
 | TSJI-01 | Phase 73 | Pending |
 | TSJI-02 | Phase 73 | Pending |
 | TSJI-03 | Phase 73 | Pending |

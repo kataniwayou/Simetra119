@@ -134,8 +134,8 @@ See `.planning/milestones/v2.3-ROADMAP.md` for details.
 **Plans:** 2 plans
 
 Plans:
-- [ ] 72-01-PLAN.md — Create TenantMetricService, interface, TenantState enum, DI registration, and unit tests
-- [ ] 72-02-PLAN.md — Migrate SnapshotJob from TierResult to TenantState, add ITenantMetricService injection
+- [x] 72-01-PLAN.md — Create TenantMetricService, interface, TenantState enum, DI registration, and unit tests
+- [x] 72-02-PLAN.md — Migrate SnapshotJob from TierResult to TenantState, add ITenantMetricService injection
 
 #### Phase 73: SnapshotJob Instrumentation
 
@@ -237,11 +237,11 @@ Plans:
 | 69. Business Metric Value Correctness | v2.3 | 2/2 | Complete | 2026-03-22 |
 | 70. Label Correctness | v2.3 | 2/2 | Complete | 2026-03-22 |
 | 71. Negative Proofs | v2.3 | 1/1 | Complete | 2026-03-22 |
-| 72. TenantMetricService & Meter Registration | v2.4 | 0/2 | Not started | - |
+| 72. TenantMetricService & Meter Registration | v2.4 | 2/2 | Complete | 2026-03-23 |
 | 73. SnapshotJob Instrumentation | v2.4 | 0/? | Not started | - |
 | 74. Grafana Dashboard Panel | v2.4 | 0/? | Not started | - |
 | 75. E2E Validation Scenarios | v2.4 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-23 — Phase 72 planned (2 plans in 2 waves)*
+*Last updated: 2026-03-23 — Phase 72 complete (2/2 plans, verified)*
