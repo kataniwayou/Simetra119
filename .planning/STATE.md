@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 68 of 71 (Command Counters)
-Plan: 3 of 3 in current phase
+Plan: 4 of 4 in current phase (gap closure)
 Status: Phase complete
-Last activity: 2026-03-22 — Completed 68-03-PLAN.md (CCV-03 assertion corrected: dispatched and suppressed both fire simultaneously during suppression window; replaced eq 0 with both > 0)
+Last activity: 2026-03-22 — Completed 68-04-PLAN.md (CCV-04 rewritten: command.failed via SET timeout to FAKE-UNREACHABLE; deleted useless tenant-cfg09, created tenant-cfg10 with valid CommandName + unreachable IP)
 
-Progress: [███░░░░░░░] v2.3 phase 68 complete (3/3 plans)
+Progress: [███░░░░░░░] v2.3 phase 68 complete (4/4 plans)
 
 ## Performance Metrics
 
@@ -40,8 +40,9 @@ Progress: [███░░░░░░░] v2.3 phase 68 complete (3/3 plans)
 - Leader-gated export: snmp_gauge/snmp_info only exported by leader pod
 - E2E scenarios continue from 69 (68 existing: 01-68)
 - MCV-11/12 require fake unreachable device IP in E2E fixture config
-- CCV-04 requires triggering SET for OID not in command map
-- snmp_command_failed_total OID-not-found path uses device_name=IP:port (not tenant name); use empty filter '' to avoid label brittleness
+- CCV-04 triggers command.failed via SET timeout (unreachable IP), NOT unmapped CommandName (unmapped causes TEN-13 to skip tenant at load time)
+- snmp_command_failed_total timeout path uses device_name=device.Name (e.g. "FAKE-UNREACHABLE"); OID-not-found/device-not-found paths use device_name=IP:port
+- FAKE-UNREACHABLE device must be in DeviceRegistry before tenant fixture is applied (TryGetByIpPort must succeed at validation time)
 
 ### Decisions
 
@@ -61,6 +62,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T17:14:43Z
-Stopped at: Completed 68-03-PLAN.md — CCV-03 assertion corrected (dispatched_delta > 0 AND suppressed_delta > 0 during suppression window); Phase 68 fully complete (3/3 plans)
+Last session: 2026-03-22T17:15:42Z
+Stopped at: Completed 68-04-PLAN.md — CCV-04 rewritten (SET timeout to FAKE-UNREACHABLE triggers command.failed, dual configmap save/restore); Phase 68 gap closure complete
 Resume file: None
