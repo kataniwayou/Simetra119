@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Quartz;
 using SnmpCollector.Configuration;
+using NSubstitute;
 using SnmpCollector.Jobs;
 using SnmpCollector.Pipeline;
 using SnmpCollector.Telemetry;
@@ -65,6 +66,7 @@ public sealed class SnapshotJobTests : IDisposable
             _correlation,
             _liveness,
             _pipelineMetrics,
+            Substitute.For<ITenantMetricService>(),
             Options.Create(new SnapshotJobOptions()),
             NullLogger<SnapshotJob>.Instance);
     }
@@ -92,7 +94,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Ready and fresh, in-range → Healthy (tier 3)
-        Assert.Equal(SnapshotJob.TierResult.Healthy, result);
+        Assert.Equal(TenantState.Healthy, result);
     }
 
     [Fact]
@@ -110,8 +112,8 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(h1, h2);
         var result = _job.EvaluateTenant(tenant);
 
-        // h2 not ready → pre-tier returns Unresolved
-        Assert.Equal(SnapshotJob.TierResult.Unresolved, result);
+        // h2 not ready → pre-tier returns NotReady
+        Assert.Equal(TenantState.NotReady, result);
     }
 
     [Fact]
@@ -129,7 +131,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Ready but no data → HasStaleness returns true (null slot = stale) → Unresolved (tier 4)
-        Assert.Equal(SnapshotJob.TierResult.Unresolved, result);
+        Assert.Equal(TenantState.Unresolved, result);
     }
 
     // -------------------------------------------------------------------------
@@ -147,7 +149,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(holder);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.NotEqual(SnapshotJob.TierResult.Unresolved, result);
+        Assert.NotEqual(TenantState.Unresolved, result);
     }
 
     [Fact]
@@ -162,8 +164,8 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(holder);
         var result = _job.EvaluateTenant(tenant);
 
-        // Not ready → pre-tier returns Unresolved (blocks advance gate)
-        Assert.Equal(SnapshotJob.TierResult.Unresolved, result);
+        // Not ready → pre-tier returns NotReady (blocks advance gate)
+        Assert.Equal(TenantState.NotReady, result);
     }
 
     [Fact]
@@ -178,7 +180,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Trap source excluded from staleness → not stale
-        Assert.NotEqual(SnapshotJob.TierResult.Unresolved, result);
+        Assert.NotEqual(TenantState.Unresolved, result);
     }
 
     [Fact]
@@ -193,7 +195,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Command source excluded from staleness → not stale
-        Assert.NotEqual(SnapshotJob.TierResult.Unresolved, result);
+        Assert.NotEqual(TenantState.Unresolved, result);
     }
 
     [Fact]
@@ -207,7 +209,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(holder);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.NotEqual(SnapshotJob.TierResult.Unresolved, result);
+        Assert.NotEqual(TenantState.Unresolved, result);
     }
 
     [Fact]
@@ -227,7 +229,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Stale data skips tiers 2-3, goes straight to command dispatch
-        Assert.Equal(SnapshotJob.TierResult.Unresolved, result);
+        Assert.Equal(TenantState.Unresolved, result);
     }
 
     // -------------------------------------------------------------------------
@@ -249,7 +251,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(h1, h2);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.Resolved, result);
+        Assert.Equal(TenantState.Resolved, result);
         // No commands should be enqueued (channel should be empty)
         Assert.False(_commandChannel.Reader.TryRead(out _));
     }
@@ -270,8 +272,8 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Not all Resolved violated → continues to Tier 3 → currently returns Healthy (Tier 3/4 not yet wired)
-        Assert.NotEqual(SnapshotJob.TierResult.Resolved, result);
-        Assert.NotEqual(SnapshotJob.TierResult.Unresolved, result);
+        Assert.NotEqual(TenantState.Resolved, result);
+        Assert.NotEqual(TenantState.Unresolved, result);
     }
 
     [Fact]
@@ -293,7 +295,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // h1 violated, h2 empty (Length=0, skipped in gate) → only h1 participates → all Resolved violated → Resolved
-        Assert.Equal(SnapshotJob.TierResult.Resolved, result);
+        Assert.Equal(TenantState.Resolved, result);
     }
 
     [Fact]
@@ -306,7 +308,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(holder);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.Resolved, result);
+        Assert.Equal(TenantState.Resolved, result);
     }
 
     [Fact]
@@ -320,7 +322,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(holder);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.Resolved, result);
+        Assert.Equal(TenantState.Resolved, result);
     }
 
     [Fact]
@@ -335,8 +337,8 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Not violated → not all Resolved violated → continues to Tier 3
-        Assert.NotEqual(SnapshotJob.TierResult.Resolved, result);
-        Assert.NotEqual(SnapshotJob.TierResult.Unresolved, result);
+        Assert.NotEqual(TenantState.Resolved, result);
+        Assert.NotEqual(TenantState.Unresolved, result);
     }
 
     [Fact]
@@ -350,7 +352,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(holder);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.NotEqual(SnapshotJob.TierResult.Resolved, result);
+        Assert.NotEqual(TenantState.Resolved, result);
     }
 
     // -------------------------------------------------------------------------
@@ -370,7 +372,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(resolved);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.Resolved, result);
+        Assert.Equal(TenantState.Resolved, result);
     }
 
     [Fact]
@@ -387,8 +389,8 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // One in-range sample → not all Resolved violated → continues to Tier 3
-        Assert.NotEqual(SnapshotJob.TierResult.Resolved, result);
-        Assert.NotEqual(SnapshotJob.TierResult.Unresolved, result);
+        Assert.NotEqual(TenantState.Resolved, result);
+        Assert.NotEqual(TenantState.Unresolved, result);
     }
 
     [Fact]
@@ -403,7 +405,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(resolved);
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.Resolved, result);
+        Assert.Equal(TenantState.Resolved, result);
     }
 
     // -------------------------------------------------------------------------
@@ -427,7 +429,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Command source checks newest only (50.0 >= 10) → not violated → continues to Tier 3
-        Assert.NotEqual(SnapshotJob.TierResult.Resolved, result);
+        Assert.NotEqual(TenantState.Resolved, result);
     }
 
     [Fact]
@@ -444,7 +446,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Command source checks newest only (5.0 < 10) → violated → Violated
-        Assert.Equal(SnapshotJob.TierResult.Resolved, result);
+        Assert.Equal(TenantState.Resolved, result);
     }
 
     [Fact]
@@ -461,7 +463,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Trap source checks newest only → NOT violated → Tier 3
-        Assert.NotEqual(SnapshotJob.TierResult.Resolved, result);
+        Assert.NotEqual(TenantState.Resolved, result);
     }
 
     [Fact]
@@ -485,7 +487,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Command source checks newest only (50.0 >= 10) → NOT violated → Healthy
-        Assert.Equal(SnapshotJob.TierResult.Healthy, result);
+        Assert.Equal(TenantState.Healthy, result);
     }
 
     [Fact]
@@ -509,7 +511,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // Poll source checks ALL samples — one in-range → Healthy
-        Assert.Equal(SnapshotJob.TierResult.Healthy, result);
+        Assert.Equal(TenantState.Healthy, result);
     }
 
     // -------------------------------------------------------------------------
@@ -617,7 +619,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(new[] { resolved, eval1, eval2 }, new[] { cmd });
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.Healthy, result);
+        Assert.Equal(TenantState.Healthy, result);
         Assert.False(_commandChannel.Reader.TryRead(out _)); // No commands
     }
 
@@ -686,7 +688,7 @@ public sealed class SnapshotJobTests : IDisposable
         var tenant = MakeTenant(new[] { resolved, eval1 });
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.Healthy, result);
+        Assert.Equal(TenantState.Healthy, result);
     }
 
     // -------------------------------------------------------------------------
@@ -739,7 +741,7 @@ public sealed class SnapshotJobTests : IDisposable
         var result = _job.EvaluateTenant(tenant);
 
         // One in-range sample → Healthy, no command enqueued
-        Assert.Equal(SnapshotJob.TierResult.Healthy, result);
+        Assert.Equal(TenantState.Healthy, result);
         Assert.False(_commandChannel.Reader.TryRead(out _));
     }
 
@@ -816,7 +818,7 @@ public sealed class SnapshotJobTests : IDisposable
 
         // Suppressed → no TryWrite, command intent = Unresolved (blocks gate)
         Assert.False(_commandChannel.Reader.TryRead(out _));
-        Assert.Equal(SnapshotJob.TierResult.Unresolved, result);
+        Assert.Equal(TenantState.Unresolved, result);
     }
 
     [Fact]
@@ -841,7 +843,7 @@ public sealed class SnapshotJobTests : IDisposable
         // Should not throw — channel full means command intent = Unresolved (blocks gate)
         var result = _job.EvaluateTenant(tenant);
 
-        Assert.Equal(SnapshotJob.TierResult.Unresolved, result);
+        Assert.Equal(TenantState.Unresolved, result);
     }
 
     [Fact]
