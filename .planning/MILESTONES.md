@@ -1,5 +1,32 @@
 # Project Milestones: SNMP Monitoring System
 
+## v2.2 Progressive E2E Snapshot Suite (Shipped: 2026-03-22)
+
+**Delivered:** Progressive 3-stage E2E test suite validating every SnapshotJob evaluation state (single tenant), proving two-tenant independence, and exercising all 7 advance gate combinations (4-tenant 2-group fixture) -- each stage gated on the previous passing.
+
+**Phases completed:** 62-65 (8 plans total, 3 quick tasks)
+
+**Key accomplishments:**
+- 16 new PSS scenario scripts (53-68) producing 52 test results across 3 progressive stages
+- Single-tenant fixture proving all 6 evaluation states: Not Ready, Stale, Resolved, Unresolved, Healthy, Suppressed
+- Two-tenant fixture proving per-tenant evaluation independence (T1 state does not affect T2)
+- Four-tenant 2-group fixture testing all 7 advance gate combinations (3 pass + 4 block)
+- Stage gating infrastructure: FAIL_COUNT gates prevent cascading execution of later stages
+- Runner stabilization: stale filename fixes, cleanup traps, --since alignment, standalone report categories
+
+**Stats:**
+- 99 files changed (8,922 insertions, 1,167 deletions)
+- 8,478 LOC C# source + 12,166 LOC C# tests + 7,532 LOC bash E2E + 1,338 LOC Python simulators
+- 4 phases, 8 plans, 3 quick tasks (082-084)
+- 3 days (2026-03-20 → 2026-03-22)
+- 462 unit tests passing, 68 PSS E2E scenario scripts
+
+**Git range:** `v2.1` → `v2.2`
+
+**What's next:** TBD — next milestone planning
+
+---
+
 ## v2.1 E2E Tenant Evaluation Tests (Shipped: 2026-03-20)
 
 **Delivered:** Comprehensive E2E test suite validating every path through the SnapshotJob 4-tier evaluation tree and priority group advance gate, using an HTTP-controlled SNMP simulator with per-OID runtime control and a 4-tenant 2-group fixture.
