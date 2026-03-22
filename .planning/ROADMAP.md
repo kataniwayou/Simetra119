@@ -147,10 +147,11 @@ Plans:
   2. `tenant_state` gauge is recorded with the correct enum value (0-3) at every tier exit, including the Healthy path
   3. A per-tenant `Stopwatch` inside `EvaluateTenant` records histogram duration before each return — not wrapped around the `Task.WhenAll` group
   4. Command outcome counters (dispatched, failed, suppressed) increment at the dispatch decision site inside `EvaluateTenant`, not in `CommandWorkerService`
-**Plans:** TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 73-01: TBD
+- [ ] 73-01-PLAN.md — Extend CommandRequest with TenantId/Priority, wire ITenantMetricService into CommandWorkerService
+- [ ] 73-02-PLAN.md — Instrument EvaluateTenant with counting helpers, Stopwatch, RecordAndReturn, and unit tests
 
 #### Phase 74: Grafana Dashboard Panel
 
@@ -238,10 +239,10 @@ Plans:
 | 70. Label Correctness | v2.3 | 2/2 | Complete | 2026-03-22 |
 | 71. Negative Proofs | v2.3 | 1/1 | Complete | 2026-03-22 |
 | 72. TenantMetricService & Meter Registration | v2.4 | 2/2 | Complete | 2026-03-23 |
-| 73. SnapshotJob Instrumentation | v2.4 | 0/? | Not started | - |
+| 73. SnapshotJob Instrumentation | v2.4 | 0/2 | Not started | - |
 | 74. Grafana Dashboard Panel | v2.4 | 0/? | Not started | - |
 | 75. E2E Validation Scenarios | v2.4 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-23 — Phase 72 complete (2/2 plans, verified)*
+*Last updated: 2026-03-23 — Phase 73 planned (2 plans in 2 waves)*
