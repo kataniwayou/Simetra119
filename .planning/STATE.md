@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Planning next milestone
+**Current focus:** v2.4 Tenant Vector Metrics
 
 ## Current Position
 
-Phase: None (between milestones)
-Plan: N/A
-Status: v2.3 milestone complete
-Last activity: 2026-03-22 — v2.3 Metric Validity & Correctness shipped
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-22 — Milestone v2.4 started
 
-Progress: [██████████] v2.3 complete
+Progress: [░░░░░░░░░░] v2.4 started
 
 ## Performance Metrics
 
@@ -53,6 +53,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T23:00:00Z
-Stopped at: v2.3 milestone completed and archived
+Last session: 2026-03-22
+Stopped at: Milestone v2.4 initialized, defining requirements
 Resume file: None

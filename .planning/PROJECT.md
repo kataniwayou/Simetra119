@@ -158,7 +158,21 @@ See `.planning/milestones/v2.3-REQUIREMENTS.md` for full requirement details.
 
 ### Active
 
-(None — next milestone TBD)
+**v2.4 Tenant Vector Metrics**
+
+- [ ] Generic tenant metric instruments (same pattern as snmp_gauge/snmp_info — shared instruments with labels)
+- [ ] Labels: tenantId, priority (no device_name, resolved_name, oid, ip, source, snmp_type)
+- [ ] All instances export tenant metrics (leader and followers, not leader-gated)
+- [ ] tenant_tier1_stale counter — N stale holders per SnapshotJob cycle per tenant
+- [ ] tenant_tier2_resolved counter — N resolved-role metrics not violated per cycle per tenant
+- [ ] tenant_tier3_evaluate counter — N evaluate-role metrics violated per cycle per tenant
+- [ ] tenant_command_dispatched counter — N commands sent per cycle per tenant
+- [ ] tenant_command_failed counter — N commands failed per cycle per tenant
+- [ ] tenant_command_suppressed counter — N commands suppressed per cycle per tenant
+- [ ] tenant_state gauge — enum: NotReady=0, Healthy=1, Resolved=2, Unresolved=3
+- [ ] tenant_gauge_duration_milliseconds histogram — per-tenant evaluation duration in SnapshotJob
+- [ ] Operations dashboard: tenant metrics table after commands panels (based on business dashboard gauge table pattern)
+- [ ] Dashboard columns: Host, Pod, Tenant, Priority, State, Dispatched, Failed, Suppressed, Stale, Resolved, Evaluate, P99 (ms), Trend, PromQL
 
 ### Out of Scope
 
@@ -228,4 +242,4 @@ See `.planning/milestones/v2.3-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-22 after v2.3 milestone shipped*
+*Last updated: 2026-03-22 after v2.4 milestone started*
