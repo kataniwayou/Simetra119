@@ -156,8 +156,8 @@ Plans:
 Plans:
 - [x] 68-01-PLAN.md — Scenarios 83-84: command.dispatched (CCV-01), command.suppressed + dispatched-unchanged (CCV-02/03) + report category
 - [x] 68-02-PLAN.md — Scenario 85: command.failed via unmapped CommandName (CCV-04) + new fixture
-- [ ] 68-03-PLAN.md — Gap closure: fix CCV-03 assertion (dispatched fires on every tier=4, not mutually exclusive with suppression)
-- [ ] 68-04-PLAN.md — Gap closure: rewrite CCV-04 to use timeout path (unreachable IP) instead of unmapped CommandName
+- [x] 68-03-PLAN.md — Gap closure: fix CCV-03 assertion (dispatched fires on every tier=4, not mutually exclusive with suppression)
+- [x] 68-04-PLAN.md — Gap closure: rewrite CCV-04 to use timeout path (unreachable IP) instead of unmapped CommandName
 
 #### Phase 69: Business Metric Value Correctness
 
@@ -245,11 +245,11 @@ Plans:
 | 65. E2E Runner Fixes & Flaky Stabilization | v2.2 | 1/1 | Complete | 2026-03-22 |
 | 66. Pipeline Event Counters | v2.3 | 3/3 | Complete | 2026-03-22 |
 | 67. Poll & Trap Infrastructure Counters | v2.3 | 2/2 | Complete | 2026-03-22 |
-| 68. Command Counters | v2.3 | 2/4 | Gap closure | 2026-03-22 |
+| 68. Command Counters | v2.3 | 4/4 | Complete | 2026-03-22 |
 | 69. Business Metric Value Correctness | v2.3 | 0/? | Not started | - |
 | 70. Label Correctness | v2.3 | 0/? | Not started | - |
 | 71. Negative Proofs | v2.3 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-22 -- Phase 68 gap closure (2 plans: fix CCV-03 assertion, rewrite CCV-04 timeout path)*
+*Last updated: 2026-03-22 -- Phase 68 complete (4/4 plans, gap closure done)*
