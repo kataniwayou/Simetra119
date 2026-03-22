@@ -89,6 +89,32 @@ assert_exists() {
     fi
 }
 
+assert_delta_eq() {
+    local delta="$1"
+    local expected="$2"
+    local scenario_name="$3"
+    local evidence="${4:-}"
+
+    if [ "$delta" -eq "$expected" ]; then
+        record_pass "$scenario_name" "delta=${delta} == expected=${expected}. ${evidence}"
+    else
+        record_fail "$scenario_name" "delta=${delta} != expected=${expected}. ${evidence}"
+    fi
+}
+
+assert_delta_ge() {
+    local delta="$1"
+    local minimum="$2"
+    local scenario_name="$3"
+    local evidence="${4:-}"
+
+    if [ "$delta" -ge "$minimum" ]; then
+        record_pass "$scenario_name" "delta=${delta} >= minimum=${minimum}. ${evidence}"
+    else
+        record_fail "$scenario_name" "delta=${delta} < minimum=${minimum}. ${evidence}"
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
