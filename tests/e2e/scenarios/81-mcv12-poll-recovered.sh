@@ -1,54 +1,31 @@
 # Scenario 81: MCV-12 -- poll.recovered increments when device becomes reachable
-# Patches FAKE-UNREACHABLE device to point to E2E simulator, waits for recovery
-# counter to increment, then restores original ConfigMap (removing FAKE-UNREACHABLE).
-# Depends on scenario 80 having left FAKE-UNREACHABLE in unreachable state.
+# Scales the E2E simulator back up to 1 replica after scenario 80 left it at 0.
+# First successful poll triggers DeviceUnreachabilityTracker recovery → poll.recovered++.
+#
+# Depends on scenario 80 having scaled down the simulator (E2E-SIM is unreachable).
 SCENARIO_NAME="MCV-12: poll.recovered increments when device becomes reachable"
 METRIC="snmp_poll_recovered_total"
-FILTER='device_name="FAKE-UNREACHABLE"'
+FILTER='device_name="E2E-SIM"'
 
-# Snapshot before recovery
 BEFORE=$(snapshot_counter "$METRIC" "$FILTER")
 
-# Patch the ConfigMap: change FAKE-UNREACHABLE IP to E2E simulator + set CommunityString
-log_info "Patching FAKE-UNREACHABLE device to point to E2E simulator..."
+# Scale simulator back up
+log_info "Scaling up e2e-simulator to 1 replica..."
+kubectl scale deployment e2e-simulator -n simetra --replicas=1
+kubectl rollout status deployment/e2e-simulator -n simetra --timeout=60s
 
-# Get current devices.json, patch FAKE-UNREACHABLE entry with jq, and re-apply
-CURRENT_JSON=$(kubectl get configmap simetra-devices -n simetra -o jsonpath='{.data.devices\.json}')
-PATCHED_JSON=$(echo "$CURRENT_JSON" | jq '
-    map(if .CommunityString == "Simetra.FAKE-UNREACHABLE" then
-        .IpAddress = "e2e-simulator.simetra.svc.cluster.local"
-    else . end)')
-
-# Create a temporary ConfigMap YAML with patched JSON
-PATCH_FILE=$(mktemp)
-cat > "$PATCH_FILE" <<CMEOF
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: simetra-devices
-  namespace: simetra
-data:
-  devices.json: |
-$(echo "$PATCHED_JSON" | sed 's/^/    /')
-CMEOF
-
-kubectl apply -f "$PATCH_FILE" -n simetra
-rm -f "$PATCH_FILE"
-
-# Wait for DeviceWatcherService to reload + first successful poll + OTel export
-# Recovery happens on the FIRST successful poll after unreachable state
-log_info "Waiting for FAKE-UNREACHABLE to recover (up to 90s)..."
-poll_until 90 5 "$METRIC" "$FILTER" "$BEFORE" || true
+# Wait for pod ready + first successful poll + OTel export
+# Pod startup ~5-10s, first poll within 1s (group 2 interval), OTel 15s + Prometheus 5s
+# Use 60s timeout
+log_info "Waiting for E2E-SIM to recover (up to 60s)..."
+poll_until 60 3 "$METRIC" "$FILTER" "$BEFORE" || true
 
 AFTER=$(snapshot_counter "$METRIC" "$FILTER")
 DELTA=$((AFTER - BEFORE))
 EVIDENCE=$(get_evidence "$METRIC" "$FILTER")
 assert_delta_gt "$DELTA" 0 "$SCENARIO_NAME" "before=$BEFORE after=$AFTER delta=$DELTA | $EVIDENCE"
 
-# Restore original ConfigMap (removes FAKE-UNREACHABLE device entirely)
-ORIGINAL_CM="$SCRIPT_DIR/fixtures/.original-devices-configmap.yaml"
-if [ -f "$ORIGINAL_CM" ]; then
-    log_info "Restoring original devices ConfigMap..."
-    restore_configmap "$ORIGINAL_CM"
-    rm -f "$ORIGINAL_CM"
-fi
+# Re-establish port forward to simulator (it was lost when pod was scaled down)
+log_info "Re-establishing e2e-simulator port forward..."
+start_port_forward simetra e2e-simulator 8080:8080 2>/dev/null || true
+sleep 2
