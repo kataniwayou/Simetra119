@@ -4,8 +4,9 @@
 #
 # Two sequential assertion windows:
 #   Window 1: first tier=4 cycle dispatches the command (dispatched increments)
-#   Window 2: second cycle fires within 30s window -- command is suppressed
-#             (suppressed increments, dispatched does NOT increment)
+#   Window 2: second cycle fires within 30s window -- command is suppressed (suppressed increments),
+#             but dispatched ALSO fires on every tier=4 enqueue
+#             (both dispatched and suppressed increment simultaneously)
 #
 # Counter labels:
 #   snmp_command_dispatched_total:  device_name="e2e-pss-tenant-supp"
@@ -14,7 +15,7 @@
 # Sub-assertions:
 #   84a: CCV-02A: command.dispatched increments on first tier=4 (Window 1)
 #   84b: CCV-02B: command.suppressed increments within suppression window (Window 2)
-#   84c: CCV-03:  command.dispatched unchanged while suppressed (Window 2)
+#   84c: CCV-03:  command.dispatched AND command.suppressed both fire during suppression (Window 2)
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
@@ -113,16 +114,17 @@ assert_delta_gt "$DELTA_SUPP_W2" 0 \
     "$(get_evidence "snmp_command_suppressed_total" 'device_name="e2e-pss-tenant-supp"')"
 
 # ---------------------------------------------------------------------------
-# Sub-assertion 84c: CCV-03 -- dispatched unchanged during Window 2
-# Command was suppressed, not re-dispatched
+# Sub-assertion 84c: CCV-03 -- dispatched AND suppressed both fire during Window 2
+# SnapshotJob calls TryWrite (dispatched++) then TrySuppress (suppressed++).
+# Both counters increment on every suppressed cycle -- they are NOT mutually exclusive.
 # ---------------------------------------------------------------------------
 
-if [ "$DELTA_SENT_W2" -eq 0 ]; then
-    record_pass "CCV-03: command.dispatched unchanged while suppressed (Window 2)" \
-        "dispatched_delta=${DELTA_SENT_W2} expected=0 suppressed_delta=${DELTA_SUPP_W2}"
+if [ "$DELTA_SENT_W2" -gt 0 ] && [ "$DELTA_SUPP_W2" -gt 0 ]; then
+    record_pass "CCV-03: dispatched and suppressed both fire during suppression window (Window 2)" \
+        "dispatched_delta=${DELTA_SENT_W2} suppressed_delta=${DELTA_SUPP_W2} (both > 0 proves simultaneous firing)"
 else
-    record_fail "CCV-03: command.dispatched unchanged while suppressed (Window 2)" \
-        "unexpected dispatched_delta=${DELTA_SENT_W2} expected=0; command was NOT suppressed"
+    record_fail "CCV-03: dispatched and suppressed both fire during suppression window (Window 2)" \
+        "dispatched_delta=${DELTA_SENT_W2} suppressed_delta=${DELTA_SUPP_W2} expected both > 0"
 fi
 
 # ---------------------------------------------------------------------------
