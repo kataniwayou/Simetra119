@@ -19,7 +19,7 @@ Progress: [██████████] v2.2 Phase 65 complete (all phases an
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 141 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02 + 59-01 + 59-02 + 62-01 + 62-02 + quick-081 + 63-01 + 63-02 + 64-01 + 64-02 + 64-03 + quick-082 + quick-083 + 65-01)
+- Total plans completed: 142 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02 + 59-01 + 59-02 + 62-01 + 62-02 + quick-081 + 63-01 + 63-02 + 64-01 + 64-02 + 64-03 + quick-082 + quick-083 + 65-01 + quick-084)
 - Average duration: ~25 min
 - Total execution time: ~39.75 hours
 
@@ -68,9 +68,10 @@ None.
 |---|-------------|------|--------|-----------|
 | 082 | Refactor PollOptions.MetricNames to Metrics object wrapper | 2026-03-20 | 7205c05 | [082-metricnames-to-polloptions-object](./quick/082-metricnames-to-polloptions-object/) |
 | 083 | Transform E2E fixture MetricNames to Metrics object-wrapper | 2026-03-20 | d9b34ef | [083-e2e-metricnames-to-metrics-transform](./quick/083-e2e-metricnames-to-metrics-transform/) |
+| 084 | Align PSS-17c and PSS-20c --since to 10s (eliminate 2s overlap) | 2026-03-22 | 20f02aa | [084-pss-17c-20c-since-alignment](./quick/084-pss-17c-20c-since-alignment/) |
 
 ## Session Continuity
 
-Last session: 2026-03-22T10:20:12Z
-Stopped at: Completed 65-01-PLAN.md (E2E runner fixes: stale filenames, cleanup trap, flaky PSS-18c/19c, standalone report categories)
+Last session: 2026-03-22T13:18:39Z
+Stopped at: Completed quick-084 (PSS-17c and PSS-20c --since alignment from 12s to 10s)
 Resume file: None
