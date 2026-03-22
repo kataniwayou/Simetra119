@@ -202,7 +202,7 @@ Plans:
   5. Follower pods export no `snmp_gauge` or `snmp_info` series (verified via `k8s_pod_name` Prometheus label).
 **Plans:** 1 plan
 Plans:
-- [ ] 71-01-PLAN.md — Scenarios 102-106: heartbeat snmp_info absence, unmapped OID absence, bad-community no business metric, trap.dropped stays zero, follower no snmp_gauge + report category
+- [x] 71-01-PLAN.md — Scenarios 102-106: heartbeat snmp_info absence, unmapped OID absence, bad-community no business metric, trap.dropped stays zero, follower no snmp_gauge + report category
 
 ---
 
@@ -256,8 +256,8 @@ Plans:
 | 68. Command Counters | v2.3 | 4/4 | Complete | 2026-03-22 |
 | 69. Business Metric Value Correctness | v2.3 | 2/2 | Complete | 2026-03-22 |
 | 70. Label Correctness | v2.3 | 2/2 | Complete | 2026-03-22 |
-| 71. Negative Proofs | v2.3 | 0/1 | Not started | - |
+| 71. Negative Proofs | v2.3 | 1/1 | Complete | 2026-03-22 |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-22 -- Phase 71 planned (1 plan, 5 scenarios 102-106, MNP-01 reframed for heartbeat reality)*
+*Last updated: 2026-03-22 -- Phase 71 complete. v2.3 milestone all phases done.*

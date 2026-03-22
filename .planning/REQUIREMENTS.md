@@ -105,11 +105,11 @@ Requirements for Metric Validity & Correctness milestone. Each maps to roadmap p
 | MLC-06 | Phase 70 | Complete |
 | MLC-07 | Phase 70 | Complete |
 | MLC-08 | Phase 70 | Complete |
-| MNP-01 | Phase 71 | Pending |
-| MNP-02 | Phase 71 | Pending |
-| MNP-03 | Phase 71 | Pending |
-| MNP-04 | Phase 71 | Pending |
-| MNP-05 | Phase 71 | Pending |
+| MNP-01 | Phase 71 | Complete |
+| MNP-02 | Phase 71 | Complete |
+| MNP-03 | Phase 71 | Complete |
+| MNP-04 | Phase 71 | Complete |
+| MNP-05 | Phase 71 | Complete |
 
 **Coverage:**
 - v2.3 requirements: 38 total
