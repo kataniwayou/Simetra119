@@ -84,13 +84,13 @@ echo "  Running scenarios"
 echo "============================================="
 echo ""
 
-for scenario in "$SCRIPT_DIR"/scenarios/[0-9]*.sh; do
+while IFS= read -r scenario; do
     if [ -f "$scenario" ]; then
         log_info "Running: $(basename "$scenario")"
         source "$scenario"
         echo ""
     fi
-done
+done < <(ls -1 "$SCRIPT_DIR"/scenarios/[0-9]*.sh 2>/dev/null | sort -V)
 
 # ---------------------------------------------------------------------------
 # Report generation
