@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.3 Metric Validity & Correctness — Phase 70: Label Correctness
+**Current focus:** v2.3 Metric Validity & Correctness — Phase 71: Negative Proofs (COMPLETE)
 
 ## Current Position
 
-Phase: 70 of 71 (Label Correctness)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-03-22 — Completed 70-02-PLAN.md (MLC-03 source=command scenario 96; phase 70 label correctness complete)
+Phase: 71 of 71 (Negative Proofs)
+Plan: 1 of 1 in current phase
+Status: Phase complete — v2.3 milestone complete
+Last activity: 2026-03-22 — Completed 71-01-PLAN.md (MNP-01 through MNP-05 negative-proof scenarios, Negative Proofs report category)
 
-Progress: [█████░░░░░] v2.3 phase 70 complete (2/2 plans in phase)
+Progress: [██████████] v2.3 complete — all phases done (71/71)
 
 ## Performance Metrics
 
@@ -48,6 +48,8 @@ Progress: [█████░░░░░] v2.3 phase 70 complete (2/2 plans in 
 - Counter32/Counter64 arrive in snmp_gauge as raw gauge values (no rate conversion) -- OtelMetricHandler calls RecordGauge for all 5 numeric SNMP types
 - IpAddress snmp_info value label: MEDIUM confidence on exact format; MVC-07 asserts "10.0.0.1" and logs actual value in EVIDENCE
 - MLC SCENARIO_RESULTS: 8 entries at indices 96-103 (MLC-01 through MLC-08); MLC-03=index 96 (source=command), MLC-01/02/04-08 in plan 01 at 94-95/97-103
+- MNP SCENARIO_RESULTS: 5 entries at indices 104-108 (MNP-01 through MNP-05); scenarios 102-106
+- Next SCENARIO_RESULTS index available: 109; report category "Negative Proofs|104|108" is the 12th and last category
 - device_name on snmp_gauge is community-derived (e.g. "E2E-SIM"), NOT tenant name (e.g. "e2e-pss-tenant"); dispatch counter uses tenant name, gauge series use device name
 
 ### Decisions
@@ -68,6 +70,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T18:35:24Z
-Stopped at: Completed 70-01-PLAN.md — 7 MLC label-correctness scenarios (94, 95, 97-101) and report.sh Label Correctness category; phase 70 fully complete (both plans done)
+Last session: 2026-03-22T19:11:00Z
+Stopped at: Completed 71-01-PLAN.md — MNP-01 through MNP-05 negative-proof scenarios and Negative Proofs report category; phase 71 complete; v2.3 milestone complete
 Resume file: None
