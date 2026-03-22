@@ -15,6 +15,7 @@ _REPORT_CATEGORIES=(
     "Snapshot State Suite|40|51"
     "Progressive Snapshot Suite|52|67"
     "Pipeline Counter Verification|68|81"
+    "Command Counter Verification|82|88"
 )
 
 generate_report() {
