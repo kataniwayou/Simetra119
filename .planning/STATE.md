@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 ## Current Position
 
-Phase: 67 of 71 (Poll & Trap Infrastructure Counters)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-03-22 — Completed 67-02-PLAN.md (MCV-11/12/13 scenarios 80-82: poll.unreachable, poll.recovered, tenantvector.routed)
+Phase: 68 of 71 (Command Counters)
+Plan: 2 of 2 in current phase (plan 01 not yet executed)
+Status: In progress
+Last activity: 2026-03-22 — Completed 68-02-PLAN.md (CCV-04 scenario 85: command.failed via unmapped CommandName)
 
-Progress: [███░░░░░░░] v2.3 phase 67 complete (2/2 plans)
+Progress: [███░░░░░░░] v2.3 phase 68 in progress (1/2 plans executed)
 
 ## Performance Metrics
 
@@ -41,6 +41,7 @@ Progress: [███░░░░░░░] v2.3 phase 67 complete (2/2 plans)
 - E2E scenarios continue from 69 (68 existing: 01-68)
 - MCV-11/12 require fake unreachable device IP in E2E fixture config
 - CCV-04 requires triggering SET for OID not in command map
+- snmp_command_failed_total OID-not-found path uses device_name=IP:port (not tenant name); use empty filter '' to avoid label brittleness
 
 ### Decisions
 
@@ -60,6 +61,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T15:34:14Z
-Stopped at: Completed 67-02-PLAN.md — MCV-11/12/13 scenarios 80-82 (poll.unreachable, poll.recovered, tenantvector.routed); Phase 67 complete
+Last session: 2026-03-22T16:26:22Z
+Stopped at: Completed 68-02-PLAN.md — CCV-04 fixture tenant-cfg09-ccv-failed.yaml and scenario 85 (command.failed); plan 68-01 not yet executed
 Resume file: None
