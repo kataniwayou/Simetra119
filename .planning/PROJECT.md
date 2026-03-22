@@ -145,18 +145,20 @@ See `.planning/milestones/v2.1-REQUIREMENTS.md` for full requirement details.
 
 See `.planning/milestones/v2.2-REQUIREMENTS.md` for full requirement details.
 
+**v2.3 Metric Validity & Correctness (shipped 2026-03-22)**
+
+- 38 E2E scenarios (69-106) validating every metric instrument
+- Pipeline counters: published/handled/rejected/errors proven accurate with exact deltas
+- Command counters: dispatched (decision) + suppressed (prevention) + failed (execution) semantics clarified
+- Business values: zero-transformation proven for all 7 SNMP types + value change propagation
+- Labels: source, snmp_type, resolved_name, device_name all verified correct
+- Negative proofs: heartbeat, unmapped, bad-community, dropped, follower export all proven
+
+See `.planning/milestones/v2.3-REQUIREMENTS.md` for full requirement details.
+
 ### Active
 
-**v2.3 Metric Validity & Correctness (in progress)**
-
-- Validate every pipeline counter increments exactly when justified and stays 0 when it shouldn't
-- Validate snmp_gauge values match what the simulator sent (all 5 numeric SNMP types)
-- Validate snmp_info labels match simulator string values (OctetString, IpAddress)
-- Validate source label correctness (poll, trap, command, synthetic)
-- Validate label correctness (resolved_name, oid, device_name, snmp_type)
-- Negative proofs: heartbeat suppression, auth rejection, unmapped OID rejection, command suppression
-- Safety-net counters (event.errors, trap.dropped) proven to stay 0 under normal operation
-- All validation via Prometheus queries against E2E simulator
+(None — next milestone TBD)
 
 ### Out of Scope
 
@@ -226,4 +228,4 @@ See `.planning/milestones/v2.2-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-22 after v2.3 milestone started*
+*Last updated: 2026-03-22 after v2.3 milestone shipped*

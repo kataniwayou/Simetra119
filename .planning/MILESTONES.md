@@ -1,5 +1,32 @@
 # Project Milestones: SNMP Monitoring System
 
+## v2.3 Metric Validity & Correctness (Shipped: 2026-03-22)
+
+**Delivered:** Every pipeline counter, command counter, business metric value, metric label, and negative-path assertion validated by E2E scenarios against the live SNMP simulator and Prometheus — proving every metric means what it claims to measure.
+
+**Phases completed:** 66-71 (14 plans total, including 2 gap closure)
+
+**Key accomplishments:**
+- 38 new E2E scenarios (69-106) validating all 37 metric instruments
+- Pipeline counter validity: published/handled/rejected/errors proven accurate with exact delta assertions
+- Command counter semantics clarified: dispatched = decision, suppressed = prevention, failed = execution error
+- Business metric values proven zero-transformation: raw SNMP values arrive exactly in Prometheus
+- All 7 label dimensions verified: source (poll/trap/command/synthetic), snmp_type, resolved_name, device_name
+- Negative proofs: heartbeat suppression, unmapped OID absence, bad-community rejection, follower export gating
+- Infrastructure: assert_delta_eq/ge helpers, sort -V for 100+ scenarios, simulator scale-down for reachability testing
+
+**Stats:**
+- 88 files changed (8,641 insertions, 71 deletions)
+- 6 phases, 14 plans (including 2 gap closure for CCV-03/04)
+- 1 day (2026-03-22)
+- 38 requirements, 38 satisfied, 0 dropped
+
+**Git range:** `v2.2` → `v2.3`
+
+**What's next:** TBD — next milestone planning
+
+---
+
 ## v2.2 Progressive E2E Snapshot Suite (Shipped: 2026-03-22)
 
 **Delivered:** Progressive 3-stage E2E test suite validating every SnapshotJob evaluation state (single tenant), proving two-tenant independence, and exercising all 7 advance gate combinations (4-tenant 2-group fixture) -- each stage gated on the previous passing.
