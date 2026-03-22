@@ -85,6 +85,7 @@ public static class ServiceCollectionExtensions
             {
                 metrics.AddMeter(TelemetryConstants.MeterName);        // Pipeline metrics (always exported)
                 metrics.AddMeter(TelemetryConstants.LeaderMeterName);  // Business metrics (leader-gated)
+                metrics.AddMeter(TelemetryConstants.TenantMeterName);  // Tenant metrics (always exported — not leader-gated)
                 metrics.AddRuntimeInstrumentation();                   // System.Runtime (always exported)
 
                 // Manual construction required: AddOtlpExporter() creates the exporter internally
@@ -405,6 +406,7 @@ public static class ServiceCollectionExtensions
 
         // Pipeline telemetry: metrics for pipeline latency, handled/rejected counts.
         services.AddSingleton<PipelineMetricService>();
+        services.AddSingleton<ITenantMetricService, TenantMetricService>();
 
         // SNMP client: wraps static Messenger.GetAsync for testability.
         services.AddSingleton<ISnmpClient, SharpSnmpClient>();
