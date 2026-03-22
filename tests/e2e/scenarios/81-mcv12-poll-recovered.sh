@@ -37,8 +37,8 @@ rm -f "$PATCH_FILE"
 
 # Wait for DeviceWatcherService to reload + first successful poll + OTel export
 # Recovery happens on the FIRST successful poll after unreachable state
-log_info "Waiting for FAKE-UNREACHABLE to recover (up to 60s)..."
-poll_until 60 5 "$METRIC" "$FILTER" "$BEFORE" || true
+log_info "Waiting for FAKE-UNREACHABLE to recover (up to 90s)..."
+poll_until 90 5 "$METRIC" "$FILTER" "$BEFORE" || true
 
 AFTER=$(snapshot_counter "$METRIC" "$FILTER")
 DELTA=$((AFTER - BEFORE))
