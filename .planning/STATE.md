@@ -9,17 +9,17 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 ## Current Position
 
-Phase: 64 of 64 (Advance Gate Logic — Complete)
-Plan: 03 of 03
+Phase: 65 of 65 (E2E Runner Fixes — Complete)
+Plan: 01 of 01
 Status: Phase complete
-Last activity: 2026-03-20 — Completed quick task 083: MetricNames → Metrics object-wrapper transform in E2E fixtures
+Last activity: 2026-03-22 — Completed 65-01: E2E runner fixes (stale filenames, cleanup trap, flaky PSS-18c/19c, standalone report categories)
 
-Progress: [██████████] v2.2 Phase 64 complete (all phases and plans done)
+Progress: [██████████] v2.2 Phase 65 complete (all phases and plans done)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 140 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02 + 59-01 + 59-02 + 62-01 + 62-02 + quick-081 + 63-01 + 63-02 + 64-01 + 64-02 + 64-03 + quick-082 + quick-083)
+- Total plans completed: 141 (v1.0 through v2.1, including quick tasks + 56-01 + 56-02 + 57-01 + 57-02 + 59-01 + 59-02 + 62-01 + 62-02 + quick-081 + 63-01 + 63-02 + 64-01 + 64-02 + 64-03 + quick-082 + quick-083 + 65-01)
 - Average duration: ~25 min
 - Total execution time: ~39.75 hours
 
@@ -55,6 +55,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 | 64-02 | Re-prime at scenario start (not OID reset at end) | Ensures clean state regardless of prior scenario; avoids extra grace wait between scenarios |
 | 64-03 | PSS-20 re-applies fixture (not just reset_oid_overrides) | reset_oid_overrides alone doesn't empty populated series; fixture re-apply forces fresh holders with empty G1 series |
 | 64-03 | BEFORE snapshots taken after G1 assertions confirmed | Ensures BEFORE baseline is post-gate-block-establishment; prior scenario activity doesn't inflate BEFORE |
+| 65-01 | --since must match sleep exactly (10s not 12s) | 2s overlap allowed prior-cycle logs to bleed into log-absence window causing false-positive failures |
+| 65-01 | Standalone runners override _REPORT_CATEGORIES before each generate_report | SCENARIO_RESULTS starts at 0 in standalone runs; default indices 52-67 always skips PSS category |
 
 ### Blockers/Concerns
 
@@ -69,6 +71,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T14:57:58Z
-Stopped at: Completed quick-083-PLAN.md (MetricNames → Metrics object-wrapper transform in E2E fixtures)
+Last session: 2026-03-22T10:20:12Z
+Stopped at: Completed 65-01-PLAN.md (E2E runner fixes: stale filenames, cleanup trap, flaky PSS-18c/19c, standalone report categories)
 Resume file: None
