@@ -154,8 +154,8 @@ Plans:
   3. Triggering a SET command for an OID that is not in the command map causes `snmp.command.failed` to increase.
 **Plans:** 2 plans
 Plans:
-- [ ] 68-01-PLAN.md — Scenarios 83-84: command.dispatched (CCV-01), command.suppressed + dispatched-unchanged (CCV-02/03) + report category
-- [ ] 68-02-PLAN.md — Scenario 85: command.failed via unmapped CommandName (CCV-04) + new fixture
+- [x] 68-01-PLAN.md — Scenarios 83-84: command.dispatched (CCV-01), command.suppressed + dispatched-unchanged (CCV-02/03) + report category
+- [x] 68-02-PLAN.md — Scenario 85: command.failed via unmapped CommandName (CCV-04) + new fixture
 
 #### Phase 69: Business Metric Value Correctness
 
@@ -243,11 +243,11 @@ Plans:
 | 65. E2E Runner Fixes & Flaky Stabilization | v2.2 | 1/1 | Complete | 2026-03-22 |
 | 66. Pipeline Event Counters | v2.3 | 3/3 | Complete | 2026-03-22 |
 | 67. Poll & Trap Infrastructure Counters | v2.3 | 2/2 | Complete | 2026-03-22 |
-| 68. Command Counters | v2.3 | 0/2 | Not started | - |
+| 68. Command Counters | v2.3 | 2/2 | Complete | 2026-03-22 |
 | 69. Business Metric Value Correctness | v2.3 | 0/? | Not started | - |
 | 70. Label Correctness | v2.3 | 0/? | Not started | - |
 | 71. Negative Proofs | v2.3 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-22 — Phase 68 planned (2 plans, 3 scenarios 83-85)*
+*Last updated: 2026-03-22 — Phase 68 complete (2/2 plans, 3 scenarios 83-85)*

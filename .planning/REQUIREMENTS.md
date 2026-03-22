@@ -85,10 +85,10 @@ Requirements for Metric Validity & Correctness milestone. Each maps to roadmap p
 | MCV-11 | Phase 67 | Complete |
 | MCV-12 | Phase 67 | Complete |
 | MCV-13 | Phase 67 | Complete |
-| CCV-01 | Phase 68 | Pending |
-| CCV-02 | Phase 68 | Pending |
-| CCV-03 | Phase 68 | Pending |
-| CCV-04 | Phase 68 | Pending |
+| CCV-01 | Phase 68 | Complete |
+| CCV-02 | Phase 68 | Complete |
+| CCV-03 | Phase 68 | Complete |
+| CCV-04 | Phase 68 | Complete |
 | MVC-01 | Phase 69 | Pending |
 | MVC-02 | Phase 69 | Pending |
 | MVC-03 | Phase 69 | Pending |
