@@ -3,7 +3,7 @@ status: complete
 phase: 67-poll-trap-infrastructure-counters
 source: 67-01-SUMMARY.md, 67-02-SUMMARY.md
 started: 2026-03-22T18:00:00Z
-updated: 2026-03-22T18:15:00Z
+updated: 2026-03-22T23:45:00Z
 ---
 
 ## Current Test
@@ -28,28 +28,26 @@ result: pass
 expected: snmp_trap_auth_failed_total delta > 0 after bad-community trap
 result: pass
 
-### 5. MCV-11: poll.unreachable increments after 3 consecutive failures
-expected: snmp_poll_unreachable_total delta > 0 after applying unreachable device
-result: skipped
-reason: Pre-existing flaky test — scenario 06 (original) also fails. FAKE-UNREACHABLE device at 10.255.255.254 doesn't trigger unreachable counter within 120s timeout. Full fixture apply resets all poll schedules; 3 consecutive timeouts across 3 replicas exceeds the wait window. Scenario code is correct; timing tolerance needs investigation outside this milestone.
+### 5. MCV-11: poll.unreachable after simulator scale-down
+expected: snmp_poll_unreachable_total delta > 0 after scaling e2e-simulator to 0 replicas
+result: pass
 
-### 6. MCV-12: poll.recovered increments when device becomes reachable
-expected: snmp_poll_recovered_total delta > 0 after patching device to reachable IP
-result: skipped
-reason: Depends on MCV-11 (scenario 80) leaving FAKE-UNREACHABLE in unreachable state. Since MCV-11 times out, MCV-12 cannot be verified.
+### 6. MCV-12: poll.recovered after simulator scale-up
+expected: snmp_poll_recovered_total delta > 0 after scaling e2e-simulator back to 1 replica
+result: pass
 
-### 7. MCV-13: tenantvector.routed increments on fan-out write
+### 7. MCV-13: tenantvector.routed on fan-out write
 expected: snmp_tenantvector_routed_total delta > 0 after tenants ConfigMap applied
 result: pass
 
 ## Summary
 
 total: 7
-passed: 5
+passed: 7
 issues: 0
 pending: 0
-skipped: 2
+skipped: 0
 
 ## Gaps
 
-[none — skipped tests are pre-existing timing issues inherited from scenario 06, not Phase 67 bugs]
+[none]
