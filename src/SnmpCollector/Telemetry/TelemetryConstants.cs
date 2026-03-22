@@ -13,4 +13,10 @@ public static class TelemetryConstants
     /// Used by SnmpMetricFactory for snmp_gauge and snmp_info instruments.
     /// </summary>
     public const string LeaderMeterName = "SnmpCollector.Leader";
+
+    /// <summary>
+    /// Tenant metrics meter -- exported by ALL instances (no leader gate).
+    /// Used by TenantMetricService for tenant.* instruments.
+    /// </summary>
+    public const string TenantMeterName = "SnmpCollector.Tenant";
 }
