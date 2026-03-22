@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 72 of 75 (TenantMetricService & Meter Registration)
-Plan: 1/1 — complete
+Plan: 2/2 — complete
 Status: Phase complete — ready for Phase 73
-Last activity: 2026-03-23 — Completed 72-01-PLAN.md
+Last activity: 2026-03-23 — Completed 72-02-PLAN.md
 
-Progress: [█░░░░░░░░░] v2.4 phase 1/4 complete
+Progress: [██░░░░░░░░] v2.4 phase 2/4 complete
 
 ## Performance Metrics
 
@@ -37,6 +37,8 @@ Progress: [█░░░░░░░░░] v2.4 phase 1/4 complete
 - v2.4: Tier counters increment by holder/command count per cycle, not by 1
 - v2.4: Duration stopwatch inside EvaluateTenant per-tenant, not around Task.WhenAll group
 - v2.4: Prometheus label casing (tenant_id vs tenantId) must be confirmed before authoring dashboard PromQL
+- v2.4: SnapshotJob.EvaluateTenant returns TenantState; pre-tier = NotReady, tier-4 = Unresolved; both block advance gate
+- v2.4: DI registration must wire ITenantMetricService → TenantMetricService when Phase 73 adds SnapshotJob instrumentation
 
 ### Decisions
 
@@ -58,5 +60,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-23
-Stopped at: Completed 72-01-PLAN.md — Phase 73 ready to execute
+Stopped at: Completed 72-02-PLAN.md — Phase 73 ready to execute
 Resume file: None
