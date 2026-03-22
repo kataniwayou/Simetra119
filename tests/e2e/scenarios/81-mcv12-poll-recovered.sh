@@ -27,5 +27,5 @@ assert_delta_gt "$DELTA" 0 "$SCENARIO_NAME" "before=$BEFORE after=$AFTER delta=$
 
 # Re-establish port forward to simulator (it was lost when pod was scaled down)
 log_info "Re-establishing e2e-simulator port forward..."
-start_port_forward simetra e2e-simulator 8080:8080 2>/dev/null || true
+start_port_forward e2e-simulator 8080 8080 2>/dev/null || true
 sleep 2
