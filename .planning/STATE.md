@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.3 Metric Validity & Correctness — Phase 68: Command Counters
+**Current focus:** v2.3 Metric Validity & Correctness — Phase 69: Business Metric Value Correctness
 
 ## Current Position
 
-Phase: 68 of 71 (Command Counters)
-Plan: 4 of 4 in current phase (gap closure)
-Status: Phase complete
-Last activity: 2026-03-22 — Completed 68-04-PLAN.md (CCV-04 rewritten: command.failed via SET timeout to FAKE-UNREACHABLE; deleted useless tenant-cfg09, created tenant-cfg10 with valid CommandName + unreachable IP)
+Phase: 69 of 71 (Business Metric Value Correctness)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-03-22 — Completed 69-01-PLAN.md (MVC-01 through MVC-07 static exact-value scenarios; CCV report range fix |82|87|; new MVC category |88|95|)
 
-Progress: [███░░░░░░░] v2.3 phase 68 complete (4/4 plans)
+Progress: [████░░░░░░] v2.3 phase 69 plan 1 complete (1/2 plans in phase)
 
 ## Performance Metrics
 
@@ -43,6 +43,10 @@ Progress: [███░░░░░░░] v2.3 phase 68 complete (4/4 plans)
 - CCV-04 triggers command.failed via SET timeout (unreachable IP), NOT unmapped CommandName (unmapped causes TEN-13 to skip tenant at load time)
 - snmp_command_failed_total timeout path uses device_name=device.Name (e.g. "FAKE-UNREACHABLE"); OID-not-found/device-not-found paths use device_name=IP:port
 - FAKE-UNREACHABLE device must be in DeviceRegistry before tenant fixture is applied (TryGetByIpPort must succeed at validation time)
+- CCV SCENARIO_RESULTS: 6 entries at indices 82-87 (83=CCV-01 assert_delta_ge, 83-85=CCV-02/03 3 entries, 86-87=CCV-04 2 entries)
+- MVC SCENARIO_RESULTS: 7 entries at indices 88-94 (MVC-01 through MVC-07); index 95 reserved for MVC-08
+- Counter32/Counter64 arrive in snmp_gauge as raw gauge values (no rate conversion) -- OtelMetricHandler calls RecordGauge for all 5 numeric SNMP types
+- IpAddress snmp_info value label: MEDIUM confidence on exact format; MVC-07 asserts "10.0.0.1" and logs actual value in EVIDENCE
 
 ### Decisions
 
@@ -62,6 +66,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T17:15:42Z
-Stopped at: Completed 68-04-PLAN.md — CCV-04 rewritten (SET timeout to FAKE-UNREACHABLE triggers command.failed, dual configmap save/restore); Phase 68 gap closure complete
+Last session: 2026-03-22T18:04:50Z
+Stopped at: Completed 69-01-PLAN.md — MVC-01 through MVC-07 static exact-value scenarios (86-92); CCV report range fix; new MVC category |88|95|
 Resume file: None
