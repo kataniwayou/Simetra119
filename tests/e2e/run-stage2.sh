@@ -109,6 +109,11 @@ done
 if [ "$FAIL_COUNT" -gt 0 ]; then
     log_error "Stage 1 had $FAIL_COUNT failure(s) -- skipping Stage 2 scenarios"
     REPORT_FILE="$REPORT_DIR/e2e-pss-stage2-report-$(date '+%Y%m%d-%H%M%S').md"
+    # Override report categories for standalone PSS Stage 2 runner
+    _REPORT_CATEGORIES=(
+        "PSS Stage 1: Single Tenant Evaluation|0|5"
+        "PSS Stage 2: Two Tenant Independence|6|8"
+    )
     generate_report "$REPORT_FILE"
     log_info "Report saved to: $REPORT_FILE"
     print_summary
@@ -144,6 +149,11 @@ done
 # ---------------------------------------------------------------------------
 
 REPORT_FILE="$REPORT_DIR/e2e-pss-stage2-report-$(date '+%Y%m%d-%H%M%S').md"
+# Override report categories for standalone PSS Stage 2 runner
+_REPORT_CATEGORIES=(
+    "PSS Stage 1: Single Tenant Evaluation|0|5"
+    "PSS Stage 2: Two Tenant Independence|6|8"
+)
 generate_report "$REPORT_FILE"
 log_info "Report saved to: $REPORT_FILE"
 

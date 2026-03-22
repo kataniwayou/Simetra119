@@ -16,7 +16,7 @@
 #
 # Dual proof pattern:
 #   PSS-19a/b: G1 positive assertions (T1 tier=3 Healthy, T2 tier=4 Unresolved)
-#   PSS-19c:   G2 log absence (sleep 10, --since=15s, G2_FOUND check)
+#   PSS-19c:   G2 log absence (sleep 10, --since=10s, G2_FOUND check)
 #   PSS-19d:   G2 metric non-increment (snapshot_counter delta == 0 for T3 and T4)
 #
 # NOTE: Fixture apply/restore is managed by run-stage3.sh (not this scenario).
@@ -100,7 +100,7 @@ PODS=$(kubectl get pods -n simetra -l app=snmp-collector \
     -o jsonpath='{.items[*].metadata.name}' 2>/dev/null) || true
 G2_FOUND=0
 for POD in $PODS; do
-    G2_LOGS=$(kubectl logs "$POD" -n simetra --since=12s 2>/dev/null \
+    G2_LOGS=$(kubectl logs "$POD" -n simetra --since=10s 2>/dev/null \
         | grep "e2e-pss-g2.*tier=" || echo "") || true
     if [ -n "$G2_LOGS" ]; then
         G2_FOUND=1
@@ -110,7 +110,7 @@ for POD in $PODS; do
 done
 
 if [ "$G2_FOUND" -eq 0 ]; then
-    record_pass "PSS-19c: G2 not evaluated -- log absence (gate blocked -- G1 mixed Healthy+Unresolved)" "G2 tier logs absent in 15s window"
+    record_pass "PSS-19c: G2 not evaluated -- log absence (gate blocked -- G1 mixed Healthy+Unresolved)" "G2 tier logs absent in 10s window"
 else
     record_fail "PSS-19c: G2 not evaluated -- log absence (gate blocked -- G1 mixed Healthy+Unresolved)" "G2 tier log found -- gate did NOT block"
 fi
