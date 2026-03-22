@@ -1,7 +1,7 @@
 # Scenario 96: MLC-03 source=command label on snmp_gauge for SET response
 # Uses tenant-cfg06-pss-single.yaml (e2e-pss-tenant: IntervalSeconds=1, SuppressionWindowSeconds=10)
 # T2 OIDs: 5.1 = evaluate (Min:10), 5.2 = res1 (Min:1), 5.3 = res2 (Min:1)
-# Command response OID: .999.4.4.0 => resolved_name="e2e_command_response", snmp_type="integer32"
+# Command response OID: .999.4.4.0 => resolved_name="e2e_set_bypass", snmp_type="integer32"
 #
 # Tier=4 fires when:
 #   - Resolved holders are NOT all violated (tier=2 gate passes)
@@ -11,7 +11,7 @@
 # OtelMetricHandler records it as snmp_gauge{source="command"}.
 #
 # Sub-assertions:
-#   96: MLC-03: source=command label on snmp_gauge (e2e_command_response)
+#   96: MLC-03: source=command label on snmp_gauge (e2e_set_bypass)
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
@@ -73,21 +73,21 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# MLC-03: Assert source="command" on snmp_gauge for e2e_command_response
-# Poll for snmp_gauge with device_name="E2E-SIM", resolved_name="e2e_command_response",
+# MLC-03: Assert source="command" on snmp_gauge for e2e_set_bypass
+# Poll for snmp_gauge with device_name="E2E-SIM", resolved_name="e2e_set_bypass",
 # source="command" up to 30s with 3s interval.
 # device_name on snmp_gauge is "E2E-SIM" (from community string), NOT the tenant name.
 # ---------------------------------------------------------------------------
 
-SCENARIO_NAME="MLC-03: source=command label on snmp_gauge (e2e_command_response)"
+SCENARIO_NAME="MLC-03: source=command label on snmp_gauge (e2e_set_bypass)"
 
-log_info "MLC-03: Polling for snmp_gauge{source=\"command\", resolved_name=\"e2e_command_response\"} (30s timeout)..."
+log_info "MLC-03: Polling for snmp_gauge{source=\"command\", resolved_name=\"e2e_set_bypass\"} (30s timeout)..."
 
 DEADLINE=$(( $(date +%s) + 30 ))
 MLC03_FOUND=false
 
 while [ "$(date +%s)" -lt "$DEADLINE" ]; do
-    MLC03_RESULT=$(query_prometheus 'snmp_gauge{device_name="E2E-SIM",resolved_name="e2e_command_response",source="command"}') || true
+    MLC03_RESULT=$(query_prometheus 'snmp_gauge{device_name="E2E-SIM",resolved_name="e2e_set_bypass",source="command"}') || true
     MLC03_COUNT=$(echo "$MLC03_RESULT" | jq -r '.data.result | length' 2>/dev/null || echo "0")
     if [ "$MLC03_COUNT" -gt 0 ]; then
         MLC03_FOUND=true
@@ -101,17 +101,17 @@ if [ "$MLC03_FOUND" = "true" ]; then
     log_info "MLC-03: Found series with source=${MLC03_SOURCE}"
     if [ "$MLC03_SOURCE" = "command" ]; then
         record_pass "$SCENARIO_NAME" \
-            "snmp_gauge{device_name=\"E2E-SIM\",resolved_name=\"e2e_command_response\",source=\"command\"} found; source=${MLC03_SOURCE}"
+            "snmp_gauge{device_name=\"E2E-SIM\",resolved_name=\"e2e_set_bypass\",source=\"command\"} found; source=${MLC03_SOURCE}"
     else
         record_fail "$SCENARIO_NAME" \
             "series found but source=${MLC03_SOURCE} expected=command"
     fi
 else
     log_info "MLC-03: Series not found after 30s; querying for evidence..."
-    MLC03_EVIDENCE=$(query_prometheus 'snmp_gauge{resolved_name="e2e_command_response"}') || true
+    MLC03_EVIDENCE=$(query_prometheus 'snmp_gauge{resolved_name="e2e_set_bypass"}') || true
     MLC03_EVIDENCE_COUNT=$(echo "$MLC03_EVIDENCE" | jq -r '.data.result | length' 2>/dev/null || echo "0")
     record_fail "$SCENARIO_NAME" \
-        "snmp_gauge{source=\"command\",resolved_name=\"e2e_command_response\"} not found after 30s; all e2e_command_response series count=${MLC03_EVIDENCE_COUNT}"
+        "snmp_gauge{source=\"command\",resolved_name=\"e2e_set_bypass\"} not found after 30s; all e2e_set_bypass series count=${MLC03_EVIDENCE_COUNT}"
 fi
 
 # ---------------------------------------------------------------------------
