@@ -1227,9 +1227,9 @@ public sealed class TenantVectorWatcherValidationTests
     // ──────────────────────────────────────────────────────
 
     [Fact]
-    public void DuplicateTenantName_SecondGetsIndexSuffix()
+    public void DuplicateTenantName_SecondSkipped()
     {
-        // Two tenants with Name="tenant-A". First keeps name, second gets index appended.
+        // Two tenants with Name="tenant-A". First is kept, second is skipped.
         var t1 = CreateValidTenant();
         t1.Name = "tenant-A";
         var t2 = CreateValidTenant();
@@ -1240,15 +1240,14 @@ public sealed class TenantVectorWatcherValidationTests
             options, CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
-        Assert.Equal(2, result.Tenants.Count);
+        Assert.Single(result.Tenants);
         Assert.Equal("tenant-A", result.Tenants[0].Name);
-        Assert.Equal("tenant-A-1", result.Tenants[1].Name);
     }
 
     [Fact]
-    public void DuplicateTenantName_BothLoadWithCorrectMetrics()
+    public void DuplicateTenantName_FirstKeptWithCorrectMetrics()
     {
-        // Two tenants with same name but different metrics. Both load, second gets index suffix.
+        // Two tenants with same name but different metric names. First tenant's metrics are in result.
         var t1 = new TenantOptions
         {
             Name = "dup-tenant",
@@ -1284,37 +1283,9 @@ public sealed class TenantVectorWatcherValidationTests
             options, CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
-        Assert.Equal(2, result.Tenants.Count);
-        Assert.Equal("dup-tenant", result.Tenants[0].Name);
+        Assert.Single(result.Tenants);
         Assert.Equal("first-eval", result.Tenants[0].Metrics[0].MetricName);
-        Assert.Equal("dup-tenant-1", result.Tenants[1].Name);
-        Assert.Equal("second-eval", result.Tenants[1].Metrics[0].MetricName);
-    }
-
-    [Fact]
-    public void DuplicateTenantName_GeneratedNameCollidesWithExplicitName()
-    {
-        // "tenant-a" at index 0, "tenant-a" at index 1 (generates "tenant-a-1"),
-        // "tenant-a-1" at index 2 (explicit name collides with generated).
-        // The third should get "tenant-a-1-2" or similar unique suffix.
-        var t1 = CreateValidTenant(); t1.Name = "tenant-a";
-        var t2 = CreateValidTenant(); t2.Name = "tenant-a";
-        var t3 = CreateValidTenant(); t3.Name = "tenant-a-1";
-
-        var options = new TenantVectorOptions { Tenants = new List<TenantOptions> { t1, t2, t3 } };
-        var result = TenantVectorWatcherService.ValidateAndBuildTenants(
-            options, CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
-            TestSnapshotIntervalSeconds, NullLogger.Instance);
-
-        Assert.Equal(3, result.Tenants.Count);
-        var names = result.Tenants.Select(t => t.Name).ToList();
-        Assert.Equal("tenant-a", names[0]);
-        Assert.Equal("tenant-a-1", names[1]);
-        // Third tenant's explicit "tenant-a-1" collides with generated — gets suffix
-        Assert.NotEqual("tenant-a-1", names[2]);
-        Assert.StartsWith("tenant-a-1-", names[2]);
-        // All names unique
-        Assert.Equal(3, names.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal("first-res", result.Tenants[0].Metrics[1].MetricName);
     }
 
     [Fact]
