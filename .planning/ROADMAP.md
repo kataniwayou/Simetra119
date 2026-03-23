@@ -157,8 +157,8 @@ Plans:
   4. SnapshotJob unit tests pass asserting percentage values and state correctness for each evaluation path (Healthy, Resolved, Unresolved)
 **Plans:** 2 plans
 Plans:
-- [ ] 77-01-PLAN.md — Add count helpers and rewrite EvaluateTenant to gather-then-decide flow
-- [ ] 77-02-PLAN.md — Rewrite metric-assertion tests and add new percentage tests
+- [x] 77-01-PLAN.md — Add count helpers and rewrite EvaluateTenant to gather-then-decide flow
+- [x] 77-02-PLAN.md — Rewrite metric-assertion tests and add new percentage tests
 
 #### Phase 78: Counter Reference Cleanup
 
@@ -248,11 +248,11 @@ Plans:
 | 74. Grafana Dashboard Panel | v2.4 | 1/1 | Complete | 2026-03-23 |
 | 75. E2E Validation Scenarios | v2.4 | 3/3 | Complete | 2026-03-23 |
 | 76. Percentage Gauge Instruments | v2.5 | 1/1 | Complete | 2026-03-23 |
-| 77. Gather-Then-Decide Evaluation Flow | v2.5 | 0/2 | Not started | - |
+| 77. Gather-Then-Decide Evaluation Flow | v2.5 | 2/2 | Complete | 2026-03-23 |
 | 78. Counter Reference Cleanup | v2.5 | 0/TBD | Not started | - |
 | 79. Dashboard Percentage Update | v2.5 | 0/TBD | Not started | - |
 | 80. E2E Scenario Updates | v2.5 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-23 — Phase 77 planned (2 plans, 2 waves)*
+*Last updated: 2026-03-23 — Phase 77 complete (2 plans, verified 4/4)*

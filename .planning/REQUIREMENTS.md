@@ -63,9 +63,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EFR-01 | Phase 77 | Pending |
-| EFR-02 | Phase 77 | Pending |
-| EFR-03 | Phase 77 | Pending |
+| EFR-01 | Phase 77 | Complete |
+| EFR-02 | Phase 77 | Complete |
+| EFR-03 | Phase 77 | Complete |
 | PGA-01 | Phase 76 | Complete |
 | PGA-02 | Phase 76 | Complete |
 | PGA-03 | Phase 76 | Complete |
@@ -82,7 +82,7 @@
 | DSH-02 | Phase 79 | Pending |
 | E2E-01 | Phase 80 | Pending |
 | E2E-02 | Phase 80 | Pending |
-| UTT-01 | Phase 77 | Pending |
+| UTT-01 | Phase 77 | Complete |
 | UTT-02 | Phase 76 | Complete |
 
 **Coverage:**
