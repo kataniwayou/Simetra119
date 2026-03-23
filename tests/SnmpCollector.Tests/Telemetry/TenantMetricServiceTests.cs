@@ -8,7 +8,8 @@ using Xunit;
 namespace SnmpCollector.Tests.Telemetry;
 
 /// <summary>
-/// Unit tests for all 8 instruments on <see cref="TenantMetricService"/>.
+/// Unit tests for all 8 instruments on <see cref="TenantMetricService"/>:
+/// 6 percentage gauges, 1 state gauge, 1 duration histogram.
 /// Uses <see cref="MeterListener"/> to observe actual OTel measurements and tag values.
 /// Placed in NonParallelCollection to prevent cross-test meter contamination
 /// (MeterListener is a global listener; parallel tests with the same meter name interfere).
@@ -21,7 +22,6 @@ public sealed class TenantMetricServiceTests : IDisposable
     private readonly MeterListener _listener;
 
     // Recorded measurements: (instrumentName, value, tags)
-    private readonly List<(string InstrumentName, long Value, KeyValuePair<string, object?>[] Tags)> _measurements = new();
     private readonly List<(string InstrumentName, double Value, KeyValuePair<string, object?>[] Tags)> _doubleMeasurements = new();
 
     public TenantMetricServiceTests()
@@ -39,10 +39,6 @@ public sealed class TenantMetricServiceTests : IDisposable
             if (instrument.Meter.Name == TelemetryConstants.TenantMeterName)
                 listener.EnableMeasurementEvents(instrument);
         };
-        _listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
-        {
-            _measurements.Add((instrument.Name, value, tags.ToArray()));
-        });
         _listener.SetMeasurementEventCallback<double>((instrument, value, tags, _) =>
         {
             _doubleMeasurements.Add((instrument.Name, value, tags.ToArray()));
@@ -58,17 +54,17 @@ public sealed class TenantMetricServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
-    // 1. IncrementTier1Stale records with tenant_id and priority tags
+    // 1. RecordMetricStalePercent records gauge value with tenant_id and priority tags
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IncrementTier1Stale_RecordsWithTenantIdAndPriorityTags()
+    public void RecordMetricStalePercent_RecordsWithTenantIdAndPriorityTags()
     {
-        _service.IncrementTier1Stale("tenant-a", 1);
+        _service.RecordMetricStalePercent("tenant-a", 1, 50.0);
 
-        var match = _measurements.Single(m => m.InstrumentName == "tenant.tier1.stale");
+        var match = _doubleMeasurements.Single(m => m.InstrumentName == "tenant.metric.stale.percent");
 
-        Assert.Equal(1L, match.Value);
+        Assert.Equal(50.0, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
         Assert.Equal("tenant-a", tags["tenant_id"]);
         Assert.Equal(1, tags["priority"]);
@@ -78,17 +74,17 @@ public sealed class TenantMetricServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
-    // 2. IncrementTier2Resolved records with tenant_id and priority tags
+    // 2. RecordMetricResolvedPercent records gauge value with tenant_id and priority tags
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IncrementTier2Resolved_RecordsWithTenantIdAndPriorityTags()
+    public void RecordMetricResolvedPercent_RecordsWithTenantIdAndPriorityTags()
     {
-        _service.IncrementTier2Resolved("tenant-a", 1);
+        _service.RecordMetricResolvedPercent("tenant-a", 1, 75.0);
 
-        var match = _measurements.Single(m => m.InstrumentName == "tenant.tier2.resolved");
+        var match = _doubleMeasurements.Single(m => m.InstrumentName == "tenant.metric.resolved.percent");
 
-        Assert.Equal(1L, match.Value);
+        Assert.Equal(75.0, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
         Assert.Equal("tenant-a", tags["tenant_id"]);
         Assert.Equal(1, tags["priority"]);
@@ -98,17 +94,17 @@ public sealed class TenantMetricServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
-    // 3. IncrementTier3Evaluate records with tenant_id and priority tags
+    // 3. RecordMetricEvaluatePercent records gauge value with tenant_id and priority tags
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IncrementTier3Evaluate_RecordsWithTenantIdAndPriorityTags()
+    public void RecordMetricEvaluatePercent_RecordsWithTenantIdAndPriorityTags()
     {
-        _service.IncrementTier3Evaluate("tenant-a", 1);
+        _service.RecordMetricEvaluatePercent("tenant-a", 1, 33.33);
 
-        var match = _measurements.Single(m => m.InstrumentName == "tenant.tier3.evaluate");
+        var match = _doubleMeasurements.Single(m => m.InstrumentName == "tenant.metric.evaluate.percent");
 
-        Assert.Equal(1L, match.Value);
+        Assert.Equal(33.33, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
         Assert.Equal("tenant-a", tags["tenant_id"]);
         Assert.Equal(1, tags["priority"]);
@@ -118,17 +114,17 @@ public sealed class TenantMetricServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
-    // 4. IncrementCommandDispatched records with tenant_id and priority tags
+    // 4. RecordCommandDispatchedPercent records gauge value with tenant_id and priority tags
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IncrementCommandDispatched_RecordsWithTenantIdAndPriorityTags()
+    public void RecordCommandDispatchedPercent_RecordsWithTenantIdAndPriorityTags()
     {
-        _service.IncrementCommandDispatched("tenant-a", 1);
+        _service.RecordCommandDispatchedPercent("tenant-a", 1, 60.0);
 
-        var match = _measurements.Single(m => m.InstrumentName == "tenant.command.dispatched");
+        var match = _doubleMeasurements.Single(m => m.InstrumentName == "tenant.command.dispatched.percent");
 
-        Assert.Equal(1L, match.Value);
+        Assert.Equal(60.0, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
         Assert.Equal("tenant-a", tags["tenant_id"]);
         Assert.Equal(1, tags["priority"]);
@@ -138,17 +134,17 @@ public sealed class TenantMetricServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
-    // 5. IncrementCommandFailed records with tenant_id and priority tags
+    // 5. RecordCommandFailedPercent records gauge value with tenant_id and priority tags
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IncrementCommandFailed_RecordsWithTenantIdAndPriorityTags()
+    public void RecordCommandFailedPercent_RecordsWithTenantIdAndPriorityTags()
     {
-        _service.IncrementCommandFailed("tenant-a", 1);
+        _service.RecordCommandFailedPercent("tenant-a", 1, 25.0);
 
-        var match = _measurements.Single(m => m.InstrumentName == "tenant.command.failed");
+        var match = _doubleMeasurements.Single(m => m.InstrumentName == "tenant.command.failed.percent");
 
-        Assert.Equal(1L, match.Value);
+        Assert.Equal(25.0, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
         Assert.Equal("tenant-a", tags["tenant_id"]);
         Assert.Equal(1, tags["priority"]);
@@ -158,17 +154,17 @@ public sealed class TenantMetricServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
-    // 6. IncrementCommandSuppressed records with tenant_id and priority tags
+    // 6. RecordCommandSuppressedPercent records gauge value with tenant_id and priority tags
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IncrementCommandSuppressed_RecordsWithTenantIdAndPriorityTags()
+    public void RecordCommandSuppressedPercent_RecordsWithTenantIdAndPriorityTags()
     {
-        _service.IncrementCommandSuppressed("tenant-a", 1);
+        _service.RecordCommandSuppressedPercent("tenant-a", 1, 10.0);
 
-        var match = _measurements.Single(m => m.InstrumentName == "tenant.command.suppressed");
+        var match = _doubleMeasurements.Single(m => m.InstrumentName == "tenant.command.suppressed.percent");
 
-        Assert.Equal(1L, match.Value);
+        Assert.Equal(10.0, match.Value);
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
         Assert.Equal("tenant-a", tags["tenant_id"]);
         Assert.Equal(1, tags["priority"]);
@@ -178,7 +174,7 @@ public sealed class TenantMetricServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
-    // 7. RecordTenantState records enum value as double with tags
+    // 7. RecordTenantState records enum value as double with renamed instrument
     // -----------------------------------------------------------------------
 
     [Fact]
@@ -186,7 +182,7 @@ public sealed class TenantMetricServiceTests : IDisposable
     {
         _service.RecordTenantState("tenant-a", 1, TenantState.Unresolved);
 
-        var match = _doubleMeasurements.Single(m => m.InstrumentName == "tenant.state");
+        var match = _doubleMeasurements.Single(m => m.InstrumentName == "tenant.evaluation.state");
 
         Assert.Equal(3.0, match.Value); // Unresolved = 3
         var tags = match.Tags.ToDictionary(t => t.Key, t => t.Value);
@@ -215,5 +211,19 @@ public sealed class TenantMetricServiceTests : IDisposable
         Assert.DoesNotContain("device_name", tags.Keys);
         Assert.DoesNotContain("host_name", tags.Keys);
         Assert.DoesNotContain("pod_name", tags.Keys);
+    }
+
+    // -----------------------------------------------------------------------
+    // 9. Zero percent edge case: RecordMetricStalePercent with 0.0 records zero
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void RecordMetricStalePercent_ZeroPercent_RecordsZero()
+    {
+        _service.RecordMetricStalePercent("tenant-a", 1, 0.0);
+
+        var match = _doubleMeasurements.Single(m => m.InstrumentName == "tenant.metric.stale.percent");
+
+        Assert.Equal(0.0, match.Value);
     }
 }
