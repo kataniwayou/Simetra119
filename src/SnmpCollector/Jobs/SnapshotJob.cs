@@ -131,13 +131,15 @@ public sealed class SnapshotJob : IJob
     /// </summary>
     internal TenantState EvaluateTenant(Tenant tenant)
     {
+        var sw = Stopwatch.StartNew();
+
         // Pre-tier: Readiness check — skip tenants where any holder is still in grace window
         if (!AreAllReady(tenant.Holders))
         {
             _logger.LogDebug(
                 "Tenant {TenantId} priority={Priority} not ready (in grace window) — skipping",
                 tenant.Id, tenant.Priority);
-            return TenantState.NotReady;
+            return RecordAndReturn(tenant, TenantState.NotReady, sw);
         }
 
         // Tier 1: Staleness check — stale data skips tiers 2-3, goes straight to commands
@@ -156,7 +158,15 @@ public sealed class SnapshotJob : IJob
                 _logger.LogDebug(
                     "Tenant {TenantId} priority={Priority} tier=2 — all resolved violated, no commands",
                     tenant.Id, tenant.Priority);
-                return TenantState.Resolved;
+
+                var staleCount = CountStaleHolders(tenant.Holders);
+                for (var i = 0; i < staleCount; i++)
+                    _tenantMetrics.IncrementTier1Stale(tenant.Id, tenant.Priority);
+                var resolvedCount = CountResolvedNonViolated(tenant.Holders);
+                for (var i = 0; i < resolvedCount; i++)
+                    _tenantMetrics.IncrementTier2Resolved(tenant.Id, tenant.Priority);
+
+                return RecordAndReturn(tenant, TenantState.Resolved, sw);
             }
 
             // Not all Resolved violated — proceed to Tier 3 (evaluate check)
@@ -170,11 +180,32 @@ public sealed class SnapshotJob : IJob
                 _logger.LogDebug(
                     "Tenant {TenantId} priority={Priority} tier=3 — not all evaluate metrics violated, no action",
                     tenant.Id, tenant.Priority);
-                return TenantState.Healthy;
+
+                var staleCount = CountStaleHolders(tenant.Holders);
+                for (var i = 0; i < staleCount; i++)
+                    _tenantMetrics.IncrementTier1Stale(tenant.Id, tenant.Priority);
+                var resolvedCount = CountResolvedNonViolated(tenant.Holders);
+                for (var i = 0; i < resolvedCount; i++)
+                    _tenantMetrics.IncrementTier2Resolved(tenant.Id, tenant.Priority);
+                var evaluateCount = CountEvaluateViolated(tenant.Holders);
+                for (var i = 0; i < evaluateCount; i++)
+                    _tenantMetrics.IncrementTier3Evaluate(tenant.Id, tenant.Priority);
+
+                return RecordAndReturn(tenant, TenantState.Healthy, sw);
             }
         }
 
         // Tier 4: Command dispatch with suppression
+        var staleCountT4 = CountStaleHolders(tenant.Holders);
+        for (var i = 0; i < staleCountT4; i++)
+            _tenantMetrics.IncrementTier1Stale(tenant.Id, tenant.Priority);
+        var resolvedCountT4 = CountResolvedNonViolated(tenant.Holders);
+        for (var i = 0; i < resolvedCountT4; i++)
+            _tenantMetrics.IncrementTier2Resolved(tenant.Id, tenant.Priority);
+        var evaluateCountT4 = CountEvaluateViolated(tenant.Holders);
+        for (var i = 0; i < evaluateCountT4; i++)
+            _tenantMetrics.IncrementTier3Evaluate(tenant.Id, tenant.Priority);
+
         var enqueueCount = 0;
 
         foreach (var cmd in tenant.Commands)
@@ -187,6 +218,7 @@ public sealed class SnapshotJob : IJob
                     "Command {CommandName} suppressed for tenant {TenantId}",
                     cmd.CommandName, tenant.Id);
                 _pipelineMetrics.IncrementCommandSuppressed(tenant.Id);
+                _tenantMetrics.IncrementCommandSuppressed(tenant.Id, tenant.Priority);
                 continue;
             }
 
@@ -198,6 +230,7 @@ public sealed class SnapshotJob : IJob
             {
                 enqueueCount++;
                 _pipelineMetrics.IncrementCommandDispatched(tenant.Id);
+                _tenantMetrics.IncrementCommandDispatched(tenant.Id, tenant.Priority);
             }
             else
             {
@@ -205,6 +238,7 @@ public sealed class SnapshotJob : IJob
                     "Command channel full, dropping command {CommandName} for tenant {TenantId}",
                     cmd.CommandName, tenant.Id);
                 _pipelineMetrics.IncrementCommandFailed(tenant.Id);
+                _tenantMetrics.IncrementCommandFailed(tenant.Id, tenant.Priority);
             }
         }
 
@@ -214,7 +248,14 @@ public sealed class SnapshotJob : IJob
 
         // Tier 4 reached = command intent = device state unresolved,
         // regardless of whether commands were actually dispatched (suppression/channel full)
-        return TenantState.Unresolved;
+        return RecordAndReturn(tenant, TenantState.Unresolved, sw);
+    }
+
+    private TenantState RecordAndReturn(Tenant tenant, TenantState state, Stopwatch sw)
+    {
+        _tenantMetrics.RecordTenantState(tenant.Id, tenant.Priority, state);
+        _tenantMetrics.RecordEvaluationDuration(tenant.Id, tenant.Priority, sw.Elapsed.TotalMilliseconds);
+        return state;
     }
 
     /// <summary>
@@ -360,6 +401,117 @@ public sealed class SnapshotJob : IJob
         // If at least one Evaluate holder was checked and ALL samples were violated → proceed to Tier 4
         // If none were checked (all empty or no Evaluate) → vacuous false (no data = no command)
         return checkedCount > 0;
+    }
+
+    /// <summary>
+    /// Counts non-excluded holders that have stale data (null slot or age exceeds grace window).
+    /// Excluded: Source=Trap, Source=Command, IntervalSeconds=0.
+    /// Unlike HasStaleness, does not short-circuit — counts ALL stale holders.
+    /// </summary>
+    private static int CountStaleHolders(IReadOnlyList<MetricSlotHolder> holders)
+    {
+        var count = 0;
+        foreach (var holder in holders)
+        {
+            if (holder.Source == SnmpSource.Trap || holder.Source == SnmpSource.Command || holder.IntervalSeconds == 0)
+                continue;
+
+            var slot = holder.ReadSlot();
+            if (slot is null)
+            {
+                count++;
+                continue;
+            }
+
+            var age = DateTimeOffset.UtcNow - slot.Timestamp;
+            var graceWindow = TimeSpan.FromSeconds(holder.IntervalSeconds * holder.GraceMultiplier);
+            if (age > graceWindow)
+                count++;
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// Counts Resolved-role holders that are NOT violated (i.e. at least one sample is in range).
+    /// For Trap/Command sources: checks newest sample only. Null slot = skip.
+    /// For Poll/Synthetic sources: if ANY sample is not violated, holder counts as non-violated.
+    /// Holders with empty series (Length == 0) do not participate.
+    /// </summary>
+    private static int CountResolvedNonViolated(IReadOnlyList<MetricSlotHolder> holders)
+    {
+        var count = 0;
+        foreach (var holder in holders)
+        {
+            if (holder.Role != "Resolved")
+                continue;
+
+            if (holder.Source == SnmpSource.Trap || holder.Source == SnmpSource.Command)
+            {
+                var slot = holder.ReadSlot();
+                if (slot is null)
+                    continue;
+                if (!IsViolated(holder, slot))
+                    count++;
+                continue;
+            }
+
+            var series = holder.ReadSeries();
+            if (series.Length == 0)
+                continue;
+
+            foreach (var sample in series)
+            {
+                if (!IsViolated(holder, sample))
+                {
+                    count++;
+                    break;
+                }
+            }
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// Counts Evaluate-role holders where ALL checked samples are violated.
+    /// For Trap/Command sources: checks newest sample only. Null slot = skip.
+    /// For Poll/Synthetic sources: ALL samples must be violated for the holder to count.
+    /// Holders with empty series (Length == 0) do not participate.
+    /// </summary>
+    private static int CountEvaluateViolated(IReadOnlyList<MetricSlotHolder> holders)
+    {
+        var count = 0;
+        foreach (var holder in holders)
+        {
+            if (holder.Role != "Evaluate")
+                continue;
+
+            if (holder.Source == SnmpSource.Trap || holder.Source == SnmpSource.Command)
+            {
+                var slot = holder.ReadSlot();
+                if (slot is null)
+                    continue;
+                if (IsViolated(holder, slot))
+                    count++;
+                continue;
+            }
+
+            var series = holder.ReadSeries();
+            if (series.Length == 0)
+                continue;
+
+            var allViolated = true;
+            foreach (var sample in series)
+            {
+                if (!IsViolated(holder, sample))
+                {
+                    allViolated = false;
+                    break;
+                }
+            }
+            if (allViolated)
+                count++;
+        }
+        return count;
     }
 
     /// <summary>
