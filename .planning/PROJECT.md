@@ -168,7 +168,18 @@ See `.planning/milestones/v2.4-REQUIREMENTS.md` for full requirement details.
 
 ### Active
 
-(None — planning next milestone)
+**v2.5 Tenant Metrics Approach Modification**
+
+- [ ] Refactor EvaluateTenant: gather all tier results (stale, resolved violations, evaluate violations) before deciding — no early returns except NotReady
+- [ ] Replace 6 counters with 6 percentage gauges: stale%, resolved%, evaluate%, dispatched%, failed%, suppressed%
+- [ ] Resolved metric measures violated (same direction as evaluate) — higher % = worse
+- [ ] Percentages use total configured counts as denominator (from tenant config, not runtime)
+- [ ] Command percentages: dispatched + failed + suppressed = 100% of total configured commands per cycle
+- [ ] All tenant metrics recorded together at exit point (gauges batched with state + duration)
+- [ ] Clean up old counter code, comments, and references
+- [ ] Update operations dashboard for percentage display
+- [ ] Update E2E scenarios (107-112) for gauge percentage assertions
+- [ ] Update unit tests for new gauge API and percentage logic
 
 ### Out of Scope
 
@@ -238,4 +249,4 @@ See `.planning/milestones/v2.4-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-23 after v2.4 milestone shipped*
+*Last updated: 2026-03-23 after v2.5 milestone started*
