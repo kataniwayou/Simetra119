@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 
 ## Current Position
 
-Phase: 74 of 75 (Grafana Dashboard Panel) — COMPLETE
-Plan: 1/1 — verified
-Status: Phase 74 complete, verified ✓ — ready for Phase 75
-Last activity: 2026-03-23 — Phase 74 verified (5/5 must-haves)
+Phase: 75 of 75 (E2E Validation Scenarios) — In progress
+Plan: 2/4 complete
+Status: Plans 75-01 and 75-02 complete — scenarios 107-110 created
+Last activity: 2026-03-23 — Completed 75-02-PLAN.md (scenarios 109-110)
 
-Progress: [███████░░░] v2.4 phase 3/4 complete
+Progress: [████████░░] v2.4 phase 4/4 in progress
 
 ## Performance Metrics
 
@@ -27,7 +27,7 @@ Progress: [███████░░░] v2.4 phase 3/4 complete
 
 ### Key Facts
 
-- 106 E2E scenario scripts total (01-106)
+- 110 E2E scenario scripts total (01-110, including TVM scenarios 107-110)
 - run-all.sh uses sort -V for version-aware ordering (required for 100+ scenarios)
 - CommandWorkerService resolves SET response names via command map (not OID map)
 - dispatched = evaluation decision, suppressed = execution prevention, failed = runtime error
@@ -46,6 +46,9 @@ Progress: [███████░░░] v2.4 phase 3/4 complete
 - v2.4: NotReady path records only state gauge + duration (no tier or command counters — design decision)
 - v2.4: Operations dashboard Tenant Status table uses columns Host, Pod, Tenant, Priority, State, Dispatched, Failed, Suppressed, Stale, Resolved, Evaluate, P99 (ms), Trend (panel id=28, row id=27)
 - v2.4: tenant_id and priority are literal snake_case tag keys in TenantMetricService (no OTel conversion needed)
+- v2.4: Resolved path (tier=2) asserts state=2 + duration delta + no commands (tier2_resolved counter NOT assertable when ALL resolved are violated)
+- v2.4: Histogram P99 PromQL: histogram_quantile(0.99, rate(tenant_evaluation_duration_milliseconds_bucket{...}[5m])) — guard NaN/+Inf
+- v2.4: ROADMAP "tenant_gauge_duration_milliseconds" is a typo; correct name is tenant_evaluation_duration_milliseconds
 
 ### Decisions
 
@@ -70,5 +73,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-23
-Stopped at: Phase 74 verified — Phase 75 ready to discuss
+Stopped at: Completed 75-02-PLAN.md — scenarios 109-110 created
 Resume file: None
