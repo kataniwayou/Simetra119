@@ -196,17 +196,11 @@ public sealed class SnapshotJob : IJob
         }
 
         // Tier 4: Command dispatch with suppression
-        var staleCountT4 = CountStaleHolders(tenant.Holders);
-        for (var i = 0; i < staleCountT4; i++)
-            _tenantMetrics.IncrementTier1Stale(tenant.Id, tenant.Priority);
-        var resolvedCountT4 = CountResolvedNonViolated(tenant.Holders);
-        for (var i = 0; i < resolvedCountT4; i++)
-            _tenantMetrics.IncrementTier2Resolved(tenant.Id, tenant.Priority);
-        var evaluateCountT4 = CountEvaluateViolated(tenant.Holders);
-        for (var i = 0; i < evaluateCountT4; i++)
-            _tenantMetrics.IncrementTier3Evaluate(tenant.Id, tenant.Priority);
-
+        // Accumulate command counts during dispatch loop — record all metrics together at exit
         var enqueueCount = 0;
+        var suppressedCount = 0;
+        var dispatchedCount = 0;
+        var failedCount = 0;
 
         foreach (var cmd in tenant.Commands)
         {
@@ -218,7 +212,7 @@ public sealed class SnapshotJob : IJob
                     "Command {CommandName} suppressed for tenant {TenantId}",
                     cmd.CommandName, tenant.Id);
                 _pipelineMetrics.IncrementCommandSuppressed(tenant.Id);
-                _tenantMetrics.IncrementCommandSuppressed(tenant.Id, tenant.Priority);
+                suppressedCount++;
                 continue;
             }
 
@@ -230,7 +224,7 @@ public sealed class SnapshotJob : IJob
             {
                 enqueueCount++;
                 _pipelineMetrics.IncrementCommandDispatched(tenant.Id);
-                _tenantMetrics.IncrementCommandDispatched(tenant.Id, tenant.Priority);
+                dispatchedCount++;
             }
             else
             {
@@ -238,13 +232,30 @@ public sealed class SnapshotJob : IJob
                     "Command channel full, dropping command {CommandName} for tenant {TenantId}",
                     cmd.CommandName, tenant.Id);
                 _pipelineMetrics.IncrementCommandFailed(tenant.Id);
-                _tenantMetrics.IncrementCommandFailed(tenant.Id, tenant.Priority);
+                failedCount++;
             }
         }
 
         _logger.LogInformation(
             "Tenant {TenantId} priority={Priority} tier=4 — commands enqueued, count={CommandCount}",
             tenant.Id, tenant.Priority, enqueueCount);
+
+        // Record all tenant metrics together at exit — tier counters + command counters + state + duration
+        var staleCountT4 = CountStaleHolders(tenant.Holders);
+        for (var i = 0; i < staleCountT4; i++)
+            _tenantMetrics.IncrementTier1Stale(tenant.Id, tenant.Priority);
+        var resolvedCountT4 = CountResolvedNonViolated(tenant.Holders);
+        for (var i = 0; i < resolvedCountT4; i++)
+            _tenantMetrics.IncrementTier2Resolved(tenant.Id, tenant.Priority);
+        var evaluateCountT4 = CountEvaluateViolated(tenant.Holders);
+        for (var i = 0; i < evaluateCountT4; i++)
+            _tenantMetrics.IncrementTier3Evaluate(tenant.Id, tenant.Priority);
+        for (var i = 0; i < dispatchedCount; i++)
+            _tenantMetrics.IncrementCommandDispatched(tenant.Id, tenant.Priority);
+        for (var i = 0; i < suppressedCount; i++)
+            _tenantMetrics.IncrementCommandSuppressed(tenant.Id, tenant.Priority);
+        for (var i = 0; i < failedCount; i++)
+            _tenantMetrics.IncrementCommandFailed(tenant.Id, tenant.Priority);
 
         // Tier 4 reached = command intent = device state unresolved,
         // regardless of whether commands were actually dispatched (suppression/channel full)
