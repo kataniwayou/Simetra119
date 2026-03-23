@@ -169,13 +169,38 @@ public sealed class SnapshotJob : IJob
             evaluateTotal = CountEvaluateParticipating(tenant.Holders);
         }
 
-        // Tier 4: Command dispatch — runs when stale or all evaluate violated
+        // --- DECIDE (same priority order as v2.4) ---
+        TenantState state;
+        if (isStale)
+        {
+            state = TenantState.Unresolved;
+        }
+        else if (AreAllResolvedViolated(tenant.Holders))
+        {
+            _logger.LogDebug(
+                "Tenant {TenantId} priority={Priority} tier=2 — all resolved violated — no commands",
+                tenant.Id, tenant.Priority);
+            state = TenantState.Resolved;
+        }
+        else if (AreAllEvaluateViolated(tenant.Holders))
+        {
+            state = TenantState.Unresolved;
+        }
+        else
+        {
+            _logger.LogDebug(
+                "Tenant {TenantId} priority={Priority} tier=3 — healthy — no action",
+                tenant.Id, tenant.Priority);
+            state = TenantState.Healthy;
+        }
+
+        // --- DISPATCH (only when state = Unresolved) ---
         var enqueueCount = 0;
         var dispatchedCount = 0;
         var suppressedCount = 0;
         var failedCount = 0;
 
-        if (isStale || AreAllEvaluateViolated(tenant.Holders))
+        if (state == TenantState.Unresolved)
         {
             foreach (var cmd in tenant.Commands)
             {
@@ -216,47 +241,28 @@ public sealed class SnapshotJob : IJob
                 tenant.Id, tenant.Priority, enqueueCount);
         }
 
-        // --- DECIDE (same priority order as v2.4) ---
-        TenantState state;
-        if (isStale)
-        {
-            state = TenantState.Unresolved;
-        }
-        else if (AreAllResolvedViolated(tenant.Holders))
-        {
-            _logger.LogDebug(
-                "Tenant {TenantId} priority={Priority} tier=2 — all resolved violated — no commands",
-                tenant.Id, tenant.Priority);
-            state = TenantState.Resolved;
-        }
-        else if (AreAllEvaluateViolated(tenant.Holders))
-        {
-            state = TenantState.Unresolved;
-        }
-        else
-        {
-            _logger.LogDebug(
-                "Tenant {TenantId} priority={Priority} tier=3 — healthy — no action",
-                tenant.Id, tenant.Priority);
-            state = TenantState.Healthy;
-        }
-
         // --- COMPUTE PERCENTAGES ---
-        var stalePercent    = staleTotal == 0    ? 0.0 : staleCount            * 100.0 / staleTotal;
-        var resolvedPercent = resolvedTotal == 0 ? 0.0 : resolvedViolatedCount * 100.0 / resolvedTotal;
-        var evaluatePercent = evaluateTotal == 0 ? 0.0 : evaluateViolatedCount * 100.0 / evaluateTotal;
-        var cmdTotal        = tenant.Commands.Count;
-        var dispatchedPct   = cmdTotal == 0 ? 0.0 : dispatchedCount  * 100.0 / cmdTotal;
-        var failedPct       = cmdTotal == 0 ? 0.0 : failedCount       * 100.0 / cmdTotal;
-        var suppressedPct   = cmdTotal == 0 ? 0.0 : suppressedCount   * 100.0 / cmdTotal;
+        var stalePercent = staleTotal == 0 ? 0.0 : staleCount * 100.0 / staleTotal;
 
-        // --- SINGLE EXIT: record all 6 percentage gauges + state + duration ---
+        // --- SINGLE EXIT: record stale% always, other 5 only when not stale ---
         _tenantMetrics.RecordMetricStalePercent(tenant.Id, tenant.Priority, stalePercent);
-        _tenantMetrics.RecordMetricResolvedPercent(tenant.Id, tenant.Priority, resolvedPercent);
-        _tenantMetrics.RecordMetricEvaluatePercent(tenant.Id, tenant.Priority, evaluatePercent);
-        _tenantMetrics.RecordCommandDispatchedPercent(tenant.Id, tenant.Priority, dispatchedPct);
-        _tenantMetrics.RecordCommandFailedPercent(tenant.Id, tenant.Priority, failedPct);
-        _tenantMetrics.RecordCommandSuppressedPercent(tenant.Id, tenant.Priority, suppressedPct);
+
+        if (!isStale)
+        {
+            var resolvedPercent = resolvedTotal == 0 ? 0.0 : resolvedViolatedCount * 100.0 / resolvedTotal;
+            var evaluatePercent = evaluateTotal == 0 ? 0.0 : evaluateViolatedCount * 100.0 / evaluateTotal;
+            var cmdTotal        = tenant.Commands.Count;
+            var dispatchedPct   = cmdTotal == 0 ? 0.0 : dispatchedCount  * 100.0 / cmdTotal;
+            var failedPct       = cmdTotal == 0 ? 0.0 : failedCount      * 100.0 / cmdTotal;
+            var suppressedPct   = cmdTotal == 0 ? 0.0 : suppressedCount  * 100.0 / cmdTotal;
+
+            _tenantMetrics.RecordMetricResolvedPercent(tenant.Id, tenant.Priority, resolvedPercent);
+            _tenantMetrics.RecordMetricEvaluatePercent(tenant.Id, tenant.Priority, evaluatePercent);
+            _tenantMetrics.RecordCommandDispatchedPercent(tenant.Id, tenant.Priority, dispatchedPct);
+            _tenantMetrics.RecordCommandFailedPercent(tenant.Id, tenant.Priority, failedPct);
+            _tenantMetrics.RecordCommandSuppressedPercent(tenant.Id, tenant.Priority, suppressedPct);
+        }
+
         return RecordAndReturn(tenant, state, sw);
     }
 
