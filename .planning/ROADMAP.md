@@ -192,7 +192,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Scenarios 107-112 each pass asserting on percentage gauge values (0-100 range) appropriate to the scenario's tenant state
   2. Smoke test confirms all 6 percentage gauge instrument names are present in Prometheus; no counter instrument names from v2.4 appear
-**Plans:** TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 80-01-PLAN.md — Rewrite smoke (107), NotReady (108), all-instances (112) for v2.5 gauges
+- [ ] 80-02-PLAN.md — Rewrite Resolved (109), Healthy (110), Unresolved (111) for v2.5 gauges
 
 ---
 
@@ -255,7 +258,7 @@ Plans:
 | 77. Gather-Then-Decide Evaluation Flow | v2.5 | 2/2 | Complete | 2026-03-23 |
 | 78. Counter Reference Cleanup | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 79. Dashboard Percentage Update | v2.5 | 1/1 | Complete | 2026-03-23 |
-| 80. E2E Scenario Updates | v2.5 | 0/TBD | Not started | - |
+| 80. E2E Scenario Updates | v2.5 | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
