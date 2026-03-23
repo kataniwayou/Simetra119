@@ -1227,9 +1227,9 @@ public sealed class TenantVectorWatcherValidationTests
     // ──────────────────────────────────────────────────────
 
     [Fact]
-    public void DuplicateTenantName_SecondSkipped()
+    public void DuplicateTenantName_SecondGetsIndexSuffix()
     {
-        // Two tenants with Name="tenant-A". First is kept, second is skipped.
+        // Two tenants with Name="tenant-A". First keeps name, second gets index appended.
         var t1 = CreateValidTenant();
         t1.Name = "tenant-A";
         var t2 = CreateValidTenant();
@@ -1240,14 +1240,15 @@ public sealed class TenantVectorWatcherValidationTests
             options, CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
-        Assert.Single(result.Tenants);
+        Assert.Equal(2, result.Tenants.Count);
         Assert.Equal("tenant-A", result.Tenants[0].Name);
+        Assert.Equal("tenant-A-1", result.Tenants[1].Name);
     }
 
     [Fact]
-    public void DuplicateTenantName_FirstKeptWithCorrectMetrics()
+    public void DuplicateTenantName_BothLoadWithCorrectMetrics()
     {
-        // Two tenants with same name but different metric names. Assert first tenant's metrics are in result.
+        // Two tenants with same name but different metrics. Both load, second gets index suffix.
         var t1 = new TenantOptions
         {
             Name = "dup-tenant",
@@ -1283,9 +1284,11 @@ public sealed class TenantVectorWatcherValidationTests
             options, CreatePassthroughOidMapService(), CreatePassthroughDeviceRegistry(), CreatePassthroughCommandMapService(),
             TestSnapshotIntervalSeconds, NullLogger.Instance);
 
-        Assert.Single(result.Tenants);
+        Assert.Equal(2, result.Tenants.Count);
+        Assert.Equal("dup-tenant", result.Tenants[0].Name);
         Assert.Equal("first-eval", result.Tenants[0].Metrics[0].MetricName);
-        Assert.Equal("first-res", result.Tenants[0].Metrics[1].MetricName);
+        Assert.Equal("dup-tenant-1", result.Tenants[1].Name);
+        Assert.Equal("second-eval", result.Tenants[1].Metrics[0].MetricName);
     }
 
     [Fact]

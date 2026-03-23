@@ -103,17 +103,21 @@ public sealed class TenantVectorWatcherService : BackgroundService
         for (var i = 0; i < options.Tenants.Count; i++)
         {
             var tenantOpts = options.Tenants[i];
-            var tenantId = !string.IsNullOrWhiteSpace(tenantOpts.Name)
+            var baseName = !string.IsNullOrWhiteSpace(tenantOpts.Name)
                 ? tenantOpts.Name
                 : $"tenant-{i}";
 
-            // Duplicate tenant name detection: skip duplicate, keep first
-            if (!string.IsNullOrWhiteSpace(tenantOpts.Name) && !seenTenantNames.Add(tenantOpts.Name))
+            // Duplicate tenant name: append array index to make unique (both tenants loaded)
+            var tenantId = seenTenantNames.Add(baseName)
+                ? baseName
+                : $"{baseName}-{i}";
+
+            if (tenantId != baseName)
             {
-                logger.LogError(
-                    "Tenant '{TenantId}' skipped: duplicate Name (first instance kept, suppression key collision avoided)",
-                    tenantId);
-                continue;
+                logger.LogWarning(
+                    "Tenant '{BaseName}' at index {Index} has duplicate Name — using '{TenantId}' to avoid suppression key collision",
+                    baseName, i, tenantId);
+                seenTenantNames.Add(tenantId);
             }
 
             var cleanMetrics = new List<MetricSlotOptions>();
@@ -484,7 +488,7 @@ public sealed class TenantVectorWatcherService : BackgroundService
 
             cleanTenants.Add(new TenantOptions
             {
-                Name = tenantOpts.Name,
+                Name = tenantId,
                 Priority = tenantOpts.Priority,
                 SuppressionWindowSeconds = tenantOpts.SuppressionWindowSeconds,
                 Metrics = cleanMetrics,
