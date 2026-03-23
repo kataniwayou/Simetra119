@@ -1378,7 +1378,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Dispatched"
+                "value": "Dispatched(%)"
               },
               {
                 "id": "custom.width",
@@ -1398,7 +1398,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Failed"
+                "value": "Failed(%)"
               },
               {
                 "id": "custom.width",
@@ -1418,7 +1418,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Suppressed"
+                "value": "Suppressed(%)"
               },
               {
                 "id": "custom.width",
@@ -1438,7 +1438,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Stale"
+                "value": "Stale(%)"
               },
               {
                 "id": "custom.width",
@@ -1458,7 +1458,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Resolved"
+                "value": "Resolved(%)"
               },
               {
                 "id": "custom.width",
@@ -1478,7 +1478,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Evaluate"
+                "value": "Evaluate(%)"
               },
               {
                 "id": "custom.width",
