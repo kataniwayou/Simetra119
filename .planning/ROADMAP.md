@@ -19,6 +19,7 @@
 - ✅ **v2.3 Metric Validity & Correctness** - Phases 66-71 (shipped 2026-03-22)
 - ✅ **v2.4 Tenant Vector Metrics** - Phases 72-75 (shipped 2026-03-23)
 - ✅ **v2.5 Tenant Metrics Approach Modification** - Phases 76-81 (shipped 2026-03-23)
+- 🚧 **v2.6 E2E Manual Tenant Simulation Suite** - Phases 82-84 (in progress)
 
 ## Phases
 
@@ -135,6 +136,56 @@ See `.planning/milestones/v2.5-ROADMAP.md` for details.
 
 ---
 
+### 🚧 v2.6 E2E Manual Tenant Simulation Suite (In Progress)
+
+**Milestone Goal:** A 17-script manual simulation suite that walks a human operator through every tenant state transition — P1 violations, P2 advance-gate blocking, and full cycle resolution — verified by watching Grafana, not automated assertions.
+
+#### Phase 82: Fixture & Infrastructure
+
+**Goal**: A 4-tenant test environment exists with collision-free OIDs, and a script runner with user approval between each step is ready to execute the suite.
+**Depends on**: Phase 81 (v2.5 complete)
+**Requirements**: FIX-01, FIX-02, FIX-03, FIX-04, RUN-01, RUN-02, RUN-03, RPT-01
+**Success Criteria** (what must be TRUE):
+  1. Applying the fixture ConfigMap produces 4 tenants (T1_P1, T2_P1, T1_P2, T2_P2) visible in Grafana with distinct OID suffixes and no collision
+  2. After the grace window passes with no violations set, all 4 tenants show Healthy state in Grafana
+  3. Running the script runner prompts for user approval before each numbered script and proceeds or aborts based on the response
+  4. Scripts 114-130 appear as a named category in report.sh output alongside existing categories
+**Plans**: TBD
+
+Plans:
+- [ ] 82-01: TBD
+
+#### Phase 83: P1 Tenant Scripts (01-12)
+
+**Goal**: Scripts 01-12 exist and correctly drive T2_P1 and T1_P1 through their full violation and resolution cycles, and prove the advance gate blocks P2 dispatch while any P1 tenant is Unresolved.
+**Depends on**: Phase 82
+**Requirements**: P1S-01, P1S-02, P1S-03, P2S-01, AGT-01
+**Success Criteria** (what must be TRUE):
+  1. Script 01 restarts all relevant pods; after running it, Grafana shows all tenants transitioning through NotReady then back to Healthy
+  2. Scripts 02-04 show T2_P1 evaluate percentage rising in Grafana (25% → 75% → 100% Unresolved) with state visible in the tenant table
+  3. Scripts 05-06 show T1_P2 violating while T2_P1 is Unresolved; Grafana confirms no dispatch metric increments for T1_P2 (advance gate blocks)
+  4. Scripts 07-09 show T2_P1 resolved percentage rising until state flips to Resolved in Grafana
+  5. Scripts 10-12 show T1_P1 cycling from partial violation to Unresolved and back to Resolved, visible in Grafana
+**Plans**: TBD
+
+Plans:
+- [ ] 83-01: TBD
+
+#### Phase 84: P2 Tenant Scripts (13-17)
+
+**Goal**: Scripts 13-17 exist and drive T2_P2 through a full multi-state cycle, proving P2 tenants resume evaluation and dispatch once all P1 tenants are Resolved.
+**Depends on**: Phase 83
+**Requirements**: P2S-02, AGT-02
+**Success Criteria** (what must be TRUE):
+  1. Scripts 13-17 show T2_P2 progressing through Unresolved, Healthy, Unresolved, and Resolved states sequentially in Grafana
+  2. Grafana shows dispatch metric increments for T2_P2 appearing only after all P1 tenants have reached Resolved state
+**Plans**: TBD
+
+Plans:
+- [ ] 84-01: TBD
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -196,7 +247,10 @@ See `.planning/milestones/v2.5-ROADMAP.md` for details.
 | 79. Dashboard Percentage Update | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 80. E2E Scenario Updates | v2.5 | 2/2 | Complete | 2026-03-23 |
 | 81. E2E Partial Percentage Scenario | v2.5 | 1/1 | Complete | 2026-03-23 |
+| 82. Fixture & Infrastructure | v2.6 | 0/TBD | Not started | - |
+| 83. P1 Tenant Scripts (01-12) | v2.6 | 0/TBD | Not started | - |
+| 84. P2 Tenant Scripts (13-17) | v2.6 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-23 — Phase 81 complete (v2.5 shipped)*
+*Last updated: 2026-03-24 — v2.6 roadmap added (phases 82-84)*

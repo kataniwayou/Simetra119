@@ -51,27 +51,27 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FIX-01 | TBD | Pending |
-| FIX-02 | TBD | Pending |
-| FIX-03 | TBD | Pending |
-| FIX-04 | TBD | Pending |
-| RUN-01 | TBD | Pending |
-| RUN-02 | TBD | Pending |
-| RUN-03 | TBD | Pending |
-| P1S-01 | TBD | Pending |
-| P1S-02 | TBD | Pending |
-| P1S-03 | TBD | Pending |
-| P2S-01 | TBD | Pending |
-| P2S-02 | TBD | Pending |
-| AGT-01 | TBD | Pending |
-| AGT-02 | TBD | Pending |
-| RPT-01 | TBD | Pending |
+| FIX-01 | Phase 82 | Pending |
+| FIX-02 | Phase 82 | Pending |
+| FIX-03 | Phase 82 | Pending |
+| FIX-04 | Phase 82 | Pending |
+| RUN-01 | Phase 82 | Pending |
+| RUN-02 | Phase 82 | Pending |
+| RUN-03 | Phase 82 | Pending |
+| RPT-01 | Phase 82 | Pending |
+| P1S-01 | Phase 83 | Pending |
+| P1S-02 | Phase 83 | Pending |
+| P1S-03 | Phase 83 | Pending |
+| P2S-01 | Phase 83 | Pending |
+| AGT-01 | Phase 83 | Pending |
+| P2S-02 | Phase 84 | Pending |
+| AGT-02 | Phase 84 | Pending |
 
 **Coverage:**
 - v2.6 requirements: 15 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 15
+- Mapped to phases: 15
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-24*
-*Last updated: 2026-03-24 — initial definition*
+*Last updated: 2026-03-24 — traceability populated (phases 82-84)*
