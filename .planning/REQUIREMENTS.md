@@ -33,11 +33,11 @@
 - [x] **TDSH-05**: Trend column with delta arrows (based on business dashboard gauge table pattern)
 ### E2E Validation
 
-- [ ] **TE2E-01**: All 8 tenant metric instruments appear in Prometheus with correct tenant_id and priority labels
-- [ ] **TE2E-02**: Tier counter increments verified against known evaluation state transitions (stale, resolved, evaluate, commanded)
-- [ ] **TE2E-03**: All-instances export verified — follower pods export tenant metrics while snmp_* metrics remain leader-gated
-- [ ] **TE2E-04**: tenant_state gauge values verified against expected evaluation outcomes (NotReady=0, Healthy=1, Resolved=2, Unresolved=3)
-- [ ] **TE2E-05**: tenant_gauge_duration_milliseconds histogram P99 verified present and > 0
+- [x] **TE2E-01**: All 8 tenant metric instruments appear in Prometheus with correct tenant_id and priority labels
+- [x] **TE2E-02**: Tier counter increments verified against known evaluation state transitions (stale, resolved, evaluate, commanded)
+- [x] **TE2E-03**: All-instances export verified — follower pods export tenant metrics while snmp_* metrics remain leader-gated
+- [x] **TE2E-04**: tenant_state gauge values verified against expected evaluation outcomes (NotReady=0, Healthy=1, Resolved=2, Unresolved=3)
+- [x] **TE2E-05**: tenant_evaluation_duration_milliseconds histogram P99 verified present and > 0
 
 ## Out of Scope
 
@@ -71,11 +71,11 @@
 | TDSH-03 | Phase 74 | Complete |
 | TDSH-04 | Phase 74 | Complete |
 | TDSH-05 | Phase 74 | Complete |
-| TE2E-01 | Phase 75 | Pending |
-| TE2E-02 | Phase 75 | Pending |
-| TE2E-03 | Phase 75 | Pending |
-| TE2E-04 | Phase 75 | Pending |
-| TE2E-05 | Phase 75 | Pending |
+| TE2E-01 | Phase 75 | Complete |
+| TE2E-02 | Phase 75 | Complete |
+| TE2E-03 | Phase 75 | Complete |
+| TE2E-04 | Phase 75 | Complete |
+| TE2E-05 | Phase 75 | Complete |
 
 **Coverage:**
 - v2.4 requirements: 23 total

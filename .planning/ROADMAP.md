@@ -17,7 +17,7 @@
 - ✅ **v2.1 E2E Tenant Evaluation Tests** - Phases 51-61 (shipped 2026-03-20)
 - ✅ **v2.2 Progressive E2E Snapshot Suite** - Phases 62-65 (shipped 2026-03-22)
 - ✅ **v2.3 Metric Validity & Correctness** - Phases 66-71 (shipped 2026-03-22)
-- 🚧 **v2.4 Tenant Vector Metrics** - Phases 72-75 (in progress)
+- ✅ **v2.4 Tenant Vector Metrics** - Phases 72-75 (shipped 2026-03-23)
 
 ## Phases
 
@@ -116,7 +116,7 @@ See `.planning/milestones/v2.3-ROADMAP.md` for details.
 
 ---
 
-### 🚧 v2.4 Tenant Vector Metrics (In Progress)
+### ✅ v2.4 Tenant Vector Metrics (Shipped 2026-03-23)
 
 **Milestone Goal:** Expose per-tenant internal evaluation state from SnapshotJob as 8 OTel instruments (6 counters, 1 gauge, 1 histogram) on a third meter that exports on all instances, and surface them in a new operations dashboard table with per-pod tenant status.
 
@@ -182,9 +182,9 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 75-01-PLAN.md — Smoke test (all 8 instruments) + NotReady path + report.sh category
-- [ ] 75-02-PLAN.md — Resolved path + Healthy path with P99 histogram
-- [ ] 75-03-PLAN.md — Unresolved path with command counters + all-instances export
+- [x] 75-01-PLAN.md — Smoke test (all 8 instruments) + NotReady path + report.sh category
+- [x] 75-02-PLAN.md — Resolved path + Healthy path with P99 histogram
+- [x] 75-03-PLAN.md — Unresolved path with command counters + all-instances export
 
 ---
 
@@ -242,8 +242,8 @@ Plans:
 | 72. TenantMetricService & Meter Registration | v2.4 | 2/2 | Complete | 2026-03-23 |
 | 73. SnapshotJob Instrumentation | v2.4 | 2/2 | Complete | 2026-03-23 |
 | 74. Grafana Dashboard Panel | v2.4 | 1/1 | Complete | 2026-03-23 |
-| 75. E2E Validation Scenarios | v2.4 | 0/? | Not started | - |
+| 75. E2E Validation Scenarios | v2.4 | 3/3 | Complete | 2026-03-23 |
 
-*Last updated: 2026-03-23 — Phase 75 planned (3 plans, 1 wave)*
+---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-23 — Phase 74 complete (1 plan, verified 5/5)*
+*Last updated: 2026-03-23 — Phase 75 complete (3 plans, verified 5/5)*
