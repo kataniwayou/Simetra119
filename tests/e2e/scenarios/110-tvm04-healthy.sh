@@ -60,9 +60,9 @@ sleep 8
 # Baselines reflect any priming-phase counters.
 # ---------------------------------------------------------------------------
 
-BEFORE_TIER3=$(snapshot_counter "tenant_tier3_evaluate_total" 'tenant_id="e2e-pss-tenant",priority="1"')
+BEFORE_DURATION=$(snapshot_counter "tenant_evaluation_duration_milliseconds_count" 'tenant_id="e2e-pss-tenant",priority="1"')
 BEFORE_DISPATCHED=$(snapshot_counter "tenant_command_dispatched_total" 'tenant_id="e2e-pss-tenant",priority="1"')
-log_info "TVM-04: Baselines -- tier3_evaluate=${BEFORE_TIER3} dispatched=${BEFORE_DISPATCHED}"
+log_info "TVM-04: Baselines -- duration_count=${BEFORE_DURATION} dispatched=${BEFORE_DISPATCHED}"
 
 # ---------------------------------------------------------------------------
 # Wait for Healthy evaluation -- poll for tier=3 log
@@ -83,11 +83,11 @@ sleep 10
 # Snapshot after values
 # ---------------------------------------------------------------------------
 
-AFTER_TIER3=$(snapshot_counter "tenant_tier3_evaluate_total" 'tenant_id="e2e-pss-tenant",priority="1"')
+AFTER_DURATION=$(snapshot_counter "tenant_evaluation_duration_milliseconds_count" 'tenant_id="e2e-pss-tenant",priority="1"')
 AFTER_DISPATCHED=$(snapshot_counter "tenant_command_dispatched_total" 'tenant_id="e2e-pss-tenant",priority="1"')
-DELTA_TIER3=$((AFTER_TIER3 - BEFORE_TIER3))
+DELTA_DURATION=$((AFTER_DURATION - BEFORE_DURATION))
 DELTA_DISPATCHED=$((AFTER_DISPATCHED - BEFORE_DISPATCHED))
-log_info "TVM-04: After -- tier3_evaluate=${AFTER_TIER3} delta=${DELTA_TIER3} dispatched=${AFTER_DISPATCHED} delta=${DELTA_DISPATCHED}"
+log_info "TVM-04: After -- duration_count=${AFTER_DURATION} delta=${DELTA_DURATION} dispatched=${AFTER_DISPATCHED} delta=${DELTA_DISPATCHED}"
 
 # ---------------------------------------------------------------------------
 # TVM-04A: tenant_state gauge == 1 (Healthy)
@@ -103,14 +103,20 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# TVM-04B: tenant_tier3_evaluate_total delta > 0
-# Healthy path increments tier3_evaluate once per non-violated evaluate holder per cycle.
-# e2e-pss-tenant has 1 evaluate holder (5.1) -- delta > 0 over 10s observation window.
+# TVM-04B: tenant_evaluation_duration_milliseconds_count delta > 0
+# Proves evaluation ran during the Healthy path.
+#
+# NOTE: tier3_evaluate_total only increments when CountEvaluateViolated > 0,
+# i.e. when an evaluate holder IS violated. In the Healthy path the evaluate
+# holder is NOT violated, so tier3_evaluate does NOT increment -- asserting
+# delta>0 on that counter for a Healthy tenant is incorrect. Instead, we
+# assert that the evaluation duration histogram count advanced, which confirms
+# evaluation ran regardless of the outcome tier.
 # ---------------------------------------------------------------------------
 
-assert_delta_gt "$DELTA_TIER3" 0 \
-    "TVM-04B: tier3_evaluate_total increments during Healthy path" \
-    "delta=${DELTA_TIER3}"
+assert_delta_gt "$DELTA_DURATION" 0 \
+    "TVM-04B: evaluation_duration_count increments during Healthy path (proves evaluation ran)" \
+    "delta=${DELTA_DURATION}"
 
 # ---------------------------------------------------------------------------
 # TVM-04C: tenant_command_dispatched_total delta == 0
