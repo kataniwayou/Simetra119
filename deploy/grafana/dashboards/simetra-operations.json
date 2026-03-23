@@ -1866,7 +1866,7 @@
               },
               {
                 "id": "decimals",
-                "value": 2
+                "value": 0
               }
             ]
           },
@@ -1886,7 +1886,7 @@
               },
               {
                 "id": "decimals",
-                "value": 2
+                "value": 0
               }
             ]
           },
@@ -1906,7 +1906,7 @@
               },
               {
                 "id": "decimals",
-                "value": 2
+                "value": 0
               }
             ]
           },
@@ -1926,7 +1926,7 @@
               },
               {
                 "id": "decimals",
-                "value": 2
+                "value": 0
               }
             ]
           },
@@ -1946,7 +1946,7 @@
               },
               {
                 "id": "decimals",
-                "value": 2
+                "value": 0
               }
             ]
           },
@@ -1966,7 +1966,7 @@
               },
               {
                 "id": "decimals",
-                "value": 2
+                "value": 0
               }
             ]
           },
@@ -2219,7 +2219,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (rate(tenant_command_dispatched_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (increase(tenant_command_dispatched_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[15s]))",
           "format": "table",
           "instant": true,
           "refId": "D"
@@ -2229,7 +2229,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (rate(tenant_command_failed_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (increase(tenant_command_failed_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[15s]))",
           "format": "table",
           "instant": true,
           "refId": "E"
@@ -2239,7 +2239,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (rate(tenant_command_suppressed_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (increase(tenant_command_suppressed_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[15s]))",
           "format": "table",
           "instant": true,
           "refId": "F"
@@ -2249,7 +2249,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (rate(tenant_tier1_stale_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (increase(tenant_tier1_stale_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[15s]))",
           "format": "table",
           "instant": true,
           "refId": "G"
@@ -2259,7 +2259,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (rate(tenant_tier2_resolved_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (increase(tenant_tier2_resolved_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[15s]))",
           "format": "table",
           "instant": true,
           "refId": "H"
@@ -2269,7 +2269,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (rate(tenant_tier3_evaluate_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (increase(tenant_tier3_evaluate_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[15s]))",
           "format": "table",
           "instant": true,
           "refId": "I"
@@ -2284,6 +2284,18 @@
         {
           "id": "organize",
           "options": {
+            "excludeByName": {
+              "__name__": true,
+              "Time": true,
+              "job": true,
+              "instance": true,
+              "service_name": true,
+              "service_namespace": true,
+              "telemetry_sdk_language": true,
+              "telemetry_sdk_name": true,
+              "telemetry_sdk_version": true,
+              "le": true
+            },
             "indexByName": {
               "service_instance_id": 0,
               "k8s_pod_name": 1,
