@@ -1709,7 +1709,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "tenant_state{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_state{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -1719,7 +1719,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "delta(tenant_command_dispatched_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s])",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (delta(tenant_command_dispatched_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s]))",
           "format": "table",
           "instant": true,
           "refId": "B"
