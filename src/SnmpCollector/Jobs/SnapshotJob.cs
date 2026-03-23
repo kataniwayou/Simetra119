@@ -526,6 +526,120 @@ public sealed class SnapshotJob : IJob
     }
 
     /// <summary>
+    /// Counts holders eligible for the staleness check.
+    /// Excluded: Source=Trap, Source=Command, IntervalSeconds=0.
+    /// This is the denominator for stale%.
+    /// </summary>
+    private static int CountStalenessEligibleHolders(IReadOnlyList<MetricSlotHolder> holders)
+    {
+        var count = 0;
+        foreach (var holder in holders)
+        {
+            if (holder.Source == SnmpSource.Trap || holder.Source == SnmpSource.Command || holder.IntervalSeconds == 0)
+                continue;
+            count++;
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// Counts Resolved-role holders that ARE violated (numerator for resolved% — higher = worse).
+    /// For Trap/Command sources: checks newest sample only. Null slot = skip.
+    /// For Poll/Synthetic sources: ALL samples must be violated for the holder to count.
+    /// Holders with empty series (Length == 0) do not participate.
+    /// </summary>
+    private static int CountResolvedViolated(IReadOnlyList<MetricSlotHolder> holders)
+    {
+        var count = 0;
+        foreach (var holder in holders)
+        {
+            if (holder.Role != "Resolved")
+                continue;
+
+            if (holder.Source == SnmpSource.Trap || holder.Source == SnmpSource.Command)
+            {
+                var slot = holder.ReadSlot();
+                if (slot is null)
+                    continue;
+                if (IsViolated(holder, slot))
+                    count++;
+                continue;
+            }
+
+            var series = holder.ReadSeries();
+            if (series.Length == 0)
+                continue;
+
+            var allViolated = true;
+            foreach (var sample in series)
+            {
+                if (!IsViolated(holder, sample))
+                {
+                    allViolated = false;
+                    break;
+                }
+            }
+            if (allViolated)
+                count++;
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// Counts Resolved-role holders with at least one participating sample.
+    /// For Trap/Command sources: non-null slot = participating.
+    /// For Poll/Synthetic sources: series.Length &gt; 0 = participating.
+    /// This is the denominator for resolved%.
+    /// </summary>
+    private static int CountResolvedParticipating(IReadOnlyList<MetricSlotHolder> holders)
+    {
+        var count = 0;
+        foreach (var holder in holders)
+        {
+            if (holder.Role != "Resolved")
+                continue;
+
+            if (holder.Source == SnmpSource.Trap || holder.Source == SnmpSource.Command)
+            {
+                if (holder.ReadSlot() is not null)
+                    count++;
+                continue;
+            }
+
+            if (holder.ReadSeries().Length > 0)
+                count++;
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// Counts Evaluate-role holders with at least one participating sample.
+    /// For Trap/Command sources: non-null slot = participating.
+    /// For Poll/Synthetic sources: series.Length &gt; 0 = participating.
+    /// This is the denominator for evaluate%.
+    /// </summary>
+    private static int CountEvaluateParticipating(IReadOnlyList<MetricSlotHolder> holders)
+    {
+        var count = 0;
+        foreach (var holder in holders)
+        {
+            if (holder.Role != "Evaluate")
+                continue;
+
+            if (holder.Source == SnmpSource.Trap || holder.Source == SnmpSource.Command)
+            {
+                if (holder.ReadSlot() is not null)
+                    count++;
+                continue;
+            }
+
+            if (holder.ReadSeries().Length > 0)
+                count++;
+        }
+        return count;
+    }
+
+    /// <summary>
     /// Checks whether a holder's current value violates its threshold bounds.
     /// <para>
     /// Threshold conditions:
