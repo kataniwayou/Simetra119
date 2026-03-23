@@ -179,7 +179,16 @@ See `.planning/milestones/v2.5-REQUIREMENTS.md` for full requirement details.
 
 ### Active
 
-(None — planning next milestone)
+**v2.6 E2E Manual Tenant Simulation Suite**
+
+- [ ] 4-tenant fixture: T1_P1 (P1, 2E/2R/1C), T2_P1 (P1, 4E/4R/1C), T1_P2 (P2, 2E/2R/1C), T2_P2 (P2, 4E/4R/1C)
+- [ ] 17 sequential scripts with user approval between each
+- [ ] Scripts set OID violations, leave state as-is (no cleanup between scripts)
+- [ ] Script 09 restarts pods — clears all states to NotReady → Healthy
+- [ ] User verifies via Grafana dashboard (no automated assertions)
+- [ ] Progressive violation coverage: 25%, 50%, 75%, 100% evaluate + resolved combinations
+- [ ] Priority group advance gate tested: P1 Unresolved blocks P2 evaluation
+- [ ] Each script uses different OIDs per tenant (no collision)
 
 ### Out of Scope
 
@@ -249,4 +258,4 @@ See `.planning/milestones/v2.5-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-23 after v2.5 milestone shipped*
+*Last updated: 2026-03-23 after v2.6 milestone started*
