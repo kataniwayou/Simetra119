@@ -1301,12 +1301,14 @@ public sealed class SnapshotJobTests : IDisposable
 
         // stale% = 100.0 (2 stale out of 2 eligible; trap excluded)
         _tenantMetrics.Received(1).RecordMetricStalePercent(tenant.Id, tenant.Priority, 100.0);
-        // stale path: resolved/evaluate/command percentages NOT recorded (stale data unreliable)
+        // stale path: resolved/evaluate NOT recorded (stale data unreliable)
         _tenantMetrics.DidNotReceive().RecordMetricResolvedPercent(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<double>());
         _tenantMetrics.DidNotReceive().RecordMetricEvaluatePercent(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<double>());
-        _tenantMetrics.DidNotReceive().RecordCommandDispatchedPercent(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<double>());
-        _tenantMetrics.DidNotReceive().RecordCommandFailedPercent(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<double>());
-        _tenantMetrics.DidNotReceive().RecordCommandSuppressedPercent(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<double>());
+        // command percentages ARE recorded (command outcomes are real)
+        // stale → Unresolved → dispatch: 1/1 = 100% dispatched
+        _tenantMetrics.Received(1).RecordCommandDispatchedPercent(tenant.Id, tenant.Priority, 100.0);
+        _tenantMetrics.Received(1).RecordCommandFailedPercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordCommandSuppressedPercent(tenant.Id, tenant.Priority, 0.0);
     }
 
     [Fact]

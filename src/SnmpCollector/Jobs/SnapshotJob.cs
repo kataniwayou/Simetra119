@@ -243,24 +243,26 @@ public sealed class SnapshotJob : IJob
 
         // --- COMPUTE PERCENTAGES ---
         var stalePercent = staleTotal == 0 ? 0.0 : staleCount * 100.0 / staleTotal;
+        var cmdTotal     = tenant.Commands.Count;
+        var dispatchedPct  = cmdTotal == 0 ? 0.0 : dispatchedCount  * 100.0 / cmdTotal;
+        var failedPct      = cmdTotal == 0 ? 0.0 : failedCount      * 100.0 / cmdTotal;
+        var suppressedPct  = cmdTotal == 0 ? 0.0 : suppressedCount  * 100.0 / cmdTotal;
 
-        // --- SINGLE EXIT: record stale% always, other 5 only when not stale ---
+        // --- SINGLE EXIT ---
+        // stale% + command percentages: always recorded (command outcomes are real)
         _tenantMetrics.RecordMetricStalePercent(tenant.Id, tenant.Priority, stalePercent);
+        _tenantMetrics.RecordCommandDispatchedPercent(tenant.Id, tenant.Priority, dispatchedPct);
+        _tenantMetrics.RecordCommandFailedPercent(tenant.Id, tenant.Priority, failedPct);
+        _tenantMetrics.RecordCommandSuppressedPercent(tenant.Id, tenant.Priority, suppressedPct);
 
+        // resolved% + evaluate%: only when not stale (stale data unreliable)
         if (!isStale)
         {
             var resolvedPercent = resolvedTotal == 0 ? 0.0 : resolvedViolatedCount * 100.0 / resolvedTotal;
             var evaluatePercent = evaluateTotal == 0 ? 0.0 : evaluateViolatedCount * 100.0 / evaluateTotal;
-            var cmdTotal        = tenant.Commands.Count;
-            var dispatchedPct   = cmdTotal == 0 ? 0.0 : dispatchedCount  * 100.0 / cmdTotal;
-            var failedPct       = cmdTotal == 0 ? 0.0 : failedCount      * 100.0 / cmdTotal;
-            var suppressedPct   = cmdTotal == 0 ? 0.0 : suppressedCount  * 100.0 / cmdTotal;
 
             _tenantMetrics.RecordMetricResolvedPercent(tenant.Id, tenant.Priority, resolvedPercent);
             _tenantMetrics.RecordMetricEvaluatePercent(tenant.Id, tenant.Priority, evaluatePercent);
-            _tenantMetrics.RecordCommandDispatchedPercent(tenant.Id, tenant.Priority, dispatchedPct);
-            _tenantMetrics.RecordCommandFailedPercent(tenant.Id, tenant.Priority, failedPct);
-            _tenantMetrics.RecordCommandSuppressedPercent(tenant.Id, tenant.Priority, suppressedPct);
         }
 
         return RecordAndReturn(tenant, state, sw);
