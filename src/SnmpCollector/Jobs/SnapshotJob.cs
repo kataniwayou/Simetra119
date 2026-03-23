@@ -441,46 +441,6 @@ public sealed class SnapshotJob : IJob
     }
 
     /// <summary>
-    /// Counts Resolved-role holders that are NOT violated (i.e. at least one sample is in range).
-    /// For Trap/Command sources: checks newest sample only. Null slot = skip.
-    /// For Poll/Synthetic sources: if ANY sample is not violated, holder counts as non-violated.
-    /// Holders with empty series (Length == 0) do not participate.
-    /// </summary>
-    private static int CountResolvedNonViolated(IReadOnlyList<MetricSlotHolder> holders)
-    {
-        var count = 0;
-        foreach (var holder in holders)
-        {
-            if (holder.Role != "Resolved")
-                continue;
-
-            if (holder.Source == SnmpSource.Trap || holder.Source == SnmpSource.Command)
-            {
-                var slot = holder.ReadSlot();
-                if (slot is null)
-                    continue;
-                if (!IsViolated(holder, slot))
-                    count++;
-                continue;
-            }
-
-            var series = holder.ReadSeries();
-            if (series.Length == 0)
-                continue;
-
-            foreach (var sample in series)
-            {
-                if (!IsViolated(holder, sample))
-                {
-                    count++;
-                    break;
-                }
-            }
-        }
-        return count;
-    }
-
-    /// <summary>
     /// Counts Evaluate-role holders where ALL checked samples are violated.
     /// For Trap/Command sources: checks newest sample only. Null slot = skip.
     /// For Poll/Synthetic sources: ALL samples must be violated for the holder to count.
