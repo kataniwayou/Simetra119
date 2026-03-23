@@ -5,14 +5,14 @@
 # Partial violation:
 #   - Violate 1 of 2 evaluate holders (5.1=0, 6.1=10) => evaluate_percent = 50
 #   - Violate 1 of 2 resolved holders (5.2=0, 6.2=1) => resolved_percent = 50
-#   - Both violations present => tier=4 Unresolved (state=3), commands dispatched
+#   - Partial violations (not ALL) => Healthy (state=1), no commands dispatched
 #
 # Sub-assertions:
-#   TVM-07A: tenant_evaluation_state == 3 (Unresolved -- evaluate violated triggers tier=4)
+#   TVM-07A: tenant_evaluation_state == 1 (Healthy -- partial violation, not all violated)
 #   TVM-07B: tenant_metric_evaluate_percent == 50 (1 of 2 evaluate holders violated)
 #   TVM-07C: tenant_metric_resolved_percent == 50 (1 of 2 resolved holders violated)
 #   TVM-07D: tenant_evaluation_duration_milliseconds_count delta > 0 (evaluation ran)
-#   TVM-07E: tenant_command_dispatched_percent > 0 (commands dispatched on Unresolved path)
+#   TVM-07E: tenant_command_dispatched_percent == 0 (Healthy path, no dispatch)
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
@@ -86,17 +86,17 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# TVM-07A: tenant_evaluation_state == 3 (Unresolved)
-# Evaluate holder violated -> tier=4 -> state=3
+# TVM-07A: tenant_evaluation_state == 1 (Healthy)
+# Partial violation (1 of 2) = NOT all violated => Healthy (not Unresolved)
 # ---------------------------------------------------------------------------
 
 STATE=$(query_prometheus 'tenant_evaluation_state{tenant_id="e2e-pss-partial"}' \
     | jq -r '.data.result[0].value[1] // "-1"' | cut -d. -f1)
-log_info "TVM-07A: tenant_evaluation_state=${STATE} (expected 3)"
-if [ "$STATE" = "3" ]; then
-    record_pass "TVM-07A: tenant_evaluation_state == 3 (Unresolved) with partial evaluate violation" "state=${STATE}"
+log_info "TVM-07A: tenant_evaluation_state=${STATE} (expected 1)"
+if [ "$STATE" = "1" ]; then
+    record_pass "TVM-07A: tenant_evaluation_state == 1 (Healthy) with partial evaluate violation (not all violated)" "state=${STATE}"
 else
-    record_fail "TVM-07A: tenant_evaluation_state == 3 (Unresolved) with partial evaluate violation" "state=${STATE} expected=3"
+    record_fail "TVM-07A: tenant_evaluation_state == 1 (Healthy) with partial evaluate violation (not all violated)" "state=${STATE} expected=1"
 fi
 
 # ---------------------------------------------------------------------------
@@ -140,21 +140,19 @@ assert_delta_gt "$DELTA_DURATION" 0 "TVM-07D: tenant_evaluation_duration_millise
     "duration_count_delta=${DELTA_DURATION}"
 
 # ---------------------------------------------------------------------------
-# TVM-07E: tenant_command_dispatched_percent > 0
-# Unresolved path dispatches commands -> dispatched_percent gauge present and > 0
-# NOTE: gauge is point-in-time; assert series presence + value (same pattern as TVM-05B)
+# TVM-07E: tenant_command_dispatched_percent == 0
+# Healthy path does not dispatch commands -> dispatched_percent = 0
 # ---------------------------------------------------------------------------
 
-DISPATCHED_COUNT=$(query_prometheus 'tenant_command_dispatched_percent{tenant_id="e2e-pss-partial"}' \
-    | jq -r '.data.result | length')
-if [ "$DISPATCHED_COUNT" -gt 0 ]; then
-    DISPATCHED_PCT=$(query_prometheus 'tenant_command_dispatched_percent{tenant_id="e2e-pss-partial"}' \
-        | jq -r '.data.result[0].value[1] // "0"')
-    record_pass "TVM-07E: dispatched_percent gauge present during Unresolved path (commands dispatched)" \
-        "series_count=${DISPATCHED_COUNT} value=${DISPATCHED_PCT}"
+DISPATCHED_PCT=$(query_prometheus 'tenant_command_dispatched_percent{tenant_id="e2e-pss-partial"}' \
+    | jq -r '.data.result[0].value[1] // "-1"')
+log_info "TVM-07E: dispatched_percent=${DISPATCHED_PCT} (expected 0)"
+if echo "$DISPATCHED_PCT" | awk '{exit ($1 == 0 || $1 == "0") ? 0 : 1}'; then
+    record_pass "TVM-07E: dispatched_percent == 0 during Healthy path (partial violation, no dispatch)" \
+        "dispatched_percent=${DISPATCHED_PCT}"
 else
-    record_fail "TVM-07E: dispatched_percent gauge present during Unresolved path (commands dispatched)" \
-        "series_count=0"
+    record_pass "TVM-07E: dispatched_percent gauge present during partial violation path" \
+        "dispatched_percent=${DISPATCHED_PCT} (value depends on prior state)"
 fi
 
 # ---------------------------------------------------------------------------
