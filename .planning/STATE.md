@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.5 Tenant Metrics Approach Modification — COMPLETE (all phases done)
+**Current focus:** v2.5 Tenant Metrics Approach Modification — Complete
 
 ## Current Position
 
-Phase: 80 of 80 (E2E Scenario Updates) — COMPLETE
-Plan: 2/2 — complete
-Status: Phase 80 complete ✓ — v2.5 all phases done
-Last activity: 2026-03-23 — Completed 80-02-PLAN.md (TVM-03/04/05 scenarios rewritten for v2.5)
+Phase: 81 of 81 (E2E Partial Percentage Scenario) — Complete
+Plan: 01 of 01
+Status: Phase complete — v2.5 milestone fully done
+Last activity: 2026-03-23 — Completed 81-01-PLAN.md
 
-Progress: [██████████] v2.5 phase 5/5 complete
+Progress: [██████████] v2.5 phase 6/6 complete
 
 ## Performance Metrics
 
@@ -27,7 +27,7 @@ Progress: [██████████] v2.5 phase 5/5 complete
 
 ### Key Facts
 
-- 112 E2E scenario scripts total (01-112, including TVM scenarios 107-112)
+- 113 E2E scenario scripts total (01-113, including TVM scenarios 107-113)
 - run-all.sh uses sort -V for version-aware ordering (required for 100+ scenarios)
 - CommandWorkerService resolves SET response names via command map (not OID map)
 - dispatched = evaluation decision, suppressed = execution prevention, failed = runtime error
@@ -61,6 +61,8 @@ Progress: [██████████] v2.5 phase 5/5 complete
 - v2.5 (80-02): E2E TVM-04: stale_percent=0 and evaluate_percent=0 assertions confirm zero-violation Healthy path
 - v2.5 (80-02): E2E TVM-05: dispatched_percent polled with 30s deadline loop; evaluate_percent>0 asserted for violated OID
 - v2.5 (80-02): Duration histogram _count delta retained in all TVM scenarios (monotonic counter, delta valid)
+- v2.5 (81-01): E2E TVM-07: 4-holder fixture (2 eval + 2 resolved); violate 1 of 2 each => evaluate_percent=50, resolved_percent=50
+- v2.5 (81-01): E2E percentage == N assertion: awk '{exit (int($1+0.5) == N) ? 0 : 1}' handles float-to-integer rounding
 
 ### Decisions
 
@@ -82,6 +84,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T19:54:39Z
-Stopped at: Completed 80-02-PLAN.md — E2E scenarios 109/110/111 (TVM-03/04/05) rewritten for v2.5 percentage gauges
+Last session: 2026-03-23T20:40:10Z
+Stopped at: Completed 81-01-PLAN.md — Scenario 113 (TVM-07) with 50% partial percentage assertions
 Resume file: None
