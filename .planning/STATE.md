@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.5 Tenant Metrics Approach Modification — Phase 77
+**Current focus:** v2.5 Tenant Metrics Approach Modification — Phase 78
 
 ## Current Position
 
 Phase: 77 of 80 (Gather-Then-Decide Evaluation Flow) — COMPLETE
-Plan: 1/1 — complete
-Status: Phase 77 plan 1 complete ✓ — ready for Phase 78
-Last activity: 2026-03-23 — Completed 77-01-PLAN.md — EvaluateTenant gather-then-decide flow done
+Plan: 2/2 — complete
+Status: Phase 77 complete ✓ — ready for Phase 78
+Last activity: 2026-03-23 — Completed 77-02-PLAN.md — percentage gauge test coverage complete
 
 Progress: [███░░░░░░░] v2.5 phase 2/5 complete
 
@@ -47,6 +47,8 @@ Progress: [███░░░░░░░] v2.5 phase 2/5 complete
 - v2.5 (77-01): EvaluateTenant: 1 early return (NotReady only); all other paths: gather > decide > compute > single exit
 - v2.5 (77-01): Stale path: resolvedTotal/evaluateTotal stub=1 to avoid div/0; both record 0.0%
 - v2.5 (77-01): CommandWorkerService no longer holds ITenantMetricService — tenant command % recorded at dispatch in SnapshotJob only
+- v2.5 (77-02): All 8 percentage-recording tests assert all 6 RecordXxxPercent gauges with exact computed values (never Arg.Any<double>)
+- v2.5 (77-02): 479 unit tests pass after phase 77 complete
 
 ### Decisions
 
@@ -67,6 +69,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T17:30:46Z
-Stopped at: Completed 77-01-PLAN.md — EvaluateTenant gather-then-decide flow + build fix done
+Last session: 2026-03-23T17:36:35Z
+Stopped at: Completed 77-02-PLAN.md — percentage gauge test coverage complete
 Resume file: None
