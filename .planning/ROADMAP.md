@@ -182,7 +182,7 @@ Plans:
   2. All 6 column PromQL queries reference the gauge instrument names directly (no increase() or rate() wrapping)
 **Plans:** 1 plan
 Plans:
-- [ ] 79-01-PLAN.md — Update PromQL queries and column headers for percentage gauges
+- [x] 79-01-PLAN.md — Update PromQL queries and column headers for percentage gauges
 
 #### Phase 80: E2E Scenario Updates
 
@@ -254,9 +254,9 @@ Plans:
 | 76. Percentage Gauge Instruments | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 77. Gather-Then-Decide Evaluation Flow | v2.5 | 2/2 | Complete | 2026-03-23 |
 | 78. Counter Reference Cleanup | v2.5 | 1/1 | Complete | 2026-03-23 |
-| 79. Dashboard Percentage Update | v2.5 | 0/TBD | Not started | - |
+| 79. Dashboard Percentage Update | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 80. E2E Scenario Updates | v2.5 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-23 — Phase 78 complete (cleanup)*
+*Last updated: 2026-03-23 — Phase 79 complete (dashboard updated)*

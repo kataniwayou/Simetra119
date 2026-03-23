@@ -78,8 +78,8 @@
 | CLN-03 | Phase 78 | Complete |
 | UCH-01 | Phase 76 | Complete |
 | UCH-02 | Phase 76 | Complete |
-| DSH-01 | Phase 79 | Pending |
-| DSH-02 | Phase 79 | Pending |
+| DSH-01 | Phase 79 | Complete |
+| DSH-02 | Phase 79 | Complete |
 | E2E-01 | Phase 80 | Pending |
 | E2E-02 | Phase 80 | Pending |
 | UTT-01 | Phase 77 | Complete |
