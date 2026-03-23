@@ -67,11 +67,17 @@ sim_set_oid "5.3" "0"    # T2 res2 violated (< Min:1)
 # Wait for Resolved state -- poll for tier=2 log
 # ---------------------------------------------------------------------------
 
-log_info "TVM-03: Polling for tier=2 log (all resolved violated, 30s timeout)..."
-if poll_until_log 30 1 "e2e-pss-tenant.*tier=2" 15; then
+log_info "TVM-03: Polling for tier=2 log (all resolved violated, 45s timeout)..."
+if poll_until_log 45 1 "e2e-pss-tenant.*tier=2" 15; then
     log_info "TVM-03: tier=2 log confirmed for e2e-pss-tenant"
+    # Sleep after log confirmation to allow the Prometheus scrape interval to
+    # capture the new state. Without this, query_prometheus may return the
+    # previous scrape's state value (1=Healthy) rather than the updated 2=Resolved.
+    log_info "TVM-03: Sleeping 15s for Prometheus scrape to propagate state=2..."
+    sleep 15
 else
-    log_warn "TVM-03: tier=2 log not found within 30s; assertions may fail"
+    log_warn "TVM-03: tier=2 log not found within 45s; sleeping 15s as fallback"
+    sleep 15
 fi
 
 log_info "TVM-03: Waiting 10s to accumulate counter deltas..."
