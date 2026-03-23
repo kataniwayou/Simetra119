@@ -155,7 +155,10 @@ Plans:
   2. All 6 percentage gauge calls and the state gauge call occur at a single exit point after state is determined — no metrics recorded mid-flow
   3. tenant_state is derived from gathered tier results and percentages, not from which tier caused an early return
   4. SnapshotJob unit tests pass asserting percentage values and state correctness for each evaluation path (Healthy, Resolved, Unresolved)
-**Plans:** TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 77-01-PLAN.md — Add count helpers and rewrite EvaluateTenant to gather-then-decide flow
+- [ ] 77-02-PLAN.md — Rewrite metric-assertion tests and add new percentage tests
 
 #### Phase 78: Counter Reference Cleanup
 
@@ -245,11 +248,11 @@ Plans:
 | 74. Grafana Dashboard Panel | v2.4 | 1/1 | Complete | 2026-03-23 |
 | 75. E2E Validation Scenarios | v2.4 | 3/3 | Complete | 2026-03-23 |
 | 76. Percentage Gauge Instruments | v2.5 | 1/1 | Complete | 2026-03-23 |
-| 77. Gather-Then-Decide Evaluation Flow | v2.5 | 0/TBD | Not started | - |
+| 77. Gather-Then-Decide Evaluation Flow | v2.5 | 0/2 | Not started | - |
 | 78. Counter Reference Cleanup | v2.5 | 0/TBD | Not started | - |
 | 79. Dashboard Percentage Update | v2.5 | 0/TBD | Not started | - |
 | 80. E2E Scenario Updates | v2.5 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-23 — Phase 76 complete (1 plan, verified 5/5)*
+*Last updated: 2026-03-23 — Phase 77 planned (2 plans, 2 waves)*
