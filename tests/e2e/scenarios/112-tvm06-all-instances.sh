@@ -1,16 +1,16 @@
-# Scenario 112: TVM-06 All-instances export -- tenant_state present on every replica pod
+# Scenario 112: TVM-06 All-instances export -- tenant_evaluation_state present on every replica pod
 # The SnmpCollector.Tenant meter is NOT gated by MetricRoleGatedExporter.
 # It exports on ALL instances (leader + followers). The SnmpCollector.Leader meter
 # IS gated -- only the leader exports snmp_gauge/snmp_info.
 # k8s.pod.name resource attribute is converted to k8s_pod_name Prometheus label via
 # resource_to_telemetry_conversion.enabled: true in otel-collector config.
 #
-# Proof: tenant_state series present for EVERY pod (including followers),
+# Proof: tenant_evaluation_state series present for EVERY pod (including followers),
 # while snmp_gauge is absent on follower pods -- confirming the third meter architecture.
 #
 # Sub-assertions:
-#   TVM-06A: tenant_state present on every pod (all-instances export confirmed)
-#   TVM-06B: at least one follower pod exports tenant_state but has no snmp_gauge
+#   TVM-06A: tenant_evaluation_state present on every pod (all-instances export confirmed)
+#   TVM-06B: at least one follower pod exports tenant_evaluation_state but has no snmp_gauge
 #            (leader-gated meter absent on followers confirmed)
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
@@ -60,16 +60,16 @@ log_info "TVM-06: Waiting 5s for metrics to propagate to Prometheus..."
 sleep 5
 
 # ---------------------------------------------------------------------------
-# Preflight: verify k8s_pod_name label exists on tenant_state
+# Preflight: verify k8s_pod_name label exists on tenant_evaluation_state
 # Requires resource_to_telemetry_conversion.enabled: true in otel-collector config.
 # ---------------------------------------------------------------------------
 
-VERIFY_LABEL=$(query_prometheus 'tenant_state{tenant_id="e2e-pss-tenant"}' \
+VERIFY_LABEL=$(query_prometheus 'tenant_evaluation_state{tenant_id="e2e-pss-tenant"}' \
     | jq -r '.data.result[0].metric.k8s_pod_name // ""')
 
 if [ -z "$VERIFY_LABEL" ]; then
     record_fail "TVM-06: preflight" \
-        "k8s_pod_name label not present on tenant_state -- resource_to_telemetry_conversion may not be working"
+        "k8s_pod_name label not present on tenant_evaluation_state -- resource_to_telemetry_conversion may not be working"
     # Cleanup before aborting
     reset_oid_overrides
     if [ -f "$FIXTURES_DIR/.original-tenants-configmap.yaml" ]; then
@@ -104,28 +104,28 @@ for POD in $POD_NAMES; do
 done
 
 # ---------------------------------------------------------------------------
-# Sub-assertion TVM-06A: tenant_state present on EVERY pod (all-instances export)
+# Sub-assertion TVM-06A: tenant_evaluation_state present on EVERY pod (all-instances export)
 # SnmpCollector.Tenant meter is not gated -- all replicas export tenant metrics.
 # ---------------------------------------------------------------------------
 
 ALL_PODS_HAVE_TENANT=true
 for POD in $POD_NAMES; do
     [ -z "$POD" ] && continue
-    COUNT=$(query_prometheus "tenant_state{k8s_pod_name=\"${POD}\",tenant_id=\"e2e-pss-tenant\"}" \
+    COUNT=$(query_prometheus "tenant_evaluation_state{k8s_pod_name=\"${POD}\",tenant_id=\"e2e-pss-tenant\"}" \
         | jq -r '.data.result | length')
     if [ "$COUNT" -gt 0 ]; then
-        record_pass "TVM-06A: tenant_state present on pod ${POD}" \
+        record_pass "TVM-06A: tenant_evaluation_state present on pod ${POD}" \
             "k8s_pod_name=${POD} series_count=${COUNT}"
     else
-        record_fail "TVM-06A: tenant_state present on pod ${POD}" \
+        record_fail "TVM-06A: tenant_evaluation_state present on pod ${POD}" \
             "k8s_pod_name=${POD} series_count=0"
         ALL_PODS_HAVE_TENANT=false
     fi
 done
 
 # ---------------------------------------------------------------------------
-# Sub-assertion TVM-06B: follower pod exports tenant_state but NOT snmp_gauge
-# A follower is a pod where snmp_gauge series count == 0 but tenant_state count > 0.
+# Sub-assertion TVM-06B: follower pod exports tenant_evaluation_state but NOT snmp_gauge
+# A follower is a pod where snmp_gauge series count == 0 but tenant_evaluation_state count > 0.
 # At least one such pod must exist (3-replica cluster has 2 followers).
 # ---------------------------------------------------------------------------
 
@@ -134,18 +134,18 @@ for POD in $POD_NAMES; do
     [ -z "$POD" ] && continue
     GAUGE_COUNT=$(query_prometheus "snmp_gauge{k8s_pod_name=\"${POD}\"}" \
         | jq -r '.data.result | length')
-    TENANT_COUNT=$(query_prometheus "tenant_state{k8s_pod_name=\"${POD}\",tenant_id=\"e2e-pss-tenant\"}" \
+    TENANT_COUNT=$(query_prometheus "tenant_evaluation_state{k8s_pod_name=\"${POD}\",tenant_id=\"e2e-pss-tenant\"}" \
         | jq -r '.data.result | length')
     if [ "$GAUGE_COUNT" -eq 0 ] && [ "$TENANT_COUNT" -gt 0 ]; then
         FOLLOWER_COUNT=$((FOLLOWER_COUNT + 1))
-        record_pass "TVM-06B: follower ${POD} has tenant_state but no snmp_gauge" \
-            "snmp_gauge=0 tenant_state=${TENANT_COUNT} k8s_pod_name=${POD}"
+        record_pass "TVM-06B: follower ${POD} has tenant_evaluation_state but no snmp_gauge" \
+            "snmp_gauge=0 tenant_evaluation_state=${TENANT_COUNT} k8s_pod_name=${POD}"
     fi
 done
 
 if [ "$FOLLOWER_COUNT" -eq 0 ]; then
-    record_fail "TVM-06B: at least one follower exports tenant_state without snmp_gauge" \
-        "follower_count=0 -- no pod found with tenant_state > 0 and snmp_gauge == 0"
+    record_fail "TVM-06B: at least one follower exports tenant_evaluation_state without snmp_gauge" \
+        "follower_count=0 -- no pod found with tenant_evaluation_state > 0 and snmp_gauge == 0"
 else
     log_info "TVM-06: ${FOLLOWER_COUNT} follower pod(s) confirmed with tenant metrics but no leader-gated metrics"
 fi
