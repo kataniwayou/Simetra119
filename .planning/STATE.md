@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 
 ## Current Position
 
-Phase: 73 of 75 (SnapshotJob Instrumentation) — COMPLETE
-Plan: 2/2 — verified
-Status: Phase 73 complete, verified ✓ — ready for Phase 74
-Last activity: 2026-03-23 — Phase 73 verified (4/4 must-haves)
+Phase: 74 of 75 (Grafana Dashboard Panel) — IN PROGRESS
+Plan: 1/1 — Task 1 complete, Task 2 at checkpoint (human-verify)
+Status: Awaiting operator verification of Tenant Status table in Grafana
+Last activity: 2026-03-23 — Completed 74-01 Task 1: Tenant Status panels added to operations dashboard
 
-Progress: [█████░░░░░] v2.4 phase 2/4 complete
+Progress: [█████░░░░░] v2.4 phase 3/4 in progress
 
 ## Performance Metrics
 
@@ -44,6 +44,8 @@ Progress: [█████░░░░░] v2.4 phase 2/4 complete
 - v2.4: EvaluateTenant instrumented with RecordAndReturn at all 4 return paths (NotReady/Resolved/Healthy/Unresolved)
 - v2.4: Tier counters use count-then-loop pattern — CountX() computed once, loop calls IncrementTierX once per holder
 - v2.4: NotReady path records only state gauge + duration (no tier or command counters — design decision)
+- v2.4: Operations dashboard Tenant Status table uses columns Host, Pod, Tenant, Priority, State, Dispatched, Failed, Suppressed, Stale, Resolved, Evaluate, P99 (ms), Trend (panel id=28, row id=27)
+- v2.4: tenant_id and priority are literal snake_case tag keys in TenantMetricService (no OTel conversion needed)
 
 ### Decisions
 
@@ -64,6 +66,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23
-Stopped at: Phase 73 verified — Phase 74 ready to discuss
+Last session: 2026-03-23T13:16:28Z
+Stopped at: Phase 74 Plan 01 — Task 1 complete (74019f8), checkpoint at Task 2 human-verify
 Resume file: None
