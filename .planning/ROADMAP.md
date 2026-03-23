@@ -141,7 +141,9 @@ See `.planning/milestones/v2.4-ROADMAP.md` for details.
   3. Resolved percent measures violated holders (numerator = violated resolved), not non-violated — higher value means more violations
   4. tenant_state gauge and tenant_evaluation_duration_milliseconds histogram are registered unchanged; unit tests confirm their existence and behaviour are unaffected
   5. TenantMetricService unit tests pass asserting gauge API, percentage values, and correct resolved direction
-**Plans:** TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 76-01-PLAN.md — Replace 6 counters with 6 percentage gauges, rename tenant.state, rewrite unit tests
 
 #### Phase 77: Gather-Then-Decide Evaluation Flow
 
@@ -242,7 +244,7 @@ See `.planning/milestones/v2.4-ROADMAP.md` for details.
 | 73. SnapshotJob Instrumentation | v2.4 | 2/2 | Complete | 2026-03-23 |
 | 74. Grafana Dashboard Panel | v2.4 | 1/1 | Complete | 2026-03-23 |
 | 75. E2E Validation Scenarios | v2.4 | 3/3 | Complete | 2026-03-23 |
-| 76. Percentage Gauge Instruments | v2.5 | 0/TBD | Not started | - |
+| 76. Percentage Gauge Instruments | v2.5 | 0/1 | Not started | - |
 | 77. Gather-Then-Decide Evaluation Flow | v2.5 | 0/TBD | Not started | - |
 | 78. Counter Reference Cleanup | v2.5 | 0/TBD | Not started | - |
 | 79. Dashboard Percentage Update | v2.5 | 0/TBD | Not started | - |
@@ -250,4 +252,4 @@ See `.planning/milestones/v2.4-ROADMAP.md` for details.
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-23 — v2.5 roadmap added (Phases 76-80)*
+*Last updated: 2026-03-23 — Phase 76 planned (1 plan)*
