@@ -75,12 +75,12 @@ sim_set_oid "5.1" "0"    # T2 eval violated (< Min:10)
 log_info "TVM-05: Polling for e2e-pss-tenant tier=4 log (30s timeout)..."
 if poll_until_log 30 1 "e2e-pss-tenant.*tier=4" 15; then
     log_info "TVM-05: tier=4 Unresolved confirmed in logs"
-    log_info "TVM-05: Sleeping 15s for Prometheus scrape to propagate gauges..."
-    sleep 15
 else
-    log_warn "TVM-05: tier=4 log not detected within 30s; sleeping 15s as fallback"
-    sleep 15
+    log_warn "TVM-05: tier=4 log not detected within 30s; proceeding with assertions"
 fi
+
+# Brief wait for OTel export (not a full Prometheus scrape cycle — we poll below)
+sleep 5
 
 # ---------------------------------------------------------------------------
 # Sub-assertion TVM-05A: tenant_evaluation_state gauge == 3 (Unresolved)
