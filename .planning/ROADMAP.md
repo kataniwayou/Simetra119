@@ -163,10 +163,10 @@ Plans:
   2. The State column displays color-coded text labels (green=Healthy, red=Unresolved, yellow=Resolved, grey=NotReady) driven by the enum value mapping
   3. Existing Host and Pod dashboard filter variables cascade correctly to filter tenant table rows
   4. The Trend column shows delta arrows derived from `delta(tenant_command_dispatched...)` via a Join by field transformation
-**Plans:** TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 74-01: TBD
+- [ ] 74-01-PLAN.md — Add Tenant Status row and table panel with 9 queries, state color mapping, and trend arrows
 
 #### Phase 75: E2E Validation Scenarios
 
@@ -239,9 +239,9 @@ Plans:
 | 71. Negative Proofs | v2.3 | 1/1 | Complete | 2026-03-22 |
 | 72. TenantMetricService & Meter Registration | v2.4 | 2/2 | Complete | 2026-03-23 |
 | 73. SnapshotJob Instrumentation | v2.4 | 2/2 | Complete | 2026-03-23 |
-| 74. Grafana Dashboard Panel | v2.4 | 0/? | Not started | - |
+| 74. Grafana Dashboard Panel | v2.4 | 0/1 | Not started | - |
 | 75. E2E Validation Scenarios | v2.4 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-23 — Phase 73 complete (2 plans, 2 waves, verified 4/4)*
+*Last updated: 2026-03-23 — Phase 74 planned (1 plan, 1 wave)*
