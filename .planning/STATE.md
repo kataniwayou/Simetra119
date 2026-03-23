@@ -51,6 +51,7 @@ Progress: [████████░░] v2.4 phase 4/4 in progress
 - v2.4: ROADMAP "tenant_gauge_duration_milliseconds" is a typo; correct name is tenant_evaluation_duration_milliseconds
 - v2.4: Unresolved tier=4 path does NOT increment tier3_evaluate (evaluate IS violated, CountEvaluateNotViolated=0); use duration_count delta as proof evaluation ran
 - v2.4: All 3 replica pods export tenant metrics (SnmpCollector.Tenant meter not gated); follower identification = snmp_gauge==0 AND tenant_state>0 per pod
+- v2.4: assert_exists in common.sh cannot filter by labels (wraps in __name__=); use query_prometheus with label selector + jq result length check for label-filtered presence assertions
 
 ### Decisions
 
@@ -75,5 +76,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-23
-Stopped at: Completed 75-03-PLAN.md — scenarios 111-112 created
+Stopped at: Completed 75-01-PLAN.md (re-executed) — 107-tvm01-smoke.sh created, 108-tvm02-notready.sh confirmed, report.sh updated
 Resume file: None
