@@ -1149,27 +1149,25 @@ public sealed class SnapshotJobTests : IDisposable
         _tenantMetrics.Received(1).RecordTenantState(tenant.Id, tenant.Priority, TenantState.NotReady);
         _tenantMetrics.Received(1).RecordEvaluationDuration(tenant.Id, tenant.Priority, Arg.Any<double>());
 
-        // No tier or command counters on NotReady path
-        _tenantMetrics.DidNotReceive().IncrementTier1Stale(Arg.Any<string>(), Arg.Any<int>());
-        _tenantMetrics.DidNotReceive().IncrementTier2Resolved(Arg.Any<string>(), Arg.Any<int>());
-        _tenantMetrics.DidNotReceive().IncrementTier3Evaluate(Arg.Any<string>(), Arg.Any<int>());
-        _tenantMetrics.DidNotReceive().IncrementCommandDispatched(Arg.Any<string>(), Arg.Any<int>());
-        _tenantMetrics.DidNotReceive().IncrementCommandSuppressed(Arg.Any<string>(), Arg.Any<int>());
-        _tenantMetrics.DidNotReceive().IncrementCommandFailed(Arg.Any<string>(), Arg.Any<int>());
+        // No percentage gauges on NotReady path
+        _tenantMetrics.DidNotReceive().RecordMetricStalePercent(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<double>());
+        _tenantMetrics.DidNotReceive().RecordMetricResolvedPercent(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<double>());
+        _tenantMetrics.DidNotReceive().RecordMetricEvaluatePercent(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<double>());
+        _tenantMetrics.DidNotReceive().RecordCommandDispatchedPercent(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<double>());
+        _tenantMetrics.DidNotReceive().RecordCommandSuppressedPercent(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<double>());
+        _tenantMetrics.DidNotReceive().RecordCommandFailedPercent(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<double>());
     }
 
     [Fact]
-    public void EvaluateTenant_ResolvedPath_RecordsStateAndDurationAndTier1AndTier2()
+    public void EvaluateTenant_ResolvedPath_RecordsPercentGaugesStateAndDuration()
     {
         _tenantMetrics.ClearReceivedCalls();
 
-        // One stale holder (will count for tier1) + one Resolved violated (tier2 resolved = 0 since all are violated)
-        // Stale holder: intervalSeconds=1, graceMultiplier=0.001 → grace=1ms, write old value immediately stale
-        // Resolved violated: value below Min → all Resolved violated → tier 2 stop (Resolved state)
-        // Note: for tier2_resolved count we need non-violated Resolved holders — so we set up one stale non-excluded
-        // holder AND one non-stale Resolved violated.
-
-        // h1: poll, tiny grace → becomes stale quickly (but we need it ready first)
+        // h1: Resolved violated (below Min=10), not stale (just written)
+        // → all Resolved violated → Resolved state
+        // stale% = 0/1 = 0.0 (eligible=1, stale=0)
+        // resolved% = 1/1 = 100.0 (1 violated Resolved, 1 participating)
+        // evaluate% = 0.0 (evaluateTotal=1 stub, 0 violated)
         var h1 = MakeHolder(intervalSeconds: 3600, graceMultiplier: 2.0, role: "Resolved",
             threshold: new ThresholdOptions { Min = 10 });
         WriteValue(h1, 5.0); // violated (below Min=10), not stale (just written)
@@ -1183,29 +1181,34 @@ public sealed class SnapshotJobTests : IDisposable
         _tenantMetrics.Received(1).RecordTenantState(tenant.Id, tenant.Priority, TenantState.Resolved);
         _tenantMetrics.Received(1).RecordEvaluationDuration(tenant.Id, tenant.Priority, Arg.Any<double>());
 
-        // tier1_stale: 0 stale holders (just written, not stale) — DidNotReceive is correct here
-        _tenantMetrics.DidNotReceive().IncrementTier1Stale(Arg.Any<string>(), Arg.Any<int>());
-        // tier2_resolved: 0 non-violated resolved (h1 is violated) — DidNotReceive is correct
-        _tenantMetrics.DidNotReceive().IncrementTier2Resolved(Arg.Any<string>(), Arg.Any<int>());
-        // tier3_evaluate: not recorded on Resolved path
-        _tenantMetrics.DidNotReceive().IncrementTier3Evaluate(Arg.Any<string>(), Arg.Any<int>());
-        // No command counters
-        _tenantMetrics.DidNotReceive().IncrementCommandDispatched(Arg.Any<string>(), Arg.Any<int>());
+        // stale% = 0.0 (no stale holders)
+        _tenantMetrics.Received(1).RecordMetricStalePercent(tenant.Id, tenant.Priority, 0.0);
+        // resolved% = 100.0 (all 1 Resolved holder violated)
+        _tenantMetrics.Received(1).RecordMetricResolvedPercent(tenant.Id, tenant.Priority, 100.0);
+        // evaluate% = 0.0 (no Evaluate holders)
+        _tenantMetrics.Received(1).RecordMetricEvaluatePercent(tenant.Id, tenant.Priority, 0.0);
+        // No commands dispatched
+        _tenantMetrics.Received(1).RecordCommandDispatchedPercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordCommandFailedPercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordCommandSuppressedPercent(tenant.Id, tenant.Priority, 0.0);
     }
 
     [Fact]
-    public void EvaluateTenant_HealthyPath_RecordsAllTierCountersAndStateAndDuration()
+    public void EvaluateTenant_HealthyPath_RecordsPercentGaugesStateAndDuration()
     {
         _tenantMetrics.ClearReceivedCalls();
 
         // Resolved NOT violated (tier2 allows through) + Evaluate NOT all violated (tier3 → Healthy)
+        // stale% = 0/1 = 0.0
+        // resolved% = 0/1 = 0.0 (0 violated Resolved, 1 participating)
+        // evaluate% = 0/1 = 0.0 (0 violated Evaluate)
         var resolved = MakeHolder(role: "Resolved",
             threshold: new ThresholdOptions { Min = 0, Max = 100 });
-        WriteValue(resolved, 50.0); // In range → not violated (tier2_resolved count = 1)
+        WriteValue(resolved, 50.0); // In range → not violated
 
         var evaluate = MakeHolder(role: "Evaluate",
             threshold: new ThresholdOptions { Min = 0, Max = 100 });
-        WriteValue(evaluate, 50.0); // In range → not violated (tier3_evaluate count = 0)
+        WriteValue(evaluate, 50.0); // In range → not violated
 
         var tenant = MakeTenant(resolved, evaluate);
         var result = _job.EvaluateTenant(tenant);
@@ -1216,30 +1219,33 @@ public sealed class SnapshotJobTests : IDisposable
         _tenantMetrics.Received(1).RecordTenantState(tenant.Id, tenant.Priority, TenantState.Healthy);
         _tenantMetrics.Received(1).RecordEvaluationDuration(tenant.Id, tenant.Priority, Arg.Any<double>());
 
-        // tier1_stale: 0 stale holders (just written) → DidNotReceive
-        _tenantMetrics.DidNotReceive().IncrementTier1Stale(Arg.Any<string>(), Arg.Any<int>());
-        // tier2_resolved: 1 non-violated resolved → received once
-        _tenantMetrics.Received(1).IncrementTier2Resolved(tenant.Id, tenant.Priority);
-        // tier3_evaluate: 0 violated evaluate → DidNotReceive
-        _tenantMetrics.DidNotReceive().IncrementTier3Evaluate(Arg.Any<string>(), Arg.Any<int>());
-
-        // No command counters on Healthy path
-        _tenantMetrics.DidNotReceive().IncrementCommandDispatched(Arg.Any<string>(), Arg.Any<int>());
+        // stale% = 0.0 (no stale holders)
+        _tenantMetrics.Received(1).RecordMetricStalePercent(tenant.Id, tenant.Priority, 0.0);
+        // resolved% = 0.0 (0 of 1 Resolved holders are violated)
+        _tenantMetrics.Received(1).RecordMetricResolvedPercent(tenant.Id, tenant.Priority, 0.0);
+        // evaluate% = 0.0 (0 of 1 Evaluate holders are violated)
+        _tenantMetrics.Received(1).RecordMetricEvaluatePercent(tenant.Id, tenant.Priority, 0.0);
+        // No commands dispatched on Healthy path
+        _tenantMetrics.Received(1).RecordCommandDispatchedPercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordCommandFailedPercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordCommandSuppressedPercent(tenant.Id, tenant.Priority, 0.0);
     }
 
     [Fact]
-    public void EvaluateTenant_UnresolvedPath_RecordsAllTierCountersPlusCommandCounters()
+    public void EvaluateTenant_UnresolvedPath_RecordsPercentGaugesStateAndDuration()
     {
         _tenantMetrics.ClearReceivedCalls();
 
         // Resolved NOT violated (passes tier2) + Evaluate ALL violated (reaches tier4) + 1 command dispatched
+        // stale% = 0.0, resolved% = 0.0 (0 violated), evaluate% = 100.0 (1/1 violated)
+        // dispatched% = 100.0 (1/1 cmd dispatched), failed% = 0.0, suppressed% = 0.0
         var resolved = MakeHolder(role: "Resolved",
             threshold: new ThresholdOptions { Min = 0, Max = 100 });
-        WriteValue(resolved, 50.0); // In range → not violated (tier2_resolved = 1)
+        WriteValue(resolved, 50.0); // In range → not violated
 
         var evaluate = MakeHolder(role: "Evaluate",
             threshold: new ThresholdOptions { Min = 10 });
-        WriteValue(evaluate, 5.0); // Below Min → violated (tier3_evaluate = 1)
+        WriteValue(evaluate, 5.0); // Below Min → violated
 
         var cmd = new CommandSlotOptions
             { Ip = "10.0.0.2", Port = 161, CommandName = "reset", Value = "1", ValueType = "Integer32" };
@@ -1253,32 +1259,29 @@ public sealed class SnapshotJobTests : IDisposable
         _tenantMetrics.Received(1).RecordTenantState(tenant.Id, tenant.Priority, TenantState.Unresolved);
         _tenantMetrics.Received(1).RecordEvaluationDuration(tenant.Id, tenant.Priority, Arg.Any<double>());
 
-        // All 3 tier counters
-        _tenantMetrics.DidNotReceive().IncrementTier1Stale(Arg.Any<string>(), Arg.Any<int>()); // 0 stale
-        _tenantMetrics.Received(1).IncrementTier2Resolved(tenant.Id, tenant.Priority); // 1 non-violated resolved
-        _tenantMetrics.Received(1).IncrementTier3Evaluate(tenant.Id, tenant.Priority); // 1 violated evaluate
-
-        // Command dispatched (not suppressed)
-        _tenantMetrics.Received(1).IncrementCommandDispatched(tenant.Id, tenant.Priority);
-        _tenantMetrics.DidNotReceive().IncrementCommandSuppressed(Arg.Any<string>(), Arg.Any<int>());
-        _tenantMetrics.DidNotReceive().IncrementCommandFailed(Arg.Any<string>(), Arg.Any<int>());
+        // stale% = 0.0 (no stale)
+        _tenantMetrics.Received(1).RecordMetricStalePercent(tenant.Id, tenant.Priority, 0.0);
+        // resolved% = 0.0 (0 of 1 Resolved violated)
+        _tenantMetrics.Received(1).RecordMetricResolvedPercent(tenant.Id, tenant.Priority, 0.0);
+        // evaluate% = 100.0 (1 of 1 Evaluate violated)
+        _tenantMetrics.Received(1).RecordMetricEvaluatePercent(tenant.Id, tenant.Priority, 100.0);
+        // Command dispatched: 1/1 = 100%
+        _tenantMetrics.Received(1).RecordCommandDispatchedPercent(tenant.Id, tenant.Priority, 100.0);
+        _tenantMetrics.Received(1).RecordCommandSuppressedPercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordCommandFailedPercent(tenant.Id, tenant.Priority, 0.0);
     }
 
     [Fact]
-    public void EvaluateTenant_StaleHolderCount_IncrementsByActualCount()
+    public void EvaluateTenant_StalePath_RecordsNonZeroStalePercentAndZeroResolvedAndEvaluate()
     {
         _tenantMetrics.ClearReceivedCalls();
 
-        // Exactly 2 stale poll holders + 1 non-stale trap holder (excluded from stale count)
-        // Tenant reaches tier4 via staleness (HasStaleness = true)
-        // The stale holders use tiny grace so they become stale quickly after write
-
-        // For them to be stale: age > grace. We use a very small grace and can't wait,
-        // so instead use intervalSeconds=0 holders (excluded from staleness) + manually control
-        // Actually we need to use real stale holders. Use graceMultiplier=0 which makes grace=0 → always stale after write
+        // Exactly 2 stale poll holders + 1 trap holder (excluded from staleness)
+        // stale% = 2/2 = 100.0, resolved% = 0.0 (stale path), evaluate% = 0.0 (stale path)
+        // dispatched% = 100.0 (1/1 cmd dispatched — stale → Unresolved → commands)
         var stale1 = MakeHolder(intervalSeconds: 3600, graceMultiplier: 0.0, role: "Resolved",
             threshold: new ThresholdOptions { Min = 10 });
-        WriteValue(stale1, 50.0); // written, but grace=0 → immediately stale (age > 0s)
+        WriteValue(stale1, 50.0); // grace=0 → immediately stale
 
         var stale2 = MakeHolder(intervalSeconds: 3600, graceMultiplier: 0.0, role: "Resolved",
             threshold: new ThresholdOptions { Min = 10 });
@@ -1286,7 +1289,7 @@ public sealed class SnapshotJobTests : IDisposable
 
         var trapHolder = MakeHolder(intervalSeconds: 1, graceMultiplier: 0.0, role: "Resolved",
             threshold: new ThresholdOptions { Min = 10 });
-        WriteValue(trapHolder, 50.0, source: SnmpSource.Trap); // Trap-sourced → excluded from stale count
+        WriteValue(trapHolder, 50.0, source: SnmpSource.Trap); // Trap-sourced → excluded from stale check
 
         var cmd = new CommandSlotOptions
             { Ip = "10.0.0.1", Port = 161, CommandName = "stale-cmd", Value = "1", ValueType = "Integer32" };
@@ -1296,8 +1299,14 @@ public sealed class SnapshotJobTests : IDisposable
 
         Assert.Equal(TenantState.Unresolved, result);
 
-        // Exactly 2 IncrementTier1Stale calls (one per stale poll holder, trap holder excluded)
-        _tenantMetrics.Received(2).IncrementTier1Stale(tenant.Id, tenant.Priority);
+        // stale% = 100.0 (2 stale out of 2 eligible; trap excluded)
+        _tenantMetrics.Received(1).RecordMetricStalePercent(tenant.Id, tenant.Priority, 100.0);
+        // resolved% = 0.0 (stale path — skip resolved/evaluate)
+        _tenantMetrics.Received(1).RecordMetricResolvedPercent(tenant.Id, tenant.Priority, 0.0);
+        // evaluate% = 0.0 (stale path)
+        _tenantMetrics.Received(1).RecordMetricEvaluatePercent(tenant.Id, tenant.Priority, 0.0);
+        // commands dispatched on stale path
+        _tenantMetrics.Received(1).RecordCommandDispatchedPercent(tenant.Id, tenant.Priority, 100.0);
     }
 
     // -------------------------------------------------------------------------

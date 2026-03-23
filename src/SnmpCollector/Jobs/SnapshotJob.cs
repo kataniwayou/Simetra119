@@ -121,19 +121,18 @@ public sealed class SnapshotJob : IJob
     }
 
     /// <summary>
-    /// Runs the 4-tier evaluation for a single tenant. Returns the tier result
+    /// Runs the gather-then-decide evaluation for a single tenant. Returns the tier result
     /// for priority-group advance gate decisions.
-    /// Pre-tier: readiness check — skip tenants where any holder is still in grace window.
-    /// Tier 1: staleness check — if stale, skip to tier 4 (commands).
-    /// Tier 2: resolved gate — if all violated, end (no commands).
-    /// Tier 3: evaluate threshold — if all violated, proceed to tier 4.
-    /// Tier 4: command dispatch with suppression.
+    /// Pre-tier: readiness check (only early return) — skip tenants still in grace window.
+    /// GATHER: collects stale count, resolved/evaluate violation counts, dispatches commands.
+    /// DECIDE: determines state using same priority order as v2.4 (stale &gt; resolved &gt; evaluate &gt; healthy).
+    /// SINGLE EXIT: records all 6 percentage gauges + state + duration.
     /// </summary>
     internal TenantState EvaluateTenant(Tenant tenant)
     {
         var sw = Stopwatch.StartNew();
 
-        // Pre-tier: Readiness check — skip tenants where any holder is still in grace window
+        // Pre-tier: Readiness check — only early return in this method
         if (!AreAllReady(tenant.Holders))
         {
             _logger.LogDebug(
@@ -142,124 +141,123 @@ public sealed class SnapshotJob : IJob
             return RecordAndReturn(tenant, TenantState.NotReady, sw);
         }
 
-        // Tier 1: Staleness check — stale data skips tiers 2-3, goes straight to commands
-        if (HasStaleness(tenant.Holders))
+        // --- GATHER ---
+
+        // Tier 1: Count stale holders
+        var staleCount = CountStaleHolders(tenant.Holders);
+        var staleTotal = CountStalenessEligibleHolders(tenant.Holders);
+        var isStale = staleCount > 0;
+
+        // Tier 2 & 3: Count resolved/evaluate violations (skipped on stale — unreliable data)
+        int resolvedViolatedCount, resolvedTotal, evaluateViolatedCount, evaluateTotal;
+
+        if (isStale)
         {
             _logger.LogDebug(
-                "Tenant {TenantId} priority={Priority} tier=1 stale — skipping to commands",
+                "Tenant {TenantId} priority={Priority} tier=1 stale — dispatching commands",
                 tenant.Id, tenant.Priority);
-            // Fall through to Tier 4 (command dispatch)
+            resolvedViolatedCount = 0;
+            resolvedTotal = 1; // avoid div/0; percent will be 0.0
+            evaluateViolatedCount = 0;
+            evaluateTotal = 1;
         }
         else
         {
-            // Tier 2: Resolved gate — are ALL Resolved metrics violated?
-            if (AreAllResolvedViolated(tenant.Holders))
-            {
-                _logger.LogDebug(
-                    "Tenant {TenantId} priority={Priority} tier=2 — all resolved violated, no commands",
-                    tenant.Id, tenant.Priority);
-
-                var staleCount = CountStaleHolders(tenant.Holders);
-                for (var i = 0; i < staleCount; i++)
-                    _tenantMetrics.IncrementTier1Stale(tenant.Id, tenant.Priority);
-                var resolvedCount = CountResolvedNonViolated(tenant.Holders);
-                for (var i = 0; i < resolvedCount; i++)
-                    _tenantMetrics.IncrementTier2Resolved(tenant.Id, tenant.Priority);
-
-                return RecordAndReturn(tenant, TenantState.Resolved, sw);
-            }
-
-            // Not all Resolved violated — proceed to Tier 3 (evaluate check)
-            _logger.LogDebug(
-                "Tenant {TenantId} priority={Priority} tier=2 — resolved not all violated, proceeding to evaluate check",
-                tenant.Id, tenant.Priority);
-
-            // Tier 3: Evaluate gate — are ALL Evaluate metrics violated?
-            if (!AreAllEvaluateViolated(tenant.Holders))
-            {
-                _logger.LogDebug(
-                    "Tenant {TenantId} priority={Priority} tier=3 — not all evaluate metrics violated, no action",
-                    tenant.Id, tenant.Priority);
-
-                var staleCount = CountStaleHolders(tenant.Holders);
-                for (var i = 0; i < staleCount; i++)
-                    _tenantMetrics.IncrementTier1Stale(tenant.Id, tenant.Priority);
-                var resolvedCount = CountResolvedNonViolated(tenant.Holders);
-                for (var i = 0; i < resolvedCount; i++)
-                    _tenantMetrics.IncrementTier2Resolved(tenant.Id, tenant.Priority);
-                var evaluateCount = CountEvaluateViolated(tenant.Holders);
-                for (var i = 0; i < evaluateCount; i++)
-                    _tenantMetrics.IncrementTier3Evaluate(tenant.Id, tenant.Priority);
-
-                return RecordAndReturn(tenant, TenantState.Healthy, sw);
-            }
+            resolvedViolatedCount = CountResolvedViolated(tenant.Holders);
+            resolvedTotal = CountResolvedParticipating(tenant.Holders);
+            evaluateViolatedCount = CountEvaluateViolated(tenant.Holders);
+            evaluateTotal = CountEvaluateParticipating(tenant.Holders);
         }
 
-        // Tier 4: Command dispatch with suppression
-        // Accumulate command counts during dispatch loop — record all metrics together at exit
+        // Tier 4: Command dispatch — runs when stale or all evaluate violated
         var enqueueCount = 0;
-        var suppressedCount = 0;
         var dispatchedCount = 0;
+        var suppressedCount = 0;
         var failedCount = 0;
 
-        foreach (var cmd in tenant.Commands)
+        if (isStale || AreAllEvaluateViolated(tenant.Holders))
         {
-            var suppressionKey = $"{tenant.Id}:{cmd.Ip}:{cmd.Port}:{cmd.CommandName}";
-
-            if (_suppressionCache.TrySuppress(suppressionKey, tenant.SuppressionWindowSeconds))
+            foreach (var cmd in tenant.Commands)
             {
-                _logger.LogDebug(
-                    "Command {CommandName} suppressed for tenant {TenantId}",
-                    cmd.CommandName, tenant.Id);
-                _pipelineMetrics.IncrementCommandSuppressed(tenant.Id);
-                suppressedCount++;
-                continue;
+                var suppressionKey = $"{tenant.Id}:{cmd.Ip}:{cmd.Port}:{cmd.CommandName}";
+
+                if (_suppressionCache.TrySuppress(suppressionKey, tenant.SuppressionWindowSeconds))
+                {
+                    _logger.LogDebug(
+                        "Command {CommandName} suppressed for tenant {TenantId}",
+                        cmd.CommandName, tenant.Id);
+                    _pipelineMetrics.IncrementCommandSuppressed(tenant.Id);
+                    suppressedCount++;
+                    continue;
+                }
+
+                var request = new CommandRequest(
+                    cmd.Ip, cmd.Port, cmd.CommandName, cmd.Value, cmd.ValueType,
+                    tenant.Id, tenant.Priority);
+
+                if (_commandChannel.Writer.TryWrite(request))
+                {
+                    enqueueCount++;
+                    _pipelineMetrics.IncrementCommandDispatched(tenant.Id);
+                    dispatchedCount++;
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Command channel full, dropping command {CommandName} for tenant {TenantId}",
+                        cmd.CommandName, tenant.Id);
+                    _pipelineMetrics.IncrementCommandFailed(tenant.Id);
+                    failedCount++;
+                }
             }
 
-            var request = new CommandRequest(
-                cmd.Ip, cmd.Port, cmd.CommandName, cmd.Value, cmd.ValueType,
-                tenant.Id, tenant.Priority);
-
-            if (_commandChannel.Writer.TryWrite(request))
-            {
-                enqueueCount++;
-                _pipelineMetrics.IncrementCommandDispatched(tenant.Id);
-                dispatchedCount++;
-            }
-            else
-            {
-                _logger.LogWarning(
-                    "Command channel full, dropping command {CommandName} for tenant {TenantId}",
-                    cmd.CommandName, tenant.Id);
-                _pipelineMetrics.IncrementCommandFailed(tenant.Id);
-                failedCount++;
-            }
+            _logger.LogInformation(
+                "Tenant {TenantId} priority={Priority} tier=4 — commands enqueued, count={CommandCount}",
+                tenant.Id, tenant.Priority, enqueueCount);
         }
 
-        _logger.LogInformation(
-            "Tenant {TenantId} priority={Priority} tier=4 — commands enqueued, count={CommandCount}",
-            tenant.Id, tenant.Priority, enqueueCount);
+        // --- DECIDE (same priority order as v2.4) ---
+        TenantState state;
+        if (isStale)
+        {
+            state = TenantState.Unresolved;
+        }
+        else if (AreAllResolvedViolated(tenant.Holders))
+        {
+            _logger.LogDebug(
+                "Tenant {TenantId} priority={Priority} tier=2 — all resolved violated — no commands",
+                tenant.Id, tenant.Priority);
+            state = TenantState.Resolved;
+        }
+        else if (AreAllEvaluateViolated(tenant.Holders))
+        {
+            state = TenantState.Unresolved;
+        }
+        else
+        {
+            _logger.LogDebug(
+                "Tenant {TenantId} priority={Priority} tier=3 — healthy — no action",
+                tenant.Id, tenant.Priority);
+            state = TenantState.Healthy;
+        }
 
-        // Record all tenant metrics together at exit — tier counters + command counters + state + duration
-        var staleCountT4 = CountStaleHolders(tenant.Holders);
-        for (var i = 0; i < staleCountT4; i++)
-            _tenantMetrics.IncrementTier1Stale(tenant.Id, tenant.Priority);
-        var resolvedCountT4 = CountResolvedNonViolated(tenant.Holders);
-        for (var i = 0; i < resolvedCountT4; i++)
-            _tenantMetrics.IncrementTier2Resolved(tenant.Id, tenant.Priority);
-        var evaluateCountT4 = CountEvaluateViolated(tenant.Holders);
-        for (var i = 0; i < evaluateCountT4; i++)
-            _tenantMetrics.IncrementTier3Evaluate(tenant.Id, tenant.Priority);
-        for (var i = 0; i < dispatchedCount; i++)
-            _tenantMetrics.IncrementCommandDispatched(tenant.Id, tenant.Priority);
-        for (var i = 0; i < suppressedCount; i++)
-            _tenantMetrics.IncrementCommandSuppressed(tenant.Id, tenant.Priority);
-        for (var i = 0; i < failedCount; i++)
-            _tenantMetrics.IncrementCommandFailed(tenant.Id, tenant.Priority);
+        // --- COMPUTE PERCENTAGES ---
+        var stalePercent    = staleTotal == 0    ? 0.0 : staleCount            * 100.0 / staleTotal;
+        var resolvedPercent = resolvedTotal == 0 ? 0.0 : resolvedViolatedCount * 100.0 / resolvedTotal;
+        var evaluatePercent = evaluateTotal == 0 ? 0.0 : evaluateViolatedCount * 100.0 / evaluateTotal;
+        var cmdTotal        = tenant.Commands.Count;
+        var dispatchedPct   = cmdTotal == 0 ? 0.0 : dispatchedCount  * 100.0 / cmdTotal;
+        var failedPct       = cmdTotal == 0 ? 0.0 : failedCount       * 100.0 / cmdTotal;
+        var suppressedPct   = cmdTotal == 0 ? 0.0 : suppressedCount   * 100.0 / cmdTotal;
 
-        // Tier 4 reached = command intent = device state unresolved,
-        // regardless of whether commands were actually dispatched (suppression/channel full)
-        return RecordAndReturn(tenant, TenantState.Unresolved, sw);
+        // --- SINGLE EXIT: record all 6 percentage gauges + state + duration ---
+        _tenantMetrics.RecordMetricStalePercent(tenant.Id, tenant.Priority, stalePercent);
+        _tenantMetrics.RecordMetricResolvedPercent(tenant.Id, tenant.Priority, resolvedPercent);
+        _tenantMetrics.RecordMetricEvaluatePercent(tenant.Id, tenant.Priority, evaluatePercent);
+        _tenantMetrics.RecordCommandDispatchedPercent(tenant.Id, tenant.Priority, dispatchedPct);
+        _tenantMetrics.RecordCommandFailedPercent(tenant.Id, tenant.Priority, failedPct);
+        _tenantMetrics.RecordCommandSuppressedPercent(tenant.Id, tenant.Priority, suppressedPct);
+        return RecordAndReturn(tenant, state, sw);
     }
 
     private TenantState RecordAndReturn(Tenant tenant, TenantState state, Stopwatch sw)

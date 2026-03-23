@@ -37,7 +37,6 @@ public sealed class CommandWorkerServiceTests : IDisposable
 
     private readonly ServiceProvider _sp;
     private readonly PipelineMetricService _metrics;
-    private readonly ITenantMetricService _tenantMetrics = Substitute.For<ITenantMetricService>();
     private readonly MeterListener _meterListener;
     private readonly List<(string InstrumentName, long Value, KeyValuePair<string, object?>[] Tags)> _measurements = new();
 
@@ -91,8 +90,7 @@ public sealed class CommandWorkerServiceTests : IDisposable
         IDeviceRegistry? deviceRegistry = null,
         ICommandMapService? commandMapService = null,
         ILeaderElection? leaderElection = null,
-        ILogger<CommandWorkerService>? logger = null,
-        ITenantMetricService? tenantMetrics = null)
+        ILogger<CommandWorkerService>? logger = null)
     {
         return new CommandWorkerService(
             commandChannel,
@@ -103,7 +101,6 @@ public sealed class CommandWorkerServiceTests : IDisposable
             new RotatingCorrelationService(),
             leaderElection ?? new AlwaysLeaderElection(),
             _metrics,
-            tenantMetrics ?? _tenantMetrics,
             Options.Create(new SnapshotJobOptions()),
             logger ?? NullLogger<CommandWorkerService>.Instance);
     }
