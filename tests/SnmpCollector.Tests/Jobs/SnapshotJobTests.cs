@@ -1159,7 +1159,7 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     [Fact]
-    public void EvaluateTenant_ResolvedPath_RecordsPercentGaugesStateAndDuration()
+    public void EvaluateTenant_ResolvedPath_RecordsPercentagesAndStateAndDuration()
     {
         _tenantMetrics.ClearReceivedCalls();
 
@@ -1194,7 +1194,7 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     [Fact]
-    public void EvaluateTenant_HealthyPath_RecordsPercentGaugesStateAndDuration()
+    public void EvaluateTenant_HealthyPath_RecordsPercentagesAndStateAndDuration()
     {
         _tenantMetrics.ClearReceivedCalls();
 
@@ -1232,7 +1232,7 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     [Fact]
-    public void EvaluateTenant_UnresolvedPath_RecordsPercentGaugesStateAndDuration()
+    public void EvaluateTenant_UnresolvedPath_RecordsPercentagesAndCommandPercentages()
     {
         _tenantMetrics.ClearReceivedCalls();
 
@@ -1272,7 +1272,7 @@ public sealed class SnapshotJobTests : IDisposable
     }
 
     [Fact]
-    public void EvaluateTenant_StalePath_RecordsNonZeroStalePercentAndZeroResolvedAndEvaluate()
+    public void EvaluateTenant_StalePath_RecordsStalePercentAndZeroResolvedAndEvaluate()
     {
         _tenantMetrics.ClearReceivedCalls();
 
@@ -1307,6 +1307,8 @@ public sealed class SnapshotJobTests : IDisposable
         _tenantMetrics.Received(1).RecordMetricEvaluatePercent(tenant.Id, tenant.Priority, 0.0);
         // commands dispatched on stale path
         _tenantMetrics.Received(1).RecordCommandDispatchedPercent(tenant.Id, tenant.Priority, 100.0);
+        _tenantMetrics.Received(1).RecordCommandFailedPercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordCommandSuppressedPercent(tenant.Id, tenant.Priority, 0.0);
     }
 
     // -------------------------------------------------------------------------
