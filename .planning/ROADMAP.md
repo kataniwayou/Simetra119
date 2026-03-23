@@ -143,7 +143,7 @@ See `.planning/milestones/v2.4-ROADMAP.md` for details.
   5. TenantMetricService unit tests pass asserting gauge API, percentage values, and correct resolved direction
 **Plans:** 1 plan
 Plans:
-- [ ] 76-01-PLAN.md — Replace 6 counters with 6 percentage gauges, rename tenant.state, rewrite unit tests
+- [x] 76-01-PLAN.md — Replace 6 counters with 6 percentage gauges, rename tenant.state, rewrite unit tests
 
 #### Phase 77: Gather-Then-Decide Evaluation Flow
 
@@ -244,7 +244,7 @@ Plans:
 | 73. SnapshotJob Instrumentation | v2.4 | 2/2 | Complete | 2026-03-23 |
 | 74. Grafana Dashboard Panel | v2.4 | 1/1 | Complete | 2026-03-23 |
 | 75. E2E Validation Scenarios | v2.4 | 3/3 | Complete | 2026-03-23 |
-| 76. Percentage Gauge Instruments | v2.5 | 0/1 | Not started | - |
+| 76. Percentage Gauge Instruments | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 77. Gather-Then-Decide Evaluation Flow | v2.5 | 0/TBD | Not started | - |
 | 78. Counter Reference Cleanup | v2.5 | 0/TBD | Not started | - |
 | 79. Dashboard Percentage Update | v2.5 | 0/TBD | Not started | - |
@@ -252,4 +252,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-23 — Phase 76 planned (1 plan)*
+*Last updated: 2026-03-23 — Phase 76 complete (1 plan, verified 5/5)*

@@ -66,24 +66,24 @@
 | EFR-01 | Phase 77 | Pending |
 | EFR-02 | Phase 77 | Pending |
 | EFR-03 | Phase 77 | Pending |
-| PGA-01 | Phase 76 | Pending |
-| PGA-02 | Phase 76 | Pending |
-| PGA-03 | Phase 76 | Pending |
-| PGA-04 | Phase 76 | Pending |
-| PGA-05 | Phase 76 | Pending |
-| PGA-06 | Phase 76 | Pending |
-| RMD-01 | Phase 76 | Pending |
-| CLN-01 | Phase 76 | Pending |
-| CLN-02 | Phase 76 | Pending |
+| PGA-01 | Phase 76 | Complete |
+| PGA-02 | Phase 76 | Complete |
+| PGA-03 | Phase 76 | Complete |
+| PGA-04 | Phase 76 | Complete |
+| PGA-05 | Phase 76 | Complete |
+| PGA-06 | Phase 76 | Complete |
+| RMD-01 | Phase 76 | Complete |
+| CLN-01 | Phase 76 | Complete |
+| CLN-02 | Phase 76 | Complete |
 | CLN-03 | Phase 78 | Pending |
-| UCH-01 | Phase 76 | Pending |
-| UCH-02 | Phase 76 | Pending |
+| UCH-01 | Phase 76 | Complete |
+| UCH-02 | Phase 76 | Complete |
 | DSH-01 | Phase 79 | Pending |
 | DSH-02 | Phase 79 | Pending |
 | E2E-01 | Phase 80 | Pending |
 | E2E-02 | Phase 80 | Pending |
 | UTT-01 | Phase 77 | Pending |
-| UTT-02 | Phase 76 | Pending |
+| UTT-02 | Phase 76 | Complete |
 
 **Coverage:**
 - v2.5 requirements: 21 total
