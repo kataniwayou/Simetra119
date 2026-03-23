@@ -180,7 +180,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Tenant Status table columns show percentage values (0-100) for stale, resolved, evaluate, dispatched, failed, suppressed — not raw counts
   2. All 6 column PromQL queries reference the gauge instrument names directly (no increase() or rate() wrapping)
-**Plans:** TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 79-01-PLAN.md — Update PromQL queries and column headers for percentage gauges
 
 #### Phase 80: E2E Scenario Updates
 
