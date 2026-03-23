@@ -18,7 +18,7 @@
 - ✅ **v2.2 Progressive E2E Snapshot Suite** - Phases 62-65 (shipped 2026-03-22)
 - ✅ **v2.3 Metric Validity & Correctness** - Phases 66-71 (shipped 2026-03-22)
 - ✅ **v2.4 Tenant Vector Metrics** - Phases 72-75 (shipped 2026-03-23)
-- ✅ **v2.5 Tenant Metrics Approach Modification** - Phases 76-80 (shipped 2026-03-23)
+- 🚧 **v2.5 Tenant Metrics Approach Modification** - Phases 76-81 (in progress)
 
 ## Phases
 
@@ -126,7 +126,7 @@ See `.planning/milestones/v2.4-ROADMAP.md` for details.
 
 ---
 
-### ✅ v2.5 Tenant Metrics Approach Modification (Shipped 2026-03-23)
+### 🚧 v2.5 Tenant Metrics Approach Modification (In Progress)
 
 **Milestone Goal:** Replace 6 per-tenant counter instruments with 6 percentage gauges, refactor EvaluateTenant to a gather-then-decide flow that records all metrics at a single exit point, flip the resolved metric direction to measure violated holders (consistent with evaluate), and update the dashboard and E2E scenarios to match.
 
@@ -197,6 +197,18 @@ Plans:
 - [x] 80-01-PLAN.md — Rewrite smoke (107), NotReady (108), all-instances (112) for v2.5 gauges
 - [x] 80-02-PLAN.md — Rewrite Resolved (109), Healthy (110), Unresolved (111) for v2.5 gauges
 
+#### Phase 81: E2E Partial Percentage Scenario
+
+**Goal:** E2E scenario 113 verifies non-boundary percentage values (e.g., 50%) using a fixture with multiple holders per role, proving the percentage calculation works end-to-end with partial violations.
+**Depends on:** Phase 80
+**Requirements:** —
+**Success Criteria** (what must be TRUE):
+  1. Scenario 113 passes asserting a specific non-zero, non-100 percentage value for at least one metric gauge
+  2. A tenant fixture with 2+ holders per role enables partial violation (violate 1 of 2 = 50%)
+**Plans:** 1 plan
+Plans:
+- [ ] 81-01-PLAN.md — Fixture + scenario 113 (TVM-07 partial percent) + report update
+
 ---
 
 ## Progress
@@ -259,6 +271,7 @@ Plans:
 | 78. Counter Reference Cleanup | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 79. Dashboard Percentage Update | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 80. E2E Scenario Updates | v2.5 | 2/2 | Complete | 2026-03-23 |
+| 81. E2E Partial Percentage Scenario | v2.5 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
