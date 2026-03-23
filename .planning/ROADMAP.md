@@ -18,7 +18,7 @@
 - ✅ **v2.2 Progressive E2E Snapshot Suite** - Phases 62-65 (shipped 2026-03-22)
 - ✅ **v2.3 Metric Validity & Correctness** - Phases 66-71 (shipped 2026-03-22)
 - ✅ **v2.4 Tenant Vector Metrics** - Phases 72-75 (shipped 2026-03-23)
-- 🚧 **v2.5 Tenant Metrics Approach Modification** - Phases 76-80 (in progress)
+- ✅ **v2.5 Tenant Metrics Approach Modification** - Phases 76-80 (shipped 2026-03-23)
 
 ## Phases
 
@@ -126,7 +126,7 @@ See `.planning/milestones/v2.4-ROADMAP.md` for details.
 
 ---
 
-### 🚧 v2.5 Tenant Metrics Approach Modification (In Progress)
+### ✅ v2.5 Tenant Metrics Approach Modification (Shipped 2026-03-23)
 
 **Milestone Goal:** Replace 6 per-tenant counter instruments with 6 percentage gauges, refactor EvaluateTenant to a gather-then-decide flow that records all metrics at a single exit point, flip the resolved metric direction to measure violated holders (consistent with evaluate), and update the dashboard and E2E scenarios to match.
 
@@ -194,8 +194,8 @@ Plans:
   2. Smoke test confirms all 6 percentage gauge instrument names are present in Prometheus; no counter instrument names from v2.4 appear
 **Plans:** 2 plans
 Plans:
-- [ ] 80-01-PLAN.md — Rewrite smoke (107), NotReady (108), all-instances (112) for v2.5 gauges
-- [ ] 80-02-PLAN.md — Rewrite Resolved (109), Healthy (110), Unresolved (111) for v2.5 gauges
+- [x] 80-01-PLAN.md — Rewrite smoke (107), NotReady (108), all-instances (112) for v2.5 gauges
+- [x] 80-02-PLAN.md — Rewrite Resolved (109), Healthy (110), Unresolved (111) for v2.5 gauges
 
 ---
 
@@ -258,8 +258,8 @@ Plans:
 | 77. Gather-Then-Decide Evaluation Flow | v2.5 | 2/2 | Complete | 2026-03-23 |
 | 78. Counter Reference Cleanup | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 79. Dashboard Percentage Update | v2.5 | 1/1 | Complete | 2026-03-23 |
-| 80. E2E Scenario Updates | v2.5 | 0/2 | Not started | - |
+| 80. E2E Scenario Updates | v2.5 | 2/2 | Complete | 2026-03-23 |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-23 — Phase 79 complete (dashboard updated)*
+*Last updated: 2026-03-23 — Phase 80 complete (v2.5 all phases done)*

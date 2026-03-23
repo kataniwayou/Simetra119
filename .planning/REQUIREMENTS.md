@@ -80,8 +80,8 @@
 | UCH-02 | Phase 76 | Complete |
 | DSH-01 | Phase 79 | Complete |
 | DSH-02 | Phase 79 | Complete |
-| E2E-01 | Phase 80 | Pending |
-| E2E-02 | Phase 80 | Pending |
+| E2E-01 | Phase 80 | Complete |
+| E2E-02 | Phase 80 | Complete |
 | UTT-01 | Phase 77 | Complete |
 | UTT-02 | Phase 76 | Complete |
 
