@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 75 of 75 (E2E Validation Scenarios) — In progress
-Plan: 2/4 complete
-Status: Plans 75-01 and 75-02 complete — scenarios 107-110 created
-Last activity: 2026-03-23 — Completed 75-02-PLAN.md (scenarios 109-110)
+Plan: 3/3 complete (plans 01, 02, 03 all executed)
+Status: Plans 75-01 through 75-03 complete — scenarios 107-112 created
+Last activity: 2026-03-23 — Completed 75-03-PLAN.md (scenarios 111-112)
 
 Progress: [████████░░] v2.4 phase 4/4 in progress
 
@@ -27,7 +27,7 @@ Progress: [████████░░] v2.4 phase 4/4 in progress
 
 ### Key Facts
 
-- 110 E2E scenario scripts total (01-110, including TVM scenarios 107-110)
+- 112 E2E scenario scripts total (01-112, including TVM scenarios 107-112)
 - run-all.sh uses sort -V for version-aware ordering (required for 100+ scenarios)
 - CommandWorkerService resolves SET response names via command map (not OID map)
 - dispatched = evaluation decision, suppressed = execution prevention, failed = runtime error
@@ -49,6 +49,8 @@ Progress: [████████░░] v2.4 phase 4/4 in progress
 - v2.4: Resolved path (tier=2) asserts state=2 + duration delta + no commands (tier2_resolved counter NOT assertable when ALL resolved are violated)
 - v2.4: Histogram P99 PromQL: histogram_quantile(0.99, rate(tenant_evaluation_duration_milliseconds_bucket{...}[5m])) — guard NaN/+Inf
 - v2.4: ROADMAP "tenant_gauge_duration_milliseconds" is a typo; correct name is tenant_evaluation_duration_milliseconds
+- v2.4: Unresolved tier=4 path does NOT increment tier3_evaluate (evaluate IS violated, CountEvaluateNotViolated=0); use duration_count delta as proof evaluation ran
+- v2.4: All 3 replica pods export tenant metrics (SnmpCollector.Tenant meter not gated); follower identification = snmp_gauge==0 AND tenant_state>0 per pod
 
 ### Decisions
 
@@ -73,5 +75,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-23
-Stopped at: Completed 75-02-PLAN.md — scenarios 109-110 created
+Stopped at: Completed 75-03-PLAN.md — scenarios 111-112 created
 Resume file: None
