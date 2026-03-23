@@ -107,17 +107,24 @@ public sealed class TenantVectorWatcherService : BackgroundService
                 ? tenantOpts.Name
                 : $"tenant-{i}";
 
-            // Duplicate tenant name: append array index to make unique (both tenants loaded)
-            var tenantId = seenTenantNames.Add(baseName)
-                ? baseName
-                : $"{baseName}-{i}";
-
-            if (tenantId != baseName)
+            // Duplicate tenant name: append array index (incrementing suffix until unique)
+            string tenantId;
+            if (seenTenantNames.Add(baseName))
             {
+                tenantId = baseName;
+            }
+            else
+            {
+                var suffix = i;
+                do
+                {
+                    tenantId = $"{baseName}-{suffix}";
+                    suffix++;
+                } while (!seenTenantNames.Add(tenantId));
+
                 logger.LogWarning(
                     "Tenant '{BaseName}' at index {Index} has duplicate Name — using '{TenantId}' to avoid suppression key collision",
                     baseName, i, tenantId);
-                seenTenantNames.Add(tenantId);
             }
 
             var cleanMetrics = new List<MetricSlotOptions>();
