@@ -67,12 +67,12 @@ sleep 8
 log_info "TVM-04: Polling for tier=3 healthy log (30s timeout)..."
 if poll_until_log 30 1 "e2e-pss-tenant.*tier=3" 15; then
     log_info "TVM-04: tier=3 healthy log confirmed for e2e-pss-tenant"
+    log_info "TVM-04: Sleeping 15s for Prometheus scrape to propagate gauges..."
+    sleep 15
 else
-    log_warn "TVM-04: tier=3 log not found within 30s; assertions may fail"
+    log_warn "TVM-04: tier=3 log not found within 30s; sleeping 15s as fallback"
+    sleep 15
 fi
-
-log_info "TVM-04: Waiting 10s for Prometheus scrape to propagate gauges..."
-sleep 10
 
 # ---------------------------------------------------------------------------
 # Snapshot duration baseline AFTER Healthy state confirmed
