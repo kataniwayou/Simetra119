@@ -1311,6 +1311,120 @@ public sealed class SnapshotJobTests : IDisposable
         _tenantMetrics.Received(1).RecordCommandSuppressedPercent(tenant.Id, tenant.Priority, 0.0);
     }
 
+    [Fact]
+    public void EvaluateTenant_AllMetricsHealthy_RecordsZeroPercentForAllSixGauges()
+    {
+        _tenantMetrics.ClearReceivedCalls();
+
+        // 2 Resolved (both in-range) + 2 Evaluate (both in-range), no commands
+        // stale% = 0/4 = 0.0, resolved% = 0/2 = 0.0, evaluate% = 0/2 = 0.0
+        // cmd gauges: all 0.0 (no commands)
+        var r1 = MakeHolder(role: "Resolved", threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(r1, 50.0); // in range
+
+        var r2 = MakeHolder(role: "Resolved", threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(r2, 75.0); // in range
+
+        var e1 = MakeHolder(role: "Evaluate", threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(e1, 30.0); // in range
+
+        var e2 = MakeHolder(role: "Evaluate", threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(e2, 60.0); // in range
+
+        var tenant = MakeTenant(r1, r2, e1, e2);
+        var result = _job.EvaluateTenant(tenant);
+
+        Assert.Equal(TenantState.Healthy, result);
+
+        _tenantMetrics.Received(1).RecordTenantState(tenant.Id, tenant.Priority, TenantState.Healthy);
+        _tenantMetrics.Received(1).RecordEvaluationDuration(tenant.Id, tenant.Priority, Arg.Any<double>());
+
+        _tenantMetrics.Received(1).RecordMetricStalePercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordMetricResolvedPercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordMetricEvaluatePercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordCommandDispatchedPercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordCommandFailedPercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordCommandSuppressedPercent(tenant.Id, tenant.Priority, 0.0);
+    }
+
+    [Fact]
+    public void EvaluateTenant_PartialEvaluateViolation_RecordsCorrectEvaluatePercent()
+    {
+        _tenantMetrics.ClearReceivedCalls();
+
+        // 1 Resolved (in-range) + 2 Evaluate (1 violated, 1 in-range), no commands
+        // AreAllEvaluateViolated returns false (only 1 of 2 violated) → Healthy
+        // evaluate% = 1/2 * 100 = 50.0
+        // resolved% = 0/1 = 0.0, stale% = 0/3 = 0.0
+        var resolved = MakeHolder(role: "Resolved", threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0); // in range
+
+        var evalViolated = MakeHolder(role: "Evaluate", threshold: new ThresholdOptions { Min = 10 });
+        WriteValue(evalViolated, 5.0); // below Min → violated
+
+        var evalHealthy = MakeHolder(role: "Evaluate", threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(evalHealthy, 50.0); // in range → NOT violated
+
+        var tenant = MakeTenant(resolved, evalViolated, evalHealthy);
+        var result = _job.EvaluateTenant(tenant);
+
+        // Only 1 of 2 Evaluate violated → NOT all violated → Healthy
+        Assert.Equal(TenantState.Healthy, result);
+
+        _tenantMetrics.Received(1).RecordTenantState(tenant.Id, tenant.Priority, TenantState.Healthy);
+        _tenantMetrics.Received(1).RecordEvaluationDuration(tenant.Id, tenant.Priority, Arg.Any<double>());
+
+        _tenantMetrics.Received(1).RecordMetricStalePercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordMetricResolvedPercent(tenant.Id, tenant.Priority, 0.0);
+        // 1 violated out of 2 participating → 50.0%
+        _tenantMetrics.Received(1).RecordMetricEvaluatePercent(tenant.Id, tenant.Priority, 50.0);
+        _tenantMetrics.Received(1).RecordCommandDispatchedPercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordCommandFailedPercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordCommandSuppressedPercent(tenant.Id, tenant.Priority, 0.0);
+    }
+
+    [Fact]
+    public void EvaluateTenant_CommandsPartialDispatch_RecordsCorrectCommandPercents()
+    {
+        _tenantMetrics.ClearReceivedCalls();
+
+        // 1 Evaluate holder (violated) + 2 commands: 1 dispatched + 1 suppressed
+        // dispatched% = 1/2 * 100 = 50.0, suppressed% = 1/2 * 100 = 50.0, failed% = 0.0
+        var resolved = MakeHolder(role: "Resolved", threshold: new ThresholdOptions { Min = 0, Max = 100 });
+        WriteValue(resolved, 50.0);
+
+        var evaluate = MakeHolder(role: "Evaluate", threshold: new ThresholdOptions { Min = 10 });
+        WriteValue(evaluate, 5.0); // violated → all evaluate violated → Unresolved
+
+        var cmdA = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "cmd-a", Value = "1", ValueType = "Integer32" };
+        var cmdB = new CommandSlotOptions
+            { Ip = "10.0.0.2", Port = 161, CommandName = "cmd-b", Value = "2", ValueType = "Integer32" };
+
+        var tenant = MakeTenant(new[] { resolved, evaluate }, new[] { cmdA, cmdB }, id: "partial-tenant");
+
+        // Pre-populate suppression for cmd-b so it gets suppressed during EvaluateTenant
+        _suppressionCache.SuppressResults = new Dictionary<string, bool>
+        {
+            { "partial-tenant:10.0.0.2:161:cmd-b", true }
+        };
+
+        var result = _job.EvaluateTenant(tenant);
+
+        Assert.Equal(TenantState.Unresolved, result);
+
+        _tenantMetrics.Received(1).RecordTenantState(tenant.Id, tenant.Priority, TenantState.Unresolved);
+        _tenantMetrics.Received(1).RecordEvaluationDuration(tenant.Id, tenant.Priority, Arg.Any<double>());
+
+        _tenantMetrics.Received(1).RecordMetricStalePercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordMetricResolvedPercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordMetricEvaluatePercent(tenant.Id, tenant.Priority, 100.0);
+        // 1 dispatched, 1 suppressed out of 2 commands
+        _tenantMetrics.Received(1).RecordCommandDispatchedPercent(tenant.Id, tenant.Priority, 50.0);
+        _tenantMetrics.Received(1).RecordCommandFailedPercent(tenant.Id, tenant.Priority, 0.0);
+        _tenantMetrics.Received(1).RecordCommandSuppressedPercent(tenant.Id, tenant.Priority, 50.0);
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
