@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 
 ## Current Position
 
-Phase: 76 of 80 (Percentage Gauge Instruments) — COMPLETE
-Plan: 1/1 — verified
-Status: Phase 76 complete, verified ✓ — ready for Phase 77
-Last activity: 2026-03-23 — Phase 76 verified (5/5 must-haves)
+Phase: 77 of 80 (Gather-Then-Decide Evaluation Flow) — COMPLETE
+Plan: 1/1 — complete
+Status: Phase 77 plan 1 complete ✓ — ready for Phase 78
+Last activity: 2026-03-23 — Completed 77-01-PLAN.md — EvaluateTenant gather-then-decide flow done
 
-Progress: [██░░░░░░░░] v2.5 phase 1/5 complete
+Progress: [███░░░░░░░] v2.5 phase 2/5 complete
 
 ## Performance Metrics
 
@@ -44,6 +44,9 @@ Progress: [██░░░░░░░░] v2.5 phase 1/5 complete
 - v2.5 (76-01): tenant.state renamed to tenant.evaluation.state; aligns with evaluation.duration naming
 - v2.5 (76-01): RecordXxxPercent API — service is passive recorder; callers compute ratios before calling
 - v2.5 (76-01): Zero denominator: callers guard division; service records 0.0 as passed
+- v2.5 (77-01): EvaluateTenant: 1 early return (NotReady only); all other paths: gather > decide > compute > single exit
+- v2.5 (77-01): Stale path: resolvedTotal/evaluateTotal stub=1 to avoid div/0; both record 0.0%
+- v2.5 (77-01): CommandWorkerService no longer holds ITenantMetricService — tenant command % recorded at dispatch in SnapshotJob only
 
 ### Decisions
 
@@ -64,6 +67,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T17:03:08Z
-Stopped at: Completed 76-01-PLAN.md — ITenantMetricService + TenantMetricService percentage gauges done
+Last session: 2026-03-23T17:30:46Z
+Stopped at: Completed 77-01-PLAN.md — EvaluateTenant gather-then-decide flow + build fix done
 Resume file: None
