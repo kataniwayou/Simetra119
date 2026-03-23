@@ -1,5 +1,29 @@
 # Project Milestones: SNMP Monitoring System
 
+## v2.5 Tenant Metrics Approach Modification (Shipped: 2026-03-23)
+
+**Delivered:** Per-tenant metrics refactored from counters to percentage gauges, EvaluateTenant redesigned with gather-then-decide flow, resolved metric flipped to measure violations, dashboard and 7 E2E scenarios updated.
+
+**Phases completed:** 76-81 (8 plans total)
+
+**Key accomplishments:**
+- 6 percentage gauges replacing 6 counters with 0-100% values per cycle
+- Gather-then-decide EvaluateTenant flow — dispatch only when state = Unresolved
+- Resolved metric direction flipped (higher = worse, consistent with evaluate)
+- Dashboard columns with (%) suffix, direct gauge PromQL queries
+- 7 E2E scenarios (107-113) including 50% partial percentage verification
+- 479 unit tests, 113 E2E scenarios total
+
+**Stats:**
+- 6 phases, 8 plans
+- Timeline: 1 day (2026-03-23)
+
+**Git range:** `feat(76-01)` → `feat(81-01)`
+
+**What's next:** To be determined — `/gsd:new-milestone`
+
+---
+
 ## v2.4 Tenant Vector Metrics (Shipped: 2026-03-23)
 
 **Delivered:** Per-tenant internal evaluation state exposed as 8 OTel instruments on a third meter exporting on all instances, surfaced in a 13-column operations dashboard table with state color mapping, per-cycle integer counters, P99 histogram, and trend arrows — verified end-to-end by 6 new E2E scenarios.
