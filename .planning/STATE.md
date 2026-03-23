@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.5 Tenant Metrics Approach Modification — Phase 80
+**Current focus:** v2.5 Tenant Metrics Approach Modification — COMPLETE (all phases done)
 
 ## Current Position
 
-Phase: 80 of 80 (E2E Scenario Updates) — In progress
-Plan: 1/2 — complete (80-01 done)
-Status: In progress — Phase 80 plan 1/2 complete
-Last activity: 2026-03-23 — Completed 80-01-PLAN.md
+Phase: 80 of 80 (E2E Scenario Updates) — COMPLETE
+Plan: 2/2 — complete
+Status: Phase 80 complete ✓ — v2.5 all phases done
+Last activity: 2026-03-23 — Completed 80-02-PLAN.md (TVM-03/04/05 scenarios rewritten for v2.5)
 
-Progress: [█████████░] v2.5 phase 5/5 in progress
+Progress: [██████████] v2.5 phase 5/5 complete
 
 ## Performance Metrics
 
@@ -56,6 +56,11 @@ Progress: [█████████░] v2.5 phase 5/5 in progress
 - v2.5 (80-01): E2E smoke (107): stale path uses gauge value > 0 via awk float compare (no snapshot_counter/delta needed)
 - v2.5 (80-01): E2E NotReady (108): tier counter snapshot/delta code removed; only state+duration assertions remain
 - v2.5 (80-01): E2E all-instances (112): tenant_state -> tenant_evaluation_state in all PromQL queries
+- v2.5 (80-02): E2E TVM-03/04/05: tenant_state -> tenant_evaluation_state; dispatched_total delta -> dispatched_percent gauge
+- v2.5 (80-02): E2E TVM-03: resolved_percent>0 and stale_percent presence assertions added for Resolved path
+- v2.5 (80-02): E2E TVM-04: stale_percent=0 and evaluate_percent=0 assertions confirm zero-violation Healthy path
+- v2.5 (80-02): E2E TVM-05: dispatched_percent polled with 30s deadline loop; evaluate_percent>0 asserted for violated OID
+- v2.5 (80-02): Duration histogram _count delta retained in all TVM scenarios (monotonic counter, delta valid)
 
 ### Decisions
 
@@ -77,6 +82,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T18:33:36Z
-Stopped at: Completed 80-01-PLAN.md — E2E scenarios 107/108/112 updated for v2.5 gauge names
+Last session: 2026-03-23T19:54:39Z
+Stopped at: Completed 80-02-PLAN.md — E2E scenarios 109/110/111 (TVM-03/04/05) rewritten for v2.5 percentage gauges
 Resume file: None
