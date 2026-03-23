@@ -1709,7 +1709,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_state{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_evaluation_state{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -1719,7 +1719,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (delta(tenant_command_dispatched_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s]))",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (delta(tenant_command_dispatched_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s]))",
           "format": "table",
           "instant": true,
           "refId": "B"
@@ -1739,7 +1739,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (increase(tenant_command_dispatched_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s])) or on(tenant_id, priority, service_instance_id, k8s_pod_name) (max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_state{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}) != 0) * 0",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_command_dispatched_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "D"
@@ -1749,7 +1749,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (increase(tenant_command_failed_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s])) or on(tenant_id, priority, service_instance_id, k8s_pod_name) (max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_state{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}) != 0) * 0",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_command_failed_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "E"
@@ -1759,7 +1759,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (increase(tenant_command_suppressed_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s])) or on(tenant_id, priority, service_instance_id, k8s_pod_name) (max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_state{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}) != 0) * 0",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_command_suppressed_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "F"
@@ -1769,7 +1769,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (increase(tenant_tier1_stale_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s])) or on(tenant_id, priority, service_instance_id, k8s_pod_name) (max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_state{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}) != 0) * 0",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_metric_stale_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "G"
@@ -1779,7 +1779,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (increase(tenant_tier2_resolved_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s])) or on(tenant_id, priority, service_instance_id, k8s_pod_name) (max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_state{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}) != 0) * 0",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_metric_resolved_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "H"
@@ -1789,7 +1789,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (increase(tenant_tier3_evaluate_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s])) or on(tenant_id, priority, service_instance_id, k8s_pod_name) (max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_state{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}) != 0) * 0",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_metric_evaluate_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "I"
