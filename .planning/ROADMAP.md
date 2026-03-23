@@ -179,10 +179,12 @@ Plans:
   3. Follower pods export tenant metrics (non-zero values queryable by pod label) while `snmp_gauge`/`snmp_info` remain absent on follower pods
   4. `tenant_state` gauge values for all 4 enum states (0=NotReady, 1=Healthy, 2=Resolved, 3=Unresolved) are verified against controlled evaluation fixture outcomes
   5. `tenant_gauge_duration_milliseconds` histogram P99 is present in Prometheus and reports a value greater than zero
-**Plans:** TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 75-01: TBD
+- [ ] 75-01-PLAN.md — Smoke test (all 8 instruments) + NotReady path + report.sh category
+- [ ] 75-02-PLAN.md — Resolved path + Healthy path with P99 histogram
+- [ ] 75-03-PLAN.md — Unresolved path with command counters + all-instances export
 
 ---
 
@@ -242,6 +244,6 @@ Plans:
 | 74. Grafana Dashboard Panel | v2.4 | 1/1 | Complete | 2026-03-23 |
 | 75. E2E Validation Scenarios | v2.4 | 0/? | Not started | - |
 
----
+*Last updated: 2026-03-23 — Phase 75 planned (3 plans, 1 wave)*
 *Roadmap created: 2026-03-10*
 *Last updated: 2026-03-23 — Phase 74 complete (1 plan, verified 5/5)*
