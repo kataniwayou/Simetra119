@@ -4,16 +4,17 @@
 #
 # Resolved path (tier=2) fires when ALL resolved holders are violated (both res OIDs < Min:1 = value 0).
 # Evaluation stops at tier=2 -- no tier=3 or tier=4, no commands dispatched.
-# tenant_state gauge = 2 (Resolved).
+# tenant_evaluation_state gauge = 2 (Resolved).
+#
+# v2.5: All metrics recorded as percentage gauges at single exit point after state determined.
+# Command percentages are 0 on Resolved path (dispatch loop does not run).
 #
 # Sub-assertions:
-#   TVM-03A: tenant_state gauge == 2 (Resolved)
+#   TVM-03A: tenant_evaluation_state gauge == 2 (Resolved)
 #   TVM-03B: tenant_evaluation_duration_milliseconds_count delta > 0 (evaluation ran during Resolved)
-#   TVM-03C: tenant_command_dispatched_total delta == 0 (no commands at tier=2)
-#
-# NOTE on tier counters: During the Resolved path, tier2_resolved increments per non-violated
-# resolved count (which may be 0 when ALL resolved are violated). These counters are not reliably
-# assertable for this path. The assertion set is: state + duration + no-commands.
+#   TVM-03C: tenant_command_dispatched_percent == 0 (no dispatch on Resolved path)
+#   TVM-03D: tenant_metric_resolved_percent > 0 (both res OIDs violated = 100% resolved violation)
+#   TVM-03E: tenant_metric_stale_percent gauge present (confirms gauge recorded for Resolved path)
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
@@ -70,37 +71,31 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Snapshot baselines AFTER state is Resolved (avoids prior-scenario carry-over)
+# Snapshot duration baseline AFTER state is Resolved
+# (histogram counter is still monotonic -- delta approach valid)
 # ---------------------------------------------------------------------------
 
 BEFORE_DURATION=$(snapshot_counter "tenant_evaluation_duration_milliseconds_count" 'tenant_id="e2e-pss-tenant",priority="1"')
-BEFORE_DISPATCHED=$(snapshot_counter "tenant_command_dispatched_total" 'tenant_id="e2e-pss-tenant",priority="1"')
-log_info "TVM-03: Baselines (post-Resolved) -- duration_count=${BEFORE_DURATION} dispatched=${BEFORE_DISPATCHED}"
+log_info "TVM-03: Baseline (post-Resolved) -- duration_count=${BEFORE_DURATION}"
 
-log_info "TVM-03: Waiting 10s to accumulate counter deltas in Resolved state..."
-sleep 10
-
-# ---------------------------------------------------------------------------
-# Snapshot after values
-# ---------------------------------------------------------------------------
+log_info "TVM-03: Waiting 5s to accumulate duration histogram increments..."
+sleep 5
 
 AFTER_DURATION=$(snapshot_counter "tenant_evaluation_duration_milliseconds_count" 'tenant_id="e2e-pss-tenant",priority="1"')
-AFTER_DISPATCHED=$(snapshot_counter "tenant_command_dispatched_total" 'tenant_id="e2e-pss-tenant",priority="1"')
 DELTA_DURATION=$((AFTER_DURATION - BEFORE_DURATION))
-DELTA_DISPATCHED=$((AFTER_DISPATCHED - BEFORE_DISPATCHED))
-log_info "TVM-03: After -- duration_count=${AFTER_DURATION} delta=${DELTA_DURATION} dispatched=${AFTER_DISPATCHED} delta=${DELTA_DISPATCHED}"
+log_info "TVM-03: After -- duration_count=${AFTER_DURATION} delta=${DELTA_DURATION}"
 
 # ---------------------------------------------------------------------------
-# TVM-03A: tenant_state gauge == 2 (Resolved)
+# TVM-03A: tenant_evaluation_state gauge == 2 (Resolved)
 # ---------------------------------------------------------------------------
 
-STATE=$(query_prometheus 'tenant_state{tenant_id="e2e-pss-tenant"}' \
+STATE=$(query_prometheus 'tenant_evaluation_state{tenant_id="e2e-pss-tenant"}' \
     | jq -r '.data.result[0].value[1] // "-1"' | cut -d. -f1)
-log_info "TVM-03A: tenant_state=${STATE} (expected 2)"
+log_info "TVM-03A: tenant_evaluation_state=${STATE} (expected 2)"
 if [ "$STATE" = "2" ]; then
-    record_pass "TVM-03A: tenant_state=2 (Resolved) when all resolved holders violated" "state=${STATE}"
+    record_pass "TVM-03A: tenant_evaluation_state=2 (Resolved) when all resolved holders violated" "state=${STATE}"
 else
-    record_fail "TVM-03A: tenant_state=2 (Resolved) when all resolved holders violated" "state=${STATE} expected=2"
+    record_fail "TVM-03A: tenant_evaluation_state=2 (Resolved) when all resolved holders violated" "state=${STATE} expected=2"
 fi
 
 # ---------------------------------------------------------------------------
@@ -113,13 +108,45 @@ assert_delta_gt "$DELTA_DURATION" 0 \
     "delta=${DELTA_DURATION}"
 
 # ---------------------------------------------------------------------------
-# TVM-03C: tenant_command_dispatched_total delta == 0
-# Evaluation stops at tier=2 -- no commands dispatched
+# TVM-03C: tenant_command_dispatched_percent == 0
+# No dispatch on Resolved path (dispatch loop does not run)
 # ---------------------------------------------------------------------------
 
-assert_delta_eq "$DELTA_DISPATCHED" 0 \
-    "TVM-03C: no commands dispatched during Resolved path (tier=2 stops evaluation)" \
-    "delta=${DELTA_DISPATCHED} expected=0"
+DISPATCHED_PCT=$(query_prometheus 'tenant_command_dispatched_percent{tenant_id="e2e-pss-tenant"}' \
+    | jq -r '.data.result[0].value[1] // "-1"')
+log_info "TVM-03C: dispatched_percent=${DISPATCHED_PCT}"
+if echo "$DISPATCHED_PCT" | awk '{exit ($1 == 0 || $1 == "0") ? 0 : 1}'; then
+    record_pass "TVM-03C: dispatched_percent=0 during Resolved path (no commands)" "dispatched_percent=${DISPATCHED_PCT}"
+else
+    record_fail "TVM-03C: dispatched_percent=0 during Resolved path (no commands)" "dispatched_percent=${DISPATCHED_PCT} expected=0"
+fi
+
+# ---------------------------------------------------------------------------
+# TVM-03D: tenant_metric_resolved_percent > 0
+# Both resolved OIDs are violated -> 100% resolved violation
+# ---------------------------------------------------------------------------
+
+RESOLVED_PCT=$(query_prometheus 'tenant_metric_resolved_percent{tenant_id="e2e-pss-tenant"}' \
+    | jq -r '.data.result[0].value[1] // "0"')
+log_info "TVM-03D: resolved_percent=${RESOLVED_PCT}"
+if echo "$RESOLVED_PCT" | awk '{exit ($1 > 0) ? 0 : 1}'; then
+    record_pass "TVM-03D: resolved_percent > 0 during Resolved path (both res OIDs violated)" "resolved_percent=${RESOLVED_PCT}"
+else
+    record_fail "TVM-03D: resolved_percent > 0 during Resolved path (both res OIDs violated)" "resolved_percent=${RESOLVED_PCT} expected>0"
+fi
+
+# ---------------------------------------------------------------------------
+# TVM-03E: tenant_metric_stale_percent gauge present
+# Confirms gauge was recorded for the Resolved path
+# ---------------------------------------------------------------------------
+
+STALE_COUNT=$(query_prometheus 'tenant_metric_stale_percent{tenant_id="e2e-pss-tenant"}' \
+    | jq -r '.data.result | length')
+if [ "$STALE_COUNT" -gt 0 ]; then
+    record_pass "TVM-03E: stale_percent gauge present during Resolved path" "series_count=${STALE_COUNT}"
+else
+    record_fail "TVM-03E: stale_percent gauge present during Resolved path" "series_count=0"
+fi
 
 # ---------------------------------------------------------------------------
 # Cleanup: clear OID overrides, restore original ConfigMap
