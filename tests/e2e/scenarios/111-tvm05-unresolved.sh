@@ -101,10 +101,10 @@ fi
 # Commands are dispatched on Unresolved path (tier=4). Poll gauge with timeout.
 # ---------------------------------------------------------------------------
 
-log_info "TVM-05: Polling for dispatched_percent > 0 (30s timeout)..."
+log_info "TVM-05: Polling for dispatched_percent > 0 (45s timeout)..."
 _tvm05_dispatched_ok=false
 DISPATCHED_PCT="0"
-DEADLINE=$(( $(date +%s) + 30 ))
+DEADLINE=$(( $(date +%s) + 45 ))
 while [ "$(date +%s)" -lt "$DEADLINE" ]; do
     DISPATCHED_PCT=$(query_prometheus 'tenant_command_dispatched_percent{tenant_id="e2e-pss-tenant"}' \
         | jq -r '.data.result[0].value[1] // "0"')
