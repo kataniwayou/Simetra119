@@ -26,11 +26,11 @@
 
 ### Operations Dashboard
 
-- [ ] **TDSH-01**: Tenant metrics table panel added after existing commands panels in operations dashboard
-- [ ] **TDSH-02**: Table columns: Host, Pod, Tenant, Priority, State, Dispatched, Failed, Suppressed, Stale, Resolved, Evaluate, P99 (ms), Trend
-- [ ] **TDSH-03**: State column with color-mapped enum values (green=Healthy, red=Unresolved, yellow=Resolved, grey=NotReady)
-- [ ] **TDSH-04**: Cascading Host/Pod filters applied to tenant table (existing dashboard filter variables)
-- [ ] **TDSH-05**: Trend column with delta arrows (based on business dashboard gauge table pattern)
+- [x] **TDSH-01**: Tenant metrics table panel added after existing commands panels in operations dashboard
+- [x] **TDSH-02**: Table columns: Host, Pod, Tenant, Priority, State, Dispatched, Failed, Suppressed, Stale, Resolved, Evaluate, P99 (ms), Trend
+- [x] **TDSH-03**: State column with color-mapped enum values (green=Healthy, red=Unresolved, yellow=Resolved, grey=NotReady)
+- [x] **TDSH-04**: Cascading Host/Pod filters applied to tenant table (existing dashboard filter variables)
+- [x] **TDSH-05**: Trend column with delta arrows (based on business dashboard gauge table pattern)
 ### E2E Validation
 
 - [ ] **TE2E-01**: All 8 tenant metric instruments appear in Prometheus with correct tenant_id and priority labels
@@ -66,11 +66,11 @@
 | TSJI-02 | Phase 73 | Complete |
 | TSJI-03 | Phase 73 | Complete |
 | TSJI-04 | Phase 73 | Complete |
-| TDSH-01 | Phase 74 | Pending |
-| TDSH-02 | Phase 74 | Pending |
-| TDSH-03 | Phase 74 | Pending |
-| TDSH-04 | Phase 74 | Pending |
-| TDSH-05 | Phase 74 | Pending |
+| TDSH-01 | Phase 74 | Complete |
+| TDSH-02 | Phase 74 | Complete |
+| TDSH-03 | Phase 74 | Complete |
+| TDSH-04 | Phase 74 | Complete |
+| TDSH-05 | Phase 74 | Complete |
 | TE2E-01 | Phase 75 | Pending |
 | TE2E-02 | Phase 75 | Pending |
 | TE2E-03 | Phase 75 | Pending |
