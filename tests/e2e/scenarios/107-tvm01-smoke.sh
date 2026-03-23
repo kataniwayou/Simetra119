@@ -1,21 +1,27 @@
 # Scenario 107: TVM-01 Smoke -- All 8 tenant metric instruments present with correct labels
 # Uses tenant-cfg06-pss-single.yaml (e2e-pss-tenant at Priority=1, IntervalSeconds=1, GraceMultiplier=2.0)
 #
-# Purpose: Verify that all 8 TenantMetricService OTel instruments are exported to Prometheus
-# with tenant_id and priority labels. Also verifies TE2E-02 stale path by triggering one stale
-# OID and asserting tenant_tier1_stale_total increments.
+# Purpose: Verify that all 8 v2.5 TenantMetricService OTel instruments are exported to Prometheus
+# with tenant_id and priority labels. Also verifies stale path by triggering one stale OID and
+# asserting tenant_metric_stale_percent is > 0. Confirms old v2.4 counters are absent.
 #
 # Sub-assertions:
-#   TVM-01A: tenant_tier1_stale_total{tenant_id="e2e-pss-tenant"} present
-#   TVM-01B: tenant_tier2_resolved_total{tenant_id="e2e-pss-tenant"} present
-#   TVM-01C: tenant_tier3_evaluate_total{tenant_id="e2e-pss-tenant"} present
-#   TVM-01D: tenant_command_dispatched_total{tenant_id="e2e-pss-tenant"} present
-#   TVM-01E: tenant_command_failed_total{tenant_id="e2e-pss-tenant"} present
-#   TVM-01F: tenant_command_suppressed_total{tenant_id="e2e-pss-tenant"} present
-#   TVM-01G: tenant_state{tenant_id="e2e-pss-tenant"} present
+#   TVM-01A: tenant_metric_stale_percent{tenant_id="e2e-pss-tenant"} present
+#   TVM-01B: tenant_metric_resolved_percent{tenant_id="e2e-pss-tenant"} present
+#   TVM-01C: tenant_metric_evaluate_percent{tenant_id="e2e-pss-tenant"} present
+#   TVM-01D: tenant_command_dispatched_percent{tenant_id="e2e-pss-tenant"} present
+#   TVM-01E: tenant_command_failed_percent{tenant_id="e2e-pss-tenant"} present
+#   TVM-01F: tenant_command_suppressed_percent{tenant_id="e2e-pss-tenant"} present
+#   TVM-01G: tenant_evaluation_state{tenant_id="e2e-pss-tenant"} present
 #   TVM-01H: tenant_evaluation_duration_milliseconds_count{tenant_id="e2e-pss-tenant"} present
-#   TVM-01I: priority label present and equals "1" on tenant_state series
-#   TVM-01J: tenant_tier1_stale_total increments after sim_set_oid_stale (TE2E-02 stale path)
+#   TVM-01I: priority label present and equals "1" on tenant_evaluation_state series
+#   TVM-01J: tenant_metric_stale_percent > 0 after sim_set_oid_stale (TE2E-02 stale path)
+#   TVM-01K: tenant_tier1_stale_total absent (v2.4 counter removed)
+#   TVM-01L: tenant_tier2_resolved_total absent (v2.4 counter removed)
+#   TVM-01M: tenant_tier3_evaluate_total absent (v2.4 counter removed)
+#   TVM-01N: tenant_command_dispatched_total absent (v2.4 counter removed)
+#   TVM-01O: tenant_command_failed_total absent (v2.4 counter removed)
+#   TVM-01P: tenant_command_suppressed_total absent (v2.4 counter removed)
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 SCENARIO_NAME="TVM-01: Tenant metric smoke test"
@@ -76,32 +82,22 @@ _tvm01_assert_metric() {
     fi
 }
 
-log_info "TVM-01: Asserting all 8 tenant metric instruments present..."
-_tvm01_assert_metric "tenant_tier1_stale_total"                          "A"
-_tvm01_assert_metric "tenant_tier2_resolved_total"                       "B"
-_tvm01_assert_metric "tenant_tier3_evaluate_total"                       "C"
-_tvm01_assert_metric "tenant_command_dispatched_total"                   "D"
-
-# TVM-01E: tenant_command_failed_total only appears after the first SET command failure
-# (OTel counters do not register until the first Add call). Poll briefly; if absent,
-# record_pass with a note -- absence means no SET failures have occurred, which is correct.
-log_info "TVM-01E: Polling for tenant_command_failed_total (15s, absent=expected OTel behavior)..."
-if poll_until_exists 15 3 "tenant_command_failed_total"; then
-    _tvm01_assert_metric "tenant_command_failed_total" "E"
-else
-    record_pass "TVM-01E: tenant_command_failed_total absent (correct -- OTel counter only appears after first SET failure; none have occurred)" "metric=tenant_command_failed_total absent=expected"
-fi
-
-_tvm01_assert_metric "tenant_command_suppressed_total"                   "F"
-_tvm01_assert_metric "tenant_state"                                      "G"
+log_info "TVM-01: Asserting all 8 v2.5 tenant metric instruments present..."
+_tvm01_assert_metric "tenant_metric_stale_percent"                       "A"
+_tvm01_assert_metric "tenant_metric_resolved_percent"                    "B"
+_tvm01_assert_metric "tenant_metric_evaluate_percent"                    "C"
+_tvm01_assert_metric "tenant_command_dispatched_percent"                 "D"
+_tvm01_assert_metric "tenant_command_failed_percent"                     "E"
+_tvm01_assert_metric "tenant_command_suppressed_percent"                 "F"
+_tvm01_assert_metric "tenant_evaluation_state"                           "G"
 _tvm01_assert_metric "tenant_evaluation_duration_milliseconds_count"     "H"
 
 # ---------------------------------------------------------------------------
-# TVM-01I: priority label present and equals "1" on tenant_state series
+# TVM-01I: priority label present and equals "1" on tenant_evaluation_state series
 # ---------------------------------------------------------------------------
 
-log_info "TVM-01: Checking priority label on tenant_state series..."
-PRIORITY=$(query_prometheus 'tenant_state{tenant_id="e2e-pss-tenant"}' | jq -r '.data.result[0].metric.priority // ""')
+log_info "TVM-01: Checking priority label on tenant_evaluation_state series..."
+PRIORITY=$(query_prometheus 'tenant_evaluation_state{tenant_id="e2e-pss-tenant"}' | jq -r '.data.result[0].metric.priority // ""')
 if [ "$PRIORITY" = "1" ]; then
     record_pass "TVM-01I: priority label present and correct" "priority=${PRIORITY}"
 else
@@ -109,13 +105,10 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# TVM-01J: tier1_stale_total increments after stale OID (TE2E-02 stale path)
+# TVM-01J: stale_percent > 0 after stale OID (TE2E-02 stale path)
 # Tenant is in Healthy state; setting one OID stale triggers tier=1 detection.
+# Gauges are always present after first recording -- query directly (no poll_until needed).
 # ---------------------------------------------------------------------------
-
-log_info "TVM-01: Snapshotting tier1_stale_total baseline..."
-STALE_BEFORE=$(snapshot_counter "tenant_tier1_stale_total" 'tenant_id="e2e-pss-tenant",priority="1"')
-log_info "TVM-01: Baseline stale_before=${STALE_BEFORE}"
 
 log_info "TVM-01: Setting OID 5.1 to stale (NoSuchInstance)..."
 sim_set_oid_stale "5.1"
@@ -128,22 +121,40 @@ else
     sleep 10
 fi
 
-# Use poll_until to wait for the Prometheus counter to exceed the baseline.
-# This avoids the race where the log fires but the scrape hasn't propagated yet,
-# and also handles the case where the baseline already included prior increments
-# from earlier cycles -- we wait until the counter genuinely advances beyond it.
-log_info "TVM-01: Polling for tier1_stale_total to exceed baseline=${STALE_BEFORE} (30s timeout)..."
-if poll_until 30 2 "tenant_tier1_stale_total" 'tenant_id="e2e-pss-tenant",priority="1"' "$STALE_BEFORE"; then
-    STALE_AFTER=$(snapshot_counter "tenant_tier1_stale_total" 'tenant_id="e2e-pss-tenant",priority="1"')
-    STALE_DELTA=$((STALE_AFTER - STALE_BEFORE))
-    log_info "TVM-01: stale_after=${STALE_AFTER} delta=${STALE_DELTA}"
-    record_pass "TVM-01J: tier1_stale_total increments on stale OID" "delta=${STALE_DELTA} before=${STALE_BEFORE} after=${STALE_AFTER}"
+# Query stale_percent gauge directly -- gauges always have a value after first recording.
+# After a stale OID cycle, stale_percent should be non-zero.
+VALUE=$(query_prometheus 'tenant_metric_stale_percent{tenant_id="e2e-pss-tenant"}' | jq -r '.data.result[0].value[1] // "0"')
+log_info "TVM-01: tenant_metric_stale_percent=${VALUE}"
+
+if echo "$VALUE" | awk '{exit ($1 > 0) ? 0 : 1}'; then
+    record_pass "TVM-01J: tenant_metric_stale_percent > 0 after stale OID" "stale_percent=${VALUE}"
 else
-    STALE_AFTER=$(snapshot_counter "tenant_tier1_stale_total" 'tenant_id="e2e-pss-tenant",priority="1"')
-    STALE_DELTA=$((STALE_AFTER - STALE_BEFORE))
-    log_info "TVM-01: stale_after=${STALE_AFTER} delta=${STALE_DELTA}"
-    record_fail "TVM-01J: tier1_stale_total increments on stale OID" "delta=${STALE_DELTA} before=${STALE_BEFORE} after=${STALE_AFTER} counter did not exceed baseline within 30s"
+    record_fail "TVM-01J: tenant_metric_stale_percent > 0 after stale OID" "stale_percent=${VALUE} expected>0"
 fi
+
+# ---------------------------------------------------------------------------
+# TVM-01K through TVM-01P: Assert old v2.4 counter names are ABSENT
+# ---------------------------------------------------------------------------
+
+_tvm01_assert_absent() {
+    local metric="$1"
+    local sub_id="$2"
+    local count
+    count=$(query_prometheus "{__name__=\"${metric}\",tenant_id=\"e2e-pss-tenant\"}" | jq -r '.data.result | length')
+    if [ "$count" -eq 0 ]; then
+        record_pass "TVM-01${sub_id}: ${metric} absent (v2.4 counter removed)" "series_count=0"
+    else
+        record_fail "TVM-01${sub_id}: ${metric} absent (v2.4 counter removed)" "metric=${metric} series_count=${count} expected=0"
+    fi
+}
+
+log_info "TVM-01: Asserting v2.4 counter names absent..."
+_tvm01_assert_absent "tenant_tier1_stale_total"         "K"
+_tvm01_assert_absent "tenant_tier2_resolved_total"      "L"
+_tvm01_assert_absent "tenant_tier3_evaluate_total"      "M"
+_tvm01_assert_absent "tenant_command_dispatched_total"  "N"
+_tvm01_assert_absent "tenant_command_failed_total"      "O"
+_tvm01_assert_absent "tenant_command_suppressed_total"  "P"
 
 # ---------------------------------------------------------------------------
 # Cleanup: clear OID overrides, restore original ConfigMap
