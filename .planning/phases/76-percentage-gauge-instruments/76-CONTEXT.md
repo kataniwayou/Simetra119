@@ -6,32 +6,27 @@
 <domain>
 ## Phase Boundary
 
-Replace 6 counter instruments with 6 percentage gauge instruments in TenantMetricService. Fix resolved direction to measure violated holders. Preserve tenant_state gauge and tenant_evaluation_duration_milliseconds histogram unchanged. Update ITenantMetricService interface and unit tests.
+Replace 6 counter instruments with 6 percentage gauge instruments in TenantMetricService. Fix resolved direction to measure violated holders. Rename tenant.state to tenant.evaluation.state. Update ITenantMetricService interface and unit tests.
 
 </domain>
 
 <decisions>
 ## Implementation Decisions
 
-### Claude's Discretion
+### Gauge naming convention
+- Metric category: `tenant.metric.stale.percent`, `tenant.metric.resolved.percent`, `tenant.metric.evaluate.percent`
+- Command category: `tenant.command.dispatched.percent`, `tenant.command.failed.percent`, `tenant.command.suppressed.percent`
+- State renamed: `tenant.state` → `tenant.evaluation.state` (consistent namespace for future additions)
+- Duration unchanged: `tenant.evaluation.duration.milliseconds` (already has evaluation prefix)
 
-**Gauge naming convention:**
-- Follow existing OTel dot-separated convention: `tenant.stale.percent`, `tenant.resolved.percent`, `tenant.evaluate.percent`, `tenant.dispatched.percent`, `tenant.failed.percent`, `tenant.suppressed.percent`
-- Prometheus auto-converts to: `tenant_stale_percent`, `tenant_resolved_percent`, etc.
-- No `_total` suffix (gauges, not counters)
-- Keep `tenant_` prefix consistent with existing `tenant_state` and `tenant_evaluation_duration_milliseconds`
+### Edge case: zero denominator
+- Record 0.0 — tenant validation prevents this case in practice (rejects tenants with missing role metrics)
 
-**Edge case: zero denominator:**
-- When denominator is 0 (e.g., tenant has no resolved-role metrics), record `0.0` — not NaN, not skip
-- Rationale: 0% violation is the correct interpretation when there are no metrics to violate
-- For commands: if total_commands = 0 and tenant reaches tier 4, record 0% for all command percentages (no commands to dispatch)
-- This avoids NaN in Prometheus which breaks dashboard rendering and PromQL comparisons
+### Resolved metric direction
+- Numerator = violated resolved holders (not non-violated) — higher % = worse, consistent with evaluate
 
-**Method signature design:**
-- Individual methods per metric: `RecordStalePercent(tenantId, priority, value)`, `RecordResolvedPercent(...)`, etc.
-- Mirrors the existing pattern where each instrument has its own method (IncrementTier1Stale, IncrementTier2Resolved, etc.)
-- Percentage calculation happens in SnapshotJob (caller), not in TenantMetricService (recorder) — service just records pre-computed doubles
-- This keeps TenantMetricService as a thin recording layer (same role as PipelineMetricService)
+### Method signatures
+- Claude's discretion — pick whatever is cleanest
 
 </decisions>
 
@@ -39,9 +34,8 @@ Replace 6 counter instruments with 6 percentage gauge instruments in TenantMetri
 ## Specific Ideas
 
 - Gauge values are doubles in range 0.0 to 100.0
-- TenantMetricService constructor creates `Gauge<double>` instruments (not `Counter<long>`)
-- Unit tests verify: gauge creation, method signatures accept double, correct instrument names, labels present
-- The counting helper removal (CLN-02) means removing CountStaleHolders/CountResolvedNonViolated/CountEvaluateViolated and replacing with percentage-computing equivalents in Phase 77
+- Percentage calculation happens in caller (SnapshotJob), not in TenantMetricService
+- tenant.evaluation.state rename means dashboard and E2E scenarios must update (Prometheus: tenant_evaluation_state instead of tenant_state)
 
 </specifics>
 
