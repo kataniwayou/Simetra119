@@ -50,7 +50,7 @@ completed: 2026-03-23
 - **Duration:** ~15 min
 - **Started:** 2026-03-23T13:00:00Z
 - **Completed:** 2026-03-23T13:16:28Z
-- **Tasks:** 1/2 (Task 2 at checkpoint awaiting human verification)
+- **Tasks:** 2/2
 - **Files modified:** 1
 
 ## Accomplishments
@@ -62,7 +62,12 @@ completed: 2026-03-23
 
 ## Task Commits
 
-1. **Task 1: Add Tenant Status row and table panel** - `74019f8` (feat)
+1. **Task 1: Add Tenant Status row and table panel** — `74019f8` (feat)
+2. **Task 2: Human verification** — approved after orchestrator corrections
+
+**Orchestrator corrections:**
+- `eb4f019` — Added excludeByName to organize transform, switched counters from rate() to increase()[15s]
+- `87bc22c` — Widened increase to [30s], added zero-fallback `or on(...) (tenant_state != 0) * 0` for non-NotReady tenants
 
 ## Files Created/Modified
 - `deploy/grafana/dashboards/simetra-operations.json` - Added 2 panels, shifted 7 existing panels
@@ -74,11 +79,17 @@ completed: 2026-03-23
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+- Counter queries changed from `rate()` to `increase()[30s]` — user wants per-cycle integer counts
+- Added `excludeByName` to organize transform (plan specified it but executor omitted it)
+- Added zero-fallback PromQL pattern for counters: `or on(...) (tenant_state != 0) * 0`
+- NotReady tenants show blank counters; all other states show 0 or actual count
+- Docker image rebuilt and deployed during checkpoint (metrics not in Prometheus without it)
 
 ## Issues Encountered
 
-None.
+- ConfigMap initially deployed to wrong namespace (default vs simetra)
+- Grafana provisioner needed pod restart to pick up ConfigMap changes
+- Counter metrics only appear after first non-zero increment — required zero-fallback pattern
 
 ## User Setup Required
 
@@ -86,9 +97,10 @@ None - no external service configuration required. Dashboard JSON is deployed vi
 
 ## Next Phase Readiness
 
-- Task 2 (human-verify checkpoint) awaiting operator confirmation in Grafana
-- On approval: Phase 74 complete, ready for Phase 75
+- Phase 74 complete: Tenant Status table verified in Grafana
+- Ready for Phase 75: E2E validation scenarios
+- No blockers
 
 ---
 *Phase: 74-grafana-dashboard-panel*
-*Completed: 2026-03-23 (pending Task 2 verification)*
+*Completed: 2026-03-23*
