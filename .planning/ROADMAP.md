@@ -18,6 +18,7 @@
 - ✅ **v2.2 Progressive E2E Snapshot Suite** - Phases 62-65 (shipped 2026-03-22)
 - ✅ **v2.3 Metric Validity & Correctness** - Phases 66-71 (shipped 2026-03-22)
 - ✅ **v2.4 Tenant Vector Metrics** - Phases 72-75 (shipped 2026-03-23)
+- 🚧 **v2.5 Tenant Metrics Approach Modification** - Phases 76-80 (in progress)
 
 ## Phases
 
@@ -125,6 +126,67 @@ See `.planning/milestones/v2.4-ROADMAP.md` for details.
 
 ---
 
+### 🚧 v2.5 Tenant Metrics Approach Modification (In Progress)
+
+**Milestone Goal:** Replace 6 per-tenant counter instruments with 6 percentage gauges, refactor EvaluateTenant to a gather-then-decide flow that records all metrics at a single exit point, flip the resolved metric direction to measure violated holders (consistent with evaluate), and update the dashboard and E2E scenarios to match.
+
+#### Phase 76: Percentage Gauge Instruments
+
+**Goal:** TenantMetricService exposes 6 percentage gauges (replacing 6 counters), with the resolved gauge measuring violated holders, and unchanged instruments preserved intact.
+**Depends on:** Phase 75
+**Requirements:** PGA-01, PGA-02, PGA-03, PGA-04, PGA-05, PGA-06, RMD-01, UCH-01, UCH-02, CLN-01, CLN-02, UTT-02
+**Success Criteria** (what must be TRUE):
+  1. ITenantMetricService exposes 6 RecordXxxPercent methods accepting pre-computed float values; no counter increment methods remain on the interface
+  2. TenantMetricService registers 6 ObservableGauge instruments (stale, resolved, evaluate, dispatched, failed, suppressed percent) and zero counter instruments for tenant tier/command metrics
+  3. Resolved percent measures violated holders (numerator = violated resolved), not non-violated — higher value means more violations
+  4. tenant_state gauge and tenant_evaluation_duration_milliseconds histogram are registered unchanged; unit tests confirm their existence and behaviour are unaffected
+  5. TenantMetricService unit tests pass asserting gauge API, percentage values, and correct resolved direction
+**Plans:** TBD
+
+#### Phase 77: Gather-Then-Decide Evaluation Flow
+
+**Goal:** EvaluateTenant collects all tier results (stale count, resolved violations, evaluate violations, command outcomes) before making any state decision, then records all metrics together at exit.
+**Depends on:** Phase 76
+**Requirements:** EFR-01, EFR-02, EFR-03, UTT-01
+**Success Criteria** (what must be TRUE):
+  1. EvaluateTenant has exactly one early return path (NotReady); all other paths complete all tier computations before branching to state determination
+  2. All 6 percentage gauge calls and the state gauge call occur at a single exit point after state is determined — no metrics recorded mid-flow
+  3. tenant_state is derived from gathered tier results and percentages, not from which tier caused an early return
+  4. SnapshotJob unit tests pass asserting percentage values and state correctness for each evaluation path (Healthy, Resolved, Unresolved)
+**Plans:** TBD
+
+#### Phase 78: Counter Reference Cleanup
+
+**Goal:** All residual counter references, counting helper methods, and dead code are removed from SnapshotJob and CommandWorkerService after the metric service and flow changes land.
+**Depends on:** Phase 77
+**Requirements:** CLN-03
+**Success Criteria** (what must be TRUE):
+  1. No counter increment call sites remain in SnapshotJob or CommandWorkerService; no orphaned counting helper methods exist in either class
+  2. Build compiles cleanly with no warnings related to removed counter members
+**Plans:** TBD
+
+#### Phase 79: Dashboard Percentage Update
+
+**Goal:** The Operations dashboard Tenant Status table displays percentage values instead of raw counts, with PromQL queries updated from increase() counter queries to direct gauge queries.
+**Depends on:** Phase 76
+**Requirements:** DSH-01, DSH-02
+**Success Criteria** (what must be TRUE):
+  1. Tenant Status table columns show percentage values (0-100) for stale, resolved, evaluate, dispatched, failed, suppressed — not raw counts
+  2. All 6 column PromQL queries reference the gauge instrument names directly (no increase() or rate() wrapping)
+**Plans:** TBD
+
+#### Phase 80: E2E Scenario Updates
+
+**Goal:** E2E scenarios 107-112 assert on percentage gauge values and confirm the 6 percentage gauge instruments are present, replacing counter delta assertions.
+**Depends on:** Phase 78
+**Requirements:** E2E-01, E2E-02
+**Success Criteria** (what must be TRUE):
+  1. Scenarios 107-112 each pass asserting on percentage gauge values (0-100 range) appropriate to the scenario's tenant state
+  2. Smoke test confirms all 6 percentage gauge instrument names are present in Prometheus; no counter instrument names from v2.4 appear
+**Plans:** TBD
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -180,7 +242,12 @@ See `.planning/milestones/v2.4-ROADMAP.md` for details.
 | 73. SnapshotJob Instrumentation | v2.4 | 2/2 | Complete | 2026-03-23 |
 | 74. Grafana Dashboard Panel | v2.4 | 1/1 | Complete | 2026-03-23 |
 | 75. E2E Validation Scenarios | v2.4 | 3/3 | Complete | 2026-03-23 |
+| 76. Percentage Gauge Instruments | v2.5 | 0/TBD | Not started | - |
+| 77. Gather-Then-Decide Evaluation Flow | v2.5 | 0/TBD | Not started | - |
+| 78. Counter Reference Cleanup | v2.5 | 0/TBD | Not started | - |
+| 79. Dashboard Percentage Update | v2.5 | 0/TBD | Not started | - |
+| 80. E2E Scenario Updates | v2.5 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-23 — Phase 75 complete (3 plans, verified 5/5)*
+*Last updated: 2026-03-23 — v2.5 roadmap added (Phases 76-80)*

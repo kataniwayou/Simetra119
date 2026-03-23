@@ -63,33 +63,33 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EFR-01 | TBD | Pending |
-| EFR-02 | TBD | Pending |
-| EFR-03 | TBD | Pending |
-| PGA-01 | TBD | Pending |
-| PGA-02 | TBD | Pending |
-| PGA-03 | TBD | Pending |
-| PGA-04 | TBD | Pending |
-| PGA-05 | TBD | Pending |
-| PGA-06 | TBD | Pending |
-| RMD-01 | TBD | Pending |
-| CLN-01 | TBD | Pending |
-| CLN-02 | TBD | Pending |
-| CLN-03 | TBD | Pending |
-| UCH-01 | TBD | Pending |
-| UCH-02 | TBD | Pending |
-| DSH-01 | TBD | Pending |
-| DSH-02 | TBD | Pending |
-| E2E-01 | TBD | Pending |
-| E2E-02 | TBD | Pending |
-| UTT-01 | TBD | Pending |
-| UTT-02 | TBD | Pending |
+| EFR-01 | Phase 77 | Pending |
+| EFR-02 | Phase 77 | Pending |
+| EFR-03 | Phase 77 | Pending |
+| PGA-01 | Phase 76 | Pending |
+| PGA-02 | Phase 76 | Pending |
+| PGA-03 | Phase 76 | Pending |
+| PGA-04 | Phase 76 | Pending |
+| PGA-05 | Phase 76 | Pending |
+| PGA-06 | Phase 76 | Pending |
+| RMD-01 | Phase 76 | Pending |
+| CLN-01 | Phase 76 | Pending |
+| CLN-02 | Phase 76 | Pending |
+| CLN-03 | Phase 78 | Pending |
+| UCH-01 | Phase 76 | Pending |
+| UCH-02 | Phase 76 | Pending |
+| DSH-01 | Phase 79 | Pending |
+| DSH-02 | Phase 79 | Pending |
+| E2E-01 | Phase 80 | Pending |
+| E2E-02 | Phase 80 | Pending |
+| UTT-01 | Phase 77 | Pending |
+| UTT-02 | Phase 76 | Pending |
 
 **Coverage:**
 - v2.5 requirements: 21 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 21
+- Mapped to phases: 21
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-23*
-*Last updated: 2026-03-23 — initial definition*
+*Last updated: 2026-03-23 — traceability mapped to Phases 76-80*

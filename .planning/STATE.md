@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.5 Tenant Metrics Approach Modification
+**Current focus:** v2.5 Tenant Metrics Approach Modification — Phase 76
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements for v2.5
-Last activity: 2026-03-23 — Milestone v2.5 started
+Phase: 76 of 80 (Percentage Gauge Instruments)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-03-23 — v2.5 roadmap created (Phases 76-80)
 
-Progress: Defining requirements
+Progress: [░░░░░░░░░░] 0% (v2.5)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 156 (v1.0 through v2.3, including quick tasks)
+- Total plans completed: 156 (v1.0 through v2.4, including quick tasks)
 - Average duration: ~25 min
 - Total execution time: ~43 hours
 
@@ -31,32 +31,21 @@ Progress: Defining requirements
 - run-all.sh uses sort -V for version-aware ordering (required for 100+ scenarios)
 - CommandWorkerService resolves SET response names via command map (not OID map)
 - dispatched = evaluation decision, suppressed = execution prevention, failed = runtime error
-- snmp.event.rejected = ValidationBehavior failures only (not unmapped OIDs)
-- Heartbeat produces snmp_gauge{resolved_name="Heartbeat"} (via MergeWithHeartbeatSeed)
-- v2.4: TenantMetricService uses "SnmpCollector.Tenant" meter — NOT "SnmpCollector.Leader" (would be follower-gated)
+- v2.4: TenantMetricService uses "SnmpCollector.Tenant" meter — NOT "SnmpCollector.Leader"
 - v2.4: Tier counters increment by holder/command count per cycle, not by 1
 - v2.4: Duration stopwatch inside EvaluateTenant per-tenant, not around Task.WhenAll group
-- v2.4: Prometheus label casing (tenant_id vs tenantId) must be confirmed before authoring dashboard PromQL
-- v2.4: SnapshotJob.EvaluateTenant returns TenantState; pre-tier = NotReady, tier-4 = Unresolved; both block advance gate
-- v2.4: DI registration wires ITenantMetricService → TenantMetricService (confirmed in ServiceCollectionExtensions.cs line 409)
-- v2.4: CommandRequest carries TenantId + Priority as positional params 6 and 7 for per-tenant metric tagging
-- v2.4: CommandWorkerService IncrementCommandFailed calls are additive (tenant + pipeline metrics both fire at each failure site)
 - v2.4: EvaluateTenant instrumented with RecordAndReturn at all 4 return paths (NotReady/Resolved/Healthy/Unresolved)
-- v2.4: Tier counters use count-then-loop pattern — CountX() computed once, loop calls IncrementTierX once per holder
 - v2.4: NotReady path records only state gauge + duration (no tier or command counters — design decision)
-- v2.4: Operations dashboard Tenant Status table uses columns Host, Pod, Tenant, Priority, State, Dispatched, Failed, Suppressed, Stale, Resolved, Evaluate, P99 (ms), Trend (panel id=28, row id=27)
-- v2.4: tenant_id and priority are literal snake_case tag keys in TenantMetricService (no OTel conversion needed)
-- v2.4: Resolved path (tier=2) asserts state=2 + duration delta + no commands (tier2_resolved counter NOT assertable when ALL resolved are violated)
-- v2.4: Histogram P99 PromQL: histogram_quantile(0.99, rate(tenant_evaluation_duration_milliseconds_bucket{...}[5m])) — guard NaN/+Inf
-- v2.4: ROADMAP "tenant_gauge_duration_milliseconds" is a typo; correct name is tenant_evaluation_duration_milliseconds
-- v2.4: Unresolved tier=4 path does NOT increment tier3_evaluate (evaluate IS violated, CountEvaluateNotViolated=0); use duration_count delta as proof evaluation ran
-- v2.4: All 3 replica pods export tenant metrics (SnmpCollector.Tenant meter not gated); follower identification = snmp_gauge==0 AND tenant_state>0 per pod
-- v2.4: assert_exists in common.sh cannot filter by labels (wraps in __name__=); use query_prometheus with label selector + jq result length check for label-filtered presence assertions
+- v2.4: Operations dashboard Tenant Status table panel id=28, row id=27
+- v2.5: Resolved percent numerator = violated holders (higher = worse), consistent with evaluate direction
+- v2.5: Command percentages: dispatched + failed + suppressed share total_tenant_commands as denominator
+- v2.5: Only NotReady returns early from EvaluateTenant; all other paths gather all tier results first
+- v2.5: All 6 percentage gauge calls + state gauge call recorded at single exit point after state determined
 
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-v2.3 decisions archived to milestones/v2.3-ROADMAP.md.
+v2.3 and v2.4 decisions archived to milestones/v2.3-ROADMAP.md and milestones/v2.4-ROADMAP.md.
 
 ### Blockers/Concerns
 
@@ -66,9 +55,6 @@ None.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
-| 082 | Refactor PollOptions.MetricNames to Metrics object wrapper | 2026-03-20 | 7205c05 | [082-metricnames-to-polloptions-object](./quick/082-metricnames-to-polloptions-object/) |
-| 083 | Transform E2E fixture MetricNames to Metrics object-wrapper | 2026-03-20 | d9b34ef | [083-e2e-metricnames-to-metrics-transform](./quick/083-e2e-metricnames-to-metrics-transform/) |
-| 084 | Align PSS-17c and PSS-20c --since to 10s (eliminate 2s overlap) | 2026-03-22 | 20f02aa | [084-pss-17c-20c-since-alignment](./quick/084-pss-17c-20c-since-alignment/) |
 | 085 | Reorder tenant table columns and batch metrics at exit | 2026-03-23 | 934c413 | [085-tenant-table-reorder-and-metric-timing](./quick/085-tenant-table-reorder-and-metric-timing/) |
 | 086 | Remove 5 redundant ops dashboard panels | 2026-03-23 | fded5bd | [086-remove-redundant-ops-panels](./quick/086-remove-redundant-ops-panels/) |
 | 087 | Switch Grafana to manual dashboard management | 2026-03-23 | 8c5221f | [087-grafana-manual-dashboard-mgmt](./quick/087-grafana-manual-dashboard-mgmt/) |
@@ -76,5 +62,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-23
-Stopped at: v2.5 milestone started — defining requirements
+Stopped at: v2.5 roadmap created — ready to plan Phase 76
 Resume file: None
