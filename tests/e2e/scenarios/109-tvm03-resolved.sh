@@ -47,14 +47,6 @@ log_info "TVM-03: Waiting 8s for readiness grace (6s grace + 2s margin)..."
 sleep 8
 
 # ---------------------------------------------------------------------------
-# Snapshot baselines before triggering Resolved path
-# ---------------------------------------------------------------------------
-
-BEFORE_DURATION=$(snapshot_counter "tenant_evaluation_duration_milliseconds_count" 'tenant_id="e2e-pss-tenant",priority="1"')
-BEFORE_DISPATCHED=$(snapshot_counter "tenant_command_dispatched_total" 'tenant_id="e2e-pss-tenant",priority="1"')
-log_info "TVM-03: Baselines -- duration_count=${BEFORE_DURATION} dispatched=${BEFORE_DISPATCHED}"
-
-# ---------------------------------------------------------------------------
 # Trigger Resolved path: both resolved OIDs violated (both < Min:1 = value 0)
 # T2 eval remains at 10 (in-range) -- tier=2 fires before tier=3 check
 # ---------------------------------------------------------------------------
@@ -70,9 +62,6 @@ sim_set_oid "5.3" "0"    # T2 res2 violated (< Min:1)
 log_info "TVM-03: Polling for tier=2 log (all resolved violated, 45s timeout)..."
 if poll_until_log 45 1 "e2e-pss-tenant.*tier=2" 15; then
     log_info "TVM-03: tier=2 log confirmed for e2e-pss-tenant"
-    # Sleep after log confirmation to allow the Prometheus scrape interval to
-    # capture the new state. Without this, query_prometheus may return the
-    # previous scrape's state value (1=Healthy) rather than the updated 2=Resolved.
     log_info "TVM-03: Sleeping 15s for Prometheus scrape to propagate state=2..."
     sleep 15
 else
@@ -80,7 +69,15 @@ else
     sleep 15
 fi
 
-log_info "TVM-03: Waiting 10s to accumulate counter deltas..."
+# ---------------------------------------------------------------------------
+# Snapshot baselines AFTER state is Resolved (avoids prior-scenario carry-over)
+# ---------------------------------------------------------------------------
+
+BEFORE_DURATION=$(snapshot_counter "tenant_evaluation_duration_milliseconds_count" 'tenant_id="e2e-pss-tenant",priority="1"')
+BEFORE_DISPATCHED=$(snapshot_counter "tenant_command_dispatched_total" 'tenant_id="e2e-pss-tenant",priority="1"')
+log_info "TVM-03: Baselines (post-Resolved) -- duration_count=${BEFORE_DURATION} dispatched=${BEFORE_DISPATCHED}"
+
+log_info "TVM-03: Waiting 10s to accumulate counter deltas in Resolved state..."
 sleep 10
 
 # ---------------------------------------------------------------------------
