@@ -19,10 +19,10 @@
 
 ### SnapshotJob Integration
 
-- [ ] **TSJI-01**: All tier counters incremented at correct exit points inside EvaluateTenant (tier-1 stale, tier-2 resolved gate, tier-3 evaluate check, tier-4 command dispatch)
-- [ ] **TSJI-02**: tenant_state gauge recorded after each evaluation cycle with correct enum value
-- [ ] **TSJI-03**: Stopwatch per-tenant inside EvaluateTenant records histogram duration (inside parallel group, not outside)
-- [ ] **TSJI-04**: Command outcome counters (dispatched, failed, suppressed) incremented per-tenant inside SnapshotJob evaluation flow
+- [x] **TSJI-01**: All tier counters incremented at correct exit points inside EvaluateTenant (tier-1 stale, tier-2 resolved gate, tier-3 evaluate check, tier-4 command dispatch)
+- [x] **TSJI-02**: tenant_state gauge recorded after each evaluation cycle with correct enum value
+- [x] **TSJI-03**: Stopwatch per-tenant inside EvaluateTenant records histogram duration (inside parallel group, not outside)
+- [x] **TSJI-04**: Command outcome counters (dispatched, failed, suppressed) incremented per-tenant inside SnapshotJob evaluation flow
 
 ### Operations Dashboard
 
@@ -64,10 +64,10 @@
 | TMET-07 | Phase 72 | Complete |
 | TMET-08 | Phase 72 | Complete |
 | TMET-09 | Phase 72 | Complete |
-| TSJI-01 | Phase 73 | Pending |
-| TSJI-02 | Phase 73 | Pending |
-| TSJI-03 | Phase 73 | Pending |
-| TSJI-04 | Phase 73 | Pending |
+| TSJI-01 | Phase 73 | Complete |
+| TSJI-02 | Phase 73 | Complete |
+| TSJI-03 | Phase 73 | Complete |
+| TSJI-04 | Phase 73 | Complete |
 | TDSH-01 | Phase 74 | Pending |
 | TDSH-02 | Phase 74 | Pending |
 | TDSH-03 | Phase 74 | Pending |

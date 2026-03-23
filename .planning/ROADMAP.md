@@ -150,8 +150,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 73-01-PLAN.md — Extend CommandRequest with TenantId/Priority, wire ITenantMetricService into CommandWorkerService
-- [ ] 73-02-PLAN.md — Instrument EvaluateTenant with counting helpers, Stopwatch, RecordAndReturn, and unit tests
+- [x] 73-01-PLAN.md — Extend CommandRequest with TenantId/Priority, wire ITenantMetricService into CommandWorkerService
+- [x] 73-02-PLAN.md — Instrument EvaluateTenant with counting helpers, Stopwatch, RecordAndReturn, and unit tests
 
 #### Phase 74: Grafana Dashboard Panel
 
@@ -239,10 +239,10 @@ Plans:
 | 70. Label Correctness | v2.3 | 2/2 | Complete | 2026-03-22 |
 | 71. Negative Proofs | v2.3 | 1/1 | Complete | 2026-03-22 |
 | 72. TenantMetricService & Meter Registration | v2.4 | 2/2 | Complete | 2026-03-23 |
-| 73. SnapshotJob Instrumentation | v2.4 | 0/2 | Not started | - |
+| 73. SnapshotJob Instrumentation | v2.4 | 2/2 | Complete | 2026-03-23 |
 | 74. Grafana Dashboard Panel | v2.4 | 0/? | Not started | - |
 | 75. E2E Validation Scenarios | v2.4 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-23 — Phase 73 planned (2 plans in 2 waves)*
+*Last updated: 2026-03-23 — Phase 73 complete (2 plans, 2 waves, verified 4/4)*
