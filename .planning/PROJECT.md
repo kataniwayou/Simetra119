@@ -156,23 +156,19 @@ See `.planning/milestones/v2.2-REQUIREMENTS.md` for full requirement details.
 
 See `.planning/milestones/v2.3-REQUIREMENTS.md` for full requirement details.
 
+**v2.4 Tenant Vector Metrics (shipped 2026-03-23)**
+
+- TenantMetricService: 8 OTel instruments (6 counters, 1 gauge, 1 histogram) on SnmpCollector.Tenant meter
+- All instances export tenant metrics (not leader-gated) — follower pods verified
+- EvaluateTenant instrumented: RecordAndReturn at all 4 exit points, counting helpers, per-cycle batched metrics
+- Operations dashboard Tenant Status table: 13 columns with state color mapping, trend arrows, increase()[30s] counters
+- 6 E2E scenarios (107-112) proving full instrument→Prometheus pipeline for all evaluation paths
+
+See `.planning/milestones/v2.4-REQUIREMENTS.md` for full requirement details.
+
 ### Active
 
-**v2.4 Tenant Vector Metrics**
-
-- [ ] Generic tenant metric instruments (same pattern as snmp_gauge/snmp_info — shared instruments with labels)
-- [ ] Labels: tenantId, priority (no device_name, resolved_name, oid, ip, source, snmp_type)
-- [ ] All instances export tenant metrics (leader and followers, not leader-gated)
-- [ ] tenant_tier1_stale counter — N stale holders per SnapshotJob cycle per tenant
-- [ ] tenant_tier2_resolved counter — N resolved-role metrics not violated per cycle per tenant
-- [ ] tenant_tier3_evaluate counter — N evaluate-role metrics violated per cycle per tenant
-- [ ] tenant_command_dispatched counter — N commands sent per cycle per tenant
-- [ ] tenant_command_failed counter — N commands failed per cycle per tenant
-- [ ] tenant_command_suppressed counter — N commands suppressed per cycle per tenant
-- [ ] tenant_state gauge — enum: NotReady=0, Healthy=1, Resolved=2, Unresolved=3
-- [ ] tenant_gauge_duration_milliseconds histogram — per-tenant evaluation duration in SnapshotJob
-- [ ] Operations dashboard: tenant metrics table after commands panels (based on business dashboard gauge table pattern)
-- [ ] Dashboard columns: Host, Pod, Tenant, Priority, State, Dispatched, Failed, Suppressed, Stale, Resolved, Evaluate, P99 (ms), Trend, PromQL
+(None — planning next milestone)
 
 ### Out of Scope
 
@@ -187,7 +183,7 @@ See `.planning/milestones/v2.3-REQUIREMENTS.md` for full requirement details.
 
 ## Context
 
-**Current state:** v2.2 shipped. 8,478 LOC C# source + 12,166 LOC C# tests + 1,338 LOC Python simulators + 7,532 LOC bash E2E test infrastructure. 462 unit tests passing, 68 PSS E2E scenario scripts across 3 progressive stages. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. Full E2E test harness with 68 scenarios. Two Grafana dashboards shipped. All 4 watchers follow watcher-validates-registry-stores pattern. Closed-loop tenant evaluation with SNMP SET command execution operational.
+**Current state:** v2.4 shipped. 475 unit tests passing, 112 E2E scenario scripts (01-112) across 7 categories. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. Two Grafana dashboards (business + operations) with per-tenant status table. All 4 watchers follow watcher-validates-registry-stores pattern. Closed-loop tenant evaluation with SNMP SET command execution and full per-tenant observability.
 
 **Reference project:** `src/Simetra/` is an existing SNMP monitoring system used as architectural reference. Key patterns adopted: structured logging, OTel setup, console formatter, correlation IDs, leader election, role-gated export. Key patterns replaced: custom middleware -> MediatR, device modules -> flat OID map, channels -> single shared trap channel.
 
@@ -242,4 +238,4 @@ See `.planning/milestones/v2.3-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-22 after v2.4 milestone started*
+*Last updated: 2026-03-23 after v2.4 milestone shipped*

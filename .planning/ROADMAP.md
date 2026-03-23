@@ -116,75 +116,12 @@ See `.planning/milestones/v2.3-ROADMAP.md` for details.
 
 ---
 
-### ✅ v2.4 Tenant Vector Metrics (Shipped 2026-03-23)
+<details>
+<summary>✅ v2.4 Tenant Vector Metrics (Phases 72-75) - SHIPPED 2026-03-23</summary>
 
-**Milestone Goal:** Expose per-tenant internal evaluation state from SnapshotJob as 8 OTel instruments (6 counters, 1 gauge, 1 histogram) on a third meter that exports on all instances, and surface them in a new operations dashboard table with per-pod tenant status.
+See `.planning/milestones/v2.4-ROADMAP.md` for details.
 
-#### Phase 72: TenantMetricService & Meter Registration
-
-**Goal:** The `SnmpCollector.Tenant` meter and all 8 tenant metric instruments exist as a registered singleton, exporting on both leader and follower instances — unblocking all downstream instrumentation work.
-**Depends on:** Phase 71 (v2.3 complete)
-**Requirements:** TMET-01, TMET-02, TMET-03, TMET-04, TMET-05, TMET-06, TMET-07, TMET-08, TMET-09
-**Success Criteria** (what must be TRUE):
-  1. `TenantMetricService` constructs without error and all 8 instruments are accessible by name in tests
-  2. The `SnmpCollector.Tenant` meter is registered via `AddMeter` in `ServiceCollectionExtensions` alongside the two existing meters
-  3. `TelemetryConstants.TenantMeterName` constant exists and is used by `TenantMetricService` — no magic strings
-  4. `MetricRoleGatedExporter` requires no changes — the tenant meter passes through ungated on all instances
-  5. All 6 counters, the state gauge, and the duration histogram have correct instrument names and `tenant_id`/`priority` labels confirmed by unit test construction
-**Plans:** 2 plans
-
-Plans:
-- [x] 72-01-PLAN.md — Create TenantMetricService, interface, TenantState enum, DI registration, and unit tests
-- [x] 72-02-PLAN.md — Migrate SnapshotJob from TierResult to TenantState, add ITenantMetricService injection
-
-#### Phase 73: SnapshotJob Instrumentation
-
-**Goal:** Every SnapshotJob evaluation cycle records live per-tenant counter, gauge, and histogram data to Prometheus — making the internal evaluation state observable from outside the process for the first time.
-**Depends on:** Phase 72
-**Requirements:** TSJI-01, TSJI-02, TSJI-03, TSJI-04
-**Success Criteria** (what must be TRUE):
-  1. Each of the 4 tier exit points in `EvaluateTenant` increments the correct counter by the actual holder/command count (not by 1)
-  2. `tenant_state` gauge is recorded with the correct enum value (0-3) at every tier exit, including the Healthy path
-  3. A per-tenant `Stopwatch` inside `EvaluateTenant` records histogram duration before each return — not wrapped around the `Task.WhenAll` group
-  4. Command outcome counters (dispatched, failed, suppressed) increment at the dispatch decision site inside `EvaluateTenant`, not in `CommandWorkerService`
-**Plans:** 2 plans
-
-Plans:
-- [x] 73-01-PLAN.md — Extend CommandRequest with TenantId/Priority, wire ITenantMetricService into CommandWorkerService
-- [x] 73-02-PLAN.md — Instrument EvaluateTenant with counting helpers, Stopwatch, RecordAndReturn, and unit tests
-
-#### Phase 74: Grafana Dashboard Panel
-
-**Goal:** The operations dashboard shows a real-time per-tenant per-pod status table with state color mapping, tier counter rates, P99 duration, and trend arrows — giving operators immediate visibility into evaluation health across all replicas.
-**Depends on:** Phase 73
-**Requirements:** TDSH-01, TDSH-02, TDSH-03, TDSH-04, TDSH-05
-**Success Criteria** (what must be TRUE):
-  1. A new tenant metrics table panel appears in the operations dashboard after the existing commands panels, with all 13 required columns (Host, Pod, Tenant, Priority, State, Dispatched, Failed, Suppressed, Stale, Resolved, Evaluate, P99 ms, Trend)
-  2. The State column displays color-coded text labels (green=Healthy, red=Unresolved, yellow=Resolved, grey=NotReady) driven by the enum value mapping
-  3. Existing Host and Pod dashboard filter variables cascade correctly to filter tenant table rows
-  4. The Trend column shows delta arrows derived from `delta(tenant_command_dispatched...)` via a Join by field transformation
-**Plans:** 1 plan
-
-Plans:
-- [x] 74-01-PLAN.md — Add Tenant Status row and table panel with 9 queries, state color mapping, and trend arrows
-
-#### Phase 75: E2E Validation Scenarios
-
-**Goal:** E2E scenario scripts confirm the full path from SnapshotJob evaluation through OTel export to Prometheus, verifying every instrument, all-instances export, and correct label values — proving the feature works end-to-end before v2.4 ships.
-**Depends on:** Phase 74
-**Requirements:** TE2E-01, TE2E-02, TE2E-03, TE2E-04, TE2E-05
-**Success Criteria** (what must be TRUE):
-  1. All 8 tenant metric instruments appear in Prometheus with `tenant_id` and `priority` labels after a SnapshotJob cycle completes
-  2. Tier counter increments match known evaluation paths — stale, resolved-gate, evaluate-violated, and commanded scenarios each produce the expected counter delta
-  3. Follower pods export tenant metrics (non-zero values queryable by pod label) while `snmp_gauge`/`snmp_info` remain absent on follower pods
-  4. `tenant_state` gauge values for all 4 enum states (0=NotReady, 1=Healthy, 2=Resolved, 3=Unresolved) are verified against controlled evaluation fixture outcomes
-  5. `tenant_gauge_duration_milliseconds` histogram P99 is present in Prometheus and reports a value greater than zero
-**Plans:** 3 plans
-
-Plans:
-- [x] 75-01-PLAN.md — Smoke test (all 8 instruments) + NotReady path + report.sh category
-- [x] 75-02-PLAN.md — Resolved path + Healthy path with P99 histogram
-- [x] 75-03-PLAN.md — Unresolved path with command counters + all-instances export
+</details>
 
 ---
 

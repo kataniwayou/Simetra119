@@ -1,5 +1,31 @@
 # Project Milestones: SNMP Monitoring System
 
+## v2.4 Tenant Vector Metrics (Shipped: 2026-03-23)
+
+**Delivered:** Per-tenant internal evaluation state exposed as 8 OTel instruments on a third meter exporting on all instances, surfaced in a 13-column operations dashboard table with state color mapping, per-cycle integer counters, P99 histogram, and trend arrows — verified end-to-end by 6 new E2E scenarios.
+
+**Phases completed:** 72-75 (8 plans total)
+
+**Key accomplishments:**
+- TenantMetricService — 8 OTel instruments (6 counters, 1 gauge, 1 histogram) on SnmpCollector.Tenant meter
+- EvaluateTenant instrumented with RecordAndReturn pattern, counting helpers, per-cycle batched metrics at exit
+- Operations dashboard Tenant Status table — 13 columns, state color mapping, trend arrows, increase()[30s] counters
+- 6 E2E scenarios (107-112) proving instrument→Prometheus pipeline across all 4 evaluation paths
+- All-instances export verified — followers export tenant metrics while snmp_gauge remains leader-gated
+
+**Stats:**
+- 17 files changed (1,846 insertions, 451 deletions)
+- 4 phases, 8 plans
+- 6 new E2E scenarios (107-112), 112 total
+- 475 unit tests passing
+- Timeline: 1 day (2026-03-23)
+
+**Git range:** `feat(72-01)` → `feat(75-03)`
+
+**What's next:** To be determined — `/gsd:new-milestone`
+
+---
+
 ## v2.3 Metric Validity & Correctness (Shipped: 2026-03-22)
 
 **Delivered:** Every pipeline counter, command counter, business metric value, metric label, and negative-path assertion validated by E2E scenarios against the live SNMP simulator and Prometheus — proving every metric means what it claims to measure.
