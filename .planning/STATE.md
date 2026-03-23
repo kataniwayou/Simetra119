@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 
 ## Current Position
 
-Phase: 78 of 80 (Counter Reference Cleanup) — COMPLETE
+Phase: 79 of 80 (Dashboard Percentage Update) — COMPLETE
 Plan: 1/1 — complete
-Status: Phase 78 complete ✓ — ready for Phase 79
-Last activity: 2026-03-23 — Phase 78 complete (dead code removed)
+Status: Phase 79 complete ✓ — ready for Phase 80
+Last activity: 2026-03-23 — Completed 79-01-PLAN.md (dashboard PromQL updated to v2.5 gauges)
 
-Progress: [██████░░░░] v2.5 phase 3/5 complete
+Progress: [███████░░░] v2.5 phase 4/5 complete
 
 ## Performance Metrics
 
@@ -49,6 +49,9 @@ Progress: [██████░░░░] v2.5 phase 3/5 complete
 - v2.5 (77-01): CommandWorkerService no longer holds ITenantMetricService — tenant command % recorded at dispatch in SnapshotJob only
 - v2.5 (77-02): All 8 percentage-recording tests assert all 6 RecordXxxPercent gauges with exact computed values (never Arg.Any<double>)
 - v2.5 (77-02): 479 unit tests pass after phase 77 complete
+- v2.5 (79-01): Dashboard panel id=28 queries v2.5 gauges directly; no increase()/rate() wrappers on percentage columns
+- v2.5 (79-01): Zero-fallback or-on clauses removed from gauge queries (gauges always have value after first recording)
+- v2.5 (79-01): Percentage column headers use (%) suffix in displayName override; raw number display (decimals=0, no unit property)
 
 ### Decisions
 
@@ -69,6 +72,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T17:36:35Z
-Stopped at: Completed 77-02-PLAN.md — percentage gauge test coverage complete
+Last session: 2026-03-23T18:08:44Z
+Stopped at: Completed 79-01-PLAN.md — dashboard PromQL updated to v2.5 percentage gauges
 Resume file: None
