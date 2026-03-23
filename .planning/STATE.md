@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 76 of 80 (Percentage Gauge Instruments)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-23 — v2.5 roadmap created (Phases 76-80)
+Plan: 1 of TBD in current phase
+Status: In progress
+Last activity: 2026-03-23 — Completed 76-01-PLAN.md (percentage gauge instruments)
 
-Progress: [░░░░░░░░░░] 0% (v2.5)
+Progress: [█░░░░░░░░░] 10% (v2.5)
 
 ## Performance Metrics
 
@@ -41,6 +41,9 @@ Progress: [░░░░░░░░░░] 0% (v2.5)
 - v2.5: Command percentages: dispatched + failed + suppressed share total_tenant_commands as denominator
 - v2.5: Only NotReady returns early from EvaluateTenant; all other paths gather all tier results first
 - v2.5: All 6 percentage gauge calls + state gauge call recorded at single exit point after state determined
+- v2.5 (76-01): tenant.state renamed to tenant.evaluation.state; aligns with evaluation.duration naming
+- v2.5 (76-01): RecordXxxPercent API — service is passive recorder; callers compute ratios before calling
+- v2.5 (76-01): Zero denominator: callers guard division; service records 0.0 as passed
 
 ### Decisions
 
@@ -61,6 +64,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23
-Stopped at: v2.5 roadmap created — ready to plan Phase 76
+Last session: 2026-03-23T17:03:08Z
+Stopped at: Completed 76-01-PLAN.md — ITenantMetricService + TenantMetricService percentage gauges done
 Resume file: None
