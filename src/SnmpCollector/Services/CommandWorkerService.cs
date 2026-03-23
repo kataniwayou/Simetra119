@@ -33,6 +33,7 @@ public sealed class CommandWorkerService : BackgroundService
     private readonly ICorrelationService _correlation;
     private readonly ILeaderElection _leaderElection;
     private readonly PipelineMetricService _pipelineMetrics;
+    private readonly ITenantMetricService _tenantMetrics;
     private readonly IOptions<SnapshotJobOptions> _snapshotJobOptions;
     private readonly ILogger<CommandWorkerService> _logger;
 
@@ -45,6 +46,7 @@ public sealed class CommandWorkerService : BackgroundService
         ICorrelationService correlation,
         ILeaderElection leaderElection,
         PipelineMetricService pipelineMetrics,
+        ITenantMetricService tenantMetrics,
         IOptions<SnapshotJobOptions> snapshotJobOptions,
         ILogger<CommandWorkerService> logger)
     {
@@ -56,6 +58,7 @@ public sealed class CommandWorkerService : BackgroundService
         _correlation = correlation;
         _leaderElection = leaderElection;
         _pipelineMetrics = pipelineMetrics;
+        _tenantMetrics = tenantMetrics;
         _snapshotJobOptions = snapshotJobOptions;
         _logger = logger;
     }
@@ -85,6 +88,7 @@ public sealed class CommandWorkerService : BackgroundService
                     "Command {CommandName} for {Target} failed",
                     req.CommandName, $"{req.Ip}:{req.Port}");
                 _pipelineMetrics.IncrementCommandFailed($"{req.Ip}:{req.Port}");
+                _tenantMetrics.IncrementCommandFailed(req.TenantId, req.Priority);
             }
             finally
             {
@@ -105,6 +109,7 @@ public sealed class CommandWorkerService : BackgroundService
                 "Command {CommandName} not found in command map for {Target} -- skipping",
                 req.CommandName, $"{req.Ip}:{req.Port}");
             _pipelineMetrics.IncrementCommandFailed($"{req.Ip}:{req.Port}");
+            _tenantMetrics.IncrementCommandFailed(req.TenantId, req.Priority);
             return;
         }
 
@@ -115,6 +120,7 @@ public sealed class CommandWorkerService : BackgroundService
                 "Device {Ip}:{Port} not found in registry -- skipping",
                 req.Ip, req.Port);
             _pipelineMetrics.IncrementCommandFailed($"{req.Ip}:{req.Port}");
+            _tenantMetrics.IncrementCommandFailed(req.TenantId, req.Priority);
             return;
         }
 
@@ -157,6 +163,7 @@ public sealed class CommandWorkerService : BackgroundService
                 "Command {CommandName} timed out for {DeviceName} after {DurationMs:F1}ms",
                 req.CommandName, device.Name, sw.Elapsed.TotalMilliseconds);
             _pipelineMetrics.IncrementCommandFailed(device.Name);
+            _tenantMetrics.IncrementCommandFailed(req.TenantId, req.Priority);
             return;
         }
 
