@@ -116,9 +116,11 @@ sim_set_oid_stale "5.1"
 log_info "TVM-01: Polling for tier=1 stale detection (30s timeout)..."
 if poll_until_log 30 1 "e2e-pss-tenant.*tier=1" 15; then
     log_info "TVM-01: tier=1 stale detection confirmed"
+    log_info "TVM-01: Sleeping 15s for Prometheus scrape to propagate stale gauges..."
+    sleep 15
 else
-    log_warn "TVM-01: tier=1 log not detected within 30s; sleeping 10s as fallback"
-    sleep 10
+    log_warn "TVM-01: tier=1 log not detected within 30s; sleeping 15s as fallback"
+    sleep 15
 fi
 
 # Query stale_percent gauge directly -- gauges always have a value after first recording.
