@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 
 ## Current Position
 
-Phase: 72 of 75 (TenantMetricService & Meter Registration) — COMPLETE
-Plan: 2/2 — verified
-Status: Phase 72 complete, verified ✓ — ready for Phase 73
-Last activity: 2026-03-23 — Phase 72 verified (10/10 must-haves)
+Phase: 73 of 75 (SnapshotJob Instrumentation) — In progress
+Plan: 1/2 — complete
+Status: Phase 73 plan 01 complete ✓ — ready for plan 02
+Last activity: 2026-03-23 — Completed 73-01-PLAN.md (CommandRequest + CommandWorkerService plumbing)
 
-Progress: [██░░░░░░░░] v2.4 phase 1/4 complete
+Progress: [██░░░░░░░░] v2.4 phase 2/4 in progress
 
 ## Performance Metrics
 
@@ -38,7 +38,9 @@ Progress: [██░░░░░░░░] v2.4 phase 1/4 complete
 - v2.4: Duration stopwatch inside EvaluateTenant per-tenant, not around Task.WhenAll group
 - v2.4: Prometheus label casing (tenant_id vs tenantId) must be confirmed before authoring dashboard PromQL
 - v2.4: SnapshotJob.EvaluateTenant returns TenantState; pre-tier = NotReady, tier-4 = Unresolved; both block advance gate
-- v2.4: DI registration must wire ITenantMetricService → TenantMetricService when Phase 73 adds SnapshotJob instrumentation
+- v2.4: DI registration wires ITenantMetricService → TenantMetricService (confirmed in ServiceCollectionExtensions.cs line 409)
+- v2.4: CommandRequest carries TenantId + Priority as positional params 6 and 7 for per-tenant metric tagging
+- v2.4: CommandWorkerService IncrementCommandFailed calls are additive (tenant + pipeline metrics both fire at each failure site)
 
 ### Decisions
 
@@ -60,5 +62,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-23
-Stopped at: Phase 72 verified — Phase 73 ready to plan
+Stopped at: Phase 73 plan 01 complete — plan 02 ready
 Resume file: None
