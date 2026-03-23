@@ -27,12 +27,10 @@
 ### Operations Dashboard
 
 - [ ] **TDSH-01**: Tenant metrics table panel added after existing commands panels in operations dashboard
-- [ ] **TDSH-02**: Table columns: Host, Pod, Tenant, Priority, State, Dispatched, Failed, Suppressed, Stale, Resolved, Evaluate, P99 (ms), Trend, PromQL
+- [ ] **TDSH-02**: Table columns: Host, Pod, Tenant, Priority, State, Dispatched, Failed, Suppressed, Stale, Resolved, Evaluate, P99 (ms), Trend
 - [ ] **TDSH-03**: State column with color-mapped enum values (green=Healthy, red=Unresolved, yellow=Resolved, grey=NotReady)
 - [ ] **TDSH-04**: Cascading Host/Pod filters applied to tenant table (existing dashboard filter variables)
 - [ ] **TDSH-05**: Trend column with delta arrows (based on business dashboard gauge table pattern)
-- [ ] **TDSH-06**: PromQL column with copyable query strings per row
-
 ### E2E Validation
 
 - [ ] **TE2E-01**: All 8 tenant metric instruments appear in Prometheus with correct tenant_id and priority labels
@@ -73,7 +71,6 @@
 | TDSH-03 | Phase 74 | Pending |
 | TDSH-04 | Phase 74 | Pending |
 | TDSH-05 | Phase 74 | Pending |
-| TDSH-06 | Phase 74 | Pending |
 | TE2E-01 | Phase 75 | Pending |
 | TE2E-02 | Phase 75 | Pending |
 | TE2E-03 | Phase 75 | Pending |
@@ -81,8 +78,8 @@
 | TE2E-05 | Phase 75 | Pending |
 
 **Coverage:**
-- v2.4 requirements: 24 total
-- Mapped to phases: 24
+- v2.4 requirements: 23 total
+- Mapped to phases: 23
 - Unmapped: 0 ✓
 
 ---

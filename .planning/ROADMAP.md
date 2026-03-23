@@ -155,15 +155,14 @@ Plans:
 
 #### Phase 74: Grafana Dashboard Panel
 
-**Goal:** The operations dashboard shows a real-time per-tenant per-pod status table with state color mapping, tier counter rates, P99 duration, trend arrows, and copyable PromQL — giving operators immediate visibility into evaluation health across all replicas.
+**Goal:** The operations dashboard shows a real-time per-tenant per-pod status table with state color mapping, tier counter rates, P99 duration, and trend arrows — giving operators immediate visibility into evaluation health across all replicas.
 **Depends on:** Phase 73
-**Requirements:** TDSH-01, TDSH-02, TDSH-03, TDSH-04, TDSH-05, TDSH-06
+**Requirements:** TDSH-01, TDSH-02, TDSH-03, TDSH-04, TDSH-05
 **Success Criteria** (what must be TRUE):
-  1. A new tenant metrics table panel appears in the operations dashboard after the existing commands panels, with all 14 required columns (Host, Pod, Tenant, Priority, State, Dispatched, Failed, Suppressed, Stale, Resolved, Evaluate, P99 ms, Trend, PromQL)
+  1. A new tenant metrics table panel appears in the operations dashboard after the existing commands panels, with all 13 required columns (Host, Pod, Tenant, Priority, State, Dispatched, Failed, Suppressed, Stale, Resolved, Evaluate, P99 ms, Trend)
   2. The State column displays color-coded text labels (green=Healthy, red=Unresolved, yellow=Resolved, grey=NotReady) driven by the enum value mapping
   3. Existing Host and Pod dashboard filter variables cascade correctly to filter tenant table rows
   4. The Trend column shows delta arrows derived from `delta(tenant_command_dispatched...)` via a Join by field transformation
-  5. The PromQL column contains copyable per-row query strings using the `label_join`/`label_replace` pattern from the business dashboard
 **Plans:** TBD
 
 Plans:
