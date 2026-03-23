@@ -1676,6 +1676,642 @@
         "x": 0,
         "y": 47
       },
+      "id": 27,
+      "title": "Tenant Status",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dfg62p9s7xl34a"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "service_instance_id"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Host"
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "k8s_pod_name"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Pod"
+              },
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tenant_id"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Tenant"
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "priority"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Priority"
+              },
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #A"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "State"
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "basic",
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "color": "text",
+                        "index": 0,
+                        "text": "NotReady"
+                      }
+                    },
+                    "type": "value"
+                  },
+                  {
+                    "options": {
+                      "1": {
+                        "color": "green",
+                        "index": 1,
+                        "text": "Healthy"
+                      }
+                    },
+                    "type": "value"
+                  },
+                  {
+                    "options": {
+                      "2": {
+                        "color": "yellow",
+                        "index": 2,
+                        "text": "Resolved"
+                      }
+                    },
+                    "type": "value"
+                  },
+                  {
+                    "options": {
+                      "3": {
+                        "color": "red",
+                        "index": 3,
+                        "text": "Unresolved"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #D"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Dispatched"
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #E"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Failed"
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #F"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Suppressed"
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #G"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Stale"
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #H"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Resolved"
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #I"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Evaluate"
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #C"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "P99 (ms)"
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #B"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Trend"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "basic",
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 60
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "dark-red",
+                      "value": -1000000000
+                    },
+                    {
+                      "color": "text",
+                      "value": 0
+                    },
+                    {
+                      "color": "dark-green",
+                      "value": 0.0001
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "color": "text",
+                        "text": "-"
+                      }
+                    },
+                    "type": "special"
+                  },
+                  {
+                    "options": {
+                      "from": -1000000000,
+                      "result": {
+                        "color": "dark-red",
+                        "text": "▼"
+                      },
+                      "to": -0.0001
+                    },
+                    "type": "range"
+                  },
+                  {
+                    "options": {
+                      "from": -0.0001,
+                      "result": {
+                        "color": "text",
+                        "text": "—"
+                      },
+                      "to": 0.0001
+                    },
+                    "type": "range"
+                  },
+                  {
+                    "options": {
+                      "from": 0.0001,
+                      "result": {
+                        "color": "dark-green",
+                        "text": "▲"
+                      },
+                      "to": 1000000000
+                    },
+                    "type": "range"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "job"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "instance"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "service_name"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "telemetry_sdk_language"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "telemetry_sdk_name"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "telemetry_sdk_version"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "id": 28,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dfg62p9s7xl34a"
+          },
+          "expr": "tenant_state{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dfg62p9s7xl34a"
+          },
+          "expr": "delta(tenant_command_dispatched_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s])",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dfg62p9s7xl34a"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le, tenant_id, priority, service_instance_id, k8s_pod_name) (rate(tenant_evaluation_duration_milliseconds_bucket{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval])))",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dfg62p9s7xl34a"
+          },
+          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (rate(tenant_command_dispatched_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "format": "table",
+          "instant": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dfg62p9s7xl34a"
+          },
+          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (rate(tenant_command_failed_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "format": "table",
+          "instant": true,
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dfg62p9s7xl34a"
+          },
+          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (rate(tenant_command_suppressed_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "format": "table",
+          "instant": true,
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dfg62p9s7xl34a"
+          },
+          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (rate(tenant_tier1_stale_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "format": "table",
+          "instant": true,
+          "refId": "G"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dfg62p9s7xl34a"
+          },
+          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (rate(tenant_tier2_resolved_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "format": "table",
+          "instant": true,
+          "refId": "H"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dfg62p9s7xl34a"
+          },
+          "expr": "sum by (tenant_id, priority, service_instance_id, k8s_pod_name) (rate(tenant_tier3_evaluate_total{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "format": "table",
+          "instant": true,
+          "refId": "I"
+        }
+      ],
+      "title": "Tenant Status",
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "service_instance_id": 0,
+              "k8s_pod_name": 1,
+              "tenant_id": 2,
+              "priority": 3,
+              "Value #A": 4,
+              "Value #D": 5,
+              "Value #E": 6,
+              "Value #F": 7,
+              "Value #G": 8,
+              "Value #H": 9,
+              "Value #I": 10,
+              "Value #C": 11,
+              "Value #B": 12
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 60
+      },
       "id": 15,
       "title": ".NET Runtime",
       "type": "row"
@@ -1745,7 +2381,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 48
+        "y": 61
       },
       "id": 16,
       "options": {
@@ -1841,7 +2477,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 48
+        "y": 61
       },
       "id": 17,
       "options": {
@@ -1933,7 +2569,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 48
+        "y": 61
       },
       "id": 18,
       "options": {
@@ -2029,7 +2665,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 56
+        "y": 69
       },
       "id": 19,
       "options": {
@@ -2121,7 +2757,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 56
+        "y": 69
       },
       "id": 20,
       "options": {
@@ -2213,7 +2849,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 56
+        "y": 69
       },
       "id": 21,
       "options": {
