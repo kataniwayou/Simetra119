@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 
 ## Current Position
 
-Phase: 79 of 80 (Dashboard Percentage Update) — COMPLETE
-Plan: 1/1 — complete
-Status: Phase 79 complete ✓ — ready for Phase 80
-Last activity: 2026-03-23 — Phase 79 complete
+Phase: 80 of 80 (E2E Scenario Updates) — In progress
+Plan: 1/2 — complete (80-01 done)
+Status: In progress — Phase 80 plan 1/2 complete
+Last activity: 2026-03-23 — Completed 80-01-PLAN.md
 
-Progress: [████████░░] v2.5 phase 4/5 complete
+Progress: [█████████░] v2.5 phase 5/5 in progress
 
 ## Performance Metrics
 
@@ -52,6 +52,10 @@ Progress: [████████░░] v2.5 phase 4/5 complete
 - v2.5 (79-01): Dashboard panel id=28 queries v2.5 gauges directly; no increase()/rate() wrappers on percentage columns
 - v2.5 (79-01): Zero-fallback or-on clauses removed from gauge queries (gauges always have value after first recording)
 - v2.5 (79-01): Percentage column headers use (%) suffix in displayName override; raw number display (decimals=0, no unit property)
+- v2.5 (80-01): E2E smoke (107): percentage gauges asserted present (A-F); 6 old v2.4 counter names asserted absent (K-P)
+- v2.5 (80-01): E2E smoke (107): stale path uses gauge value > 0 via awk float compare (no snapshot_counter/delta needed)
+- v2.5 (80-01): E2E NotReady (108): tier counter snapshot/delta code removed; only state+duration assertions remain
+- v2.5 (80-01): E2E all-instances (112): tenant_state -> tenant_evaluation_state in all PromQL queries
 
 ### Decisions
 
@@ -73,6 +77,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T18:08:44Z
-Stopped at: Completed 79-01-PLAN.md — dashboard PromQL updated to v2.5 percentage gauges
+Last session: 2026-03-23T18:33:36Z
+Stopped at: Completed 80-01-PLAN.md — E2E scenarios 107/108/112 updated for v2.5 gauge names
 Resume file: None
