@@ -826,7 +826,7 @@ public sealed class SnapshotJobTests : IDisposable
     {
         // Fill the channel to capacity (16)
         for (var i = 0; i < 16; i++)
-            _commandChannel.Writer.TryWrite(new CommandRequest("x", 1, "fill", "0", "Integer32"));
+            _commandChannel.Writer.TryWrite(new CommandRequest("x", 1, "fill", "0", "Integer32", "test-tenant", 1));
 
         var resolved = MakeHolder(role: "Resolved",
             threshold: new ThresholdOptions { Min = 0, Max = 100 });

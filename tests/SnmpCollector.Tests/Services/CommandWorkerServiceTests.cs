@@ -77,8 +77,10 @@ public sealed class CommandWorkerServiceTests : IDisposable
         string ip = TestIp,
         int port = TestPort,
         string value = TestValue,
-        string valueType = TestValueType)
-        => new(ip, port, commandName, value, valueType);
+        string valueType = TestValueType,
+        string tenantId = "test-tenant",
+        int priority = 1)
+        => new(ip, port, commandName, value, valueType, tenantId, priority);
 
     private CommandWorkerService CreateService(
         ISender sender,

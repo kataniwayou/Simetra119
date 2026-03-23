@@ -191,7 +191,8 @@ public sealed class SnapshotJob : IJob
             }
 
             var request = new CommandRequest(
-                cmd.Ip, cmd.Port, cmd.CommandName, cmd.Value, cmd.ValueType);
+                cmd.Ip, cmd.Port, cmd.CommandName, cmd.Value, cmd.ValueType,
+                tenant.Id, tenant.Priority);
 
             if (_commandChannel.Writer.TryWrite(request))
             {
