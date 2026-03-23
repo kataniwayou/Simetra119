@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 
 ## Current Position
 
-Phase: 73 of 75 (SnapshotJob Instrumentation) — In progress
-Plan: 1/2 — complete
-Status: Phase 73 plan 01 complete ✓ — ready for plan 02
-Last activity: 2026-03-23 — Completed 73-01-PLAN.md (CommandRequest + CommandWorkerService plumbing)
+Phase: 73 of 75 (SnapshotJob Instrumentation) — Complete
+Plan: 2/2 — complete
+Status: Phase 73 complete ✓ — all 8 ITenantMetricService methods wired
+Last activity: 2026-03-23 — Completed 73-02-PLAN.md (EvaluateTenant instrumentation)
 
-Progress: [██░░░░░░░░] v2.4 phase 2/4 in progress
+Progress: [███░░░░░░░] v2.4 phase 3/4 in progress
 
 ## Performance Metrics
 
@@ -41,6 +41,9 @@ Progress: [██░░░░░░░░] v2.4 phase 2/4 in progress
 - v2.4: DI registration wires ITenantMetricService → TenantMetricService (confirmed in ServiceCollectionExtensions.cs line 409)
 - v2.4: CommandRequest carries TenantId + Priority as positional params 6 and 7 for per-tenant metric tagging
 - v2.4: CommandWorkerService IncrementCommandFailed calls are additive (tenant + pipeline metrics both fire at each failure site)
+- v2.4: EvaluateTenant instrumented with RecordAndReturn at all 4 return paths (NotReady/Resolved/Healthy/Unresolved)
+- v2.4: Tier counters use count-then-loop pattern — CountX() computed once, loop calls IncrementTierX once per holder
+- v2.4: NotReady path records only state gauge + duration (no tier or command counters — design decision)
 
 ### Decisions
 
@@ -62,5 +65,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-23
-Stopped at: Phase 73 plan 01 complete — plan 02 ready
+Stopped at: Phase 73 complete — plan 73-02 complete (EvaluateTenant instrumentation)
 Resume file: None
