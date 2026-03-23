@@ -168,7 +168,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. No counter increment call sites remain in SnapshotJob or CommandWorkerService; no orphaned counting helper methods exist in either class
   2. Build compiles cleanly with no warnings related to removed counter members
-**Plans:** TBD
+**Plans:** 1 plan
+Plans:
+- [x] 78-01-PLAN.md — Remove dead CountResolvedNonViolated method
 
 #### Phase 79: Dashboard Percentage Update
 
@@ -249,10 +251,10 @@ Plans:
 | 75. E2E Validation Scenarios | v2.4 | 3/3 | Complete | 2026-03-23 |
 | 76. Percentage Gauge Instruments | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 77. Gather-Then-Decide Evaluation Flow | v2.5 | 2/2 | Complete | 2026-03-23 |
-| 78. Counter Reference Cleanup | v2.5 | 0/TBD | Not started | - |
+| 78. Counter Reference Cleanup | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 79. Dashboard Percentage Update | v2.5 | 0/TBD | Not started | - |
 | 80. E2E Scenario Updates | v2.5 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-23 — Phase 77 complete (2 plans, verified 4/4)*
+*Last updated: 2026-03-23 — Phase 78 complete (cleanup)*

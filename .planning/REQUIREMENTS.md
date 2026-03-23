@@ -75,7 +75,7 @@
 | RMD-01 | Phase 76 | Complete |
 | CLN-01 | Phase 76 | Complete |
 | CLN-02 | Phase 76 | Complete |
-| CLN-03 | Phase 78 | Pending |
+| CLN-03 | Phase 78 | Complete |
 | UCH-01 | Phase 76 | Complete |
 | UCH-02 | Phase 76 | Complete |
 | DSH-01 | Phase 79 | Pending |
