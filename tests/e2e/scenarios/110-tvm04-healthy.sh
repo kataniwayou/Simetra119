@@ -9,17 +9,22 @@
 #
 # After priming (eval=10, res1=1, res2=1), no OID changes are needed.
 # The primed values satisfy all tier gates -- tenant evaluates Healthy each cycle.
-# tenant_state gauge = 1 (Healthy).
+# tenant_evaluation_state gauge = 1 (Healthy).
+#
+# v2.5: All metrics recorded as percentage gauges at single exit point after state determined.
+# All percentage gauges = 0 on Healthy path (no violations, no dispatch).
 #
 # METRIC NAME NOTE: ROADMAP uses "tenant_gauge_duration_milliseconds" -- this is a TYPO.
 # The correct Prometheus histogram name is tenant_evaluation_duration_milliseconds
-# (OTel instrument: tenant.evaluation.duration.milliseconds → dot-to-underscore conversion).
+# (OTel instrument: tenant.evaluation.duration.milliseconds -> dot-to-underscore conversion).
 #
 # Sub-assertions:
-#   TVM-04A: tenant_state gauge == 1 (Healthy)
-#   TVM-04B: tenant_tier3_evaluate_total delta > 0 (tier3 counter increments during Healthy path)
-#   TVM-04C: tenant_command_dispatched_total delta == 0 (Healthy state, no commands)
+#   TVM-04A: tenant_evaluation_state gauge == 1 (Healthy)
+#   TVM-04B: tenant_evaluation_duration_milliseconds_count delta > 0 (evaluation ran)
+#   TVM-04C: tenant_command_dispatched_percent == 0 (Healthy state, no commands)
 #   TVM-04D: histogram P99 present and > 0 (full instrumentation pipeline verified)
+#   TVM-04E: tenant_metric_stale_percent == 0 (no stale OIDs in Healthy path)
+#   TVM-04F: tenant_metric_evaluate_percent == 0 (evaluate OID in-range)
 
 FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fixtures"
 
@@ -55,16 +60,6 @@ log_info "TVM-04: Waiting 8s for readiness grace (6s grace + 2s margin)..."
 sleep 8
 
 # ---------------------------------------------------------------------------
-# Snapshot baselines after priming sleep
-# Tenant is now ready and in healthy state.
-# Baselines reflect any priming-phase counters.
-# ---------------------------------------------------------------------------
-
-BEFORE_DURATION=$(snapshot_counter "tenant_evaluation_duration_milliseconds_count" 'tenant_id="e2e-pss-tenant",priority="1"')
-BEFORE_DISPATCHED=$(snapshot_counter "tenant_command_dispatched_total" 'tenant_id="e2e-pss-tenant",priority="1"')
-log_info "TVM-04: Baselines -- duration_count=${BEFORE_DURATION} dispatched=${BEFORE_DISPATCHED}"
-
-# ---------------------------------------------------------------------------
 # Wait for Healthy evaluation -- poll for tier=3 log
 # No OID changes needed: primed values are already all in-range
 # ---------------------------------------------------------------------------
@@ -76,30 +71,35 @@ else
     log_warn "TVM-04: tier=3 log not found within 30s; assertions may fail"
 fi
 
-log_info "TVM-04: Waiting 10s to accumulate counter deltas..."
+log_info "TVM-04: Waiting 10s for Prometheus scrape to propagate gauges..."
 sleep 10
 
 # ---------------------------------------------------------------------------
-# Snapshot after values
+# Snapshot duration baseline AFTER Healthy state confirmed
+# (histogram counter is still monotonic -- delta approach valid)
 # ---------------------------------------------------------------------------
+
+BEFORE_DURATION=$(snapshot_counter "tenant_evaluation_duration_milliseconds_count" 'tenant_id="e2e-pss-tenant",priority="1"')
+log_info "TVM-04: Baseline -- duration_count=${BEFORE_DURATION}"
+
+log_info "TVM-04: Waiting 5s to accumulate duration histogram increments..."
+sleep 5
 
 AFTER_DURATION=$(snapshot_counter "tenant_evaluation_duration_milliseconds_count" 'tenant_id="e2e-pss-tenant",priority="1"')
-AFTER_DISPATCHED=$(snapshot_counter "tenant_command_dispatched_total" 'tenant_id="e2e-pss-tenant",priority="1"')
 DELTA_DURATION=$((AFTER_DURATION - BEFORE_DURATION))
-DELTA_DISPATCHED=$((AFTER_DISPATCHED - BEFORE_DISPATCHED))
-log_info "TVM-04: After -- duration_count=${AFTER_DURATION} delta=${DELTA_DURATION} dispatched=${AFTER_DISPATCHED} delta=${DELTA_DISPATCHED}"
+log_info "TVM-04: After -- duration_count=${AFTER_DURATION} delta=${DELTA_DURATION}"
 
 # ---------------------------------------------------------------------------
-# TVM-04A: tenant_state gauge == 1 (Healthy)
+# TVM-04A: tenant_evaluation_state gauge == 1 (Healthy)
 # ---------------------------------------------------------------------------
 
-STATE=$(query_prometheus 'tenant_state{tenant_id="e2e-pss-tenant"}' \
+STATE=$(query_prometheus 'tenant_evaluation_state{tenant_id="e2e-pss-tenant"}' \
     | jq -r '.data.result[0].value[1] // "-1"' | cut -d. -f1)
-log_info "TVM-04A: tenant_state=${STATE} (expected 1)"
+log_info "TVM-04A: tenant_evaluation_state=${STATE} (expected 1)"
 if [ "$STATE" = "1" ]; then
-    record_pass "TVM-04A: tenant_state=1 (Healthy) when all metrics in-range" "state=${STATE}"
+    record_pass "TVM-04A: tenant_evaluation_state=1 (Healthy) when all metrics in-range" "state=${STATE}"
 else
-    record_fail "TVM-04A: tenant_state=1 (Healthy) when all metrics in-range" "state=${STATE} expected=1"
+    record_fail "TVM-04A: tenant_evaluation_state=1 (Healthy) when all metrics in-range" "state=${STATE} expected=1"
 fi
 
 # ---------------------------------------------------------------------------
@@ -119,13 +119,18 @@ assert_delta_gt "$DELTA_DURATION" 0 \
     "delta=${DELTA_DURATION}"
 
 # ---------------------------------------------------------------------------
-# TVM-04C: tenant_command_dispatched_total delta == 0
+# TVM-04C: tenant_command_dispatched_percent == 0
 # Healthy state means no tier=4, no evaluate violation, no commands dispatched.
 # ---------------------------------------------------------------------------
 
-assert_delta_eq "$DELTA_DISPATCHED" 0 \
-    "TVM-04C: no commands dispatched during Healthy path (tier=3, no action)" \
-    "delta=${DELTA_DISPATCHED} expected=0"
+DISPATCHED_PCT=$(query_prometheus 'tenant_command_dispatched_percent{tenant_id="e2e-pss-tenant"}' \
+    | jq -r '.data.result[0].value[1] // "-1"')
+log_info "TVM-04C: dispatched_percent=${DISPATCHED_PCT}"
+if echo "$DISPATCHED_PCT" | awk '{exit ($1 == 0 || $1 == "0") ? 0 : 1}'; then
+    record_pass "TVM-04C: dispatched_percent=0 during Healthy path (no commands)" "dispatched_percent=${DISPATCHED_PCT}"
+else
+    record_fail "TVM-04C: dispatched_percent=0 during Healthy path (no commands)" "dispatched_percent=${DISPATCHED_PCT} expected=0"
+fi
 
 # ---------------------------------------------------------------------------
 # TVM-04D: Histogram P99 present and > 0
@@ -141,6 +146,34 @@ if [ -n "$P99" ] && [ "$P99" != "0" ] && [ "$P99" != "NaN" ] && [ "$P99" != "+In
     record_pass "TVM-04D: tenant_evaluation_duration_milliseconds P99 present and > 0" "p99=${P99}ms"
 else
     record_fail "TVM-04D: tenant_evaluation_duration_milliseconds P99 present and > 0" "p99=${P99} expected > 0"
+fi
+
+# ---------------------------------------------------------------------------
+# TVM-04E: tenant_metric_stale_percent == 0
+# No stale OIDs in Healthy path (all OIDs recently polled and in-range)
+# ---------------------------------------------------------------------------
+
+STALE_PCT=$(query_prometheus 'tenant_metric_stale_percent{tenant_id="e2e-pss-tenant"}' \
+    | jq -r '.data.result[0].value[1] // "-1"')
+log_info "TVM-04E: stale_percent=${STALE_PCT}"
+if echo "$STALE_PCT" | awk '{exit ($1 == 0 || $1 == "0") ? 0 : 1}'; then
+    record_pass "TVM-04E: stale_percent=0 during Healthy path (no stale OIDs)" "stale_percent=${STALE_PCT}"
+else
+    record_fail "TVM-04E: stale_percent=0 during Healthy path (no stale OIDs)" "stale_percent=${STALE_PCT} expected=0"
+fi
+
+# ---------------------------------------------------------------------------
+# TVM-04F: tenant_metric_evaluate_percent == 0
+# Evaluate OID is in-range (value 10 >= Min:10), no evaluate violations
+# ---------------------------------------------------------------------------
+
+EVAL_PCT=$(query_prometheus 'tenant_metric_evaluate_percent{tenant_id="e2e-pss-tenant"}' \
+    | jq -r '.data.result[0].value[1] // "-1"')
+log_info "TVM-04F: evaluate_percent=${EVAL_PCT}"
+if echo "$EVAL_PCT" | awk '{exit ($1 == 0 || $1 == "0") ? 0 : 1}'; then
+    record_pass "TVM-04F: evaluate_percent=0 during Healthy path (evaluate in-range)" "evaluate_percent=${EVAL_PCT}"
+else
+    record_fail "TVM-04F: evaluate_percent=0 during Healthy path (evaluate in-range)" "evaluate_percent=${EVAL_PCT} expected=0"
 fi
 
 # ---------------------------------------------------------------------------
