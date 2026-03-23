@@ -1,12 +1,12 @@
 # Phase 77: Gather-Then-Decide Evaluation Flow - Context
 
 **Gathered:** 2026-03-23
-**Status:** Ready for planning
+**Status:** Complete (updated with final behavior after quick-088)
 
 <domain>
 ## Phase Boundary
 
-Refactor EvaluateTenant to gather all tier results before deciding state, compute percentages, and record all metrics at a single exit point. SnapshotJob callers updated to use the new RecordXxxPercent API from Phase 76. Unit tests rewritten for new flow.
+Refactor EvaluateTenant to gather all tier results before deciding state, compute percentages, and record metrics at exit. Dispatch only when state = Unresolved.
 
 </domain>
 
@@ -14,48 +14,51 @@ Refactor EvaluateTenant to gather all tier results before deciding state, comput
 ## Implementation Decisions
 
 ### State determination rules
-- Same tier priority order as v2.4 — logic unchanged, just gathered before deciding:
-  1. Stale detected → Unresolved (dispatch commands)
-  2. All resolved violated → Resolved (no commands)
-  3. All evaluate violated → Unresolved (dispatch commands)
-  4. Otherwise → Healthy
-- The difference: in v2.4 each tier short-circuited with an early return. Now all results are gathered first, then the same priority rules determine state.
+- Same tier priority order: stale → resolved → evaluate → healthy
+- Gathered before deciding — no early returns except NotReady
 
 ### NotReady special handling
-- NotReady returns early (only exception to gather-then-decide)
-- Only state + duration recorded. NO percentage gauges recorded.
-- Same behavior as v2.4 — NotReady means no evaluation happened, percentages are meaningless
+- Early return, state + duration only. No percentage gauges recorded.
 
 ### Stale path behavior
-- If staleness detected: compute stale% but skip resolved/evaluate gathering
-- Record resolved% = 0 and evaluate% = 0 (stale data is unreliable — computing violations on stale data is misleading)
-- Still proceed to command dispatch (stale → Unresolved → commands)
-- Command percentages (dispatched/failed/suppressed) recorded normally from dispatch results
+- Compute stale%, skip resolved/evaluate gathering (stale data unreliable)
+- Dispatch commands (stale → Unresolved → dispatch loop runs)
+- Record: stale% + dispatched% + suppressed% + failed% (command outcomes are real)
+- Do NOT record: resolved%, evaluate% (stale data unreliable)
 
-### Metric recording
-- All 6 percentage gauges + state + duration recorded together at a single exit point after state is determined
-- No metrics recorded mid-flow (except NotReady early return with state + duration only)
+### Dispatch timing
+- Dispatch AFTER state decision, only when state == Unresolved
+- Prevents commands firing on Resolved/Healthy paths
+
+### Final behavior table
+
+| State | Stale(%) | Resolved(%) | Evaluate(%) | Dispatched(%) | Suppressed(%) | Failed(%) |
+|-------|----------|-------------|-------------|---------------|---------------|-----------|
+| NotReady | — | — | — | — | — | — |
+| Healthy | computed | computed | computed | computed | computed | computed |
+| Resolved | computed | computed | computed | computed | computed | computed |
+| Unresolved (stale) | computed | — | — | computed | computed | computed |
+| Unresolved (evaluate) | computed | computed | computed | computed | computed | computed |
 
 </decisions>
 
 <specifics>
 ## Specific Ideas
 
-- The gather phase collects: staleCount, resolvedViolatedCount, evaluateViolatedCount, and the totals from config for each denominator
-- Percentages computed after gathering, before state determination
-- Command dispatch still happens inline (must dispatch before knowing command percentages)
-- After dispatch loop: compute command percentages, determine state, record all metrics, return
+- "computed" means the percentage is calculated from actual gathered data and recorded as a gauge
+- "—" means the gauge is NOT recorded that cycle (Prometheus keeps last known value)
+- Healthy/Resolved command percentages will always be 0 (dispatch loop doesn't run), but they ARE recorded
 
 </specifics>
 
 <deferred>
 ## Deferred Ideas
 
-None — discussion stayed within phase scope.
+None.
 
 </deferred>
 
 ---
 
 *Phase: 77-gather-then-decide-evaluation-flow*
-*Context gathered: 2026-03-23*
+*Context updated: 2026-03-23 (post quick-088 dispatch fix)*
