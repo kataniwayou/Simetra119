@@ -39,6 +39,7 @@ public sealed class TenantMetricService : ITenantMetricService, IDisposable
     // Histogram of per-tenant evaluation cycle durations in milliseconds
     private readonly Histogram<double> _evaluationDuration;
 
+
     public TenantMetricService(IMeterFactory meterFactory)
     {
         _meter = meterFactory.Create(TelemetryConstants.TenantMeterName);
@@ -55,6 +56,7 @@ public sealed class TenantMetricService : ITenantMetricService, IDisposable
         _evaluationDuration = _meter.CreateHistogram<double>(
             "tenant.evaluation.duration.milliseconds",
             description: "Duration of one tenant evaluation cycle in milliseconds");
+
     }
 
     /// <summary>Record the stale metric percentage for the given tenant (0.0-100.0).</summary>
