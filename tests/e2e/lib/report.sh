@@ -18,7 +18,8 @@ _REPORT_CATEGORIES=(
     "Command Counter Verification|82|87"
     "Business Metric Value Correctness|88|95"
     "Label Correctness|96|103"
-    "Negative Proofs|104|108"
+    "Negative Proofs|104|105"
+    "Tenant Metric Validation|106|111"
 )
 
 generate_report() {
