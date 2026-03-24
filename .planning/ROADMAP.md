@@ -19,7 +19,7 @@
 - ✅ **v2.3 Metric Validity & Correctness** - Phases 66-71 (shipped 2026-03-22)
 - ✅ **v2.4 Tenant Vector Metrics** - Phases 72-75 (shipped 2026-03-23)
 - ✅ **v2.5 Tenant Metrics Approach Modification** - Phases 76-81 (shipped 2026-03-23)
-- 🚧 **v2.6 E2E Manual Tenant Simulation Suite** - Phases 82-83 (in progress)
+- ✅ **v2.6 E2E Manual Tenant Simulation Suite** - Phases 82-83 (shipped 2026-03-24)
 
 ## Phases
 
@@ -136,7 +136,7 @@ See `.planning/milestones/v2.5-ROADMAP.md` for details.
 
 ---
 
-### v2.6 E2E Manual Tenant Simulation Suite (In Progress)
+### v2.6 E2E Manual Tenant Simulation Suite (Complete)
 
 **Milestone Goal:** An interactive command interpreter that lets a human operator drive any tenant into any violation state on demand — using a terse CLI pattern syntax — so tenant state transitions can be verified by watching Grafana without managing 17 script files.
 
@@ -171,7 +171,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 83-01-PLAN.md — Create standalone sim_command.sh command interpreter
+- [x] 83-01-PLAN.md — Create standalone sim_command.sh command interpreter
 
 ---
 
@@ -237,8 +237,8 @@ Plans:
 | 80. E2E Scenario Updates | v2.5 | 2/2 | Complete | 2026-03-23 |
 | 81. E2E Partial Percentage Scenario | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 82. Fixture & OID Mapping | v2.6 | 2/2 | Complete | 2026-03-24 |
-| 83. Command Interpreter | v2.6 | 0/1 | Not started | - |
+| 83. Command Interpreter | v2.6 | 1/1 | Complete | 2026-03-24 |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-24 — Phase 83 planned (1 plan, 1 wave)*
+*Last updated: 2026-03-24 — Phase 83 complete, milestone v2.6 complete*

@@ -19,14 +19,14 @@
 
 ### Command Interpreter
 
-- [ ] **CMD-01**: Accept pattern commands from CLI in format: {Tenant}-{V/S}-{#}E-{#}R
-- [ ] **CMD-02**: Parse pattern, validate tenant name, mode (V/S), and metric counts against mapping
-- [ ] **CMD-03**: Translate pattern to simulator HTTP API calls (existing /oid/{suffix}/{value} endpoints)
-- [ ] **CMD-04**: Error on unknown tenant with list of available tenants
-- [ ] **CMD-05**: Error on count exceeding available metrics for that tenant/role
-- [ ] **CMD-06**: Error on invalid pattern format with expected format hint
-- [ ] **CMD-07**: Set non-violated metrics to healthy value (not just the violated ones)
-- [ ] **CMD-08**: Stale mode (S) uses sim_set_oid_stale for the specified metrics
+- [x] **CMD-01**: Accept pattern commands from CLI in format: {Tenant}-{V/S}-{#}E-{#}R
+- [x] **CMD-02**: Parse pattern, validate tenant name, mode (V/S), and metric counts against mapping
+- [x] **CMD-03**: Translate pattern to simulator HTTP API calls (existing /oid/{suffix}/{value} endpoints)
+- [x] **CMD-04**: Error on unknown tenant with list of available tenants
+- [x] **CMD-05**: Error on count exceeding available metrics for that tenant/role
+- [x] **CMD-06**: Error on invalid pattern format with expected format hint
+- [x] **CMD-07**: Set non-violated metrics to healthy value (not just the violated ones)
+- [x] **CMD-08**: Stale mode (S) uses sim_set_oid_stale for the specified metrics
 
 ## Out of Scope
 
@@ -47,14 +47,14 @@
 | FIX-04 | Phase 82 | Complete |
 | MAP-01 | Phase 82 | Complete |
 | MAP-02 | Phase 82 | Complete |
-| CMD-01 | Phase 83 | Pending |
-| CMD-02 | Phase 83 | Pending |
-| CMD-03 | Phase 83 | Pending |
-| CMD-04 | Phase 83 | Pending |
-| CMD-05 | Phase 83 | Pending |
-| CMD-06 | Phase 83 | Pending |
-| CMD-07 | Phase 83 | Pending |
-| CMD-08 | Phase 83 | Pending |
+| CMD-01 | Phase 83 | Complete |
+| CMD-02 | Phase 83 | Complete |
+| CMD-03 | Phase 83 | Complete |
+| CMD-04 | Phase 83 | Complete |
+| CMD-05 | Phase 83 | Complete |
+| CMD-06 | Phase 83 | Complete |
+| CMD-07 | Phase 83 | Complete |
+| CMD-08 | Phase 83 | Complete |
 
 **Coverage:**
 - v2.6 requirements: 14 total
