@@ -136,42 +136,12 @@ See `.planning/milestones/v2.5-ROADMAP.md` for details.
 
 ---
 
-### v2.6 E2E Manual Tenant Simulation Suite (Complete)
+<details>
+<summary>✅ v2.6 E2E Manual Tenant Simulation Suite (Phases 82-83) - SHIPPED 2026-03-24</summary>
 
-**Milestone Goal:** An interactive command interpreter that lets a human operator drive any tenant into any violation state on demand — using a terse CLI pattern syntax — so tenant state transitions can be verified by watching Grafana without managing 17 script files.
+See `.planning/milestones/v2.6-ROADMAP.md` for details.
 
-#### Phase 82: Fixture & OID Mapping
-
-**Goal**: A 4-tenant environment with collision-free OIDs is live in the cluster, all tenants start Healthy, and a hardcoded mapping file defines every OID suffix and value needed to violate or restore any tenant role.
-**Depends on**: Phase 81 (v2.5 complete)
-**Requirements**: FIX-01, FIX-02, FIX-03, FIX-04, MAP-01, MAP-02
-**Success Criteria** (what must be TRUE):
-  1. Applying the fixture ConfigMap produces 4 tenants (T1_P1, T2_P1, T1_P2, T2_P2) visible in Grafana with distinct OID suffixes and no collision between any two tenants
-  2. After the grace window passes with no violations set, all 4 tenants show Healthy state in Grafana
-  3. The OID metric map contains entries for every OID suffix used by all 4 tenants
-  4. The hardcoded mapping file lists per-tenant per-role OID suffixes with healthy and violated values, and adding a new tenant or metric requires adding a single line
-**Plans**: 2 plans
-
-Plans:
-- [x] 82-01-PLAN.md — Register 24 v2.6 OIDs in simulator, OID metric map, and device poll config
-- [x] 82-02-PLAN.md — Create 4-tenant fixture ConfigMap and OID mapping file
-
-#### Phase 83: Command Interpreter
-
-**Goal**: A command interpreter accepts `{Tenant}-{V/S}-{#}E-{#}R` patterns from the Claude Code CLI, validates them against the mapping, translates them to simulator HTTP API calls, and produces clear errors for invalid input.
-**Depends on**: Phase 82
-**Requirements**: CMD-01, CMD-02, CMD-03, CMD-04, CMD-05, CMD-06, CMD-07, CMD-08
-**Success Criteria** (what must be TRUE):
-  1. Running a valid pattern (e.g. `T1_P1-V-2E-1R`) against the interpreter causes the simulator to receive the correct OID value HTTP calls and Grafana reflects the expected violation state
-  2. Running a stale-mode pattern (e.g. `T1_P1-S-1E-0R`) causes the interpreter to call sim_set_oid_stale for the specified metrics rather than setting a violated value
-  3. Non-violated metrics in the pattern are set to their healthy value, not left at whatever state they were in
-  4. An unknown tenant name produces an error listing all valid tenant names
-  5. A count exceeding available metrics for that tenant/role produces an error identifying the limit
-  6. A malformed pattern produces an error showing the expected format
-**Plans**: 1 plan
-
-Plans:
-- [x] 83-01-PLAN.md — Create standalone sim_command.sh command interpreter
+</details>
 
 ---
 

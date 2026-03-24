@@ -1,5 +1,31 @@
 # Project Milestones: SNMP Monitoring System
 
+## v2.6 E2E Manual Tenant Simulation Suite (Shipped: 2026-03-24)
+
+**Delivered:** Interactive command interpreter (`sim_command.sh`) that drives any of 4 tenants into any evaluation state with a terse pattern command, backed by a collision-free 4-tenant fixture and OID mapping file, with full SnapshotJob evaluation logging for Elastic traceability.
+
+**Phases completed:** 82-83 (3 plans total)
+
+**Key accomplishments:**
+- 4-tenant fixture (T1_P1, T2_P1, T1_P2, T2_P2) with 24 OIDs across subtrees 8-11
+- OID mapping file (oid_map.sh) with 72 associative array entries for interpreter lookup
+- Standalone command interpreter: `./sim_command.sh T1_P1-V-2E-1R` → simulator HTTP calls
+- Simulator fix: per-varbind noSuchInstance handling (was aborting entire GET)
+- Per-tenant poll groups eliminating cross-tenant staleness
+- SnapshotJob evaluation logging: state transitions, gate blocks, stale detection
+- 20 documented test scenarios covering all evaluation paths
+
+**Stats:**
+- 2 phases, 3 plans, 2 quick tasks (090, 091)
+- 31 files changed, 3,749 insertions
+- Timeline: 1 day (2026-03-24)
+
+**Git range:** `feat(82-01)` → `feat(quick-091)`
+
+**What's next:** To be determined — `/gsd:new-milestone`
+
+---
+
 ## v2.5 Tenant Metrics Approach Modification (Shipped: 2026-03-23)
 
 **Delivered:** Per-tenant metrics refactored from counters to percentage gauges, EvaluateTenant redesigned with gather-then-decide flow, resolved metric flipped to measure violations, dashboard and 7 E2E scenarios updated.

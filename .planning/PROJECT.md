@@ -177,16 +177,22 @@ See `.planning/milestones/v2.4-REQUIREMENTS.md` for full requirement details.
 
 See `.planning/milestones/v2.5-REQUIREMENTS.md` for full requirement details.
 
+**v2.6 E2E Manual Tenant Simulation Suite (shipped 2026-03-24)**
+
+- 4-tenant fixture (T1_P1/T2_P1/T1_P2/T2_P2) with collision-free OID subtrees 8-11
+- OID mapping file (oid_map.sh) with associative array lookup for interpreter
+- Interactive command interpreter (sim_command.sh): `{Tenant}-{V/S}-{#}E-{#}R` patterns
+- Pattern validation with 3 error types (unknown tenant, count exceeded, malformed)
+- Translates to simulator HTTP API calls (/oid/{suffix}/{value} and /oid/{suffix}/stale)
+- Simulator per-varbind noSuchInstance fix for multi-OID GET handling
+- Per-tenant poll groups at 5s interval for timing isolation
+- SnapshotJob evaluation pipeline logging (state, transitions, gate blocks)
+
+See `.planning/milestones/v2.6-REQUIREMENTS.md` for full requirement details.
+
 ### Active
 
-**v2.6 E2E Manual Tenant Simulation Suite**
-
-- [ ] 4-tenant fixture: T1_P1 (P1, 2E/2R/1C), T2_P1 (P1, 4E/4R/1C), T1_P2 (P2, 2E/2R/1C), T2_P2 (P2, 4E/4R/1C)
-- [ ] Hardcoded tenant OID mapping file (per-tenant per-role OID suffixes + healthy/violated values)
-- [ ] Interactive command interpreter: user types pattern on Claude Code CLI (e.g., T2_P1-V-2E-0R)
-- [ ] Pattern validation with clear error messages (unknown tenant, count exceeds, invalid format)
-- [ ] Translates commands to existing simulator HTTP API calls
-- [ ] User verifies via Grafana dashboard (no automated assertions, no scripts)
+(No active requirements — start next milestone with `/gsd:new-milestone`)
 
 ### Out of Scope
 
@@ -201,7 +207,7 @@ See `.planning/milestones/v2.5-REQUIREMENTS.md` for full requirement details.
 
 ## Context
 
-**Current state:** v2.4 shipped. 475 unit tests passing, 112 E2E scenario scripts (01-112) across 7 categories. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. Two Grafana dashboards (business + operations) with per-tenant status table. All 4 watchers follow watcher-validates-registry-stores pattern. Closed-loop tenant evaluation with SNMP SET command execution and full per-tenant observability.
+**Current state:** v2.6 shipped. 479 unit tests passing, 113 E2E scenario scripts (01-113) across 7 categories. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. Two Grafana dashboards (business + operations) with per-tenant status table and footer row counts. All 4 watchers follow watcher-validates-registry-stores pattern. Closed-loop tenant evaluation with SNMP SET command execution and full per-tenant observability. Interactive 4-tenant simulation via sim_command.sh with 20 documented test scenarios.
 
 **Reference project:** `src/Simetra/` is an existing SNMP monitoring system used as architectural reference. Key patterns adopted: structured logging, OTel setup, console formatter, correlation IDs, leader election, role-gated export. Key patterns replaced: custom middleware -> MediatR, device modules -> flat OID map, channels -> single shared trap channel.
 
@@ -256,4 +262,4 @@ See `.planning/milestones/v2.5-REQUIREMENTS.md` for full requirement details.
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
 ---
-*Last updated: 2026-03-23 after v2.6 milestone started*
+*Last updated: 2026-03-24 after v2.6 milestone shipped*

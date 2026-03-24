@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-23)
+See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.6 E2E Manual Tenant Simulation Suite — COMPLETE
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 83 of 83 (Command Interpreter)
-Plan: 01 of 01 in phase 83
-Status: Phase 83 complete — milestone v2.6 complete
-Last activity: 2026-03-24 — Completed 83-01-PLAN.md (sim_command.sh command interpreter)
+Phase: — (between milestones)
+Plan: —
+Status: v2.6 shipped, ready for next milestone
+Last activity: 2026-03-24 — v2.6 milestone archived
 
-Progress: [██████████] v2.6 complete (all phases done)
+Progress: v2.6 shipped. Start next milestone with /gsd:new-milestone
 
 ## Performance Metrics
 
