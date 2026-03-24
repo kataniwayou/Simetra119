@@ -182,13 +182,11 @@ See `.planning/milestones/v2.5-REQUIREMENTS.md` for full requirement details.
 **v2.6 E2E Manual Tenant Simulation Suite**
 
 - [ ] 4-tenant fixture: T1_P1 (P1, 2E/2R/1C), T2_P1 (P1, 4E/4R/1C), T1_P2 (P2, 2E/2R/1C), T2_P2 (P2, 4E/4R/1C)
-- [ ] 17 sequential scripts with user approval between each
-- [ ] Scripts set OID violations, leave state as-is (no cleanup between scripts)
-- [ ] Script 09 restarts pods — clears all states to NotReady → Healthy
-- [ ] User verifies via Grafana dashboard (no automated assertions)
-- [ ] Progressive violation coverage: 25%, 50%, 75%, 100% evaluate + resolved combinations
-- [ ] Priority group advance gate tested: P1 Unresolved blocks P2 evaluation
-- [ ] Each script uses different OIDs per tenant (no collision)
+- [ ] Hardcoded tenant OID mapping file (per-tenant per-role OID suffixes + healthy/violated values)
+- [ ] Interactive command interpreter: user types pattern on Claude Code CLI (e.g., T2_P1-V-2E-0R)
+- [ ] Pattern validation with clear error messages (unknown tenant, count exceeds, invalid format)
+- [ ] Translates commands to existing simulator HTTP API calls
+- [ ] User verifies via Grafana dashboard (no automated assertions, no scripts)
 
 ### Out of Scope
 

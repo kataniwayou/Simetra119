@@ -9,69 +9,58 @@
 
 - [ ] **FIX-01**: 4-tenant ConfigMap fixture with T1_P1 (P1, 2E/2R/1C), T2_P1 (P1, 4E/4R/1C), T1_P2 (P2, 2E/2R/1C), T2_P2 (P2, 4E/4R/1C)
 - [ ] **FIX-02**: Each tenant uses unique OID suffixes (no OID collision between tenants)
-- [ ] **FIX-03**: All tenants start in Healthy state after fixture applied and grace window passes
-- [ ] **FIX-04**: OID metric map extended with entries for all 4 tenants (16 evaluate + 16 resolved OIDs minimum)
+- [ ] **FIX-03**: OID metric map extended with entries for all 4 tenants
+- [ ] **FIX-04**: All tenants start in Healthy state after fixture applied and grace window passes
 
-### Script Runner
+### Tenant OID Mapping
 
-- [ ] **RUN-01**: Sequential script execution with user approval prompt between each script
-- [ ] **RUN-02**: Scripts set OID violations and leave states as-is (no cleanup between scripts)
-- [ ] **RUN-03**: Script 01 restarts pods to reset all states (NotReady → Healthy)
+- [ ] **MAP-01**: Hardcoded mapping file defining per-tenant per-role OID suffixes with healthy/violated values
+- [ ] **MAP-02**: Mapping is easy to maintain — add tenant or metric by adding a line
 
-### P1 Tenant Scenarios
+### Command Interpreter
 
-- [ ] **P1S-01**: Scripts 02-04 progressively violate T2_P1 evaluate (25% → 75% → Unresolved 100%)
-- [ ] **P1S-02**: Scripts 07-09 progressively resolve T2_P1 (50% res → 75% res → Resolved 100%/100%)
-- [ ] **P1S-03**: Scripts 10-12 progressively violate T1_P1 (50% → Unresolved → Resolved)
-
-### P2 Tenant Scenarios
-
-- [ ] **P2S-01**: Scripts 05-06 violate T1_P2 while P1 tenant Unresolved (advance gate blocks — no dispatch)
-- [ ] **P2S-02**: Scripts 13-17 progressively cycle T2_P2 (Unresolved → Healthy → Unresolved → Resolved)
-
-### Advance Gate Verification
-
-- [ ] **AGT-01**: Script 06 proves P2 tenant does NOT dispatch when P1 tenant is Unresolved (advance gate blocks)
-- [ ] **AGT-02**: Scripts 13+ prove P2 tenants resume evaluation after all P1 tenants reach Resolved
-
-### Report Integration
-
-- [ ] **RPT-01**: Scripts numbered 114-130 (continuing from 113), report.sh category updated
+- [ ] **CMD-01**: Accept pattern commands from CLI in format: {Tenant}-{V/S}-{#}E-{#}R
+- [ ] **CMD-02**: Parse pattern, validate tenant name, mode (V/S), and metric counts against mapping
+- [ ] **CMD-03**: Translate pattern to simulator HTTP API calls (existing /oid/{suffix}/{value} endpoints)
+- [ ] **CMD-04**: Error on unknown tenant with list of available tenants
+- [ ] **CMD-05**: Error on count exceeding available metrics for that tenant/role
+- [ ] **CMD-06**: Error on invalid pattern format with expected format hint
+- [ ] **CMD-07**: Set non-violated metrics to healthy value (not just the violated ones)
+- [ ] **CMD-08**: Stale mode (S) uses sim_set_oid_stale for the specified metrics
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Automated assertions in scripts | This suite is manual verification — user observes Grafana |
-| Stale path scenarios | Staleness testing covered in v2.4/v2.5 E2E suites |
-| Multi-group (3+ priorities) | 2 priority groups sufficient for advance gate verification |
-| Command suppression window testing | Covered in v2.4 E2E suite |
+| Automated assertions | Manual verification via Grafana — user observes |
+| Script files (107-130) | Replaced by interactive command interpreter |
+| report.sh changes | No scripts to categorize |
+| New simulator code | Reuse existing HTTP API endpoints |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FIX-01 | Phase 82 | Pending |
-| FIX-02 | Phase 82 | Pending |
-| FIX-03 | Phase 82 | Pending |
-| FIX-04 | Phase 82 | Pending |
-| RUN-01 | Phase 82 | Pending |
-| RUN-02 | Phase 82 | Pending |
-| RUN-03 | Phase 82 | Pending |
-| RPT-01 | Phase 82 | Pending |
-| P1S-01 | Phase 83 | Pending |
-| P1S-02 | Phase 83 | Pending |
-| P1S-03 | Phase 83 | Pending |
-| P2S-01 | Phase 83 | Pending |
-| AGT-01 | Phase 83 | Pending |
-| P2S-02 | Phase 84 | Pending |
-| AGT-02 | Phase 84 | Pending |
+| FIX-01 | TBD | Pending |
+| FIX-02 | TBD | Pending |
+| FIX-03 | TBD | Pending |
+| FIX-04 | TBD | Pending |
+| MAP-01 | TBD | Pending |
+| MAP-02 | TBD | Pending |
+| CMD-01 | TBD | Pending |
+| CMD-02 | TBD | Pending |
+| CMD-03 | TBD | Pending |
+| CMD-04 | TBD | Pending |
+| CMD-05 | TBD | Pending |
+| CMD-06 | TBD | Pending |
+| CMD-07 | TBD | Pending |
+| CMD-08 | TBD | Pending |
 
 **Coverage:**
-- v2.6 requirements: 15 total
-- Mapped to phases: 15
-- Unmapped: 0
+- v2.6 requirements: 14 total
+- Mapped to phases: 0 (pending roadmap)
+- Unmapped: 14
 
 ---
 *Requirements defined: 2026-03-24*
-*Last updated: 2026-03-24 — traceability populated (phases 82-84)*
+*Last updated: 2026-03-24 — revised from script-based to interactive command approach*
