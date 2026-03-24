@@ -7,15 +7,15 @@
 
 ### Fixture Setup
 
-- [ ] **FIX-01**: 4-tenant ConfigMap fixture with T1_P1 (P1, 2E/2R/1C), T2_P1 (P1, 4E/4R/1C), T1_P2 (P2, 2E/2R/1C), T2_P2 (P2, 4E/4R/1C)
-- [ ] **FIX-02**: Each tenant uses unique OID suffixes (no OID collision between tenants)
-- [ ] **FIX-03**: OID metric map extended with entries for all 4 tenants
-- [ ] **FIX-04**: All tenants start in Healthy state after fixture applied and grace window passes
+- [x] **FIX-01**: 4-tenant ConfigMap fixture with T1_P1 (P1, 2E/2R/1C), T2_P1 (P1, 4E/4R/1C), T1_P2 (P2, 2E/2R/1C), T2_P2 (P2, 4E/4R/1C)
+- [x] **FIX-02**: Each tenant uses unique OID suffixes (no OID collision between tenants)
+- [x] **FIX-03**: OID metric map extended with entries for all 4 tenants
+- [x] **FIX-04**: All tenants start in Healthy state after fixture applied and grace window passes
 
 ### Tenant OID Mapping
 
-- [ ] **MAP-01**: Hardcoded mapping file defining per-tenant per-role OID suffixes with healthy/violated values
-- [ ] **MAP-02**: Mapping is easy to maintain — add tenant or metric by adding a line
+- [x] **MAP-01**: Hardcoded mapping file defining per-tenant per-role OID suffixes with healthy/violated values
+- [x] **MAP-02**: Mapping is easy to maintain — add tenant or metric by adding a line
 
 ### Command Interpreter
 
@@ -41,12 +41,12 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FIX-01 | Phase 82 | Pending |
-| FIX-02 | Phase 82 | Pending |
-| FIX-03 | Phase 82 | Pending |
-| FIX-04 | Phase 82 | Pending |
-| MAP-01 | Phase 82 | Pending |
-| MAP-02 | Phase 82 | Pending |
+| FIX-01 | Phase 82 | Complete |
+| FIX-02 | Phase 82 | Complete |
+| FIX-03 | Phase 82 | Complete |
+| FIX-04 | Phase 82 | Complete |
+| MAP-01 | Phase 82 | Complete |
+| MAP-02 | Phase 82 | Complete |
 | CMD-01 | Phase 83 | Pending |
 | CMD-02 | Phase 83 | Pending |
 | CMD-03 | Phase 83 | Pending |

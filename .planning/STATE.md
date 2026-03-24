@@ -48,6 +48,7 @@ Progress: [█████░░░░░] v2.6 phase 1/2 complete
 - v2.6: S mode calls sim_set_oid_stale for the specified metrics
 - v2.6 (82-02): OID_MAP key format: TENANT.ROLE.N.FIELD — T1_P1 subtree=8, T2_P1=9, T1_P2=10, T2_P2=11
 - v2.6 (82-02): Evaluate healthy=10/violated=0; Resolved healthy=1/violated=0; all 4 tenants reuse e2e_set_bypass
+- v2.6 (82-01): Simulator baseline must use healthy values (eval=10, res=1) not 0 — otherwise tenants start Violated
 
 ### Decisions
 

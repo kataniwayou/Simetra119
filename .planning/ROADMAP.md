@@ -153,8 +153,8 @@ See `.planning/milestones/v2.5-ROADMAP.md` for details.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 82-01-PLAN.md — Register 24 v2.6 OIDs in simulator, OID metric map, and device poll config
-- [ ] 82-02-PLAN.md — Create 4-tenant fixture ConfigMap and OID mapping file
+- [x] 82-01-PLAN.md — Register 24 v2.6 OIDs in simulator, OID metric map, and device poll config
+- [x] 82-02-PLAN.md — Create 4-tenant fixture ConfigMap and OID mapping file
 
 #### Phase 83: Command Interpreter
 
@@ -236,9 +236,9 @@ Plans:
 | 79. Dashboard Percentage Update | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 80. E2E Scenario Updates | v2.5 | 2/2 | Complete | 2026-03-23 |
 | 81. E2E Partial Percentage Scenario | v2.5 | 1/1 | Complete | 2026-03-23 |
-| 82. Fixture & OID Mapping | v2.6 | 0/2 | Not started | - |
+| 82. Fixture & OID Mapping | v2.6 | 2/2 | Complete | 2026-03-24 |
 | 83. Command Interpreter | v2.6 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-24 — Phase 82 planned (2 plans, 1 wave)*
+*Last updated: 2026-03-24 — Phase 82 complete (2 plans executed, all tenants Healthy)*
