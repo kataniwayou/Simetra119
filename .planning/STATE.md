@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.6 E2E Manual Tenant Simulation Suite — Phase 82: Fixture & OID Mapping
+**Current focus:** v2.6 E2E Manual Tenant Simulation Suite — COMPLETE
 
 ## Current Position
 
-Phase: 82 of 83 (Fixture & OID Mapping)
-Plan: 02 of 02 in phase 82
-Status: Phase 82 complete
-Last activity: 2026-03-24 — Completed 82-02-PLAN.md (fixture + OID mapping file)
+Phase: 83 of 83 (Command Interpreter)
+Plan: 01 of 01 in phase 83
+Status: Phase 83 complete — milestone v2.6 complete
+Last activity: 2026-03-24 — Completed 83-01-PLAN.md (sim_command.sh command interpreter)
 
-Progress: [█████░░░░░] v2.6 phase 1/2 complete
+Progress: [██████████] v2.6 complete (all phases done)
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Progress: [█████░░░░░] v2.6 phase 1/2 complete
 - v2.6 (82-02): OID_MAP key format: TENANT.ROLE.N.FIELD — T1_P1 subtree=8, T2_P1=9, T1_P2=10, T2_P2=11
 - v2.6 (82-02): Evaluate healthy=10/violated=0; Resolved healthy=1/violated=0; all 4 tenants reuse e2e_set_bypass
 - v2.6 (82-01): Simulator baseline must use healthy values (eval=10, res=1) not 0 — otherwise tenants start Violated
+- v2.6 (83-01): sim_command.sh uses #!/usr/bin/env bash + bash 4+ guard (macOS ships bash 3, lacks associative arrays)
 
 ### Decisions
 
@@ -72,5 +73,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 82-01-PLAN.md — 24 v2.6 OID registrations (simulator, OID map, device poll config)
+Stopped at: Completed 83-01-PLAN.md — sim_command.sh command interpreter, milestone v2.6 complete
 Resume file: None
