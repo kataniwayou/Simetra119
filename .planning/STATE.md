@@ -71,5 +71,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 82-02-PLAN.md — fixture ConfigMap and OID mapping file created
+Stopped at: Completed 82-01-PLAN.md — 24 v2.6 OID registrations (simulator, OID map, device poll config)
 Resume file: None
