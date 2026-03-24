@@ -244,7 +244,13 @@ data:
               {"MetricName": "e2e_T1P1_eval1"},
               {"MetricName": "e2e_T1P1_eval2"},
               {"MetricName": "e2e_T1P1_res1"},
-              {"MetricName": "e2e_T1P1_res2"},
+              {"MetricName": "e2e_T1P1_res2"}
+            ]
+          },
+          {
+            "IntervalSeconds": 1,
+            "GraceMultiplier": 2.0,
+            "Metrics": [
               {"MetricName": "e2e_T2P1_eval1"},
               {"MetricName": "e2e_T2P1_eval2"},
               {"MetricName": "e2e_T2P1_eval3"},
@@ -252,11 +258,23 @@ data:
               {"MetricName": "e2e_T2P1_res1"},
               {"MetricName": "e2e_T2P1_res2"},
               {"MetricName": "e2e_T2P1_res3"},
-              {"MetricName": "e2e_T2P1_res4"},
+              {"MetricName": "e2e_T2P1_res4"}
+            ]
+          },
+          {
+            "IntervalSeconds": 1,
+            "GraceMultiplier": 2.0,
+            "Metrics": [
               {"MetricName": "e2e_T1P2_eval1"},
               {"MetricName": "e2e_T1P2_eval2"},
               {"MetricName": "e2e_T1P2_res1"},
-              {"MetricName": "e2e_T1P2_res2"},
+              {"MetricName": "e2e_T1P2_res2"}
+            ]
+          },
+          {
+            "IntervalSeconds": 1,
+            "GraceMultiplier": 2.0,
+            "Metrics": [
               {"MetricName": "e2e_T2P2_eval1"},
               {"MetricName": "e2e_T2P2_eval2"},
               {"MetricName": "e2e_T2P2_eval3"},
