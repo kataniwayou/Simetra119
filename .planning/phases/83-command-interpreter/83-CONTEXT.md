@@ -33,7 +33,7 @@ A standalone Bash script that accepts `{Tenant}-{V/S}-{#}E-{#}R` patterns, valid
 - User checks Grafana to observe state changes
 
 ### Healthy reset behavior
-- Every command is a **full state declaration** for the tenant
+- **Stateless** — the interpreter tracks nothing between invocations. Every command is a full state declaration for the tenant
 - Non-violated/non-stale metrics are explicitly set to their healthy value
 - `T1_P1-V-2E-0R` → 2 Evaluate violated, remaining Evaluate + all Resolved reset to healthy
 - `T1_P1-V-0E-0R` → effectively resets the tenant to all-healthy
