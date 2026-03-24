@@ -70,9 +70,10 @@ None.
 | 088 | Move dispatch after state decision | 2026-03-23 | 25f07b7 | [088-move-dispatch-after-decide](./quick/088-move-dispatch-after-decide/) |
 | 089 | Append index to duplicate tenant names instead of skipping | 2026-03-23 | 8873c2e | [089-duplicate-tenant-name-index](./quick/089-duplicate-tenant-name-index/) |
 | 090 | Enable table footer row counts on all 4 table panels | 2026-03-24 | 32ed4dd | [090-table-footer-row-counts](./quick/090-table-footer-row-counts/) |
+| 091 | Add evaluation pipeline logging to SnapshotJob | 2026-03-24 | dce2a00 | [091-snapshot-evaluation-logging](./quick/091-snapshot-evaluation-logging/) |
 
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed quick-090 — table footer row counts on all 4 Grafana table panels
+Stopped at: Completed quick-091 — evaluation pipeline logging in SnapshotJob
 Resume file: None
