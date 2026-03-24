@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v2.6 E2E Manual Tenant Simulation Suite — Phase 82: Fixture & Infrastructure
+**Current focus:** v2.6 E2E Manual Tenant Simulation Suite — Phase 82: Fixture & OID Mapping
 
 ## Current Position
 
-Phase: 82 of 84 (Fixture & Infrastructure)
+Phase: 82 of 83 (Fixture & OID Mapping)
 Plan: — (not yet planned)
 Status: Ready to plan
-Last activity: 2026-03-24 — v2.6 roadmap created (phases 82-84)
+Last activity: 2026-03-24 — v2.6 roadmap revised to interactive command interpreter (phases 82-83)
 
-Progress: [░░░░░░░░░░] v2.6 phase 0/3 complete
+Progress: [░░░░░░░░░░] v2.6 phase 0/2 complete
 
 ## Performance Metrics
 
@@ -40,10 +40,12 @@ Progress: [░░░░░░░░░░] v2.6 phase 0/3 complete
 - v2.5 (76-01): tenant.state renamed to tenant.evaluation.state
 - v2.5 (77-01): CommandWorkerService no longer holds ITenantMetricService — tenant command % recorded at dispatch in SnapshotJob only
 - v2.5 (81-01): E2E percentage == N assertion: awk '{exit (int($1+0.5) == N) ? 0 : 1}' handles float-to-integer rounding
-- v2.6: New scripts numbered 114-130 (continuing from 113), category added to report.sh
+- v2.6: Approach is interactive command interpreter, not 17 script files
+- v2.6: Command pattern format: {Tenant}-{V/S}-{#}E-{#}R (e.g. T1_P1-V-2E-1R)
 - v2.6: 4-tenant fixture — T1_P1 (P1, 2E/2R/1C), T2_P1 (P1, 4E/4R/1C), T1_P2 (P2, 2E/2R/1C), T2_P2 (P2, 4E/4R/1C)
-- v2.6: Scripts set OID violations and leave state as-is (no cleanup between scripts)
-- v2.6: Script 01 (114) restarts pods to reset all states; user verifies Grafana at each step
+- v2.6: Interpreter reuses existing simulator /oid/{suffix}/{value} HTTP endpoints — no new simulator code
+- v2.6: Non-violated metrics in a pattern are set to healthy value (not left in previous state)
+- v2.6: S mode calls sim_set_oid_stale for the specified metrics
 
 ### Decisions
 
@@ -67,5 +69,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: v2.6 roadmap created — phases 82, 83, 84 defined
+Stopped at: v2.6 roadmap revised — approach changed from 17-script suite to interactive command interpreter, phases 82-83 defined
 Resume file: None

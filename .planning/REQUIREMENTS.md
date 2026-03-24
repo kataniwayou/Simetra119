@@ -41,26 +41,26 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FIX-01 | TBD | Pending |
-| FIX-02 | TBD | Pending |
-| FIX-03 | TBD | Pending |
-| FIX-04 | TBD | Pending |
-| MAP-01 | TBD | Pending |
-| MAP-02 | TBD | Pending |
-| CMD-01 | TBD | Pending |
-| CMD-02 | TBD | Pending |
-| CMD-03 | TBD | Pending |
-| CMD-04 | TBD | Pending |
-| CMD-05 | TBD | Pending |
-| CMD-06 | TBD | Pending |
-| CMD-07 | TBD | Pending |
-| CMD-08 | TBD | Pending |
+| FIX-01 | Phase 82 | Pending |
+| FIX-02 | Phase 82 | Pending |
+| FIX-03 | Phase 82 | Pending |
+| FIX-04 | Phase 82 | Pending |
+| MAP-01 | Phase 82 | Pending |
+| MAP-02 | Phase 82 | Pending |
+| CMD-01 | Phase 83 | Pending |
+| CMD-02 | Phase 83 | Pending |
+| CMD-03 | Phase 83 | Pending |
+| CMD-04 | Phase 83 | Pending |
+| CMD-05 | Phase 83 | Pending |
+| CMD-06 | Phase 83 | Pending |
+| CMD-07 | Phase 83 | Pending |
+| CMD-08 | Phase 83 | Pending |
 
 **Coverage:**
 - v2.6 requirements: 14 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 14
+- Mapped to phases: 14 (100%)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-24*
-*Last updated: 2026-03-24 — revised from script-based to interactive command approach*
+*Last updated: 2026-03-24 — traceability updated for revised roadmap (phases 82-83)*
