@@ -184,5 +184,89 @@
         ]
       }
     ]
+  },
+  {
+    "CommunityString": "Simetra.E2E-SIM",
+    "IpAddress": "127.0.0.1",
+    "Port": 10163,
+    "Polls": [
+      {
+        "IntervalSeconds": 10,
+        "GraceMultiplier": 2.0,
+        "Metrics": [
+          {"MetricName": "e2e_gauge_test"},
+          {"MetricName": "e2e_integer_test"},
+          {"MetricName": "e2e_counter32_test"},
+          {"MetricName": "e2e_counter64_test"},
+          {"MetricName": "e2e_timeticks_test"},
+          {"MetricName": "e2e_info_test"},
+          {"MetricName": "e2e_ip_test"}
+        ]
+      },
+      {
+        "IntervalSeconds": 10,
+        "GraceMultiplier": 2.0,
+        "Metrics": [
+          {"MetricName": "e2e_port_utilization"},
+          {"MetricName": "e2e_channel_state"},
+          {"MetricName": "e2e_bypass_status"},
+          {"MetricName": "e2e_command_response"},
+          {"MetricName": "e2e_agg_source_a"},
+          {"MetricName": "e2e_agg_source_b"}
+        ]
+      },
+      {
+        "IntervalSeconds": 1,
+        "GraceMultiplier": 2.0,
+        "Metrics": [
+          {"MetricName": "e2e_eval_T2"},
+          {"MetricName": "e2e_res1_T2"},
+          {"MetricName": "e2e_res2_T2"},
+          {"MetricName": "e2e_eval_T3"},
+          {"MetricName": "e2e_res1_T3"},
+          {"MetricName": "e2e_res2_T3"},
+          {"MetricName": "e2e_eval_T4"},
+          {"MetricName": "e2e_res1_T4"},
+          {"MetricName": "e2e_res2_T4"}
+        ]
+      },
+      {
+        "IntervalSeconds": 1,
+        "GraceMultiplier": 2.0,
+        "Metrics": [
+          {"MetricName": "e2e_T1P1_eval1"},
+          {"MetricName": "e2e_T1P1_eval2"},
+          {"MetricName": "e2e_T1P1_res1"},
+          {"MetricName": "e2e_T1P1_res2"},
+          {"MetricName": "e2e_T2P1_eval1"},
+          {"MetricName": "e2e_T2P1_eval2"},
+          {"MetricName": "e2e_T2P1_eval3"},
+          {"MetricName": "e2e_T2P1_eval4"},
+          {"MetricName": "e2e_T2P1_res1"},
+          {"MetricName": "e2e_T2P1_res2"},
+          {"MetricName": "e2e_T2P1_res3"},
+          {"MetricName": "e2e_T2P1_res4"},
+          {"MetricName": "e2e_T1P2_eval1"},
+          {"MetricName": "e2e_T1P2_eval2"},
+          {"MetricName": "e2e_T1P2_res1"},
+          {"MetricName": "e2e_T1P2_res2"},
+          {"MetricName": "e2e_T2P2_eval1"},
+          {"MetricName": "e2e_T2P2_eval2"},
+          {"MetricName": "e2e_T2P2_eval3"},
+          {"MetricName": "e2e_T2P2_eval4"},
+          {"MetricName": "e2e_T2P2_res1"},
+          {"MetricName": "e2e_T2P2_res2"},
+          {"MetricName": "e2e_T2P2_res3"},
+          {"MetricName": "e2e_T2P2_res4"}
+        ]
+      },
+      {
+        "IntervalSeconds": 10,
+        "GraceMultiplier": 2.0,
+        "Metrics": [{"MetricName": "e2e_agg_source_a"}, {"MetricName": "e2e_agg_source_b"}],
+        "AggregatedMetricName": "e2e_total_util",
+        "Aggregator": "sum"
+      }
+    ]
   }
 ]
