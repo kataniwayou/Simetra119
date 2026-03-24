@@ -40,6 +40,7 @@ A standalone Bash script that accepts `{Tenant}-{V/S}-{#}E-{#}R` patterns, valid
 - `T1_P1-S-0E-0R` → also all-healthy (no stale metrics)
 - Which specific slots get violated/staled doesn't matter (first N in order is fine)
 - V or S mode — one mode per command, cannot mix in a single pattern
+- A new command **fully replaces** the previous state: e.g. `T1_P1-S-2E-0R` then `T1_P1-V-2E-2R` cancels the stale by setting all metrics to violated/healthy values via sim_set_oid
 
 ### Claude's Discretion
 - Port-forward implementation details (port number, cleanup mechanism)
