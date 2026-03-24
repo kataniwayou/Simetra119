@@ -69,9 +69,10 @@ None.
 | 087 | Switch Grafana to manual dashboard management | 2026-03-23 | 8c5221f | [087-grafana-manual-dashboard-mgmt](./quick/087-grafana-manual-dashboard-mgmt/) |
 | 088 | Move dispatch after state decision | 2026-03-23 | 25f07b7 | [088-move-dispatch-after-decide](./quick/088-move-dispatch-after-decide/) |
 | 089 | Append index to duplicate tenant names instead of skipping | 2026-03-23 | 8873c2e | [089-duplicate-tenant-name-index](./quick/089-duplicate-tenant-name-index/) |
+| 090 | Enable table footer row counts on all 4 table panels | 2026-03-24 | 32ed4dd | [090-table-footer-row-counts](./quick/090-table-footer-row-counts/) |
 
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 83-01-PLAN.md — sim_command.sh command interpreter, milestone v2.6 complete
+Stopped at: Completed quick-090 — table footer row counts on all 4 Grafana table panels
 Resume file: None
