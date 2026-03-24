@@ -168,10 +168,10 @@ Plans:
   4. An unknown tenant name produces an error listing all valid tenant names
   5. A count exceeding available metrics for that tenant/role produces an error identifying the limit
   6. A malformed pattern produces an error showing the expected format
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 83-01: TBD
+- [ ] 83-01-PLAN.md — Create standalone sim_command.sh command interpreter
 
 ---
 
@@ -237,8 +237,8 @@ Plans:
 | 80. E2E Scenario Updates | v2.5 | 2/2 | Complete | 2026-03-23 |
 | 81. E2E Partial Percentage Scenario | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 82. Fixture & OID Mapping | v2.6 | 2/2 | Complete | 2026-03-24 |
-| 83. Command Interpreter | v2.6 | 0/TBD | Not started | - |
+| 83. Command Interpreter | v2.6 | 0/1 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-24 — Phase 82 complete (2 plans executed, all tenants Healthy)*
+*Last updated: 2026-03-24 — Phase 83 planned (1 plan, 1 wave)*
