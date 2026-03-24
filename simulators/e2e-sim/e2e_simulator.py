@@ -115,33 +115,33 @@ def _make_scenario(overrides: dict) -> dict:
         f"{E2E_PREFIX}.7.2": 0,                 # e2e_res1_T4   Gauge32
         f"{E2E_PREFIX}.7.3": 0,                 # e2e_res2_T4   Gauge32
         # v2.6: T1_P1 (subtree .999.8.x) -- 4 polled OIDs
-        f"{E2E_PREFIX}.8.1": 0,                 # e2e_T1P1_eval1  Gauge32
-        f"{E2E_PREFIX}.8.2": 0,                 # e2e_T1P1_eval2  Gauge32
-        f"{E2E_PREFIX}.8.3": 0,                 # e2e_T1P1_res1   Gauge32
-        f"{E2E_PREFIX}.8.4": 0,                 # e2e_T1P1_res2   Gauge32
+        f"{E2E_PREFIX}.8.1": 10,                # e2e_T1P1_eval1  Gauge32 (healthy >= Min 10.0)
+        f"{E2E_PREFIX}.8.2": 10,                # e2e_T1P1_eval2  Gauge32 (healthy >= Min 10.0)
+        f"{E2E_PREFIX}.8.3": 1,                 # e2e_T1P1_res1   Gauge32 (healthy >= Min 1.0)
+        f"{E2E_PREFIX}.8.4": 1,                 # e2e_T1P1_res2   Gauge32 (healthy >= Min 1.0)
         # v2.6: T2_P1 (subtree .999.9.x) -- 8 polled OIDs
-        f"{E2E_PREFIX}.9.1": 0,                 # e2e_T2P1_eval1  Gauge32
-        f"{E2E_PREFIX}.9.2": 0,                 # e2e_T2P1_eval2  Gauge32
-        f"{E2E_PREFIX}.9.3": 0,                 # e2e_T2P1_eval3  Gauge32
-        f"{E2E_PREFIX}.9.4": 0,                 # e2e_T2P1_eval4  Gauge32
-        f"{E2E_PREFIX}.9.5": 0,                 # e2e_T2P1_res1   Gauge32
-        f"{E2E_PREFIX}.9.6": 0,                 # e2e_T2P1_res2   Gauge32
-        f"{E2E_PREFIX}.9.7": 0,                 # e2e_T2P1_res3   Gauge32
-        f"{E2E_PREFIX}.9.8": 0,                 # e2e_T2P1_res4   Gauge32
+        f"{E2E_PREFIX}.9.1": 10,                # e2e_T2P1_eval1  Gauge32 (healthy >= Min 10.0)
+        f"{E2E_PREFIX}.9.2": 10,                # e2e_T2P1_eval2  Gauge32 (healthy >= Min 10.0)
+        f"{E2E_PREFIX}.9.3": 10,                # e2e_T2P1_eval3  Gauge32 (healthy >= Min 10.0)
+        f"{E2E_PREFIX}.9.4": 10,                # e2e_T2P1_eval4  Gauge32 (healthy >= Min 10.0)
+        f"{E2E_PREFIX}.9.5": 1,                 # e2e_T2P1_res1   Gauge32 (healthy >= Min 1.0)
+        f"{E2E_PREFIX}.9.6": 1,                 # e2e_T2P1_res2   Gauge32 (healthy >= Min 1.0)
+        f"{E2E_PREFIX}.9.7": 1,                 # e2e_T2P1_res3   Gauge32 (healthy >= Min 1.0)
+        f"{E2E_PREFIX}.9.8": 1,                 # e2e_T2P1_res4   Gauge32 (healthy >= Min 1.0)
         # v2.6: T1_P2 (subtree .999.10.x) -- 4 polled OIDs
-        f"{E2E_PREFIX}.10.1": 0,                # e2e_T1P2_eval1  Gauge32
-        f"{E2E_PREFIX}.10.2": 0,                # e2e_T1P2_eval2  Gauge32
-        f"{E2E_PREFIX}.10.3": 0,                # e2e_T1P2_res1   Gauge32
-        f"{E2E_PREFIX}.10.4": 0,                # e2e_T1P2_res2   Gauge32
+        f"{E2E_PREFIX}.10.1": 10,               # e2e_T1P2_eval1  Gauge32 (healthy >= Min 10.0)
+        f"{E2E_PREFIX}.10.2": 10,               # e2e_T1P2_eval2  Gauge32 (healthy >= Min 10.0)
+        f"{E2E_PREFIX}.10.3": 1,                # e2e_T1P2_res1   Gauge32 (healthy >= Min 1.0)
+        f"{E2E_PREFIX}.10.4": 1,                # e2e_T1P2_res2   Gauge32 (healthy >= Min 1.0)
         # v2.6: T2_P2 (subtree .999.11.x) -- 8 polled OIDs
-        f"{E2E_PREFIX}.11.1": 0,                # e2e_T2P2_eval1  Gauge32
-        f"{E2E_PREFIX}.11.2": 0,                # e2e_T2P2_eval2  Gauge32
-        f"{E2E_PREFIX}.11.3": 0,                # e2e_T2P2_eval3  Gauge32
-        f"{E2E_PREFIX}.11.4": 0,                # e2e_T2P2_eval4  Gauge32
-        f"{E2E_PREFIX}.11.5": 0,                # e2e_T2P2_res1   Gauge32
-        f"{E2E_PREFIX}.11.6": 0,                # e2e_T2P2_res2   Gauge32
-        f"{E2E_PREFIX}.11.7": 0,                # e2e_T2P2_res3   Gauge32
-        f"{E2E_PREFIX}.11.8": 0,                # e2e_T2P2_res4   Gauge32
+        f"{E2E_PREFIX}.11.1": 10,               # e2e_T2P2_eval1  Gauge32 (healthy >= Min 10.0)
+        f"{E2E_PREFIX}.11.2": 10,               # e2e_T2P2_eval2  Gauge32 (healthy >= Min 10.0)
+        f"{E2E_PREFIX}.11.3": 10,               # e2e_T2P2_eval3  Gauge32 (healthy >= Min 10.0)
+        f"{E2E_PREFIX}.11.4": 10,               # e2e_T2P2_eval4  Gauge32 (healthy >= Min 10.0)
+        f"{E2E_PREFIX}.11.5": 1,                # e2e_T2P2_res1   Gauge32 (healthy >= Min 1.0)
+        f"{E2E_PREFIX}.11.6": 1,                # e2e_T2P2_res2   Gauge32 (healthy >= Min 1.0)
+        f"{E2E_PREFIX}.11.7": 1,                # e2e_T2P2_res3   Gauge32 (healthy >= Min 1.0)
+        f"{E2E_PREFIX}.11.8": 1,                # e2e_T2P2_res4   Gauge32 (healthy >= Min 1.0)
     }
     baseline.update(overrides)
     return baseline
