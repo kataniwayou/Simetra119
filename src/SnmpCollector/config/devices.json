@@ -231,7 +231,7 @@
         ]
       },
       {
-        "IntervalSeconds": 1,
+        "IntervalSeconds": 5,
         "GraceMultiplier": 2.0,
         "Metrics": [
           {"MetricName": "e2e_T1P1_eval1"},
@@ -241,7 +241,7 @@
         ]
       },
       {
-        "IntervalSeconds": 1,
+        "IntervalSeconds": 5,
         "GraceMultiplier": 2.0,
         "Metrics": [
           {"MetricName": "e2e_T2P1_eval1"},
@@ -255,7 +255,7 @@
         ]
       },
       {
-        "IntervalSeconds": 1,
+        "IntervalSeconds": 5,
         "GraceMultiplier": 2.0,
         "Metrics": [
           {"MetricName": "e2e_T1P2_eval1"},
@@ -265,7 +265,7 @@
         ]
       },
       {
-        "IntervalSeconds": 1,
+        "IntervalSeconds": 5,
         "GraceMultiplier": 2.0,
         "Metrics": [
           {"MetricName": "e2e_T2P2_eval1"},

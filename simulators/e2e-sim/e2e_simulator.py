@@ -48,6 +48,7 @@ from pysnmp.entity import engine, config
 from pysnmp.entity.rfc3413 import cmdrsp, context
 from pysnmp.carrier.asyncio.dgram import udp
 from pysnmp.proto.api import v2c
+from pysnmp.proto.rfc1905 import noSuchInstance as noSuchInstanceValue
 from pysnmp.smi.error import NoSuchInstanceError
 from pysnmp.hlapi.v3arch.asyncio import (
     SnmpEngine as HlapiEngine,
@@ -303,15 +304,17 @@ class DynamicInstance(MibScalarInstance):
 
     def getValue(self, name, **ctx):
         # Per-OID stale override (highest priority)
+        # Return noSuchInstance as a value (not raise) so multi-varbind GETs
+        # continue processing remaining OIDs instead of aborting the whole PDU.
         if self._oid_str in _stale_oids:
-            raise NoSuchInstanceError(name=name, idx=(0,))
+            return noSuchInstanceValue
         # Per-OID value override
         if self._oid_str in _oid_overrides:
             return self.getSyntax().clone(_oid_overrides[self._oid_str])
         # Fall back to active scenario
         val = SCENARIOS[_active_scenario].get(self._oid_str, STALE)
         if val is STALE:
-            raise NoSuchInstanceError(name=name, idx=(0,))
+            return noSuchInstanceValue
         return self.getSyntax().clone(val)
 
 
