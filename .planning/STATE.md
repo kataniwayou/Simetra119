@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 82 of 83 (Fixture & OID Mapping)
-Plan: — (not yet planned)
-Status: Ready to plan
-Last activity: 2026-03-24 — v2.6 roadmap revised to interactive command interpreter (phases 82-83)
+Plan: 02 of 02 in phase 82
+Status: Phase 82 complete
+Last activity: 2026-03-24 — Completed 82-02-PLAN.md (fixture + OID mapping file)
 
-Progress: [░░░░░░░░░░] v2.6 phase 0/2 complete
+Progress: [█████░░░░░] v2.6 phase 1/2 complete
 
 ## Performance Metrics
 
@@ -46,6 +46,8 @@ Progress: [░░░░░░░░░░] v2.6 phase 0/2 complete
 - v2.6: Interpreter reuses existing simulator /oid/{suffix}/{value} HTTP endpoints — no new simulator code
 - v2.6: Non-violated metrics in a pattern are set to healthy value (not left in previous state)
 - v2.6: S mode calls sim_set_oid_stale for the specified metrics
+- v2.6 (82-02): OID_MAP key format: TENANT.ROLE.N.FIELD — T1_P1 subtree=8, T2_P1=9, T1_P2=10, T2_P2=11
+- v2.6 (82-02): Evaluate healthy=10/violated=0; Resolved healthy=1/violated=0; all 4 tenants reuse e2e_set_bypass
 
 ### Decisions
 
@@ -69,5 +71,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: v2.6 roadmap revised — approach changed from 17-script suite to interactive command interpreter, phases 82-83 defined
+Stopped at: Completed 82-02-PLAN.md — fixture ConfigMap and OID mapping file created
 Resume file: None
