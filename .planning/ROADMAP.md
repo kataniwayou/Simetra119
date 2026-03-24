@@ -136,7 +136,7 @@ See `.planning/milestones/v2.5-ROADMAP.md` for details.
 
 ---
 
-### 🚧 v2.6 E2E Manual Tenant Simulation Suite (In Progress)
+### v2.6 E2E Manual Tenant Simulation Suite (In Progress)
 
 **Milestone Goal:** An interactive command interpreter that lets a human operator drive any tenant into any violation state on demand — using a terse CLI pattern syntax — so tenant state transitions can be verified by watching Grafana without managing 17 script files.
 
@@ -150,10 +150,11 @@ See `.planning/milestones/v2.5-ROADMAP.md` for details.
   2. After the grace window passes with no violations set, all 4 tenants show Healthy state in Grafana
   3. The OID metric map contains entries for every OID suffix used by all 4 tenants
   4. The hardcoded mapping file lists per-tenant per-role OID suffixes with healthy and violated values, and adding a new tenant or metric requires adding a single line
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 82-01: TBD
+- [ ] 82-01-PLAN.md — Register 24 v2.6 OIDs in simulator, OID metric map, and device poll config
+- [ ] 82-02-PLAN.md — Create 4-tenant fixture ConfigMap and OID mapping file
 
 #### Phase 83: Command Interpreter
 
@@ -235,9 +236,9 @@ Plans:
 | 79. Dashboard Percentage Update | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 80. E2E Scenario Updates | v2.5 | 2/2 | Complete | 2026-03-23 |
 | 81. E2E Partial Percentage Scenario | v2.5 | 1/1 | Complete | 2026-03-23 |
-| 82. Fixture & OID Mapping | v2.6 | 0/TBD | Not started | - |
+| 82. Fixture & OID Mapping | v2.6 | 0/2 | Not started | - |
 | 83. Command Interpreter | v2.6 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-24 — v2.6 revised from 17-script suite to interactive command interpreter (phases 82-83)*
+*Last updated: 2026-03-24 — Phase 82 planned (2 plans, 1 wave)*
