@@ -5,12 +5,13 @@ Provides a controllable, deterministic SNMP device for E2E pipeline testing.
 All values are driven by a named scenario registry — switch scenarios at runtime
 via the HTTP control endpoint on port 8080.
 
-Serves 24 OIDs total:
+Serves 48 OIDs total:
   7 mapped      (.999.1.x) -- Gauge32, Integer32, Counter32, Counter64, TimeTicks,
                               OctetString, IpAddress
   2 unmapped    (.999.2.x) -- Gauge32, OctetString (outside oidmaps.json)
   6 test-purpose(.999.4.x) -- Gauge32 x5, Integer32 x1 (writable command target)
   9 tenant-OIDs (.999.5.x, .999.6.x, .999.7.x) -- Gauge32, per-tenant T2-T4
+ 24 v2.6 tenant (.999.8.x, .999.9.x, .999.10.x, .999.11.x) -- Gauge32, 4-tenant fixture
 
 Sends two trap streams:
   - Valid traps   with community Simetra.E2E-SIM  every TRAP_INTERVAL seconds
@@ -113,6 +114,34 @@ def _make_scenario(overrides: dict) -> dict:
         f"{E2E_PREFIX}.7.1": 0,                 # e2e_eval_T4   Gauge32
         f"{E2E_PREFIX}.7.2": 0,                 # e2e_res1_T4   Gauge32
         f"{E2E_PREFIX}.7.3": 0,                 # e2e_res2_T4   Gauge32
+        # v2.6: T1_P1 (subtree .999.8.x) -- 4 polled OIDs
+        f"{E2E_PREFIX}.8.1": 0,                 # e2e_T1P1_eval1  Gauge32
+        f"{E2E_PREFIX}.8.2": 0,                 # e2e_T1P1_eval2  Gauge32
+        f"{E2E_PREFIX}.8.3": 0,                 # e2e_T1P1_res1   Gauge32
+        f"{E2E_PREFIX}.8.4": 0,                 # e2e_T1P1_res2   Gauge32
+        # v2.6: T2_P1 (subtree .999.9.x) -- 8 polled OIDs
+        f"{E2E_PREFIX}.9.1": 0,                 # e2e_T2P1_eval1  Gauge32
+        f"{E2E_PREFIX}.9.2": 0,                 # e2e_T2P1_eval2  Gauge32
+        f"{E2E_PREFIX}.9.3": 0,                 # e2e_T2P1_eval3  Gauge32
+        f"{E2E_PREFIX}.9.4": 0,                 # e2e_T2P1_eval4  Gauge32
+        f"{E2E_PREFIX}.9.5": 0,                 # e2e_T2P1_res1   Gauge32
+        f"{E2E_PREFIX}.9.6": 0,                 # e2e_T2P1_res2   Gauge32
+        f"{E2E_PREFIX}.9.7": 0,                 # e2e_T2P1_res3   Gauge32
+        f"{E2E_PREFIX}.9.8": 0,                 # e2e_T2P1_res4   Gauge32
+        # v2.6: T1_P2 (subtree .999.10.x) -- 4 polled OIDs
+        f"{E2E_PREFIX}.10.1": 0,                # e2e_T1P2_eval1  Gauge32
+        f"{E2E_PREFIX}.10.2": 0,                # e2e_T1P2_eval2  Gauge32
+        f"{E2E_PREFIX}.10.3": 0,                # e2e_T1P2_res1   Gauge32
+        f"{E2E_PREFIX}.10.4": 0,                # e2e_T1P2_res2   Gauge32
+        # v2.6: T2_P2 (subtree .999.11.x) -- 8 polled OIDs
+        f"{E2E_PREFIX}.11.1": 0,                # e2e_T2P2_eval1  Gauge32
+        f"{E2E_PREFIX}.11.2": 0,                # e2e_T2P2_eval2  Gauge32
+        f"{E2E_PREFIX}.11.3": 0,                # e2e_T2P2_eval3  Gauge32
+        f"{E2E_PREFIX}.11.4": 0,                # e2e_T2P2_eval4  Gauge32
+        f"{E2E_PREFIX}.11.5": 0,                # e2e_T2P2_res1   Gauge32
+        f"{E2E_PREFIX}.11.6": 0,                # e2e_T2P2_res2   Gauge32
+        f"{E2E_PREFIX}.11.7": 0,                # e2e_T2P2_res3   Gauge32
+        f"{E2E_PREFIX}.11.8": 0,                # e2e_T2P2_res4   Gauge32
     }
     baseline.update(overrides)
     return baseline
@@ -196,6 +225,38 @@ TENANT_OIDS = [
     (f"{E2E_PREFIX}.7.3", "e2e_res2_T4",  v2c.Gauge32, False),
 ]
 
+# v2.6: Per-tenant OIDs for T1_P1/T2_P1/T1_P2/T2_P2 (subtrees .999.8.x - .999.11.x)
+TENANT_OIDS_V26 = [
+    # T1_P1 (subtree .999.8.x) -- P1, 2E + 2R = 4 polled OIDs
+    (f"{E2E_PREFIX}.8.1",  "e2e_T1P1_eval1", v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.8.2",  "e2e_T1P1_eval2", v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.8.3",  "e2e_T1P1_res1",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.8.4",  "e2e_T1P1_res2",  v2c.Gauge32, False),
+    # T2_P1 (subtree .999.9.x) -- P1, 4E + 4R = 8 polled OIDs
+    (f"{E2E_PREFIX}.9.1",  "e2e_T2P1_eval1", v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.9.2",  "e2e_T2P1_eval2", v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.9.3",  "e2e_T2P1_eval3", v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.9.4",  "e2e_T2P1_eval4", v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.9.5",  "e2e_T2P1_res1",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.9.6",  "e2e_T2P1_res2",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.9.7",  "e2e_T2P1_res3",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.9.8",  "e2e_T2P1_res4",  v2c.Gauge32, False),
+    # T1_P2 (subtree .999.10.x) -- P2, 2E + 2R = 4 polled OIDs
+    (f"{E2E_PREFIX}.10.1", "e2e_T1P2_eval1", v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.10.2", "e2e_T1P2_eval2", v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.10.3", "e2e_T1P2_res1",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.10.4", "e2e_T1P2_res2",  v2c.Gauge32, False),
+    # T2_P2 (subtree .999.11.x) -- P2, 4E + 4R = 8 polled OIDs
+    (f"{E2E_PREFIX}.11.1", "e2e_T2P2_eval1", v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.11.2", "e2e_T2P2_eval2", v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.11.3", "e2e_T2P2_eval3", v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.11.4", "e2e_T2P2_eval4", v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.11.5", "e2e_T2P2_res1",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.11.6", "e2e_T2P2_res2",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.11.7", "e2e_T2P2_res3",  v2c.Gauge32, False),
+    (f"{E2E_PREFIX}.11.8", "e2e_T2P2_res4",  v2c.Gauge32, False),
+]
+
 # Trap configuration
 TRAP_OID = f"{E2E_PREFIX}.3.1"
 GAUGE_OID = f"{E2E_PREFIX}.1.1.0"
@@ -271,7 +332,7 @@ def oid_str_to_tuple(oid_str):
 
 
 # ---------------------------------------------------------------------------
-# OID registration: 24 OIDs (7 mapped + 2 unmapped + 6 test-purpose + 9 tenant)
+# OID registration: 48 OIDs (7 mapped + 2 unmapped + 6 test-purpose + 9 tenant + 24 v2.6 tenant)
 # ---------------------------------------------------------------------------
 
 symbols = {}
@@ -288,8 +349,8 @@ for oid_str, label, syntax_cls, _static_value in MAPPED_OIDS + UNMAPPED_OIDS:
     )
     registered_oids.append(f"{oid_str}.0")
 
-# Register 15 test-purpose and tenant OIDs
-for oid_str, label, syntax_cls, writable in TEST_OIDS + TENANT_OIDS:
+# Register 39 test-purpose and tenant OIDs (including v2.6)
+for oid_str, label, syntax_cls, writable in TEST_OIDS + TENANT_OIDS + TENANT_OIDS_V26:
     oid_tuple = oid_str_to_tuple(oid_str)
     safe_label = label.replace("-", "_")
 
