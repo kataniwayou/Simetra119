@@ -165,12 +165,12 @@
       "options": {
         "cellHeight": "sm",
         "footer": {
-          "countRows": false,
-          "fields": "",
+          "show": true,
           "reducer": [
-            "sum"
+            "count"
           ],
-          "show": false
+          "countRows": true,
+          "fields": ""
         },
         "showHeader": true,
         "sortBy": []
@@ -1577,7 +1577,7 @@
                       "from": -1000000000,
                       "result": {
                         "color": "dark-red",
-                        "text": "▼"
+                        "text": "\u00e2\u2013\u00bc"
                       },
                       "to": -0.0001
                     },
@@ -1588,7 +1588,7 @@
                       "from": -0.0001,
                       "result": {
                         "color": "text",
-                        "text": "—"
+                        "text": "\u00e2\u20ac\u201d"
                       },
                       "to": 0.0001
                     },
@@ -1599,7 +1599,7 @@
                       "from": 0.0001,
                       "result": {
                         "color": "dark-green",
-                        "text": "▲"
+                        "text": "\u00e2\u2013\u00b2"
                       },
                       "to": 1000000000
                     },
@@ -1693,12 +1693,12 @@
       "options": {
         "cellHeight": "sm",
         "footer": {
-          "countRows": false,
-          "fields": "",
+          "show": true,
           "reducer": [
-            "sum"
+            "count"
           ],
-          "show": false
+          "countRows": true,
+          "fields": ""
         },
         "showHeader": true,
         "sortBy": []
