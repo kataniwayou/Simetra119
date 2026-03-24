@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -27,6 +28,8 @@ public sealed class SnapshotJob : IJob
     private readonly ILogger<SnapshotJob> _logger;
 
     private readonly ITenantMetricService _tenantMetrics;
+
+    private static readonly ConcurrentDictionary<string, TenantState> s_previousStates = new();
 
     public SnapshotJob(
         ITenantVectorRegistry registry,
@@ -61,8 +64,12 @@ public sealed class SnapshotJob : IJob
             var totalEvaluated = 0;
             var totalUnresolved = 0;
 
-            foreach (var group in _registry.Groups)
+            var groups = _registry.Groups;
+            var advanceBlockedAtIndex = -1;
+
+            for (var g = 0; g < groups.Count; g++)
             {
+                var group = groups[g];
                 var results = new TenantState[group.Tenants.Count];
                 if (group.Tenants.Count == 1)
                 {
@@ -95,7 +102,32 @@ public sealed class SnapshotJob : IJob
                 }
 
                 if (!shouldAdvance)
+                {
+                    // Find first blocking tenant for the log
+                    for (var i = 0; i < results.Length; i++)
+                    {
+                        if (results[i] == TenantState.Unresolved || results[i] == TenantState.NotReady)
+                        {
+                            _logger.LogInformation(
+                                "Advance gate blocked at priority={Priority} by tenant {TenantId} state={State}",
+                                group.Priority, group.Tenants[i].Id, results[i]);
+                            break;
+                        }
+                    }
+                    advanceBlockedAtIndex = g;
                     break;
+                }
+            }
+
+            // Log skipped priority groups
+            if (advanceBlockedAtIndex >= 0)
+            {
+                for (var g = advanceBlockedAtIndex + 1; g < groups.Count; g++)
+                {
+                    _logger.LogInformation(
+                        "Priority group {Priority} skipped -- advance gate blocked ({TenantCount} tenants)",
+                        groups[g].Priority, groups[g].Tenants.Count);
+                }
             }
 
             sw.Stop();
@@ -184,6 +216,9 @@ public sealed class SnapshotJob : IJob
         }
         else if (AreAllEvaluateViolated(tenant.Holders))
         {
+            _logger.LogDebug(
+                "Tenant {TenantId} priority={Priority} tier=3 -- all evaluate violated -- dispatching commands",
+                tenant.Id, tenant.Priority);
             state = TenantState.Unresolved;
         }
         else
@@ -193,6 +228,24 @@ public sealed class SnapshotJob : IJob
                 tenant.Id, tenant.Priority);
             state = TenantState.Healthy;
         }
+
+        // Compute stalePercent here (used in summary log and COMPUTE PERCENTAGES below)
+        var stalePercent = staleTotal == 0 ? 0.0 : staleCount * 100.0 / staleTotal;
+
+        _logger.LogInformation(
+            "Tenant {TenantId} priority={Priority} state={State} stale={StaleCount}/{StaleTotal} ({StalePercent:F1}%)",
+            tenant.Id, tenant.Priority, state, staleCount, staleTotal, stalePercent);
+
+        if (s_previousStates.TryGetValue(tenant.Id, out var oldState))
+        {
+            if (oldState != state)
+            {
+                _logger.LogInformation(
+                    "Tenant {TenantId} state changed {OldState} -> {NewState}",
+                    tenant.Id, oldState, state);
+            }
+        }
+        s_previousStates[tenant.Id] = state;
 
         // --- DISPATCH (only when state = Unresolved) ---
         var enqueueCount = 0;
@@ -242,7 +295,6 @@ public sealed class SnapshotJob : IJob
         }
 
         // --- COMPUTE PERCENTAGES ---
-        var stalePercent = staleTotal == 0 ? 0.0 : staleCount * 100.0 / staleTotal;
         var cmdTotal     = tenant.Commands.Count;
         var dispatchedPct  = cmdTotal == 0 ? 0.0 : dispatchedCount  * 100.0 / cmdTotal;
         var failedPct      = cmdTotal == 0 ? 0.0 : failedCount      * 100.0 / cmdTotal;
