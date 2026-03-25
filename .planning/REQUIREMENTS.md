@@ -9,8 +9,8 @@
 
 - [ ] **CFG-01**: PreferredNode string field in config (feature disabled when absent/empty — backward compatible with existing deployments)
 - [ ] **CFG-02**: Pod reads NODE_NAME env var from Downward API to determine if it is the preferred node
-- [ ] **CFG-03**: Lease namespace resolved from pod's own namespace at runtime (not hardcoded "default")
-- [ ] **CFG-04**: Startup validation: heartbeat lease name must differ from leadership lease name
+- ~~**CFG-03**: Lease namespace resolved from pod's own namespace at runtime~~ — Dropped: `LeaseOptions.Namespace` already configurable, operator sets at deployment
+- ~~**CFG-04**: Startup validation: heartbeat lease name must differ from leadership lease name~~ — Dropped: derived name always appends `-preferred`, collision impossible
 
 ### Preferred Heartbeat
 
@@ -66,8 +66,8 @@
 |-------------|-------|--------|
 | CFG-01 | Phase 84 | Pending |
 | CFG-02 | Phase 84 | Pending |
-| CFG-03 | Phase 84 | Pending |
-| CFG-04 | Phase 84 | Pending |
+| ~~CFG-03~~ | — | Dropped |
+| ~~CFG-04~~ | — | Dropped |
 | HB-04 | Phase 85 | Pending |
 | HB-01 | Phase 86 | Pending |
 | HB-02 | Phase 86 | Pending |
@@ -81,10 +81,10 @@
 | DEP-02 | Phase 89 | Pending |
 
 **Coverage:**
-- v3.0 requirements: 15 total
-- Mapped to phases: 15
+- v3.0 requirements: 13 active (2 dropped)
+- Mapped to phases: 13
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-25*
-*Last updated: 2026-03-25 — traceability complete, all 15 requirements mapped to phases 84-89*
+*Last updated: 2026-03-25 — CFG-03, CFG-04 dropped after phase 84 discussion*
