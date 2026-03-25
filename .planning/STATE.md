@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 Phase: — (between milestones)
 Plan: —
 Status: v2.6 shipped, ready for next milestone
-Last activity: 2026-03-24 — v2.6 milestone archived
+Last activity: 2026-03-25 — Completed quick-092: startup probe device check and watcher naming
 
 Progress: v2.6 shipped. Start next milestone with /gsd:new-milestone
 
