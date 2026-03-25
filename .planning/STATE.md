@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 ## Current Position
 
 Phase: 86 of 89 (PreferredHeartbeatService Writer Path)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-26 — Phase 85 complete (2 plans, 500 tests, 13 new)
+Plan: 1 of TBD in current phase
+Status: In progress
+Last activity: 2026-03-26 — Completed 86-01-PLAN.md (writer path + readiness gate)
 
-Progress: [█████████████████░░░] ~85%
+Progress: [█████████████████░░░] ~86%
 
 ## Performance Metrics
 
@@ -38,7 +38,7 @@ Progress: [█████████████████░░░] ~85%
 - OnStoppedLeading must be idempotent: sets _isLeader = false only, never destructive teardown
 - Startup validator: CFG-04 — heartbeat lease name must differ from leadership lease name (prevents 409 Conflict)
 - Startup validator: CFG-02 — warn/throw when PreferredNode configured but PHYSICAL_HOSTNAME is empty
-- Phase 86 (writer path): readiness gate mechanism not yet selected — three options: ApplicationStarted vs IHealthCheckService poll vs TaskCompletionSource<bool>
+- Phase 86 (writer path): readiness gate selected — IHostApplicationLifetime.ApplicationStarted.Register callback, volatile bool _isSchedulerReady on job (RESOLVED in 86-01)
 - Phase 5 (voluntary yield) has open question: LeaderElector state after mid-renewal cancellation — resourceVersion staleness risk
 
 ### Decisions
@@ -52,7 +52,7 @@ None.
 
 ### Blockers/Concerns
 
-- Phase 86 (writer path): Readiness gate mechanism not yet selected — three options exist. Resolve via brief code inspection of ReadinessHealthCheck before starting 86-01.
+- Phase 86 (86-02): Constructor signature changed in 86-01 — test setup may need updating for IHostApplicationLifetime and IOptions<PodIdentityOptions> params.
 - Phase 88 (voluntary yield): LeaderElector behavior after mid-renewal cancellation unconfirmed. May need a minimal unit test spike before modifying the live election loop.
 
 ### Quick Tasks Completed
@@ -71,5 +71,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-26
-Stopped at: Phase 85 fully complete (85-01 + 85-02) — ready to plan Phase 86
+Stopped at: Completed 86-01-PLAN.md — writer path added to PreferredHeartbeatJob
 Resume file: None
