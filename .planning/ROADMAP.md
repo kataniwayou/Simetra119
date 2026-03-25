@@ -204,7 +204,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 87-01: K8sLeaseElection outer loop with _innerCts, Gate 1 backoff, OnStoppedLeading idempotency
+- [ ] 87-01-PLAN.md — K8sLeaseElection outer loop with _innerCts, Gate 1 backoff, CancelInnerElection method
+- [ ] 87-02-PLAN.md — Unit tests for backoff logic, CancelInnerElection safety, initial state verification
 
 #### Phase 88: K8sLeaseElection — Gate 2 (Voluntary Yield While Leading)
 **Goal**: A non-preferred pod that currently holds leadership releases it when the preferred pod recovers, allowing site-affinity to be restored without operator intervention
@@ -301,10 +302,10 @@ Plans:
 | 84. Config and Interface Foundation | v3.0 | 1/1 | Complete | 2026-03-25 |
 | 85. PreferredHeartbeatService Reader Path | v3.0 | 2/2 | Complete | 2026-03-26 |
 | 86. PreferredHeartbeatService Writer Path | v3.0 | 2/2 | Complete | 2026-03-26 |
-| 87. Election Gate 1 — Backoff Before Acquire | v3.0 | 0/TBD | Not started | - |
+| 87. Election Gate 1 — Backoff Before Acquire | v3.0 | 0/2 | Not started | - |
 | 88. Election Gate 2 — Voluntary Yield | v3.0 | 0/TBD | Not started | - |
 | 89. Observability and Deployment Wiring | v3.0 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-26 — Phase 86 complete*
+*Last updated: 2026-03-26 — Phase 87 planned*
