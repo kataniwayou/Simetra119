@@ -174,8 +174,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 85-01-PLAN.md — PreferredHeartbeatJob implementation, PreferredLeaderService volatile bool, DI wiring
-- [ ] 85-02-PLAN.md — Unit tests for UpdateStampFreshness and PreferredHeartbeatJob with mocked K8s
+- [x] 85-01-PLAN.md — PreferredHeartbeatJob implementation, PreferredLeaderService volatile bool, DI wiring
+- [x] 85-02-PLAN.md — Unit tests for UpdateStampFreshness and PreferredHeartbeatJob with mocked K8s
 
 #### Phase 86: PreferredHeartbeatService — Writer Path and Readiness Gate
 **Goal**: The preferred pod stamps the heartbeat lease only after it is genuinely ready, giving non-preferred pods an accurate presence signal that does not trigger premature yield
@@ -298,7 +298,7 @@ Plans:
 | 82. Fixture & OID Mapping | v2.6 | 2/2 | Complete | 2026-03-24 |
 | 83. Command Interpreter | v2.6 | 1/1 | Complete | 2026-03-24 |
 | 84. Config and Interface Foundation | v3.0 | 1/1 | Complete | 2026-03-25 |
-| 85. PreferredHeartbeatService Reader Path | v3.0 | 0/TBD | Not started | - |
+| 85. PreferredHeartbeatService Reader Path | v3.0 | 2/2 | Complete | 2026-03-26 |
 | 86. PreferredHeartbeatService Writer Path | v3.0 | 0/TBD | Not started | - |
 | 87. Election Gate 1 — Backoff Before Acquire | v3.0 | 0/TBD | Not started | - |
 | 88. Election Gate 2 — Voluntary Yield | v3.0 | 0/TBD | Not started | - |
@@ -306,4 +306,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-25 — Phase 84 complete*
+*Last updated: 2026-03-26 — Phase 85 complete*

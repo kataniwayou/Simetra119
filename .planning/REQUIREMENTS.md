@@ -68,7 +68,7 @@
 | CFG-02 | Phase 84 | Complete |
 | ~~CFG-03~~ | — | Dropped |
 | ~~CFG-04~~ | — | Dropped |
-| HB-04 | Phase 85 | Pending |
+| HB-04 | Phase 85 | Complete |
 | HB-01 | Phase 86 | Pending |
 | HB-02 | Phase 86 | Pending |
 | HB-03 | Phase 86 | Pending |
@@ -87,4 +87,4 @@
 
 ---
 *Requirements defined: 2026-03-25*
-*Last updated: 2026-03-25 — Phase 84 complete, CFG-01 and CFG-02 verified*
+*Last updated: 2026-03-26 — Phase 85 complete, HB-04 verified*
