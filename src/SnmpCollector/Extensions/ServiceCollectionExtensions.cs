@@ -241,6 +241,12 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<K8sLeaseElection>());
             services.AddHostedService(sp => sp.GetRequiredService<K8sLeaseElection>());
 
+            // Phase 84: Preferred leader identity resolution (stub — no background loop until Phase 85).
+            // Concrete-first pattern: same singleton serves both PreferredLeaderService and IPreferredStampReader.
+            services.AddSingleton<PreferredLeaderService>();
+            services.AddSingleton<IPreferredStampReader>(
+                sp => sp.GetRequiredService<PreferredLeaderService>());
+
             // Phase 15: Independent ConfigMap watchers for OID maps and device config
             services.AddSingleton<OidMapWatcherService>();
             services.AddHostedService(sp => sp.GetRequiredService<OidMapWatcherService>());
@@ -260,6 +266,9 @@ public static class ServiceCollectionExtensions
         {
             // Local dev: AlwaysLeaderElection (IsLeader=true, no K8s dependency).
             services.AddSingleton<ILeaderElection, AlwaysLeaderElection>();
+
+            // Phase 84: Preferred leader feature disabled in local dev.
+            services.AddSingleton<IPreferredStampReader, NullPreferredStampReader>();
         }
 
         // Phase 7: PodIdentityOptions.PodIdentity defaults to HOSTNAME env var (K8s pod name),
