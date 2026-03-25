@@ -158,7 +158,7 @@ public sealed class DeviceWatcherService : BackgroundService
         var configMap = await _kubeClient.CoreV1.ReadNamespacedConfigMapAsync(
             ConfigMapName, _namespace, cancellationToken: ct).ConfigureAwait(false);
 
-        await HandleConfigMapChangedAsync(configMap, ct).ConfigureAwait(false);
+        await HandleConfigMapChangedAsync(configMap, ct, isInitialLoad: true).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -167,7 +167,7 @@ public sealed class DeviceWatcherService : BackgroundService
     /// then applies the new device list to <see cref="IDeviceRegistry"/> and
     /// <see cref="DynamicPollScheduler"/>.
     /// </summary>
-    private async Task HandleConfigMapChangedAsync(V1ConfigMap configMap, CancellationToken ct)
+    private async Task HandleConfigMapChangedAsync(V1ConfigMap configMap, CancellationToken ct, bool isInitialLoad = false)
     {
         if (configMap.Data is null || !configMap.Data.TryGetValue(ConfigKey, out var jsonContent))
         {
@@ -217,6 +217,7 @@ public sealed class DeviceWatcherService : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Device reload failed -- previous config remains active");
+            if (isInitialLoad) throw;
         }
         finally
         {
