@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 ## Current Position
 
 Phase: 85 of 89 (PreferredHeartbeatService Reader Path)
-Plan: 1 of 1 in current phase
+Plan: 2 of 2 in current phase
 Status: Phase complete
-Last activity: 2026-03-26 — Completed 85-01-PLAN.md (reader path: PreferredHeartbeatJob + UpdateStampFreshness)
+Last activity: 2026-03-26 — Completed 85-02-PLAN.md (tests: UpdateStampFreshness + PreferredHeartbeatJob with mocked IKubernetes)
 
 Progress: [█████████████████░░░] ~85%
 
@@ -71,5 +71,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-26
-Stopped at: Phase 85 complete — ready to plan Phase 86
+Stopped at: Phase 85 fully complete (85-01 + 85-02) — ready to plan Phase 86
 Resume file: None
