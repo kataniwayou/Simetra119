@@ -1,0 +1,4 @@
+*.tar
+src/SnmpCollector/bin/
+src/SnmpCollector/obj/
+src/SnmpCollector/.vs/

@@ -30,25 +30,20 @@ From the `ship/` folder root:
 docker build -t snmp-collector:v2.6 .
 ```
 
-### 1.2 Pull OTel Collector image
-
-```bash
-docker pull otel/opentelemetry-collector-contrib:0.120.0
-```
-
-### 1.3 Save images to tar files
+### 1.2 Save SnmpCollector image to tar
 
 ```bash
 docker save snmp-collector:v2.6 -o snmp-collector-v2.6.tar
-docker save otel/opentelemetry-collector-contrib:0.120.0 -o otel-collector-0.120.0.tar
 ```
 
-### 1.4 Transfer to prod machine
+> The OTel Collector image is pre-saved in the ship folder as `otel-collector-0.120.0.tar`.
 
-Copy via RDP to the prod machine:
-- `snmp-collector-v2.6.tar`
-- `otel-collector-0.120.0.tar`
-- `ship/deploy/` folder (all yaml files)
+### 1.3 Transfer to prod machine
+
+Copy the entire `ship/` folder to the prod machine via RDP. It contains everything needed:
+- `snmp-collector-v2.6.tar` (built in step 1.2)
+- `otel-collector-0.120.0.tar` (pre-saved)
+- `deploy/` folder (all yaml files)
 
 ---
 
