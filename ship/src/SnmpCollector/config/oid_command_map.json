@@ -1,0 +1,23 @@
+[
+  // ===========================================================================
+  // OID-to-Command-Name Mapping
+  // Local development fallback -- same format as ConfigMap key "oid_command_map.json"
+  // ConfigMap name: simetra-oid-command-map
+  // ===========================================================================
+
+  // ---- OBP (Optical Bypass) bypass commands -- 4 entries ----
+  { "Oid": "1.3.6.1.4.1.47477.10.21.1.4.1.0", "CommandName": "obp_set_bypass_L1" },
+  { "Oid": "1.3.6.1.4.1.47477.10.21.2.4.1.0", "CommandName": "obp_set_bypass_L2" },
+  { "Oid": "1.3.6.1.4.1.47477.10.21.3.4.1.0", "CommandName": "obp_set_bypass_L3" },
+  { "Oid": "1.3.6.1.4.1.47477.10.21.4.4.1.0", "CommandName": "obp_set_bypass_L4" },
+
+  // ---- NPB (Network Packet Broker) counter reset commands -- 8 entries ----
+  { "Oid": "1.3.6.1.4.1.47477.100.3.1.1.0", "CommandName": "npb_reset_counters_P1" },
+  { "Oid": "1.3.6.1.4.1.47477.100.3.2.1.0", "CommandName": "npb_reset_counters_P2" },
+  { "Oid": "1.3.6.1.4.1.47477.100.3.3.1.0", "CommandName": "npb_reset_counters_P3" },
+  { "Oid": "1.3.6.1.4.1.47477.100.3.4.1.0", "CommandName": "npb_reset_counters_P4" },
+  { "Oid": "1.3.6.1.4.1.47477.100.3.5.1.0", "CommandName": "npb_reset_counters_P5" },
+  { "Oid": "1.3.6.1.4.1.47477.100.3.6.1.0", "CommandName": "npb_reset_counters_P6" },
+  { "Oid": "1.3.6.1.4.1.47477.100.3.7.1.0", "CommandName": "npb_reset_counters_P7" },
+  { "Oid": "1.3.6.1.4.1.47477.100.3.8.1.0", "CommandName": "npb_reset_counters_P8" }
+]

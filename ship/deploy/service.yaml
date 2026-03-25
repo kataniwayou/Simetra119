@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: snmp-collector
+  namespace: simetra
+  labels:
+    app: snmp-collector
+spec:
+  type: ClusterIP
+  selector:
+    app: snmp-collector
+  ports:
+  - name: health
+    port: 8080
+    protocol: TCP
+    targetPort: health
+  - name: snmp-trap
+    port: 10162
+    protocol: UDP
+    targetPort: 10162

@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: snmp-collector
+  namespace: simetra
+  labels:
+    app: snmp-collector
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: snmp-collector
+  template:
+    metadata:
+      labels:
+        app: snmp-collector
+    spec:
+      serviceAccountName: simetra-sa
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: snmp-collector
+        image: snmp-collector:local
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8080
+          name: health
+          protocol: TCP
+        - containerPort: 10162
+          name: snmp
+          protocol: UDP
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: Production
+        - name: PodIdentity__PodIdentity
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: PHYSICAL_HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: CONFIG_DIRECTORY
+          value: /app/config
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        startupProbe:
+          httpGet:
+            path: /healthz/startup
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 3
+          failureThreshold: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz/ready
+            port: health
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /healthz/live
+            port: health
+          periodSeconds: 15
+          failureThreshold: 3
+          timeoutSeconds: 5
+      volumes:
+      - name: config
+        projected:
+          sources:
+          - configMap:
+              name: snmp-collector-config
+          - configMap:
+              name: simetra-oid-metric-map
+          - configMap:
+              name: simetra-devices
+          - configMap:
+              name: simetra-tenants

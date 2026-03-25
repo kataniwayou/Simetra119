@@ -1,0 +1,37 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Quartz.Extensions.DependencyInjection</id>
+    <version>3.15.1</version>
+    <title>Quartz.NET</title>
+    <authors>Facundo Glaeser, Marko Lahma, Quartz.NET</authors>
+    <license type="expression">Apache-2.0</license>
+    <licenseUrl>https://licenses.nuget.org/Apache-2.0</licenseUrl>
+    <icon>quartz-logo-small.png</icon>
+    <readme>microsoft-di-integration.md</readme>
+    <projectUrl>https://www.quartz-scheduler.net/</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/quartznet/quartznet/master/src/quartz-logo-small.png</iconUrl>
+    <description>Quartz.NET Microsoft.Extensions.DependencyInjection integration; Quartz Scheduling Framework for .NET</description>
+    <releaseNotes>https://github.com/quartznet/quartznet/releases</releaseNotes>
+    <copyright>Copyright Marko Lahma</copyright>
+    <tags>scheduling tasks jobs triggers scheduler threading</tags>
+    <repository type="git" url="https://github.com/quartznet/quartznet" commit="0e5a7f7591463b0ed5a1cde136dae83c439a0d14" />
+    <dependencies>
+      <group targetFramework="net8.0">
+        <dependency id="Quartz" version="3.15.1" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Configuration.Abstractions" version="8.0.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Options" version="8.0.0" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework="net9.0">
+        <dependency id="Quartz" version="3.15.1" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Configuration.Abstractions" version="9.0.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Options" version="9.0.0" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework=".NETStandard2.0">
+        <dependency id="Quartz" version="3.15.1" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Configuration.Abstractions" version="2.1.1" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Options" version="2.1.1" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>
