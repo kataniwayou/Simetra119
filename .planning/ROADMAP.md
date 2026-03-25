@@ -186,10 +186,11 @@ Plans:
   2. Stamping does not begin until `ReadinessHealthCheck` passes — a pod that has not completed watcher loading and first poll does not emit a heartbeat stamp
   3. On graceful shutdown the heartbeat lease is handled via TTL expiry (not explicit delete), preventing a 404 window that would cause non-preferred pods to race prematurely
   4. `PreferredHeartbeatService` is fully functional on both paths: writer on the preferred pod, reader on all others — verified by integration against the K8s Coordination API
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 86-01: PreferredHeartbeatService writer branch, readiness gate, TTL shutdown strategy
+- [ ] 86-01-PLAN.md — Writer path implementation, readiness gate, write-before-read Execute restructuring
+- [ ] 86-02-PLAN.md — Unit tests for writer path (constructor fix, create/replace, conflict, readiness gate)
 
 #### Phase 87: K8sLeaseElection — Gate 1 (Backoff Before Acquire)
 **Goal**: Non-preferred pods delay their leadership retry when the preferred pod is present, while preserving completely standard election behavior when the preferred pod is absent or unconfigured
@@ -200,7 +201,7 @@ Plans:
   2. When `IsPreferredStampFresh` is false (stamp stale, lease absent, or `PreferredNode` not configured), the non-preferred pod competes with no added delay — behavior is identical to today's election
   3. The preferred pod itself is never subject to Gate 1 backoff — it competes immediately through the normal `LeaderElector` flow
   4. The `_innerCts` outer loop structure is in place and the `OnStoppedLeading` handler is proven idempotent (sets `_isLeader = false` only, no destructive teardown)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [ ] 87-01: K8sLeaseElection outer loop with _innerCts, Gate 1 backoff, OnStoppedLeading idempotency
@@ -214,7 +215,7 @@ Plans:
   2. After yielding, the preferred pod acquires leadership within one `RetryPeriod` through the normal `LeaderElector` flow — no force-acquire, no special path
   3. The yield path does not call `StopAsync` on the host — it cancels `_innerCts` only, allowing the outer loop to restart cleanly without affecting other hosted services
   4. End-to-end scenario verified: non-preferred pod leads → preferred pod stamp becomes fresh → non-preferred yields → preferred pod acquires → system returns to steady-state preferred leadership
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [ ] 88-01: Gate 2 yield implementation, lease deletion on stamp-fresh transition, end-to-end test
@@ -227,7 +228,7 @@ Plans:
   1. A structured INFO log line is emitted at each election decision point: backing off (stamp fresh, not competing), competing normally (stamp stale or feature off), yielding to preferred pod (stamp became fresh while leading), and heartbeat stamping started (preferred pod post-readiness)
   2. The deployment manifest includes a pod anti-affinity rule (`requiredDuringSchedulingIgnoredDuringExecution`, `kubernetes.io/hostname` topology key) preventing two collector pods from landing on the same node
   3. The pod spec injects `PHYSICAL_HOSTNAME` from `spec.nodeName` and `POD_NAMESPACE` from `metadata.namespace` via Downward API env vars — the preferred-election feature activates correctly in a multi-node cluster without manual config
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [ ] 89-01: Structured log lines at all decision points, deployment manifest anti-affinity + Downward API wiring
@@ -299,7 +300,7 @@ Plans:
 | 83. Command Interpreter | v2.6 | 1/1 | Complete | 2026-03-24 |
 | 84. Config and Interface Foundation | v3.0 | 1/1 | Complete | 2026-03-25 |
 | 85. PreferredHeartbeatService Reader Path | v3.0 | 2/2 | Complete | 2026-03-26 |
-| 86. PreferredHeartbeatService Writer Path | v3.0 | 0/TBD | Not started | - |
+| 86. PreferredHeartbeatService Writer Path | v3.0 | 0/2 | Not started | - |
 | 87. Election Gate 1 — Backoff Before Acquire | v3.0 | 0/TBD | Not started | - |
 | 88. Election Gate 2 — Voluntary Yield | v3.0 | 0/TBD | Not started | - |
 | 89. Observability and Deployment Wiring | v3.0 | 0/TBD | Not started | - |
