@@ -64,27 +64,27 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CFG-01 | TBD | Pending |
-| CFG-02 | TBD | Pending |
-| CFG-03 | TBD | Pending |
-| CFG-04 | TBD | Pending |
-| HB-01 | TBD | Pending |
-| HB-02 | TBD | Pending |
-| HB-03 | TBD | Pending |
-| HB-04 | TBD | Pending |
-| ELEC-01 | TBD | Pending |
-| ELEC-02 | TBD | Pending |
-| ELEC-03 | TBD | Pending |
-| ELEC-04 | TBD | Pending |
-| OBS-01 | TBD | Pending |
-| DEP-01 | TBD | Pending |
-| DEP-02 | TBD | Pending |
+| CFG-01 | Phase 84 | Pending |
+| CFG-02 | Phase 84 | Pending |
+| CFG-03 | Phase 84 | Pending |
+| CFG-04 | Phase 84 | Pending |
+| HB-04 | Phase 85 | Pending |
+| HB-01 | Phase 86 | Pending |
+| HB-02 | Phase 86 | Pending |
+| HB-03 | Phase 86 | Pending |
+| ELEC-01 | Phase 87 | Pending |
+| ELEC-03 | Phase 87 | Pending |
+| ELEC-04 | Phase 87 | Pending |
+| ELEC-02 | Phase 88 | Pending |
+| OBS-01 | Phase 89 | Pending |
+| DEP-01 | Phase 89 | Pending |
+| DEP-02 | Phase 89 | Pending |
 
 **Coverage:**
 - v3.0 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15 ⚠️
+- Mapped to phases: 15
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-25*
-*Last updated: 2026-03-25 after initial definition*
+*Last updated: 2026-03-25 — traceability complete, all 15 requirements mapped to phases 84-89*

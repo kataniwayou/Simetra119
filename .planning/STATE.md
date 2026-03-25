@@ -2,61 +2,58 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-24)
+See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v3.0 Preferred Leader Election
+**Current focus:** v3.0 Preferred Leader Election — Phase 84: Config and Interface Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements for v3.0
-Last activity: 2026-03-25 — Milestone v3.0 started
+Phase: 84 of 89 (Config and Interface Foundation)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-03-25 — v3.0 roadmap created, phases 84-89 defined
+
+Progress: [████████████████░░░░] ~84%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 156 (v1.0 through v2.5, including quick tasks)
+- Total plans completed: 156 (v1.0 through v2.6, including quick tasks)
 - Average duration: ~25 min
 - Total execution time: ~43 hours
 
 ## Accumulated Context
 
-### Key Facts
+### Key Facts for v3.0
 
-- 113 E2E scenario scripts total (01-113, including TVM scenarios 107-113)
-- run-all.sh uses sort -V for version-aware ordering (required for 100+ scenarios)
-- CommandWorkerService resolves SET response names via command map (not OID map)
-- dispatched = evaluation decision, suppressed = execution prevention, failed = runtime error
-- v2.4: TenantMetricService uses "SnmpCollector.Tenant" meter — NOT "SnmpCollector.Leader"
-- v2.4: Tier counters increment by holder/command count per cycle, not by 1
-- v2.5: Resolved percent numerator = violated holders (higher = worse), consistent with evaluate direction
-- v2.5: Command percentages: dispatched + failed + suppressed share total_tenant_commands as denominator
-- v2.5: Only NotReady returns early from EvaluateTenant; all other paths gather all tier results first
-- v2.5: All 6 percentage gauge calls + state gauge call recorded at single exit point after state determined
-- v2.5 (76-01): tenant.state renamed to tenant.evaluation.state
-- v2.5 (77-01): CommandWorkerService no longer holds ITenantMetricService — tenant command % recorded at dispatch in SnapshotJob only
-- v2.5 (81-01): E2E percentage == N assertion: awk '{exit (int($1+0.5) == N) ? 0 : 1}' handles float-to-integer rounding
-- v2.6: Approach is interactive command interpreter, not 17 script files
-- v2.6: Command pattern format: {Tenant}-{V/S}-{#}E-{#}R (e.g. T1_P1-V-2E-1R)
-- v2.6: 4-tenant fixture — T1_P1 (P1, 2E/2R/1C), T2_P1 (P1, 4E/4R/1C), T1_P2 (P2, 2E/2R/1C), T2_P2 (P2, 4E/4R/1C)
-- v2.6: Interpreter reuses existing simulator /oid/{suffix}/{value} HTTP endpoints — no new simulator code
-- v2.6: Non-violated metrics in a pattern are set to healthy value (not left in previous state)
-- v2.6: S mode calls sim_set_oid_stale for the specified metrics
-- v2.6 (82-02): OID_MAP key format: TENANT.ROLE.N.FIELD — T1_P1 subtree=8, T2_P1=9, T1_P2=10, T2_P2=11
-- v2.6 (82-02): Evaluate healthy=10/violated=0; Resolved healthy=1/violated=0; all 4 tenants reuse e2e_set_bypass
-- v2.6 (82-01): Simulator baseline must use healthy values (eval=10, res=1) not 0 — otherwise tenants start Violated
-- v2.6 (83-01): sim_command.sh uses #!/usr/bin/env bash + bash 4+ guard (macOS ships bash 3, lacks associative arrays)
+- Two-lease mechanism: leadership lease (existing `snmp-collector`) + heartbeat lease (`snmp-collector-preferred`)
+- PHYSICAL_HOSTNAME env var (not NODE_NAME) — already injected from spec.nodeName in existing deployment
+- PreferredHeartbeatService is both writer (preferred pod, post-readiness) and reader (non-preferred pod, periodic poll)
+- IPreferredStampReader: narrow interface with single `bool IsPreferredStampFresh` — K8sLeaseElection reads in-memory bool (zero network calls in gate path)
+- Freshness threshold = HeartbeatDurationSeconds + 5s (clock-skew tolerance) — never exactly equal to heartbeat interval
+- 404 response from lease read = stale (same as old timestamp) — absence is not instant "down" signal
+- Shutdown strategy: TTL expiry, NOT explicit delete — prevents 404 window that triggers premature non-preferred race
+- Voluntary yield mechanism: cancel _innerCts only, NOT StopAsync (which would cancel the entire host)
+- OnStoppedLeading must be idempotent: sets _isLeader = false only, never destructive teardown
+- Startup validator: CFG-04 — heartbeat lease name must differ from leadership lease name (prevents 409 Conflict)
+- Startup validator: CFG-02 — warn/throw when PreferredNode configured but PHYSICAL_HOSTNAME is empty
+- Phase 3 (readiness gate) has open question: which mechanism for readiness signal (ApplicationStarted vs IHealthCheckService poll vs TaskCompletionSource<bool>)
+- Phase 5 (voluntary yield) has open question: LeaderElector state after mid-renewal cancellation — resourceVersion staleness risk
 
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
 v2.3 and v2.4 decisions archived to milestones/v2.3-ROADMAP.md and milestones/v2.4-ROADMAP.md.
 
-### Blockers/Concerns
+### Pending Todos
 
 None.
+
+### Blockers/Concerns
+
+- Phase 86 (writer path): Readiness gate mechanism not yet selected — three options exist. Resolve via brief code inspection of ReadinessHealthCheck before starting 86-01.
+- Phase 88 (voluntary yield): LeaderElector behavior after mid-renewal cancellation unconfirmed. May need a minimal unit test spike before modifying the live election loop.
 
 ### Quick Tasks Completed
 
@@ -74,5 +71,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-25
-Stopped at: Defining v3.0 requirements
+Stopped at: v3.0 roadmap created — ready to plan Phase 84
 Resume file: None

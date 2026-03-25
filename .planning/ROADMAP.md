@@ -20,6 +20,7 @@
 - ✅ **v2.4 Tenant Vector Metrics** - Phases 72-75 (shipped 2026-03-23)
 - ✅ **v2.5 Tenant Metrics Approach Modification** - Phases 76-81 (shipped 2026-03-23)
 - ✅ **v2.6 E2E Manual Tenant Simulation Suite** - Phases 82-83 (shipped 2026-03-24)
+- 🚧 **v3.0 Preferred Leader Election** - Phases 84-89 (in progress)
 
 ## Phases
 
@@ -145,6 +146,95 @@ See `.planning/milestones/v2.6-ROADMAP.md` for details.
 
 ---
 
+### 🚧 v3.0 Preferred Leader Election (In Progress)
+
+**Milestone Goal:** Pod co-located with SNMP devices gets leadership priority for lowest-latency monitoring, with full HA preserved when the preferred pod is absent.
+
+#### Phase 84: Config and Interface Foundation
+**Goal**: The system knows which pod is preferred and the two-lease design is locked in code before any behavioral changes exist
+**Depends on**: Phase 83
+**Requirements**: CFG-01, CFG-02, CFG-03, CFG-04
+**Success Criteria** (what must be TRUE):
+  1. `SiteAffinityOptions` loads from config with `PreferredNode` optional — app starts and behaves identically when the field is absent or empty
+  2. Pod reads `PHYSICAL_HOSTNAME` env var at startup and determines `_isPreferredPod` — log line confirms preferred vs. non-preferred identity on startup
+  3. Lease namespace is resolved from the pod's own namespace at runtime, not hardcoded to "default"
+  4. Startup validation rejects configuration where the heartbeat lease name equals the leadership lease name, logging a clear error before any election runs
+**Plans**: TBD
+
+Plans:
+- [ ] 84-01: SiteAffinityOptions, IPreferredStampReader, DI registration, startup validators
+
+#### Phase 85: PreferredHeartbeatService — Reader Path
+**Goal**: Non-preferred pods maintain a live in-memory freshness signal by polling the heartbeat lease, with correct clock-skew tolerance and 404-as-stale semantics
+**Depends on**: Phase 84
+**Requirements**: HB-04
+**Success Criteria** (what must be TRUE):
+  1. `PreferredHeartbeatService` on a non-preferred pod polls the heartbeat lease at `HeartbeatRenewIntervalSeconds` cadence and updates `IsPreferredStampFresh`
+  2. A 404 (lease not found) is treated identically to a stale timestamp — `IsPreferredStampFresh` returns false, no exception thrown
+  3. Freshness threshold is `HeartbeatDurationSeconds + 5s` (clock-skew tolerance baked in) — a stamp older than this threshold yields false
+  4. `IPreferredStampReader.IsPreferredStampFresh` returns a real derived value, not a stub — verified by unit test with a mocked lease response
+**Plans**: TBD
+
+Plans:
+- [ ] 85-01: PreferredHeartbeatService reader branch, freshness computation, unit tests
+
+#### Phase 86: PreferredHeartbeatService — Writer Path and Readiness Gate
+**Goal**: The preferred pod stamps the heartbeat lease only after it is genuinely ready, giving non-preferred pods an accurate presence signal that does not trigger premature yield
+**Depends on**: Phase 85
+**Requirements**: HB-01, HB-02, HB-03
+**Success Criteria** (what must be TRUE):
+  1. Preferred pod creates and renews the `snmp-collector-preferred` heartbeat lease at `HeartbeatRenewIntervalSeconds`, with pod identity and `renewTime` in the lease spec
+  2. Stamping does not begin until `ReadinessHealthCheck` passes — a pod that has not completed watcher loading and first poll does not emit a heartbeat stamp
+  3. On graceful shutdown the heartbeat lease is handled via TTL expiry (not explicit delete), preventing a 404 window that would cause non-preferred pods to race prematurely
+  4. `PreferredHeartbeatService` is fully functional on both paths: writer on the preferred pod, reader on all others — verified by integration against the K8s Coordination API
+**Plans**: TBD
+
+Plans:
+- [ ] 86-01: PreferredHeartbeatService writer branch, readiness gate, TTL shutdown strategy
+
+#### Phase 87: K8sLeaseElection — Gate 1 (Backoff Before Acquire)
+**Goal**: Non-preferred pods delay their leadership retry when the preferred pod is present, while preserving completely standard election behavior when the preferred pod is absent or unconfigured
+**Depends on**: Phase 86
+**Requirements**: ELEC-01, ELEC-03, ELEC-04
+**Success Criteria** (what must be TRUE):
+  1. When `IsPreferredStampFresh` is true, a non-preferred pod extends its retry delay — it does not immediately re-enter the `RunAndTryToHoldLeadershipForeverAsync` loop
+  2. When `IsPreferredStampFresh` is false (stamp stale, lease absent, or `PreferredNode` not configured), the non-preferred pod competes with no added delay — behavior is identical to today's election
+  3. The preferred pod itself is never subject to Gate 1 backoff — it competes immediately through the normal `LeaderElector` flow
+  4. The `_innerCts` outer loop structure is in place and the `OnStoppedLeading` handler is proven idempotent (sets `_isLeader = false` only, no destructive teardown)
+**Plans**: TBD
+
+Plans:
+- [ ] 87-01: K8sLeaseElection outer loop with _innerCts, Gate 1 backoff, OnStoppedLeading idempotency
+
+#### Phase 88: K8sLeaseElection — Gate 2 (Voluntary Yield While Leading)
+**Goal**: A non-preferred pod that currently holds leadership releases it when the preferred pod recovers, allowing site-affinity to be restored without operator intervention
+**Depends on**: Phase 87
+**Requirements**: ELEC-02
+**Success Criteria** (what must be TRUE):
+  1. When a non-preferred pod is leader and `IsPreferredStampFresh` transitions to true (preferred pod has recovered), the leader voluntarily deletes the leadership lease
+  2. After yielding, the preferred pod acquires leadership within one `RetryPeriod` through the normal `LeaderElector` flow — no force-acquire, no special path
+  3. The yield path does not call `StopAsync` on the host — it cancels `_innerCts` only, allowing the outer loop to restart cleanly without affecting other hosted services
+  4. End-to-end scenario verified: non-preferred pod leads → preferred pod stamp becomes fresh → non-preferred yields → preferred pod acquires → system returns to steady-state preferred leadership
+**Plans**: TBD
+
+Plans:
+- [ ] 88-01: Gate 2 yield implementation, lease deletion on stamp-fresh transition, end-to-end test
+
+#### Phase 89: Observability and Deployment Wiring
+**Goal**: Every preferred-election decision is visible in logs, the deployment manifest enforces one-pod-per-node topology, and the node-name env var is correctly wired so the feature activates in production
+**Depends on**: Phase 88
+**Requirements**: OBS-01, DEP-01, DEP-02
+**Success Criteria** (what must be TRUE):
+  1. A structured INFO log line is emitted at each election decision point: backing off (stamp fresh, not competing), competing normally (stamp stale or feature off), yielding to preferred pod (stamp became fresh while leading), and heartbeat stamping started (preferred pod post-readiness)
+  2. The deployment manifest includes a pod anti-affinity rule (`requiredDuringSchedulingIgnoredDuringExecution`, `kubernetes.io/hostname` topology key) preventing two collector pods from landing on the same node
+  3. The pod spec injects `PHYSICAL_HOSTNAME` from `spec.nodeName` and `POD_NAMESPACE` from `metadata.namespace` via Downward API env vars — the preferred-election feature activates correctly in a multi-node cluster without manual config
+**Plans**: TBD
+
+Plans:
+- [ ] 89-01: Structured log lines at all decision points, deployment manifest anti-affinity + Downward API wiring
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -208,7 +298,13 @@ See `.planning/milestones/v2.6-ROADMAP.md` for details.
 | 81. E2E Partial Percentage Scenario | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 82. Fixture & OID Mapping | v2.6 | 2/2 | Complete | 2026-03-24 |
 | 83. Command Interpreter | v2.6 | 1/1 | Complete | 2026-03-24 |
+| 84. Config and Interface Foundation | v3.0 | 0/TBD | Not started | - |
+| 85. PreferredHeartbeatService Reader Path | v3.0 | 0/TBD | Not started | - |
+| 86. PreferredHeartbeatService Writer Path | v3.0 | 0/TBD | Not started | - |
+| 87. Election Gate 1 — Backoff Before Acquire | v3.0 | 0/TBD | Not started | - |
+| 88. Election Gate 2 — Voluntary Yield | v3.0 | 0/TBD | Not started | - |
+| 89. Observability and Deployment Wiring | v3.0 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-24 — Phase 83 complete, milestone v2.6 complete*
+*Last updated: 2026-03-25 — v3.0 Preferred Leader Election milestone added, phases 84-89*
