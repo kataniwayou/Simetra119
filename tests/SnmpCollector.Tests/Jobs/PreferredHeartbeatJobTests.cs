@@ -2,6 +2,7 @@ using System.Net;
 using k8s;
 using k8s.Autorest;
 using k8s.Models;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -16,17 +17,21 @@ using Xunit;
 namespace SnmpCollector.Tests.Jobs;
 
 /// <summary>
-/// Unit tests for <see cref="PreferredHeartbeatJob"/> covering all lease-read scenarios:
-/// fresh lease, stale lease, exact threshold, 404, transient errors, null timestamps,
-/// acquireTime fallback, and liveness stamping.
+/// Unit tests for <see cref="PreferredHeartbeatJob"/> covering:
+/// <list type="bullet">
+///   <item>Reader path — fresh/stale/404/transient-error/null-timestamps/liveness (8 tests, Phase 85)</item>
+///   <item>Writer path — create, renew, readiness gate, non-preferred skip, 409/404 conflict,
+///         transient error, AcquireTime only on create (9 tests, Phase 86)</item>
+/// </list>
 /// <para>
 /// SC-4: IPreferredStampReader.IsPreferredStampFresh returns a real derived value, not a stub —
 /// verified here with a mocked K8s lease response.
 /// </para>
 /// <para>
-/// Mocking strategy: <see cref="ICoordinationV1Operations.ReadNamespacedLeaseWithHttpMessagesAsync"/>
-/// is the underlying interface method called by the <c>ReadNamespacedLeaseAsync</c> extension method.
-/// NSubstitute mocks the interface method; the extension delegates to it automatically.
+/// Mocking strategy: the extension methods (<c>ReadNamespacedLeaseAsync</c>,
+/// <c>CreateNamespacedLeaseAsync</c>, <c>ReplaceNamespacedLeaseAsync</c>) delegate to the
+/// underlying <see cref="ICoordinationV1Operations"/> WithHttpMessages overloads.
+/// NSubstitute mocks those interface methods; the extensions delegate automatically.
 /// </para>
 /// </summary>
 public sealed class PreferredHeartbeatJobTests
@@ -35,14 +40,21 @@ public sealed class PreferredHeartbeatJobTests
     private const string LeaseName = "snmp-collector-leader";
     private const string Namespace = "default";
     private const string JobKeyName = "preferred-heartbeat";
+    private const string PodId = "test-pod-01";
+    private const string NodeName = "node-a";
 
     // -------------------------------------------------------------------------
-    // Test infrastructure
+    // Shared test infrastructure
     // -------------------------------------------------------------------------
 
     private readonly ICoordinationV1Operations _mockCoordV1 = Substitute.For<ICoordinationV1Operations>();
     private readonly IKubernetes _mockKubeClient = Substitute.For<IKubernetes>();
     private readonly ILivenessVectorService _mockLiveness = Substitute.For<ILivenessVectorService>();
+
+    private readonly IOptions<LeaseOptions> _leaseOptions;
+    private readonly IOptions<PodIdentityOptions> _podIdentityOptions;
+
+    // Reader-only test job: not preferred, not ready (default lifetime mock, CancellationToken.None)
     private readonly PreferredLeaderService _preferredLeaderService;
     private readonly PreferredHeartbeatJob _job;
 
@@ -50,21 +62,30 @@ public sealed class PreferredHeartbeatJobTests
     {
         _mockKubeClient.CoordinationV1.Returns(_mockCoordV1);
 
-        var leaseOptions = Options.Create(new LeaseOptions
+        _leaseOptions = Options.Create(new LeaseOptions
         {
             Name = LeaseName,
             Namespace = Namespace,
             DurationSeconds = DurationSeconds
         });
 
+        _podIdentityOptions = Options.Create(new PodIdentityOptions
+        {
+            PodIdentity = PodId
+        });
+
         _preferredLeaderService = new PreferredLeaderService(
-            leaseOptions,
+            _leaseOptions,
             NullLogger<PreferredLeaderService>.Instance);
 
+        // Default job: not preferred (no PreferredNode set), not ready (CancellationToken.None never fires)
+        var lifetime = MakeLifetime(alreadyStarted: false);
         _job = new PreferredHeartbeatJob(
             _mockKubeClient,
             _preferredLeaderService,
-            leaseOptions,
+            _leaseOptions,
+            _podIdentityOptions,
+            lifetime,
             _mockLiveness,
             NullLogger<PreferredHeartbeatJob>.Instance);
     }
@@ -77,8 +98,66 @@ public sealed class PreferredHeartbeatJobTests
         => new StubJobContext(jobKeyName);
 
     /// <summary>
-    /// Sets up the mock to return the given lease via the underlying WithHttpMessages method.
-    /// The ReadNamespacedLeaseAsync extension delegates to ReadNamespacedLeaseWithHttpMessagesAsync.
+    /// Returns a mock IHostApplicationLifetime whose ApplicationStarted token is either
+    /// already cancelled (simulating the host fully started) or not (host still starting).
+    /// </summary>
+    private static IHostApplicationLifetime MakeLifetime(bool alreadyStarted)
+    {
+        var lifetime = Substitute.For<IHostApplicationLifetime>();
+
+        if (alreadyStarted)
+        {
+            // Create a pre-cancelled token so Register fires synchronously in the constructor.
+            var cts = new CancellationTokenSource();
+            cts.Cancel();
+            lifetime.ApplicationStarted.Returns(cts.Token);
+        }
+        else
+        {
+            lifetime.ApplicationStarted.Returns(CancellationToken.None);
+        }
+
+        return lifetime;
+    }
+
+    /// <summary>
+    /// Builds a PreferredHeartbeatJob that is the preferred pod (PHYSICAL_HOSTNAME == PreferredNode)
+    /// and optionally already started (readiness gate open).
+    /// Caller MUST restore PHYSICAL_HOSTNAME after the test.
+    /// </summary>
+    private PreferredHeartbeatJob MakePreferredJob(
+        bool schedulerReady,
+        out PreferredLeaderService preferredLeaderService)
+    {
+        var leaseOptions = Options.Create(new LeaseOptions
+        {
+            Name = LeaseName,
+            Namespace = Namespace,
+            DurationSeconds = DurationSeconds,
+            PreferredNode = NodeName          // enables preferred-pod feature
+        });
+
+        // PHYSICAL_HOSTNAME must match PreferredNode for IsPreferredPod = true
+        Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", NodeName);
+
+        preferredLeaderService = new PreferredLeaderService(
+            leaseOptions,
+            NullLogger<PreferredLeaderService>.Instance);
+
+        var lifetime = MakeLifetime(alreadyStarted: schedulerReady);
+
+        return new PreferredHeartbeatJob(
+            _mockKubeClient,
+            preferredLeaderService,
+            leaseOptions,
+            _podIdentityOptions,
+            lifetime,
+            _mockLiveness,
+            NullLogger<PreferredHeartbeatJob>.Instance);
+    }
+
+    /// <summary>
+    /// Sets up the read mock to return the given lease.
     /// </summary>
     private void SetupLeaseResponse(V1Lease lease)
     {
@@ -99,7 +178,7 @@ public sealed class PreferredHeartbeatJobTests
     }
 
     /// <summary>
-    /// Sets up the mock to throw the given exception.
+    /// Sets up the read mock to throw the given exception.
     /// </summary>
     private void SetupLeaseThrows(Exception ex)
     {
@@ -113,6 +192,125 @@ public sealed class PreferredHeartbeatJobTests
             .ThrowsAsync(ex);
     }
 
+    /// <summary>
+    /// Sets up CreateNamespacedLeaseWithHttpMessagesAsync to return a lease with the given resourceVersion.
+    /// </summary>
+    private void SetupCreateResponse(string resourceVersion = "rv-100")
+    {
+        var created = MakeLease(resourceVersion);
+        var response = new HttpOperationResponse<V1Lease>
+        {
+            Body = created,
+            Response = new HttpResponseMessage(HttpStatusCode.Created)
+        };
+
+        _mockCoordV1
+            .CreateNamespacedLeaseWithHttpMessagesAsync(
+                Arg.Any<V1Lease>(),
+                Arg.Any<string>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(response);
+    }
+
+    /// <summary>
+    /// Sets up CreateNamespacedLeaseWithHttpMessagesAsync to throw an HttpOperationException
+    /// with the specified status code.
+    /// </summary>
+    private void SetupCreateThrows(HttpStatusCode statusCode)
+    {
+        _mockCoordV1
+            .CreateNamespacedLeaseWithHttpMessagesAsync(
+                Arg.Any<V1Lease>(),
+                Arg.Any<string>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                Arg.Any<CancellationToken>())
+            .ThrowsAsync(MakeHttpException(statusCode));
+    }
+
+    /// <summary>
+    /// Sets up CreateNamespacedLeaseWithHttpMessagesAsync to throw a generic exception.
+    /// </summary>
+    private void SetupCreateThrowsGeneric(Exception ex)
+    {
+        _mockCoordV1
+            .CreateNamespacedLeaseWithHttpMessagesAsync(
+                Arg.Any<V1Lease>(),
+                Arg.Any<string>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                Arg.Any<CancellationToken>())
+            .ThrowsAsync(ex);
+    }
+
+    /// <summary>
+    /// Sets up ReplaceNamespacedLeaseWithHttpMessagesAsync to return a lease with a new resourceVersion.
+    /// </summary>
+    private void SetupReplaceResponse(string resourceVersion = "rv-200")
+    {
+        var replaced = MakeLease(resourceVersion);
+        var response = new HttpOperationResponse<V1Lease>
+        {
+            Body = replaced,
+            Response = new HttpResponseMessage(HttpStatusCode.OK)
+        };
+
+        _mockCoordV1
+            .ReplaceNamespacedLeaseWithHttpMessagesAsync(
+                Arg.Any<V1Lease>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(response);
+    }
+
+    /// <summary>
+    /// Sets up ReplaceNamespacedLeaseWithHttpMessagesAsync to throw an HttpOperationException.
+    /// </summary>
+    private void SetupReplaceThrows(HttpStatusCode statusCode)
+    {
+        _mockCoordV1
+            .ReplaceNamespacedLeaseWithHttpMessagesAsync(
+                Arg.Any<V1Lease>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                Arg.Any<CancellationToken>())
+            .ThrowsAsync(MakeHttpException(statusCode));
+    }
+
+    private static V1Lease MakeLease(string resourceVersion = "rv-100") =>
+        new()
+        {
+            Metadata = new V1ObjectMeta { ResourceVersion = resourceVersion },
+            Spec = new V1LeaseSpec
+            {
+                HolderIdentity = PodId,
+                RenewTime = DateTime.UtcNow,
+                LeaseDurationSeconds = DurationSeconds
+            }
+        };
+
     private static V1Lease FreshLease(DateTime? renewTime = null, DateTime? acquireTime = null) =>
         new()
         {
@@ -123,11 +321,14 @@ public sealed class PreferredHeartbeatJobTests
             }
         };
 
-    private static HttpOperationException Make404Exception()
+    private static HttpOperationException Make404Exception() =>
+        MakeHttpException(HttpStatusCode.NotFound);
+
+    private static HttpOperationException MakeHttpException(HttpStatusCode statusCode)
     {
         var response = new HttpResponseMessageWrapper(
-            new HttpResponseMessage(HttpStatusCode.NotFound), "");
-        return new HttpOperationException("Not Found") { Response = response };
+            new HttpResponseMessage(statusCode), "");
+        return new HttpOperationException(statusCode.ToString()) { Response = response };
     }
 
     // -------------------------------------------------------------------------
@@ -300,9 +501,461 @@ public sealed class PreferredHeartbeatJobTests
         _mockLiveness.Received(1).Stamp(JobKeyName);
     }
 
+    // =========================================================================
+    //  Writer-path tests (Phase 86)
+    // =========================================================================
+
     // -------------------------------------------------------------------------
-    // Minimal IJobExecutionContext stub
+    // 9. Execute_PreferredAndReady_CreatesHeartbeatLease
+    //    HB-01: preferred pod + scheduler ready + no cached resourceVersion
+    //    -> calls Create with HolderIdentity, RenewTime, LeaseDurationSeconds, AcquireTime
     // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_PreferredAndReady_CreatesHeartbeatLease()
+    {
+        // Arrange
+        SetupCreateResponse("rv-100");
+        SetupLeaseResponse(FreshLease());  // reader path
+
+        var job = MakePreferredJob(schedulerReady: true, out _);
+
+        try
+        {
+            // Act
+            await job.Execute(MakeContext());
+
+            // Assert: Create called exactly once
+            await _mockCoordV1.Received(1)
+                .CreateNamespacedLeaseWithHttpMessagesAsync(
+                    Arg.Is<V1Lease>(l =>
+                        l.Spec.HolderIdentity == PodId &&
+                        l.Spec.RenewTime != null &&
+                        l.Spec.AcquireTime != null &&
+                        l.Spec.LeaseDurationSeconds == DurationSeconds),
+                    Arg.Any<string>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                    Arg.Any<CancellationToken>());
+
+            // Replace must NOT be called on first tick
+            await _mockCoordV1.DidNotReceive()
+                .ReplaceNamespacedLeaseWithHttpMessagesAsync(
+                    Arg.Any<V1Lease>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                    Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", null);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 10. Execute_PreferredAndReady_RenewsWithCachedResourceVersion
+    //     Second tick uses Replace (not Create) with the cached resourceVersion.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_PreferredAndReady_RenewsWithCachedResourceVersion()
+    {
+        // Arrange: first tick creates (rv-100), second tick replaces (rv-200)
+        SetupCreateResponse("rv-100");
+        SetupReplaceResponse("rv-200");
+        SetupLeaseResponse(FreshLease());  // reader path
+
+        var job = MakePreferredJob(schedulerReady: true, out _);
+
+        try
+        {
+            // Act: tick 1 — create
+            await job.Execute(MakeContext());
+
+            // Act: tick 2 — replace using cached rv-100
+            await job.Execute(MakeContext());
+
+            // Assert: Replace called with the resourceVersion from tick 1
+            await _mockCoordV1.Received(1)
+                .ReplaceNamespacedLeaseWithHttpMessagesAsync(
+                    Arg.Is<V1Lease>(l => l.Metadata.ResourceVersion == "rv-100"),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                    Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", null);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 11. Execute_PreferredButNotReady_SkipsWrite
+    //     Readiness gate: scheduler not ready -> no Create or Replace.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_PreferredButNotReady_SkipsWrite()
+    {
+        // Arrange: preferred pod but scheduler NOT ready (CancellationToken.None)
+        SetupLeaseResponse(FreshLease());  // reader path only
+
+        var job = MakePreferredJob(schedulerReady: false, out _);
+
+        try
+        {
+            // Act
+            await job.Execute(MakeContext());
+
+            // Assert: no write calls at all
+            await _mockCoordV1.DidNotReceive()
+                .CreateNamespacedLeaseWithHttpMessagesAsync(
+                    Arg.Any<V1Lease>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                    Arg.Any<CancellationToken>());
+
+            await _mockCoordV1.DidNotReceive()
+                .ReplaceNamespacedLeaseWithHttpMessagesAsync(
+                    Arg.Any<V1Lease>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                    Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", null);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 12. Execute_NotPreferred_SkipsWrite
+    //     Non-preferred pod -> no Create or Replace. Reader path still runs.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_NotPreferred_SkipsWrite()
+    {
+        // Arrange: default _job is not preferred (no PreferredNode), but scheduler ready doesn't matter
+        SetupLeaseResponse(FreshLease());  // reader path
+
+        // Act
+        await _job.Execute(MakeContext());
+
+        // Assert: no write calls, reader path ran (IsPreferredStampFresh updated)
+        await _mockCoordV1.DidNotReceive()
+            .CreateNamespacedLeaseWithHttpMessagesAsync(
+                Arg.Any<V1Lease>(),
+                Arg.Any<string>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                Arg.Any<CancellationToken>());
+
+        await _mockCoordV1.DidNotReceive()
+            .ReplaceNamespacedLeaseWithHttpMessagesAsync(
+                Arg.Any<V1Lease>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                Arg.Any<CancellationToken>());
+
+        Assert.True(_preferredLeaderService.IsPreferredStampFresh);
+    }
+
+    // -------------------------------------------------------------------------
+    // 13. Execute_CreateConflict409_FallsBackToReadThenReplace
+    //     409 on Create -> reads existing lease -> calls Replace.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_CreateConflict409_FallsBackToReadThenReplace()
+    {
+        // Arrange: Create throws 409, Read returns rv-existing, Replace succeeds
+        SetupCreateThrows(HttpStatusCode.Conflict);
+
+        // The read for the fallback path (ReadNamespacedLeaseAsync) returns a lease with a resourceVersion
+        var existingLease = MakeLease("rv-existing");
+        var readResponse = new HttpOperationResponse<V1Lease>
+        {
+            Body = existingLease,
+            Response = new HttpResponseMessage(HttpStatusCode.OK)
+        };
+        _mockCoordV1
+            .ReadNamespacedLeaseWithHttpMessagesAsync(
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<bool?>(),
+                Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(readResponse);
+
+        SetupReplaceResponse("rv-200");
+
+        var job = MakePreferredJob(schedulerReady: true, out _);
+
+        try
+        {
+            // Act
+            await job.Execute(MakeContext());
+
+            // Assert: Replace called with resourceVersion from the read fallback
+            await _mockCoordV1.Received(1)
+                .ReplaceNamespacedLeaseWithHttpMessagesAsync(
+                    Arg.Is<V1Lease>(l => l.Metadata.ResourceVersion == "rv-existing"),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                    Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", null);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 14. Execute_ReplaceConflict409_InvalidatesCache
+    //     409 on Replace -> cache invalidated -> next tick calls Create again.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_ReplaceConflict409_InvalidatesCache()
+    {
+        // Arrange: tick 1 creates (caches rv-100), tick 2 replaces but gets 409
+        SetupCreateResponse("rv-100");
+        SetupLeaseResponse(FreshLease());  // reader path
+
+        var job = MakePreferredJob(schedulerReady: true, out _);
+
+        try
+        {
+            // Tick 1: create succeeds, rv-100 cached
+            await job.Execute(MakeContext());
+
+            // Tick 2: replace throws 409 -> cache invalidated
+            SetupReplaceThrows(HttpStatusCode.Conflict);
+            await job.Execute(MakeContext());
+
+            // Tick 3: cache is null again -> Create called (not Replace)
+            SetupCreateResponse("rv-300");
+            _mockCoordV1.ClearReceivedCalls();
+            await job.Execute(MakeContext());
+
+            // Assert: Create called again (not Replace) on tick 3
+            await _mockCoordV1.Received(1)
+                .CreateNamespacedLeaseWithHttpMessagesAsync(
+                    Arg.Any<V1Lease>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                    Arg.Any<CancellationToken>());
+
+            await _mockCoordV1.DidNotReceive()
+                .ReplaceNamespacedLeaseWithHttpMessagesAsync(
+                    Arg.Any<V1Lease>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                    Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", null);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 15. Execute_Replace404_InvalidatesCache
+    //     404 on Replace -> cache invalidated -> next tick calls Create again.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_Replace404_InvalidatesCache()
+    {
+        // Arrange: tick 1 creates (caches rv-100), tick 2 replaces but gets 404
+        SetupCreateResponse("rv-100");
+        SetupLeaseResponse(FreshLease());  // reader path
+
+        var job = MakePreferredJob(schedulerReady: true, out _);
+
+        try
+        {
+            // Tick 1: create succeeds
+            await job.Execute(MakeContext());
+
+            // Tick 2: replace throws 404 -> cache invalidated
+            SetupReplaceThrows(HttpStatusCode.NotFound);
+            await job.Execute(MakeContext());
+
+            // Tick 3: cache null -> Create called again
+            SetupCreateResponse("rv-300");
+            _mockCoordV1.ClearReceivedCalls();
+            await job.Execute(MakeContext());
+
+            await _mockCoordV1.Received(1)
+                .CreateNamespacedLeaseWithHttpMessagesAsync(
+                    Arg.Any<V1Lease>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                    Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", null);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 16. Execute_WriteTransientError_LogsWarningAndContinuesRead
+    //     Generic exception on Create -> job does not throw, reader path runs,
+    //     liveness stamped.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_WriteTransientError_LogsWarningAndContinuesRead()
+    {
+        // Arrange: Create throws a transient error
+        SetupCreateThrowsGeneric(new HttpRequestException("connection refused"));
+        SetupLeaseResponse(FreshLease());  // reader path
+
+        var job = MakePreferredJob(schedulerReady: true, out var preferredLeaderService);
+
+        try
+        {
+            // Act: should NOT throw
+            await job.Execute(MakeContext());
+
+            // Assert: liveness stamped (finally block in Execute)
+            _mockLiveness.Received(1).Stamp(JobKeyName);
+
+            // Assert: reader path still ran (stamp freshness updated)
+            Assert.True(preferredLeaderService.IsPreferredStampFresh);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", null);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 17. Execute_AcquireTimeSetOnlyOnCreate_NotOnReplace
+    //     AcquireTime present in Create body, absent (null) in Replace body.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_AcquireTimeSetOnlyOnCreate_NotOnReplace()
+    {
+        // Capture the lease bodies sent to Create and Replace
+        V1Lease? capturedCreate = null;
+        V1Lease? capturedReplace = null;
+
+        var createResponse = new HttpOperationResponse<V1Lease>
+        {
+            Body = MakeLease("rv-100"),
+            Response = new HttpResponseMessage(HttpStatusCode.Created)
+        };
+        _mockCoordV1
+            .CreateNamespacedLeaseWithHttpMessagesAsync(
+                Arg.Do<V1Lease>(l => capturedCreate = l),
+                Arg.Any<string>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(createResponse);
+
+        var replaceResponse = new HttpOperationResponse<V1Lease>
+        {
+            Body = MakeLease("rv-200"),
+            Response = new HttpResponseMessage(HttpStatusCode.OK)
+        };
+        _mockCoordV1
+            .ReplaceNamespacedLeaseWithHttpMessagesAsync(
+                Arg.Do<V1Lease>(l => capturedReplace = l),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(replaceResponse);
+
+        SetupLeaseResponse(FreshLease());  // reader path
+
+        var job = MakePreferredJob(schedulerReady: true, out _);
+
+        try
+        {
+            // Tick 1: Create
+            await job.Execute(MakeContext());
+            // Tick 2: Replace
+            await job.Execute(MakeContext());
+
+            // Assert: AcquireTime set on Create body
+            Assert.NotNull(capturedCreate);
+            Assert.NotNull(capturedCreate!.Spec.AcquireTime);
+
+            // Assert: AcquireTime NOT set on Replace body (renewal only updates RenewTime)
+            Assert.NotNull(capturedReplace);
+            Assert.Null(capturedReplace!.Spec.AcquireTime);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", null);
+        }
+    }
+
+    // =========================================================================
+    //  Minimal IJobExecutionContext stub
+    // =========================================================================
 
     private sealed class StubJobContext : IJobExecutionContext
     {
