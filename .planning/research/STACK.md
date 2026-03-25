@@ -1,17 +1,19 @@
 # Stack Research
 
-**Domain:** Tenant-level observability metrics — OTel SDK instrument patterns and Grafana dashboard
-**Researched:** 2026-03-22
+**Domain:** Preferred leader election with site-affinity — two-lease mechanism for SNMP monitoring
+**Researched:** 2026-03-25
 **Confidence:** HIGH
 
 ---
 
 ## Context
 
-This is a targeted stack addendum for the tenant vector metrics milestone. The project already runs
-OpenTelemetry .NET SDK 1.15 with OTLP gRPC exporter, `System.Diagnostics.Metrics`, Prometheus remote-write,
-and Grafana. No new dependencies are needed. All findings below are based on codebase inspection and
-verified against official OTel documentation.
+This is a targeted stack addendum for adding preferred leader election to an existing SNMP collector
+that already runs K8s Lease-based leader election via `KubernetesClient` 18.0.13. The existing
+`K8sLeaseElection` uses `LeaseLock` + `LeaderElector` from `k8s.LeaderElection.*`. The new mechanism
+adds a **second, independently managed Lease resource** used solely as a heartbeat stamp — it does
+not go through `LeaderElector` at all. All findings are based on codebase inspection plus verification
+against NuGet and official Kubernetes API documentation.
 
 ---
 
@@ -19,258 +21,135 @@ verified against official OTel documentation.
 
 ### Core Technologies
 
-All technologies are already in the project. No additions required.
+No new NuGet packages are required. All needed APIs exist in the current dependencies.
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| `System.Diagnostics.Metrics` (BCL) | .NET 9 | Counter, Gauge, Histogram instruments | Built into .NET; OTel SDK maps it to OTLP |
-| `OpenTelemetry.Exporter.OpenTelemetryProtocol` | 1.15.0 | OTLP gRPC export | Already in csproj; supports all instrument types |
-| `OpenTelemetry.Extensions.Hosting` | 1.15.0 | `AddMeter`, `AddView`, SDK wiring | Already in csproj |
-| Prometheus + Grafana | existing | Metric storage and dashboards | Already deployed |
+| Technology | Current Version | Role in Preferred Election | Confidence |
+|------------|----------------|---------------------------|------------|
+| `KubernetesClient` | 18.0.13 | Direct `CoordinationV1` API calls for the heartbeat lease (create / read / replace / delete) | HIGH |
+| `Microsoft.Extensions.Hosting` | 9.0.0 | `BackgroundService` for the `PreferredHeartbeatService` loop | HIGH |
+| `Microsoft.Extensions.Options` | 9.0.0 | Config binding for the new `PreferredElectionOptions` config section | HIGH |
+| K8s Downward API (pod env vars) | cluster feature | Inject `NODE_NAME` and `POD_NAMESPACE` into the container at runtime | HIGH |
 
-### No New Dependencies
+### What the Heartbeat Lease Uses from KubernetesClient
 
-Confirmed by inspecting `SnmpCollector.csproj`. OTel 1.15 shipped `Gauge<T>` support (added in 1.10
-per issue #4805, merged PR #5867). `SnmpMetricFactory` already calls `_meter.CreateGauge<double>()`,
-proving `Gauge<T>` works in this project today.
+The `IKubernetes` interface already injected into `K8sLeaseElection` exposes all needed operations
+through `_kubeClient.CoordinationV1`:
 
----
+| Operation | Method Signature | When Used |
+|-----------|-----------------|-----------|
+| Create heartbeat lease | `CreateNamespacedLeaseAsync(V1Lease body, string ns)` | First heartbeat if lease does not exist yet |
+| Read heartbeat lease | `ReadNamespacedLeaseAsync(string name, string ns)` | Non-preferred pods check stamp freshness; non-preferred leader checks before yielding |
+| Replace (update) heartbeat lease | `ReplaceNamespacedLeaseAsync(V1Lease body, string name, string ns)` | Preferred pod renews its stamp each heartbeat interval |
+| Delete heartbeat lease | `DeleteNamespacedLeaseAsync(string name, string ns)` | Preferred pod cleans up on graceful shutdown |
 
-## OTel SDK Instrument Patterns
+All four methods exist in `KubernetesClient` 18.0.13 — `K8sLeaseElection.StopAsync` already calls
+`DeleteNamespacedLeaseAsync` proving the delete path is in use today. `CreateNamespacedLease` and
+`ReplaceNamespacedLease` are part of the same generated `CoordinationV1` interface.
 
-### Counter — per-cycle tenant increments
+**There is no need to upgrade to 19.0.2.** Version 18.0.13 has full `CoordinationV1` support.
+19.0.2 (published 2026-02-24) added kubectl-layer conveniences; it does not change the underlying
+Lease CRUD API the project depends on. Upgrade only if another dependency forces it.
 
-The 6 tenant counters follow the same pattern as existing counters in `PipelineMetricService`.
-Use `Meter.CreateCounter<long>` on the **`SnmpCollector` meter** (not the leader-gated
-`SnmpCollector.Leader` meter), so they export from all instances.
+### V1Lease Fields Used for the Heartbeat Stamp
 
-```csharp
-// In TenantMetricService constructor
-_tier1Stale      = _meter.CreateCounter<long>("snmp.tenant.tier1_stale");
-_tier2Resolved   = _meter.CreateCounter<long>("snmp.tenant.tier2_resolved");
-_tier3Evaluate   = _meter.CreateCounter<long>("snmp.tenant.tier3_evaluate");
-_cmdDispatched   = _meter.CreateCounter<long>("snmp.tenant.command_dispatched");
-_cmdFailed       = _meter.CreateCounter<long>("snmp.tenant.command_failed");
-_cmdSuppressed   = _meter.CreateCounter<long>("snmp.tenant.command_suppressed");
+The `V1LeaseSpec` has these fields relevant to the heartbeat mechanism:
 
-// Call site — labels: tenantId and priority only
-_tier1Stale.Add(1, new TagList { { "tenant_id", tenant.Id }, { "priority", tenant.Priority } });
-```
+| Field | Type | Purpose in Preferred Election |
+|-------|------|-------------------------------|
+| `holderIdentity` | `string` | Set to the preferred pod's identity; readers verify this matches `PreferredNode` config |
+| `renewTime` | `DateTime?` (MicroTime) | The timestamp the preferred pod last wrote; non-preferred pods compare `UtcNow - renewTime` against the back-off threshold |
+| `acquireTime` | `DateTime?` (MicroTime) | When the preferred pod first created the lease; used for the stability gate (`UtcNow - acquireTime >= StabilityGateSeconds`) |
+| `leaseDurationSeconds` | `int?` | Set to the heartbeat TTL; used as the staleness threshold so readers know when a stamp is expired |
 
-`TagList` is a stack-allocated struct; passing inline avoids heap allocation on the hot path.
-The existing `IncrementCommandSuppressed(string deviceName)` call in `SnapshotJob` uses the same
-pattern — the tenant-scoped counters are additive, not replacing it.
-
-### Gauge — enum state reporting
-
-**Decision: use synchronous `Gauge<T>` (not `ObservableGauge<T>`).**
-
-Rationale:
-- `EvaluateTenant()` already computes the state synchronously in `SnapshotJob`. The state is known at
-  evaluation time, so push-model `Gauge<T>.Record()` is the correct fit.
-- `ObservableGauge<T>` requires registering a callback that the SDK polls on the export interval.
-  That pattern requires storing state externally (e.g., `ConcurrentDictionary<tenantId, int>`) so the
-  callback can read it. This is more indirection than needed when the value is already computed.
-- `Gauge<T>` was added in OTel .NET 1.10 (PR #5867). The project is on 1.15. `SnmpMetricFactory`
-  already uses `CreateGauge<double>()` — no compatibility risk.
-
-Enum mapping (integer values stored in Prometheus, mapped in Grafana):
-
-| State | Value |
-|-------|-------|
-| NotReady | 0 |
-| Healthy | 1 |
-| Resolved | 2 |
-| Unresolved | 3 |
-
-```csharp
-// Instrument creation (on SnmpCollector meter — all-instance export)
-_tenantState = _meter.CreateGauge<int>("snmp.tenant.state",
-    description: "Tenant evaluation state: 0=NotReady, 1=Healthy, 2=Resolved, 3=Unresolved");
-
-// Call site — record after EvaluateTenant() returns
-var stateValue = result switch
-{
-    TierResult.Healthy    => 1,
-    TierResult.Resolved   => 2,
-    TierResult.Unresolved => 3,
-    _                     => 0   // NotReady (pre-tier skip)
-};
-_tenantState.Record(stateValue,
-    new TagList { { "tenant_id", tenant.Id }, { "priority", tenant.Priority } });
-```
-
-The gauge reports the **last-written value** until overwritten on the next cycle. This is correct
-behavior for a state enum: Prometheus will show the most recent evaluation result.
-
-### Histogram — per-tenant evaluation duration
-
-Use `Meter.CreateHistogram<double>` for `snmp.tenant.gauge_duration_milliseconds`. This mirrors the
-existing `_snapshotCycleDuration` histogram but scoped to individual tenant evaluation time.
-
-**Bucket boundaries.** Default OTel SDK buckets are
-`[0, 5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000]`. These are ms-range
-boundaries, which is exactly what tenant evaluation duration needs. The existing
-`snmp.snapshot.cycle_duration_ms` histogram uses default buckets and the business dashboard
-successfully queries `histogram_quantile(0.99, ...)` against them. Use the same defaults.
-
-If a custom narrower range is needed later (e.g., to reduce bucket count for cardinality), configure
-it in the `WithMetrics` builder chain using `AddView`:
-
-```csharp
-// Optional: override buckets if default range is too wide for sub-10ms evaluations
-metrics.AddView(
-    instrumentName: "snmp.tenant.gauge_duration_milliseconds",
-    new ExplicitBucketHistogramConfiguration
-    {
-        Boundaries = new double[] { 1, 2, 5, 10, 25, 50, 100, 250, 500 }
-    });
-```
-
-Call site:
-
-```csharp
-_tenantGaugeDuration = _meter.CreateHistogram<double>(
-    "snmp.tenant.gauge_duration_milliseconds",
-    unit: "ms",
-    description: "Duration of per-tenant evaluation in SnapshotJob");
-
-// In EvaluateTenant — wrap with Stopwatch
-var sw = Stopwatch.StartNew();
-// ... evaluation logic ...
-sw.Stop();
-_tenantGaugeDuration.Record(sw.Elapsed.TotalMilliseconds,
-    new TagList { { "tenant_id", tenant.Id }, { "priority", tenant.Priority } });
-```
+No new Kubernetes API objects are needed. The existing `V1Lease` / `V1LeaseSpec` / `V1ObjectMeta`
+model classes cover the full heartbeat stamp.
 
 ---
 
-## MetricRoleGatedExporter Bypass
+## Runtime Environment Variable Access
 
-**The problem.** `MetricRoleGatedExporter` filters out all metrics from `TelemetryConstants.LeaderMeterName`
-("SnmpCollector.Leader") on follower instances. Metrics from `TelemetryConstants.MeterName`
-("SnmpCollector") pass through on all instances.
+### NODE_NAME — Downward API
 
-**The solution.** Create all new tenant instruments on the `SnmpCollector` meter (not the leader meter).
-This is the same meter used by `PipelineMetricService` for pipeline counters. The gate logic in
-`MetricRoleGatedExporter.Export()` is:
+The preferred pod is identified by matching the pod's node name against the `PreferredNode` config
+value. `spec.nodeName` is exposed via the Kubernetes Downward API as an environment variable.
 
-```csharp
-if (!string.Equals(metric.MeterName, _gatedMeterName, StringComparison.Ordinal))
-{
-    ungated.Add(metric);  // passes through on followers
-}
+**Kubernetes manifest injection (required in Deployment spec):**
+
+```yaml
+env:
+- name: NODE_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: spec.nodeName
+- name: POD_NAMESPACE
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.namespace
 ```
 
-Any instrument created via `meterFactory.Create(TelemetryConstants.MeterName)` has
-`metric.MeterName == "SnmpCollector"`, which does **not** match `_gatedMeterName` ("SnmpCollector.Leader"),
-so it is never filtered. No code changes to `MetricRoleGatedExporter` are required.
+**C# read at startup (in `PreferredElectionOptions` PostConfigure or service constructor):**
 
-**Where to create the instruments.** Two options:
+```csharp
+var nodeName = Environment.GetEnvironmentVariable("NODE_NAME");
+var podNamespace = Environment.GetEnvironmentVariable("POD_NAMESPACE");
+```
 
-1. **Extend `PipelineMetricService`** — add the 8 new instruments alongside the existing 15. Simple,
-   no new class. Downside: the class grows larger (23 instruments total).
+`spec.nodeName` is only available via environment variable injection — it is not available through
+downward API volume files. This is confirmed by current Kubernetes documentation (March 2025).
 
-2. **New `TenantMetricService` singleton** — inject `IMeterFactory`, call
-   `meterFactory.Create(TelemetryConstants.MeterName)` to get the same meter, create instruments there.
-   This is a clean separation: pipeline metrics stay in `PipelineMetricService`, tenant vector metrics
-   in `TenantMetricService`. Register as `AddSingleton<TenantMetricService>()` alongside the existing
-   `AddSingleton<PipelineMetricService>()`.
+### POD_NAMESPACE — Runtime Namespace Resolution
 
-**Recommended: new `TenantMetricService`** — the scope is cleanly bounded (all instruments tagged with
-`tenant_id` and `priority`), and injection into `SnapshotJob` is explicit.
+The heartbeat lease must be created in the pod's own namespace, not a hardcoded value. The pod's
+namespace comes from `metadata.namespace` via the Downward API (same pattern as `NODE_NAME`).
+
+This means `LeaseOptions.Namespace` (used for the leadership lease) can serve as the fallback, but
+the heartbeat lease should read `POD_NAMESPACE` from the environment at runtime and fall back to
+`LeaseOptions.Namespace` if the env var is absent (local dev).
+
+**Resolution order for namespace:**
+1. `POD_NAMESPACE` environment variable (set by Downward API in-cluster)
+2. `LeaseOptions.Namespace` from config (local dev fallback)
+
+This pattern is self-contained: no service account namespace file reads, no `kubectl` calls, no
+in-cluster config namespace discovery tricks. `Environment.GetEnvironmentVariable` is sufficient.
 
 ---
 
-## Grafana Dashboard Patterns
+## New Configuration Section
 
-### Prometheus metric names (OTel to Prometheus translation)
+One new options class is needed. Bind it from a dedicated config section (e.g., `PreferredElection`).
 
-OTel SDK metric names use `.` as separator. The OTLP to Prometheus pipeline converts them:
+| Config Field | Type | Purpose |
+|--------------|------|---------|
+| `PreferredNode` | `string?` | Node name the preferred pod runs on; compared against `NODE_NAME`. `null` disables the mechanism entirely (safe default). |
+| `HeartbeatLeaseName` | `string` | Name of the second Lease resource (e.g., `snmp-collector-preferred`) |
+| `HeartbeatIntervalSeconds` | `int` | How often the preferred pod renews the stamp (e.g., 5) |
+| `StaleThresholdSeconds` | `int` | Age of `renewTime` after which non-preferred pods consider the preferred pod gone (e.g., 30) |
+| `StabilityGateSeconds` | `int` | How long the preferred pod must have been stamping before non-preferred pods yield (e.g., 60) |
+| `BackOffSeconds` | `int` | How long a non-preferred pod waits before competing after losing leadership (e.g., the same as `StaleThresholdSeconds`) |
 
-| OTel name | Prometheus name |
-|-----------|-----------------|
-| `snmp.tenant.tier1_stale` | `snmp_tenant_tier1_stale_total` |
-| `snmp.tenant.tier2_resolved` | `snmp_tenant_tier2_resolved_total` |
-| `snmp.tenant.tier3_evaluate` | `snmp_tenant_tier3_evaluate_total` |
-| `snmp.tenant.command_dispatched` | `snmp_tenant_command_dispatched_total` |
-| `snmp.tenant.command_failed` | `snmp_tenant_command_failed_total` |
-| `snmp.tenant.command_suppressed` | `snmp_tenant_command_suppressed_total` |
-| `snmp.tenant.state` | `snmp_tenant_state` |
-| `snmp.tenant.gauge_duration_milliseconds` | `snmp_tenant_gauge_duration_milliseconds` (histogram: `_bucket`, `_count`, `_sum`) |
+The namespace for the heartbeat lease is resolved at runtime from `POD_NAMESPACE` env var, not
+stored in this config section. This avoids duplicating the namespace config and keeps it consistent
+with the existing `LeaseOptions.Namespace`.
 
-Counters get `_total` suffix. Gauges and histogram base names are unchanged. This matches the
-existing pattern: `snmp.event.published` becomes `snmp_event_published_total`,
-`snmp_gauge_duration` histogram becomes `snmp_gauge_duration_milliseconds_bucket`.
+---
 
-### Operations dashboard — tenant table panel
+## What the New Service Looks Like
 
-Model this on the existing "Gauge Metrics" table in `simetra-business.json`. That panel uses:
-- Query A (`instant`, `format: "table"`): current values via `label_replace` + `label_join`
-- Query B (`instant`, `format: "table"`): trend via `delta(...[30s])`
-- Query C (`instant`, `format: "table"`): P99 via `histogram_quantile(0.99, sum by (le, ...) (rate(..._bucket[...])))`
-- Transformation: `merge` then `organize` to set column order
+The `PreferredHeartbeatService` is a `BackgroundService` that:
 
-**Tenant table query A — current state with text mapping:**
+1. On startup: checks `PreferredNode` config. If `null` or does not match `NODE_NAME`, exits
+   immediately — non-preferred pods do not run this service's main loop.
+2. If this pod is preferred: waits for a stability gate period, then enters a renewal loop calling
+   `ReplaceNamespacedLeaseAsync` (creating the lease first if it does not exist).
+3. On `StopAsync`: calls `DeleteNamespacedLeaseAsync` to remove the heartbeat lease, signaling
+   to any current non-preferred leader that it can retain leadership cleanly.
 
-```promql
-snmp_tenant_state{k8s_pod_name=~"$pod"}
-```
-
-This is `instant` format. Grafana receives one row per `{tenant_id, priority}` label set.
-Apply value mappings in fieldConfig overrides on "Value #A":
-
-```json
-"mappings": [
-  { "options": { "0": { "text": "NotReady",   "color": "text"     } }, "type": "value" },
-  { "options": { "1": { "text": "Healthy",    "color": "green"    } }, "type": "value" },
-  { "options": { "2": { "text": "Resolved",   "color": "blue"     } }, "type": "value" },
-  { "options": { "3": { "text": "Unresolved", "color": "dark-red" } }, "type": "value" }
-]
-```
-
-Set `cellOptions.type = "color-background"` with `mode: "basic"` to color the cell background —
-matching the operations dashboard "Role" column (Pod Identity panel, "Value #B" override).
-
-**Tenant table query B — per-cycle counter rates:**
-
-```promql
-sum by (tenant_id, priority) (
-  rate(snmp_tenant_tier3_evaluate_total{k8s_pod_name=~"$pod"}[$__rate_interval])
-)
-```
-
-Use `rate()` for the counters to show events-per-second. `instant: true`. One column per counter
-metric is added as a separate target (refId B, C, D, ...) and merged.
-
-**Tenant table query C — P99 evaluation duration:**
-
-```promql
-histogram_quantile(0.99,
-  sum by (le, tenant_id, priority) (
-    rate(snmp_tenant_gauge_duration_milliseconds_bucket{k8s_pod_name=~"$pod"}[$__rate_interval])
-  )
-)
-```
-
-This matches the existing business dashboard P99 query pattern for `snmp_gauge_duration_milliseconds`.
-
-### Column organization
-
-Suggested visible columns for the tenant table:
-
-| Column | Source | Display Name |
-|--------|--------|--------------|
-| `tenant_id` | label from any target | Tenant |
-| `priority` | label from any target | Priority |
-| `Value #A` | `snmp_tenant_state` | State |
-| `Value #B` | rate of `tier3_evaluate` | Evaluate/s |
-| `Value #C` | rate of `command_dispatched` | Dispatch/s |
-| `Value #D` | rate of `command_suppressed` | Suppressed/s |
-| `Value #E` | P99 histogram | P99 (ms) |
-
-Standard boilerplate columns (`Time`, `job`, `instance`, `service_name`, SDK telemetry labels)
-are hidden via `custom.hidden: true` overrides, matching the existing dashboard pattern.
+The voluntary yield (non-preferred leader deletes the leadership lease when preferred recovers) is
+implemented in `K8sLeaseElection` by injecting an `IPreferredStampReader` interface. This reader
+is called on a timer inside `K8sLeaseElection.ExecuteAsync` (or a sibling watcher) to check whether
+the heartbeat lease is fresh enough to trigger a yield. When yield is triggered, the non-preferred
+leader calls `DeleteNamespacedLeaseAsync` on the **leadership** lease and sets `_isLeader = false`.
 
 ---
 
@@ -278,52 +157,86 @@ are hidden via `custom.hidden: true` overrides, matching the existing dashboard 
 
 | Recommended | Alternative | Why Not |
 |-------------|-------------|---------|
-| `Gauge<T>.Record()` (push) | `ObservableGauge<T>` with callback | Requires external state store; EvaluateTenant already computes state synchronously — callback adds indirection without benefit |
-| Instruments on `SnmpCollector` meter | Instruments on `SnmpCollector.Leader` meter | Leader meter is filtered on followers; tenant metrics must export from all instances for per-pod visibility |
-| New `TenantMetricService` | Extend `PipelineMetricService` | Clean separation of concerns; PipelineMetricService already has 15 instruments; new class keeps tenant scope explicit |
-| Default OTel histogram buckets | Custom bucket boundaries | Existing `snmp_gauge_duration` uses defaults and P99 queries work; change only if cardinality becomes an issue |
-| `int` type for gauge values | `double` type | State is an enum (0-3); `int` signals intent; `Gauge<int>` is valid with `System.Diagnostics.Metrics` |
+| Second plain `V1Lease` as heartbeat stamp | `LeaderElector` with `preferredHolder` field | `preferredHolder` is Alpha-gated behind `CoordinatedLeaderElection` feature gate; not available in standard Kubernetes clusters without explicit enablement. The two-lease pattern works on any K8s version. |
+| `ReplaceNamespacedLeaseAsync` for stamp renewal | Re-use `LeaseLock` / `LeaderElector` for the heartbeat lease | `LeaderElector` is designed for contested election; heartbeat is a unilateral write by the preferred pod only. Using `LeaderElector` would add unnecessary retry/backoff logic to an uncontested write. |
+| `POD_NAMESPACE` env var (Downward API) for namespace | In-cluster config namespace file (`/var/run/secrets/kubernetes.io/serviceaccount/namespace`) | The service account namespace file works but adds a file read dependency. The Downward API env var approach is consistent with how `NODE_NAME` is already injected and does not require filesystem access. |
+| `NODE_NAME` env var compared against `PreferredNode` config | Label/annotation selector on the pod | Env var is simpler — no Kubernetes API call needed to determine if this pod is preferred. The pod knows its own node at startup. |
+| `StabilityGateSeconds` before stamping | Stamp immediately on startup | Without a gate, a preferred pod that flaps (crash-loop) could destabilize leadership every restart. The gate ensures the preferred pod is running stably before non-preferred pods yield. |
 
 ---
 
-## What NOT to Use
+## What NOT to Add
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `UpDownCounter<T>` for state | UpDownCounter is for values that go up and down cumulatively (e.g., active connections); enum state is a snapshot, not a delta | `Gauge<T>` — records current value, replaces previous |
-| `ObservableGauge` with shared dictionary | Requires concurrent dictionary keyed by tenantId to bridge from `EvaluateTenant` to callback; adds a write path and lock | `Gauge<T>.Record()` at call site |
-| `TelemetryConstants.LeaderMeterName` for tenant meters | MetricRoleGatedExporter filters this meter on followers; tenant metrics need all-instance export | `TelemetryConstants.MeterName` ("SnmpCollector") |
-| `delta()` PromQL for counter columns in table | `delta()` is for gauges; for monotonic counters use `rate()` or `increase()` | `rate(snmp_tenant_..._total[$__rate_interval])` |
+| Any new NuGet package | Nothing is needed that isn't already in `KubernetesClient` 18.0.13 | Direct `CoordinationV1` API calls |
+| `KubernetesClient` upgrade to 19.0.2 | 19.0.2 adds kubectl-layer helpers irrelevant to this feature; upgrading risks transitive dependency churn without benefit | Stay on 18.0.13 unless forced by another dependency |
+| `preferredHolder` / `strategy` fields on `V1LeaseSpec` | These are Alpha-gated features (`CoordinatedLeaderElection` gate); they require explicit feature gate enablement and are not stable as of Kubernetes 1.35 | Two-lease pattern using standard `V1Lease` resources |
+| Shared `LeaderElectionConfig` between leadership and heartbeat leases | `LeaderElectionConfig` applies contest semantics (retry, renew deadline); heartbeat is a solo write | Direct `CoordinationV1` API calls for heartbeat |
+| Config-driven namespace for heartbeat lease | Would duplicate `LeaseOptions.Namespace` and create drift risk in production vs dev | Read `POD_NAMESPACE` from Downward API env var at runtime |
 
 ---
 
 ## Version Compatibility
 
-| Package | Version | Notes |
-|---------|---------|-------|
-| `OpenTelemetry.Exporter.OpenTelemetryProtocol` | 1.15.0 | In csproj; `Gauge<T>` available since 1.10 |
-| `OpenTelemetry.Extensions.Hosting` | 1.15.0 | `AddView` for histogram bucket override available |
-| `System.Diagnostics.Metrics` | .NET 9 BCL | `Meter.CreateGauge<T>()` is a .NET 9 BCL API; OTel SDK wraps it |
-| `Microsoft.Extensions.Diagnostics.Metrics` | N/A | Not used; project uses `IMeterFactory` from `Microsoft.Extensions.DependencyInjection` |
+| Package | Version in Csproj | Notes |
+|---------|------------------|-------|
+| `KubernetesClient` | 18.0.13 | All four `CoordinationV1` Lease CRUD methods available. No upgrade needed. |
+| `Microsoft.Extensions.Hosting` | 9.0.0 | `BackgroundService` for `PreferredHeartbeatService`. No change. |
+| `Microsoft.Extensions.Options.DataAnnotations` | 9.0.0 | Validates the new `PreferredElectionOptions` config section. No change. |
 
-Note on `CreateGauge<T>()`: This is defined on `System.Diagnostics.Metrics.Meter` in .NET 9 BCL.
-`SnmpMetricFactory` already calls it successfully. No NuGet package upgrade needed.
+No new package references are added to `SnmpCollector.csproj`.
+
+---
+
+## Installation
+
+No changes to `SnmpCollector.csproj`.
+
+The only deployment change required is adding `NODE_NAME` and `POD_NAMESPACE` Downward API
+environment variables to the Kubernetes Deployment manifest:
+
+```yaml
+env:
+- name: NODE_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: spec.nodeName
+- name: POD_NAMESPACE
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.namespace
+```
+
+And adding the `PreferredElection` config section to `appsettings.Production.json` (or the
+ConfigMap that provides it):
+
+```json
+"PreferredElection": {
+  "PreferredNode": "site-a-node",
+  "HeartbeatLeaseName": "snmp-collector-preferred",
+  "HeartbeatIntervalSeconds": 5,
+  "StaleThresholdSeconds": 30,
+  "StabilityGateSeconds": 60,
+  "BackOffSeconds": 30
+}
+```
+
+When `PreferredNode` is `null` or absent, the mechanism is fully disabled and the pod behaves
+exactly as it does today.
 
 ---
 
 ## Sources
 
-- Codebase `src/SnmpCollector/Telemetry/PipelineMetricService.cs` — existing Counter/Histogram pattern (HIGH)
-- Codebase `src/SnmpCollector/Telemetry/MetricRoleGatedExporter.cs` — gate logic by meter name (HIGH)
-- Codebase `src/SnmpCollector/Telemetry/TelemetryConstants.cs` — meter name constants (HIGH)
-- Codebase `src/SnmpCollector/Telemetry/SnmpMetricFactory.cs` — `CreateGauge<double>()` in production use (HIGH)
-- Codebase `src/SnmpCollector/Extensions/ServiceCollectionExtensions.cs` — meter registration, gated exporter wiring (HIGH)
-- Codebase `deploy/grafana/dashboards/simetra-business.json` — table panel with label_join, delta, histogram_quantile patterns (HIGH)
-- Codebase `deploy/grafana/dashboards/simetra-operations.json` — value mapping / color-background cell pattern for enum display (HIGH)
-- GitHub issue open-telemetry/opentelemetry-dotnet #4805 — synchronous Gauge added in 1.10, PR #5867 merged (MEDIUM)
-- OTel official docs https://opentelemetry.io/docs/languages/dotnet/metrics/instruments/ — ObservableGauge callback API (MEDIUM)
-- OTel SDK customizing README https://github.com/open-telemetry/opentelemetry-dotnet/blob/main/docs/metrics/customizing-the-sdk/README.md — `AddView` + `ExplicitBucketHistogramConfiguration` API (MEDIUM)
+- Codebase `src/SnmpCollector/Telemetry/K8sLeaseElection.cs` — existing `CoordinationV1.DeleteNamespacedLeaseAsync` call pattern (HIGH)
+- Codebase `src/SnmpCollector/SnmpCollector.csproj` — `KubernetesClient` 18.0.13 confirmed (HIGH)
+- Codebase `src/SnmpCollector/Configuration/LeaseOptions.cs` — existing lease config pattern (HIGH)
+- NuGet Gallery https://www.nuget.org/packages/KubernetesClient/ — latest version 19.0.2, published 2026-02-24; 18.0.13 is the current project version (HIGH)
+- Kubernetes API reference https://kubernetes.io/docs/reference/kubernetes-api/cluster-resources/lease-v1/ — `V1LeaseSpec` fields: `holderIdentity`, `renewTime`, `acquireTime`, `leaseDurationSeconds`, `leaseTransitions`, `preferredHolder` (Alpha), `strategy` (Alpha) (HIGH)
+- Kubernetes Downward API docs https://kubernetes.io/docs/concepts/workloads/pods/downward-api/ — `spec.nodeName` and `metadata.namespace` available as env vars via `fieldRef`; `spec.nodeName` is env-var only, not available as volume file (HIGH)
+- kubernetes-client/csharp GitHub releases https://github.com/kubernetes-client/csharp/releases — v19.0.2 change summary confirms no `CoordinationV1` API changes vs 18.x (MEDIUM)
 
 ---
-*Stack research for: tenant-level OTel metrics (counters, gauge, histogram) with all-instance export and Grafana table dashboard*
-*Researched: 2026-03-22*
+*Stack research for: preferred leader election with two-lease site-affinity mechanism*
+*Researched: 2026-03-25*

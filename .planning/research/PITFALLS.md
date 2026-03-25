@@ -1,536 +1,138 @@
-# Domain Pitfalls
+# Pitfalls Research
 
-**Domain:** E2E test infrastructure — HTTP-controlled simulator and bash evaluation test scripts added to existing SNMP monitoring system
-**Researched:** 2026-03-17
-**Confidence:** HIGH (verified against source code: SnapshotJob.cs, MetricSlotHolder.cs, SuppressionCache.cs, TenantVectorRegistry.cs, CommandWorkerService.cs, e2e_simulator.py, existing scenario scripts, lib/prometheus.sh, lib/common.sh)
+**Domain:** Preferred/priority leader election with site-affinity added to existing K8s lease-based distributed SNMP monitoring system
+**Researched:** 2026-03-25
+**Confidence:** HIGH for K8s library behavior (verified against kubernetes-client/csharp and client-go source); HIGH for integration pitfalls (verified against project source: K8sLeaseElection.cs, GracefulShutdownService.cs, CommandWorkerService.cs, deployment.yaml, rbac.yaml); MEDIUM for operational edge cases (multi-source reasoning)
 
-> **Note:** This file covers pitfalls specific to the v2.1 addition: HTTP scenario control endpoint on the pysnmp simulator, scenario registry, bash test scripts for SnapshotJob evaluation, and multi-tenant test configurations. Earlier pitfall files (v1.5–v1.9 additions) are not repeated here. The pitfalls below assume the v2.0 system is already deployed and functional.
+> **Scope:** Pitfalls specific to adding a preferred/priority leader election mechanism on top of the existing two-lease design (leadership lease + preferred heartbeat lease). The existing system already uses `LeaderElector.RunAndTryToHoldLeadershipForeverAsync`, voluntary yield via lease deletion on SIGTERM, and `ILeaderElection.IsLeader` gating in `MetricRoleGatedExporter` and `CommandWorkerService`. Known pitfalls already surfaced in design conversations (split-brain window, flapping preemption, LeaderElector state mismatch from force-acquisition, in-flight command loss during yield, network partition at preferred site, PreferredNode config staleness) are **not repeated here**. This document covers additional pitfalls not yet identified.
 
 ---
 
 ## Critical Pitfalls
 
-Mistakes that cause silent test passes, timing failures, or misread evaluation results.
+Mistakes that cause incorrect behavior, rewrites, or data loss.
 
 ---
 
-### Pitfall 1: asyncio Event Loop Blocking — HTTP Handler Stalls SNMP Responses
+### Pitfall 1: `OnStoppedLeading` Fires on Every Leadership Loss — Not Just Permanent Exit
 
-**What goes wrong:** The existing `e2e_simulator.py` runs one asyncio event loop that drives both pysnmp's `snmpEngine.open_dispatcher()` and the trap send tasks. Adding an HTTP endpoint naively with `http.server.BaseHTTPRequestHandler` (which is synchronous) or with a blocking `asyncio.run()` call inside the scenario switch handler will block the event loop. While the HTTP request is being processed, pysnmp cannot service incoming SNMP GETs from the collector. The collector's `MetricPollJob` gets a timeout, records a consecutive failure, and the `MetricSlotHolder` stops receiving fresh samples — causing the next SnapshotJob cycle to return `TierResult.Stale` rather than evaluating thresholds.
+**What goes wrong:** The implementation assumes `OnStoppedLeading` fires only when the pod permanently surrenders leadership. In fact, `RunAndTryToHoldLeadershipForeverAsync` loops: it calls `RunUntilLeadershipLostAsync` repeatedly, and `OnStoppedLeading` fires in the `finally` block of each inner call — including transient losses (renewal blip, short API hiccup). Code that reacts to `OnStoppedLeading` by performing irreversible teardown (clearing in-memory state, closing channels, initiating drain) will corrupt the pod's ability to re-acquire and function as leader.
 
-**Why it happens:** pysnmp's asyncio transport integrates with the running event loop via `open_dispatcher()`. Any synchronous I/O in a coroutine or callback on the same loop stalls all I/O, including SNMP UDP reads. The symptom looks like intermittent poll failures during the test window, not a configuration error.
+**Why it happens:** `RunUntilLeadershipLostAsync` is documented as "completes and does not retry." The forever-loop wraps it, making `OnStoppedLeading` fire on every inner-loop exit, not just final application shutdown. The distinction is not obvious without reading the library source.
 
-**Consequences:** Test scripts waiting for `TierResult.Commanded` observe only `TierResult.Stale`. Prometheus command counters never increment. The scenario assertion times out. The failure is non-deterministic (depends on whether an HTTP request overlaps with a pysnmp SNMP GET handler).
+**How to avoid:** Keep `OnStoppedLeading` handlers idempotent and non-destructive. Set `_isLeader = false` only. Do not drain channels, release resources, or alter scheduler state inside this handler. Reserve irreversible teardown for `StopAsync` / `CancellationToken` cancellation.
 
-**Prevention:** Implement the HTTP control endpoint as an async coroutine using `aiohttp` or `asyncio`-native `aiohttp.web` / `asyncio.start_server`. Both integrate into the existing event loop without blocking. The scenario switch (`current_scenario = new_name`) must be a non-blocking in-memory assignment — never call `time.sleep()` or any blocking I/O inside the handler coroutine. Keep HTTP handler code to: validate request, mutate scenario variable, return `200 OK`. No disk I/O, no subprocess calls.
+The preferred-leader yield path uses `StopAsync` which deletes the leadership lease and then sets `_isLeader = false` — this is correct. The new preferred heartbeat service must not hook `OnStoppedLeading` for any destructive action.
 
-**Detection:** Add a log line in the SNMP GET handler (`DynamicInstance.getValue`) that fires every time a value is read. If GET responses stop arriving in the simulator logs during an HTTP call, the event loop is being blocked. In bash test output: SnapshotJob log shows `tier=1 stale` immediately after the HTTP scenario switch.
+**Warning signs:** Pod logs show `OnStoppedLeading` multiple times in a run but the pod later re-acquires leadership and resumes export — confirms the handler fires on transient losses. If any resource that should persist across re-acquisition is absent after re-acquisition, suspect destructive `OnStoppedLeading` logic.
 
-**Phase:** HTTP simulator implementation.
-
----
-
-### Pitfall 2: Sentinel Value (0) Satisfies Equality Thresholds — False Command Dispatch at Startup
-
-**What goes wrong:** `MetricSlotHolder` initializes with a sentinel `MetricSlot(Value=0, Timestamp=UtcNow)` before any real SNMP data arrives. `SnapshotJob.IsViolated()` treats `Min == Max` as an equality check: violated if `value == threshold.Min.Value`. If any test tenant is configured with an equality threshold where `Min = Max = 0` (e.g., testing "trigger when metric value is 0"), the sentinel slot makes the holder appear violated from the moment the pod starts.
-
-**Why it happens:** `MetricSlotHolder` constructor writes the sentinel into the series: `new MetricSlot(0, null, DateTimeOffset.UtcNow)`. The staleness check in Tier 1 (`HasStaleness`) skips holders where `ReadSlot()` returns null — but after the sentinel write, `ReadSlot()` returns the sentinel (non-null). The staleness clock starts from the sentinel timestamp, and `IntervalSeconds * GraceMultiplier` keeps it "fresh" for the first 30s. During that window, Tier 3 sees `Value=0`, which satisfies a `Min=Max=0` equality threshold, and Tier 4 dispatches a command before any real data has been polled.
-
-**Consequences:** A spurious SNMP SET fires within the first 30s of pod startup for any equality-zero threshold tenant. If the suppression cache is empty (new pod), the command is not suppressed. The test script's "before" counter snapshot is taken after the spurious command, making delta assertions unreliable.
-
-**Prevention:** Two mitigations, apply both:
-1. Avoid `Min = Max = 0` thresholds in test tenant configs. Use boundary-range thresholds (e.g., `Max = 5` for "trigger when value > 5") so that the sentinel value of 0 is within the safe range and does not violate the threshold.
-2. In bash test scripts, add a startup settle wait (at minimum `IntervalSeconds * GraceMultiplier` = 30s) before taking the "before" counter snapshot, ensuring all holders have been overwritten by at least one real poll.
-
-**Detection:** `snmp_command_sent_total` increments during the first 30s of pod startup without any scenario being active. Pod logs show `tier=4 — commands enqueued` with `correlationId` matching a cycle that fired before the first `snmp_poll_executed_total` increment for the test device.
-
-**Phase:** Tenant config design and test script structure.
+**Phase to address:** Preferred heartbeat service implementation (Phase: two-lease coordination).
 
 ---
 
-### Pitfall 3: Time Series Fill Requirement — Tests Assert Too Early
+### Pitfall 2: Preferred Heartbeat Lease Read Occurs While the Preferred Pod Deletes and Recreates It
 
-**What goes wrong:** `AreAllEvaluateViolated()` requires ALL samples in the time series to be violated, not just the latest. If a tenant metric slot is configured with `TimeSeriesSize = N`, the slot must receive N consecutive violated samples before SnapshotJob returns `TierResult.Commanded`. The bash test script sets a scenario (e.g., "threshold_breach"), waits one SnapshotJob cycle (15s), and checks command counters — but if `TimeSeriesSize > 1`, one cycle is not enough. The series still contains older in-range samples carried over from the pre-breach scenario.
+**What goes wrong:** The two-lease design uses a second lease ("preferred heartbeat lease") that the preferred pod writes periodically to signal liveness. Non-preferred pods read this lease to decide whether to back off. The K8s API returns a 404 for a deleted lease. If the preferred pod deletes its heartbeat lease during shutdown (e.g., a clean SIGTERM) and immediately recreates it on restart, there is a window where the non-preferred leader reads 404, concludes the preferred pod is absent, and stops backing off — potentially winning or retaining leadership just as the preferred pod restarts and expects to preempt.
 
-**Why it happens:** The "wait for N cycles" calculation is invisible in the scenario config. The script author sees `TimeSeriesSize = 3` and `IntervalSeconds = 15` but only waits `15 + OTel_export_interval = 30s`. The actual minimum wait before the command can fire is `(TimeSeriesSize * IntervalSeconds) + OTel_export_interval = (3 * 15) + 15 = 60s`.
+**Why it happens:** Lease deletion + pod restart + next election cycle can overlap within seconds on fast nodes. The non-preferred pod's back-off check fires during that 404 window, sees a stale absence signal, and proceeds.
 
-**Consequences:** The poll_until assertion times out (30s default) before the command fires. Test shows FAIL for `command_sent_total delta > 0`. The system is working correctly; the test wait window is too short.
+**How to avoid:** On the preferred pod: do NOT explicitly delete the heartbeat lease during shutdown. Let it expire naturally via TTL. The non-preferred pod's "preferred is present" check should use a freshness window (e.g., `renewTime` must be within the last N seconds) rather than treating "lease exists" as a binary signal. A 404 should be treated the same as a stale timestamp — both indicate "preferred is not fresh," which is a necessary but not sufficient condition for yielding.
 
-**Prevention:** Derive the minimum wait time from the tenant config at test design time: `wait_seconds = (TimeSeriesSize * IntervalSeconds) + OTel_export_interval`. For the baseline `TimeSeriesSize=1, IntervalSeconds=15`, the minimum is 30s. The existing 30s poll timeout is sufficient for depth-1 series only. If any test tenant uses depth > 1, the poll timeout must be scaled. Add a comment in each scenario script stating the TimeSeriesSize assumption and the derived wait.
+Corollary: set the heartbeat lease TTL to be longer than the pod restart time (at least 2× the `terminationGracePeriodSeconds` = 60s) so a clean restart does not create a spurious absence window.
 
-**Detection:** SnapshotJob logs show `tier=3 — not all evaluate metrics violated` on cycles after the scenario switch, even though the OID is returning a breaching value. A second log check a full `TimeSeriesSize * IntervalSeconds` seconds later shows the command fires correctly.
+**Warning signs:** Metrics show leadership bouncing rapidly around the time a preferred pod restarts cleanly. Logs show the non-preferred pod logging "preferred not fresh, no longer backing off" followed seconds later by "preferred pod acquired leadership" from the preferred pod.
 
-**Phase:** Bash test script design, timeout calculation.
-
----
-
-### Pitfall 4: Suppression Cache Bleeds Between Scenarios — Second Test Sees "Already Suppressed"
-
-**What goes wrong:** `SuppressionCache` uses lazy TTL expiry with a `ConcurrentDictionary<string, DateTimeOffset>`. The suppression key is `"tenantId:ip:port:commandName"`. After one test scenario triggers a command, the cache entry persists for `SuppressionWindowSeconds` (default 60s). The next scenario in the same test run, testing the same tenant's command, runs within the 60s window. The second scenario's SnapshotJob cycle evaluates Tier 4, calls `TrySuppress()`, finds the unexpired entry, and suppresses the command. The command counter does not increment; the test asserts delta > 0 and fails.
-
-**Why it happens:** The suppression cache is a singleton per pod. It is not cleared between E2E test scenarios. The same pod that ran scenario A is still serving scenario B 20s later. The 60s default window spans multiple scenario cycles.
-
-**Consequences:** Scenario B fails with delta=0 on `snmp_command_sent_total`, appearing to be a SnapshotJob evaluation bug. Debugging wastes time re-checking threshold config and time series fill, when the actual issue is suppression cache state from scenario A.
-
-**Prevention:** Two strategies:
-1. Space scenarios far enough apart that the suppression window expires. For 60s default, 75s between scenarios that fire the same command ensures clean state. This makes the full test suite slow.
-2. Design scenarios to use distinct tenant IDs (and thus distinct suppression keys). Each test scenario writes its own tenant config to the ConfigMap with a unique name. The suppression key differs per tenant name, so scenario A's cache entry does not affect scenario B. This is the preferred approach.
-
-An alternative: expose a cache-clear endpoint in the application (not recommended for production code) or use a short suppression window (e.g., 5s) in the test tenant config specifically.
-
-**Detection:** Pod logs show `Command {CommandName} suppressed for tenant {TenantId}` on the cycle immediately after a scenario switch where a command should fire. The suppression log appears even though no command fired "just now" from the test's perspective.
-
-**Phase:** Bash test script design, tenant config isolation.
+**Phase to address:** Two-lease coordination design (heartbeat lease lifecycle and TTL selection).
 
 ---
 
-### Pitfall 5: Multi-Replica Command Counter — Per-Pod vs. Cluster-Total Mismatch
+### Pitfall 3: RBAC Does Not Cover the New Heartbeat Lease Name or Namespace
 
-**What goes wrong:** SnapshotJob runs on all 3 replicas simultaneously. All 3 pods evaluate thresholds. All 3 pods may enqueue a command to their local `CommandChannel`. However, `CommandWorkerService` gates SET execution with `if (!_leaderElection.IsLeader) return` — only the leader pod actually sends the SNMP SET. The `snmp_command_sent_total` counter only increments on the leader. `snmp_command_suppressed_total` increments on all pods for subsequent cycles (each pod has its own `SuppressionCache`). A test script querying `sum(snmp_command_sent_total)` sees the correct total. A test that queries per-pod and expects all pods to show `sent > 0` will fail for the two non-leader pods.
+**What goes wrong:** The existing `rbac.yaml` grants `["get", "list", "watch", "create", "update", "patch", "delete"]` on `leases` in the `simetra` namespace. This covers any lease in that namespace by name. However: if the heartbeat lease is placed in a different namespace for isolation (e.g., a shared coordination namespace), or if a cluster-scoped lease is used by mistake, the pod's service account (`simetra-sa`) will receive 403 Forbidden on all operations against the heartbeat lease. The `LeaderElector` and any direct `IKubernetes` calls will fail with `HttpOperationException`.
 
-**Why it happens:** SnapshotJob is not leader-gated. The evaluation logic runs on every pod. Only the final SET dispatch step is leader-gated. The `_commandSuppressed` counter increments on all pods for the same command because each pod's `SuppressionCache` is independent.
+**Why it happens:** The existing RBAC uses a `Role` (namespace-scoped), not `ClusterRole`. Adding a lease in a different namespace requires a new `Role` + `RoleBinding` in that namespace. Operators often forget this when copying the heartbeat lease design from documentation that shows leases in `kube-system` or a different coordination namespace.
 
-**Consequences:** After one successful command trigger, the suppression counter on non-leader pods climbs every cycle for the window duration, but `sent` stays at 0 on non-leaders. A Prometheus assertion like `snmp_command_suppressed_total{pod=pod-1} > 0` passes for all pods, but `snmp_command_sent_total{pod=pod-2}` will never be > 0 if pod-2 is not leader.
+**How to avoid:** Keep both leases (leadership + heartbeat) in the `simetra` namespace. The existing `Role` already covers this. Explicitly document in the design that both lease names must be in the same namespace as the RBAC binding. Add a startup validation that attempts a `GetNamespacedLeaseAsync` for both lease names during `IHostedService.StartAsync` and fails fast with a clear error if 403 is returned, rather than silently failing at election time.
 
-**Prevention:** Always use `sum(snmp_command_sent_total)` without pod label filter for sent assertions. For per-pod assertions, use `max(snmp_command_sent_total) > 0` to assert at least one pod sent. When testing command suppression, `sum(snmp_command_suppressed_total)` reflects cumulative suppression across all pods — divide by 3 (replica count) to get the per-pod expectation, or use any() semantics.
+**Warning signs:** Pod startup logs show `403 Forbidden` on lease operations. `K8sLeaseElection` remains in follower state permanently (the `OnStartedLeading` event never fires). The pod never exports business metrics.
 
-**Detection:** `sum(snmp_command_sent_total) == 1` while the test expected 3. Pod logs confirm the SET was issued once; only one pod shows the "Command completed" INFO log. The other two pods show "Skipping SET — not leader" DEBUG lines.
-
-**Phase:** Bash validation script design, Prometheus assertion construction.
+**Phase to address:** RBAC and lease configuration (pre-implementation checklist).
 
 ---
 
-### Pitfall 6: OTel Cumulative Temporality Delay — Delta Baseline Taken Before Export
+### Pitfall 4: `NODE_NAME` Environment Variable Is Empty at Process Startup
 
-**What goes wrong:** OTel SDK exports metrics every ~15s (cumulative temporality). The existing `snapshot_counter` utility queries the current Prometheus value at baseline time, then waits and queries again. If the baseline snapshot is taken in the first seconds after a pod restart or after a ConfigMap reload, the OTel export cycle may not have flushed the current counter value to Prometheus yet. The baseline captures a stale value. After the test scenario runs and the delta is computed, the apparent delta includes both the pre-baseline increment and the scenario increment — or the baseline is artificially low, inflating the delta.
+**What goes wrong:** The preferred-leader check compares `PreferredNode` config against `NODE_NAME` (sourced from the Downward API `spec.nodeName`). The existing `deployment.yaml` already injects `PHYSICAL_HOSTNAME` from `spec.nodeName`. If the preferred-leader code reads `NODE_NAME` (or whatever the env var is named) before the container environment is fully initialized — for example, in a static field initializer or a `IOptions<>` validator that runs in the DI container build phase — it may receive an empty string. An empty `NODE_NAME` will never match `PreferredNode`, meaning the pod always behaves as non-preferred even when it is running on the preferred node.
 
-**Why it happens:** `query_counter` calls Prometheus HTTP API which returns the last scraped value. The OTel Collector scrapes on its own interval (15s default). If the test baseline is taken immediately after scenario setup, before the OTel Collector has scraped the updated value, the baseline is 1-2 export cycles stale.
+**Why it happens:** `spec.nodeName` is guaranteed to be populated by the time the pod's `spec` is committed by the scheduler, so the env var will be present at container startup. The actual risk is a code bug: reading the wrong env var name (case sensitivity), reading `NODE_NAME` when the deployment injects it as `PHYSICAL_HOSTNAME`, or using a fallback that silently returns empty string instead of throwing.
 
-**Consequences:** Timing-sensitive tests produce inconsistent results: some runs pass (baseline taken after export), others fail (baseline taken before export with stale value). The failure manifests as delta=0 when a command was actually sent, or delta=2 when only 1 command was expected.
+**How to avoid:** Use the exact env var name that `deployment.yaml` injects. Currently `PHYSICAL_HOSTNAME` is used (from `spec.nodeName`). Do not introduce a second `NODE_NAME` var — reuse the existing one. Add a startup validator that checks `string.IsNullOrEmpty(nodeName)` and logs a warning or throws if the preferred-leader feature is enabled but no node name is available. Test locally by launching with `PHYSICAL_HOSTNAME=` (empty) and verifying the fallback behavior is deliberate, not silent.
 
-**Prevention:** After any ConfigMap change or pod restart, add a mandatory settle wait of at least `2 * OTel_export_interval` (30s) before taking the baseline snapshot. The existing 30s wait pattern in `28-tenantvector-routing.sh` is the correct model. New evaluation scenario scripts must apply the same pattern. Document this as a required wait after ConfigMap apply.
+**Warning signs:** `PreferredNode` is configured, `PHYSICAL_HOSTNAME` matches the node, but the pod never enters preferred mode. Logs show "this pod is non-preferred" on every election cycle. `Environment.GetEnvironmentVariable("PHYSICAL_HOSTNAME")` returns null in the production environment (check with a diagnostic log line at startup).
 
-**Detection:** A scenario that consistently fails on the first run but passes on the second (when counters have stabilized) is showing this symptom. Querying Prometheus twice in succession 5s apart shows the value jumping mid-scenario — the export cycle landed between the two queries.
-
-**Phase:** All bash scenario scripts.
+**Phase to address:** Configuration wiring (PreferredNode + env var binding).
 
 ---
 
-## Moderate Pitfalls
+### Pitfall 5: Stability Gate Clock Uses Wall Time — Pod Clock Skew Causes Premature or Delayed Preemption
 
-Mistakes that cause test confusion, incorrect assertions, or hard-to-diagnose failures.
+**What goes wrong:** The stability gate (preventing flapping preemption: preferred pod must be stable for N seconds before stamping the heartbeat lease) uses `DateTimeOffset.UtcNow` or a `Stopwatch` started at pod startup. In a multi-node cluster, node clocks can skew by seconds even with NTP. The non-preferred pod reads the `renewTime` field of the heartbeat lease to determine freshness. `renewTime` is written by the preferred pod using its local clock. If the preferred pod's clock is fast by 5s and the non-preferred pod's clock is slow by 5s, the non-preferred pod sees `renewTime` as 10s newer than its own now, potentially treating a stale heartbeat as fresh.
 
----
+**Why it happens:** K8s explicitly documents that the leader election client "does not consider timestamps in the leader election record to be accurate because these timestamps may not have been produced by a local clock." The same caveat applies to heartbeat lease timestamps read by non-preferred pods.
 
-### Pitfall 7: Priority Group Advance Gate — Higher-Priority Tenant Blocks Lower-Priority Test
+**How to avoid:** Build in a clock-skew tolerance into the freshness threshold. If the heartbeat interval is T seconds, the freshness threshold should be `T + max_clock_skew_tolerance` (e.g., T + 5s). Do not set the freshness threshold equal to the heartbeat interval. Document the assumed max clock skew (2-5s is typical in well-managed K8s clusters).
 
-**What goes wrong:** `SnapshotJob` processes priority groups sequentially. If group 1 (higher priority) returns `TierResult.Stale` or `TierResult.Commanded` for any tenant, the `shouldAdvance` gate breaks the group loop — group 2 and beyond never run in that cycle. A test for a group-2 tenant will never see a command dispatch as long as any group-1 tenant is stale or active.
+**Warning signs:** In test environments where all pods run on the same node (minikube, k3s single-node), this pitfall does not surface. It only appears in multi-node clusters. Symptom: non-preferred pod logs "preferred is fresh, backing off" for longer than expected after preferred pod crashes, or "preferred not fresh, no longer backing off" before the stability gate has actually expired.
 
-**Why it happens:** The advance gate logic in `SnapshotJob.Execute()`: `if (results[i] == TierResult.Stale || results[i] == TierResult.Commanded) { shouldAdvance = false; break; }`. This is intentional by design. The gate exists so lower-priority tenants do not issue commands when higher-priority tenants are already acting.
-
-**Consequences:** A test for a same-priority scenario (2 tenants in group 1) that also deploys a second group inadvertently introduces a higher-priority tenant in group 1 with stale data (e.g., the device is not reachable yet). Every SnapshotJob cycle returns early. The group-2 test tenant command never fires.
-
-**Prevention:** Assign the same priority to all tenants in a test that exercises parallel evaluation. For different-priority tests, ensure all higher-priority tenants are in a `TierResult.Healthy` state (metrics within threshold, not stale) before the scenario under test begins. If a higher-priority tenant uses a device that may be unreachable, configure its metrics with `IntervalSeconds = 0` (excluded from staleness checks) or use a device that is guaranteed reachable.
-
-**Detection:** SnapshotJob logs for the cycle show `tier=1 stale` for a group-1 tenant, followed immediately by no log lines for group-2 tenants. The cycle summary log shows `Commanded=0, Stale=1` even though the group-2 threshold is violated.
-
-**Phase:** Multi-tenant test scenario design.
+**Phase to address:** Heartbeat freshness check implementation.
 
 ---
 
-### Pitfall 8: ConfigMap Reload Resets Sentinel — Carry-Over Skipped for Scenarios Changing Thresholds
+### Pitfall 6: `GracefulShutdownService` Does Not Know About the Heartbeat Lease
 
-**What goes wrong:** When the test script modifies the tenant ConfigMap to switch from one threshold configuration to another (e.g., changing `Max` from 100 to 5 to simulate a breach), `TenantVectorWatcherService` triggers `TenantVectorRegistry.Reload()`. The reload carries over existing slot values for metrics where `(ip, port, metricName)` matches the old config. However, if the `TimeSeriesSize` changes between the old and new config, `CopyFrom()` truncates the series: `series.RemoveRange(0, series.Length - TimeSeriesSize)`. Reducing `TimeSeriesSize` drops older samples. The new holder may start with a shorter series than expected, delaying the point at which all samples are violated.
+**What goes wrong:** The existing `GracefulShutdownService` has a hard-coded 5-step shutdown sequence. Step 1 calls `K8sLeaseElection.StopAsync` which deletes the leadership lease. The heartbeat lease has no equivalent cleanup step. If the preferred pod shuts down and the heartbeat lease is not deleted (relying on TTL expiry), the non-preferred leader will continue to back off for up to `leaseDuration` seconds after the preferred pod is gone, delaying the election stabilization. Worse: if the new preferred heartbeat service is a `BackgroundService`, it will be stopped by the host framework after `GracefulShutdownService.StopAsync` completes, meaning the framework stop order (reverse registration order) now affects heartbeat lease cleanup.
 
-**Why it happens:** `MetricSlotHolder.CopyFrom()` line 102-104: `var trimmed = oldSeries.Length > TimeSeriesSize ? oldSeries.RemoveRange(0, oldSeries.Length - TimeSeriesSize) : oldSeries`. This is correct behavior, but test authors who change `TimeSeriesSize` mid-test do not account for the truncation affecting test timing.
+**Why it happens:** `GracefulShutdownService` was designed as the SINGLE orchestrator for shutdown steps. Adding a new lease without extending the shutdown sequence violates that design and creates an implicit dependency on framework stop ordering.
 
-**Prevention:** Avoid changing `TimeSeriesSize` between scenario variations in the same test. Set a single `TimeSeriesSize` for each test tenant at deployment time and keep it constant across scenario switches. If a scenario requires a different depth, use a separate tenant with a distinct name.
+**How to avoid:** Extend `GracefulShutdownService` to include heartbeat lease cleanup as a new step (e.g., Step 1b: delete heartbeat lease if preferred pod). This keeps the shutdown sequence explicit and time-budgeted. Alternatively, design the heartbeat service to self-delete its lease in its own `StopAsync`, and document that `GracefulShutdownService` does not need to orchestrate it.
 
-**Detection:** After a ConfigMap threshold change, SnapshotJob cycles show `tier=3 — not all evaluate metrics violated` more times than `TimeSeriesSize` would predict. Checking the debug log for `TimeSeries holder: ... samples={SampleCount}` after reload shows fewer samples than expected.
+Choose one pattern and be explicit. The risk is subtle: if the heartbeat lease is deleted by the BackgroundService framework stop (after `GracefulShutdownService`), it happens AFTER leadership has already been released and the new leader may already be elected — making the heartbeat cleanup redundant but harmless. If it is NOT deleted, the TTL delay is the cost.
 
-**Phase:** Bash scenario design, ConfigMap reload interactions.
+**Warning signs:** After a clean preferred-pod shutdown, the non-preferred leader delays preemption by exactly `heartbeatLeaseDuration` seconds. Logs on the non-preferred pod show "preferred is fresh, backing off" after the preferred pod has already exited.
 
----
-
-### Pitfall 9: kubectl Logs Pod Selection — Missing Commands from Non-Queried Replicas
-
-**What goes wrong:** `kubectl logs pod/<pod-name>` only returns logs for one pod. SnapshotJob runs on all 3 replicas in parallel. The tier-4 log line `"Tenant {TenantId} priority={Priority} tier=4 — commands enqueued"` appears on all 3 pods (each pod evaluates independently). The leader pod also logs `"Command {CommandName} completed for {DeviceName}"` from `CommandWorkerService`. If the bash test only checks a single pod for the tier-4 log, it succeeds or fails depending on whether that pod was polled. If it only checks the leader pod for the "completed" log but the leader changed after a restart, the log is on a different pod.
-
-**Why it happens:** The existing E2E scripts already handle this correctly for some scenarios (e.g., `28-tenantvector-routing.sh` iterates all pods). But new evaluation scripts that naively copy a single-pod log check pattern will miss events on the other two pods.
-
-**Consequences:** Flaky tests where the same scenario passes on some runs (checked pod happened to be the one with the log) and fails on others.
-
-**Prevention:** All log-based assertions must iterate all 3 pods with `kubectl get pods -o jsonpath='{.items[*].metadata.name}'`. For "tier-4 commands enqueued" assertions: find the first pod with the log line (any pod suffices — all 3 run SnapshotJob). For "Command completed" assertions: find the pod where the leader is; query `kubectl logs --all-containers` for the INFO log, or rely on `sum(snmp_command_sent_total) > 0` via Prometheus instead of log inspection.
-
-**Detection:** A log assertion returns FAIL on one run and PASS on the next with no config changes. The evidence string shows `pod=pod-0` when the line appeared on `pod-1`.
-
-**Phase:** Bash validation logic.
+**Phase to address:** Shutdown sequence extension (modify GracefulShutdownService or define heartbeat BackgroundService contract).
 
 ---
 
-### Pitfall 10: Scenario Switch Timing — OID Value Change Not Yet Seen by Next Poll
+### Pitfall 7: Channel-Based Command Dispatch Does Not Drain Before Yield Handover Completes
 
-**What goes wrong:** The HTTP scenario switch endpoint returns `200 OK` after updating the in-memory `current_scenario` variable in the simulator. The `DynamicInstance.getValue()` callback will return the new value on the next SNMP GET. However, the collector's `MetricPollJob` fires on a Quartz schedule that is not synchronized with the HTTP switch. If the test script switches the scenario and immediately enters the poll-until assertion loop, the first 1-2 Prometheus queries may reflect the pre-switch value (the poll cycle that was already in flight when the switch arrived has not yet completed its OTel export).
+**What goes wrong:** When the non-preferred leader yields (deletes leadership lease), `CommandWorkerService` continues draining the command `Channel<CommandRequest>` for the duration of the shutdown sequence (8s drain budget in Step 4 of `GracefulShutdownService`). However, after yield, the preferred pod may acquire leadership and start dispatching commands to the same devices concurrently — before the yielding pod has finished draining its channel. Both pods send SET commands to devices for the same tenant within the same SnapshotJob cycle window.
 
-**Why it happens:** The poll cycle, OTel export, and Prometheus scrape are three independent 15s intervals that are not phase-aligned with the test script's wall clock. The scenario switch can land at any point in these cycles.
+**Why it happens:** The channel drain (Step 4) happens after the leadership lease is deleted (Step 1). Between Step 1 and Step 4, the preferred pod has acquired leadership and started processing. The `CommandWorkerService` leadership gate (`if (!_leaderElection.IsLeader) return;`) correctly prevents new SETs after yield — but commands already in the channel buffer were enqueued before yield and will be executed during drain if `IsLeader` was true when they were dequeued.
 
-**Consequences:** The poll-until loop queries Prometheus and finds command counter unchanged. With a 30s timeout, there is a risk that the window closes before two full poll+export+scrape cycles complete, especially if the switch lands near the end of a poll cycle.
+Wait — the gate is checked per-command inside `ExecuteCommandAsync`. After `StopAsync` sets `_isLeader = false`, the gate will return early for all in-channel commands. This is the correct behavior. The actual risk is the opposite: the channel may have commands enqueued by the last SnapshotJob cycle before yield, and those commands are silently dropped (gate returns early) rather than being re-dispatched by the new leader.
 
-**Prevention:** After sending the HTTP scenario switch request, insert a mandatory sleep of one full poll cycle (15s) before starting the poll-until assertion. This ensures at least one complete poll cycle with the new OID values before asserting. The poll-until timeout should be at least `(TimeSeriesSize * IntervalSeconds) + (2 * OTel_export_interval)` = `(1 * 15) + 30 = 45s` minimum for depth-1 tenants.
+**How to avoid:** Accept the silent drop as designed behavior. The new leader's SnapshotJob will re-evaluate tenants within the next cycle (15s) and re-dispatch any needed commands. Document this as "at-least-once evaluation, not at-least-once command" — consistent with the existing suppression cache design. Do NOT attempt to transfer the in-flight channel buffer to the new leader (this would require distributed queuing and is out of scope).
 
-**Detection:** The first 1-2 polls in the poll-until loop return the old Prometheus value. After ~30s the value updates. If the timeout is 30s, the test times out on the first iteration.
+Ensure the suppression cache TTL (`SuppressionWindowSeconds`) is long enough that the new leader does not immediately re-dispatch the same command that the old leader just (partially) sent during its drain window.
 
-**Phase:** Bash test script timing, poll-until timeout values.
+**Warning signs:** After handover, a device receives a duplicate SET command within 15s. Check whether the suppression cache on the new leader is empty (new pod, no shared state) or whether the old leader's suppression entry had expired.
 
----
-
-### Pitfall 11: Resolved Gate Blocks Command — Test Misreads Tier-2 as Tier-3 Failure
-
-**What goes wrong:** `AreAllResolvedViolated()` returns `true` (all Resolved holders violated) → SnapshotJob returns `TierResult.ConfirmedBad` without dispatching a command. A test author who did not intend to trigger the resolved gate has inadvertently configured a Resolved metric whose threshold is also breached (or has no threshold, which evaluates as always-violated). The tenant stops at Tier 2 and never reaches Tier 4. Prometheus shows no command increment; the test fails.
-
-**Why it happens:** The 4-tier logic has this specific asymmetry: `AreAllResolvedViolated = true` means "confirmed bad, all Evaluate metrics are confirmed bad too, no command needed." If any Resolved metric has no threshold (`threshold is null` → always violated), and the test intends to reach Tier 4, the vacuous violation stops the cascade silently.
-
-**Consequences:** Test shows `snmp_command_sent_total` delta=0 despite the Evaluate threshold being breached. Pod logs show `tier=2 — all resolved violated, device confirmed bad, no commands` — a subtle distinction from `tier=3 — not all evaluate metrics violated`.
-
-**Prevention:** In evaluation test tenant configs, ensure Resolved metrics have thresholds set such that the value returned by the "healthy" scenario is within range (not violated). Only switch the Evaluate metrics to a breaching value in the "breach" scenario. Explicitly validate the Resolved metric threshold in the tenant config comments.
-
-**Detection:** Pod logs show `tier=2` log lines with `"device confirmed bad"` during the breach scenario instead of `tier=4`. SnapshotJob cycle summary logs show `Commanded=0` but `TierResult` for the tenant is `ConfirmedBad` not `Healthy`.
-
-**Phase:** Tenant config design, test scenario logic verification.
+**Phase to address:** Yield handover design (document drop-and-re-evaluate contract explicitly).
 
 ---
 
-## Minor Pitfalls
+### Pitfall 8: Two-Lease Write Conflicts If Both Pods Target the Same Lease Name
 
-Mistakes that cause confusion but are quickly fixable.
+**What goes wrong:** The two-lease design uses separate lease names to avoid `resourceVersion` conflicts. If configuration or code has both the leadership lease name and heartbeat lease name set to the same value (e.g., both default to `"snmp-collector-leader"`), every write from the preferred heartbeat service will conflict with writes from `LeaderElector`, causing 409 Conflict responses, incremented retry counters, and degraded election reliability.
 
----
+**Why it happens:** Config defaults often copy from the existing `LeaseOptions.Name`. A new `PreferredHeartbeatLeaseOptions.Name` with the same default as `LeaseOptions.Name` will silently produce the same lease name unless distinctly configured.
 
-### Pitfall 12: HTTP Endpoint Port Conflicts with SNMP Port 161
+**How to avoid:** Assign a clearly distinct default name (e.g., `"snmp-collector-preferred-hb"`) in `PreferredHeartbeatLeaseOptions`. Add a startup validator that asserts `LeaseOptions.Name != PreferredHeartbeatLeaseOptions.Name` and throws `InvalidOperationException` at startup if they match. This is trivial to implement and prevents a silent, hard-to-diagnose failure.
 
-**What goes wrong:** The simulator already binds UDP port 161 for SNMP. If the HTTP control endpoint binds TCP port 161 on the same container, the bind succeeds (UDP and TCP are separate namespaces) but causes confusion when reading `netstat` output during debugging. More critically, if the HTTP port is chosen as 8080 and the simulator container already exposes 8080 for something else, or if the collector's health endpoint is on 8080 and port-forwards are active, there is a port collision.
+**Warning signs:** Kubernetes API server returns `409 Conflict` on lease update operations. `K8sLeaseElection` logs increased renewal failures. Leadership oscillates or degrades. Both pod logs show `resourceVersion` mismatch errors on lease writes.
 
-**Prevention:** Choose a distinct port for the HTTP control endpoint (e.g., 9191 or 9080). Document the port in the simulator Dockerfile `EXPOSE` directive and in the K8s Service definition. Do not reuse 161, 8080, or any port already in the cluster services.
-
-**Phase:** HTTP simulator implementation.
-
----
-
-### Pitfall 13: Scenario Registry Default — Simulator Starts in Unknown State
-
-**What goes wrong:** If the simulator starts without a defined default scenario, the `DynamicInstance.getValue()` callback may return a value that happens to breach a threshold. The first poll cycle after deployment triggers an unintended command before any test script has run.
-
-**Prevention:** Define a named `"baseline"` scenario as the default at startup. The baseline scenario returns values that are within all test tenant thresholds. The K8s Deployment sets `INITIAL_SCENARIO=baseline` via env var (or the simulator hardcodes it). Every test script begins with `POST /scenario/baseline` to reset state before proceeding.
-
-**Phase:** HTTP simulator implementation, scenario registry design.
-
----
-
-### Pitfall 14: GraceMultiplier Range Validation Rejects Test Configs
-
-**What goes wrong:** `MetricSlotOptions.GraceMultiplier` was constrained to range `[2.0, 5.0]` in v1.9. A test tenant config that sets `GraceMultiplier = 1.5` (to tighten the staleness window for faster test iteration) will be rejected by `TenantVectorOptionsValidator` with an error log. The tenant is skipped, the routing index has no entries for the test device, and all poll data is silently dropped with no command dispatch.
-
-**Prevention:** Use `GraceMultiplier >= 2.0` in all test tenant configs. The minimum valid value (2.0) provides a 30s staleness window for a 15s poll interval, which is acceptable for E2E testing. If faster staleness detection is needed for staleness-testing scenarios, use `IntervalSeconds` adjustment instead.
-
-**Detection:** `TenantVectorWatcherService` logs a validation error mentioning `GraceMultiplier` out of range. `TenantVectorRegistry.TenantCount` is lower than expected. No routing fan-out for the test device (no `snmp_tenantvector_routed_total` increment for the device).
-
-**Phase:** Tenant config authoring.
-
----
-
-## Phase-Specific Warnings
-
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| HTTP simulator endpoint | Event loop blocking (Pitfall 1) | Use aiohttp or asyncio.start_server; never blocking I/O in handler |
-| Simulator startup scenario | Unknown default state (Pitfall 13) | Hardcode "baseline" scenario, emit startup log |
-| Tenant threshold config design | Sentinel triggers equality threshold (Pitfall 2) | Avoid Min=Max=0; use range thresholds with safe baseline values |
-| Tenant threshold config design | Resolved gate stops cascade (Pitfall 11) | Verify Resolved metrics have in-range thresholds for baseline scenario |
-| Time series depth > 1 | Tests assert before series fills (Pitfall 3) | wait = TimeSeriesSize * IntervalSeconds + OTel interval |
-| Test script sequencing | Suppression bleeds between scenarios (Pitfall 4) | Use distinct tenant names per scenario or space 75s+ apart |
-| Multi-tenant same-priority tests | Priority gate blocks test tenant (Pitfall 7) | Set all test tenants to same Priority; verify no higher-priority stale tenants |
-| Prometheus assertions | Per-pod sent vs. cluster total mismatch (Pitfall 5) | Use sum() without pod filter for sent assertions |
-| Baseline snapshot timing | OTel export delay inflates delta (Pitfall 6) | 30s settle wait after ConfigMap apply before snapshot |
-| Scenario switch timing | OID change not yet polled (Pitfall 10) | 15s sleep after HTTP switch before poll-until |
-| Log-based assertions | Single pod check misses other replicas (Pitfall 9) | Iterate all pods; prefer Prometheus for command assertions |
-| ConfigMap threshold change | Series truncation if TimeSeriesSize changes (Pitfall 8) | Fix TimeSeriesSize per tenant, do not change mid-test |
-| GraceMultiplier in test config | Validation rejects < 2.0 (Pitfall 14) | Keep GraceMultiplier >= 2.0 in all test configs |
-
-## Sources
-
-- Source code verified: `src/SnmpCollector/Jobs/SnapshotJob.cs` (4-tier evaluation logic, advance gate)
-- Source code verified: `src/SnmpCollector/Pipeline/MetricSlotHolder.cs` (sentinel value, CopyFrom truncation)
-- Source code verified: `src/SnmpCollector/Pipeline/SuppressionCache.cs` (lazy TTL, ConcurrentDictionary key structure)
-- Source code verified: `src/SnmpCollector/Pipeline/TenantVectorRegistry.cs` (Reload, carry-over, priority bucket ordering)
-- Source code verified: `src/SnmpCollector/Services/CommandWorkerService.cs` (leader gate, command sent counter placement)
-- Source code verified: `simulators/e2e-sim/e2e_simulator.py` (asyncio event loop structure, open_dispatcher)
-- Source code verified: `tests/e2e/lib/prometheus.sh` (snapshot_counter, poll_until, 30s timeout, 3s interval)
-- Source code verified: `tests/e2e/scenarios/28-tenantvector-routing.sh` (multi-pod log iteration pattern)
-- Source code verified: `src/SnmpCollector/Configuration/MetricSlotOptions.cs` (GraceMultiplier field, IntervalSeconds default)
-
----
-
----
-
-# Pitfalls Research — Tenant Vector Metrics Milestone
-
-**Domain:** Adding tenant-level per-evaluation-cycle metrics to existing OTel/Prometheus monitoring system (3-replica K8s)
-**Researched:** 2026-03-22
-**Confidence:** HIGH — all pitfalls grounded directly in codebase: MetricRoleGatedExporter.cs, PipelineMetricService.cs, TelemetryConstants.cs, SnapshotJob.cs, ServiceCollectionExtensions.cs, TenantVectorRegistry.cs, CardinalityAuditService.cs.
-
----
-
-## Critical Pitfalls
-
----
-
-### Pitfall TV-1: Counter Double-Counting from All-Instances Export
-
-**What goes wrong:**
-All 3 replicas run `SnapshotJob` independently and each increments tenant counters on every 15s cycle. If Grafana queries use a raw counter value or a `rate()` expression without cross-instance aggregation, the displayed rate is 3x the true system rate. A dashboard showing "commands dispatched per minute" reads 30/min when the actual rate is 10/min.
-
-**Why it happens:**
-The new tenant counters belong on `TelemetryConstants.MeterName = "SnmpCollector"` (all-instances export, same as `snmp.command.dispatched` and all existing pipeline counters). Engineers writing PromQL apply the same patterns used for single-instance services and omit `sum by (tenant_id, priority)`. The mistake is invisible until someone notices the numbers are exactly 3x the values logged in application logs.
-
-**How to avoid:**
-All PromQL for tenant counters must aggregate across instances before presenting a per-tenant total:
-
-```promql
-# Correct: rate of commands dispatched, per tenant
-sum by (tenant_id, priority) (
-  rate(snmp_tenant_commands_dispatched_total[30s])
-)
-
-# Wrong: triple-counts without aggregation
-rate(snmp_tenant_commands_dispatched_total[30s])
-```
-
-Establish this as a standard at the start of the dashboard build phase, not after panels are written.
-
-**Warning signs:**
-- Dashboard numbers are exactly 3x values seen in application logs for a known single-tenant test.
-- Any Grafana panel on a tenant counter lacks `sum by (tenant_id)` in its PromQL.
-- `rate()` window is shorter than twice the SnapshotJob cycle interval (see Pitfall TV-7).
-
-**Phase to address:**
-Instrument definition phase — document the PromQL aggregation requirement before any dashboard panel is written.
-
----
-
-### Pitfall TV-2: Tenant State Gauge Registered on the Wrong Meter
-
-**What goes wrong:**
-The `snmp_tenant_state` enum gauge is placed on `TelemetryConstants.MeterName` ("SnmpCollector") instead of `TelemetryConstants.LeaderMeterName` ("SnmpCollector.Leader"). All 3 replicas export the gauge. Since each replica independently evaluates tenant state via `SnapshotJob.EvaluateTenant()`, followers may export a different state integer than the leader at the same timestamp. Prometheus receives 3 conflicting series. Any aggregation over them (`max`, `min`, `avg`) produces either the wrong value or a meaningless fractional result.
-
-**Why it happens:**
-`PipelineMetricService` uses `TelemetryConstants.MeterName` for all 15 instruments. The path of least resistance when adding a new instrument is to add it to `PipelineMetricService`, which silently puts it on the wrong meter. There is no compile-time check that enforces meter assignment per instrument type.
-
-**How to avoid:**
-Tenant state gauge must be created on `LeaderMeterName`:
-- Do NOT add it to `PipelineMetricService`.
-- Create a separate `TenantMetricService` (or similar) using `meterFactory.Create(TelemetryConstants.LeaderMeterName)` for the state gauge.
-- `MetricRoleGatedExporter` will then suppress it on followers automatically — no exporter code changes needed (see Pitfall TV-3).
-
-PromQL for the leader-gated gauge is then clean:
-```promql
-snmp_tenant_state{tenant_id="alpha"}
-```
-
-**Warning signs:**
-- Prometheus shows 3 time series for `snmp_tenant_state{tenant_id="..."}` with potentially different values at the same timestamp.
-- Any `avg by (tenant_id)` on the state gauge (produces fractional values like `1.67`).
-- Dashboard state column shows unexpected values during failover (leader changes, state series briefly conflicts).
-
-**Phase to address:**
-Instrument definition phase — meter assignment per instrument type must be decided and documented before `CreateGauge` is called.
-
----
-
-### Pitfall TV-3: Attempting to Bypass MetricRoleGatedExporter by Modifying It
-
-**What goes wrong:**
-A developer sees that new tenant instruments need to bypass gating (counters must export from all replicas) and concludes the exporter needs modification — adding an instrument-name whitelist, a second gating condition, or a flag. They change `MetricRoleGatedExporter.cs`, introducing complexity and a regression risk for all existing instruments.
-
-**Why it happens:**
-The exporter's design is meter-name-based, not instrument-name-based. The gating check at line 56 is:
-```csharp
-if (!string.Equals(metric.MeterName, _gatedMeterName, StringComparison.Ordinal))
-```
-Any instrument on `"SnmpCollector"` passes through on followers regardless of its name. Any instrument on `"SnmpCollector.Leader"` is suppressed on followers. Meter selection at instrument creation time is the complete control surface — no exporter changes are needed or desired.
-
-**How to avoid:**
-Understand the two-meter model before writing any instrument code:
-
-| Meter | Exported by | Use for |
-|-------|-------------|---------|
-| `"SnmpCollector"` | All instances | Counters, histograms where per-instance values are valid and summed in PromQL |
-| `"SnmpCollector.Leader"` | Leader only | State gauges, any instrument with a single authoritative value |
-
-New tenant instruments map as follows:
-- Counters (`commands_dispatched`, `commands_suppressed`, `commands_failed`, `cycle_count`, `stale_count`, `resolved_count`, `healthy_count`) → `MeterName`
-- Evaluation duration histogram → `MeterName` (per-replica timing is valid; aggregate with `sum by (le, tenant_id)` for P99)
-- State gauge (`tenant_state`) → `LeaderMeterName`
-
-A PR that modifies `MetricRoleGatedExporter.cs` for this milestone is a red flag.
-
-**Warning signs:**
-- `MetricRoleGatedExporter.cs` appears in the PR diff.
-- New instrument name appears in an `if` condition inside `Export()`.
-- State gauge shows 3 series in Prometheus.
-
-**Phase to address:**
-Instrument definition phase — class and meter assignment design, before any instrument creation code is written.
-
----
-
-### Pitfall TV-4: Histogram Bucket Boundaries Don't Cover the Actual Duration Range
-
-**What goes wrong:**
-The OTel .NET SDK default histogram bucket boundaries are `[0, 5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000]` ms. For a per-tenant evaluation duration histogram, where the evaluation loop (grace check, staleness check, threshold evaluation, command dispatch) typically completes in 1–20ms, nearly all observations land in the `[0, 5]` bucket. `histogram_quantile(0.99, ...)` then returns exactly `5.0` — the bucket boundary — not a useful percentile.
-
-The existing `snmp.snapshot.cycle_duration_ms` uses default buckets (adequate for a full multi-tenant cycle that may span 1–500ms). A per-tenant evaluation histogram needs explicit fine-grained boundaries.
-
-**Why it happens:**
-`_meter.CreateHistogram<double>(name, unit: "ms")` uses defaults unless an `AddView` override is registered. Developers copy the existing histogram pattern without checking whether default buckets are appropriate for the measurement range.
-
-**How to avoid:**
-Register an `AddView` in `ServiceCollectionExtensions.AddSnmpTelemetry` before the `AddMeter` calls:
-
-```csharp
-metrics.AddView(
-    instrumentName: "snmp.tenant.eval_duration_ms",
-    new ExplicitBucketHistogramConfiguration
-    {
-        Boundaries = [0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 250.0, 500.0]
-    });
-```
-
-Rationale for these boundaries:
-- 0.5–2ms: grace check + staleness iteration only (no command)
-- 2–10ms: full tier 1–3 evaluation
-- 10–50ms: tier 4 command dispatch, including suppression cache write
-- 50–500ms: anomalously slow (worth surfacing; triggers investigation)
-
-For the histogram PromQL in Grafana to aggregate across instances correctly:
-```promql
-histogram_quantile(0.99,
-  sum by (le, tenant_id, priority) (
-    rate(snmp_tenant_eval_duration_ms_bucket[2m])
-  )
-)
-```
-
-**Warning signs:**
-- Prometheus `le` label values for `snmp_tenant_eval_duration_ms_bucket` show `5`, `10`, `25` — these are default boundaries, not the custom ones.
-- `histogram_quantile(0.99, ...)` returns exactly `5.0` or `10.0` (boundary snapping, not interpolation).
-- Grafana heatmap shows all observations concentrated in one row.
-
-**Phase to address:**
-Instrument definition phase — `AddView` registration in `AddSnmpTelemetry` must be in the same PR as the histogram instrument creation.
-
----
-
-### Pitfall TV-5: Enum Gauge — Integer Values Not Mapped to Labels in Grafana
-
-**What goes wrong:**
-Prometheus stores gauge values as floats. `snmp_tenant_state{tenant_id="alpha"}` returns `2.0`, not `"Unresolved"`. A Grafana table showing raw numeric values is operationally useless for an on-call engineer. The correct rendering requires Grafana Value Mappings, but these are configured per panel and are easy to omit or misconfigure (wrong range, missing value).
-
-A secondary mistake: using `avg by (tenant_id)` instead of `max by (tenant_id)` on the state gauge. If the series briefly has multiple values due to export timing, `avg` returns a non-integer float.
-
-**Why it happens:**
-Two patterns for enum-as-gauge exist in the Prometheus ecosystem, and they are frequently confused:
-
-- **Approach A (recommended):** Single gauge per `(tenant_id, priority)` with integer value encoding (0=Healthy, 1=Resolved, 2=Unresolved). Grafana Value Mappings render the integer as labelled text with colour.
-- **Approach B (not recommended here):** State-set pattern — one series per possible state value, with `value=1` for the active state. Triples series count for no benefit given the state gauge is leader-gated.
-
-**How to avoid:**
-Use Approach A. Define state encoding as constants to prevent integer literals scattered through the codebase:
-
-```csharp
-// In TelemetryConstants.cs or a dedicated TenantStateConstants class
-public const double TenantStateHealthy    = 0.0;
-public const double TenantStateResolved   = 1.0;
-public const double TenantStateUnresolved = 2.0;
-```
-
-Grafana table panel configuration:
-- PromQL: `max by (tenant_id, priority) (snmp_tenant_state)` (leader-only export, `max` collapses cleanly)
-- Field override for `snmp_tenant_state`: `Unit = none`
-- Value Mappings: `0 → Healthy` (green), `1 → Resolved` (orange), `2 → Unresolved` (red)
-
-Do not use `avg` — use `max` or `last_over_time` for the state display query.
-
-**Warning signs:**
-- Grafana state column shows `0`, `1`, `2` as raw numbers.
-- State cell shows blank/null for some tenants — Value Mapping range does not cover a returned value.
-- `avg by (tenant_id)` in the state query PromQL.
-- Integer literals `0.0`, `1.0`, `2.0` appear directly in `gauge.Record()` call sites.
-
-**Phase to address:**
-Instrument definition phase (define constants) and dashboard implementation phase (configure Value Mappings).
-
----
-
-### Pitfall TV-6: Cardinality Estimate Does Not Include Tenant Instruments
-
-**What goes wrong:**
-`CardinalityAuditService` computes `devices × oidDimension × 2 instruments × 2 sources` and warns if the estimate exceeds 10,000 series. It does not account for tenant instruments. With 4 tenants × 8 instruments, the tenant dimension adds 32 series — negligible now. However, the audit log gives a false sense of completeness: operations teams relying on it to size Prometheus storage do not see the tenant series contribution. If tenant count grows (production may have 20–50 tenants) and more instruments are added, the omission becomes material.
-
-Separately: if someone accidentally uses a high-cardinality value as a label dimension alongside `tenant_id` (e.g., adding `device_name` or `metric_name` to tenant counters), the audit will not catch it because the formula does not include tenant instruments at all.
-
-**Why it happens:**
-`CardinalityAuditService` was written before tenant instruments existed. It is not automatically updated when new instrument families are added.
-
-**How to avoid:**
-Update the cardinality formula in `CardinalityAuditService.AuditCardinality()` to include the tenant instrument contribution:
-
-```csharp
-var tenantInstrumentCount = 8;  // 6 counters + 1 histogram + 1 state gauge
-var tenantSeriesEstimate = _tenantRegistry.TenantCount * tenantInstrumentCount;
-var totalEstimate = existingEstimate + tenantSeriesEstimate;
-```
-
-Keep `tenant_id` and `priority` as the only label dimensions on tenant instruments. Do not add `device_name`, `ip`, or `metric_name` — those are already captured on `snmp_gauge`/`snmp_info`.
-
-**Warning signs:**
-- Startup cardinality log shows only the `devices × OIDs × 2 × 2` formula with no mention of tenant instruments.
-- A PR proposes adding `device_name` as a label on a tenant counter.
-- `tenant_id` values in Prometheus include dynamic strings (IPs, OID names) rather than stable configured names.
-
-**Phase to address:**
-Instrument definition phase — update `CardinalityAuditService` in the same PR as the new instrument creation.
-
----
-
-### Pitfall TV-7: Per-Cycle Counter Rate() Window Too Narrow
-
-**What goes wrong:**
-Tenant cycle counters increment once per SnapshotJob cycle per tenant — every 15 seconds. A `rate()` window shorter than 2× the cycle interval may contain zero or one increment, producing a near-zero or spiky rate that looks like the metric is broken rather than healthy.
-
-`snmp_tenant_commands_dispatched_total` increments only when Tier 4 is reached. On a healthy system it may not increment for hours. A dashboard showing `rate(snmp_tenant_commands_dispatched_total[30s]) == 0` during normal operation will be misread as "metrics not working."
-
-**Why it happens:**
-Engineers calibrate `rate()` windows for high-frequency counters (events per second). A 2-minute window on a 15-second-cycle counter is correct; a 30-second window on the same counter may catch 0–2 increments, producing a volatile, misleading result. The mistake is applying a rate window that was right for `snmp.event.published` (high-frequency) without adjusting for the much lower frequency of per-cycle counters.
-
-**How to avoid:**
-Use `rate()` windows of at least `4 × cycle_interval` (60s for a 15s cycle) for tenant cycle counters. For cumulative totals, use the raw counter with `sum by (tenant_id)`. For increment-rate panels, document the expected zero-rate:
-
-```promql
-# Commands dispatched rate — zero on healthy system (Tier 4 only reached when threshold violated)
-sum by (tenant_id, priority) (
-  rate(snmp_tenant_commands_dispatched_total[2m])
-)
-```
-
-Add panel description: "Expected to be 0 on a healthy system. Non-zero values indicate threshold violations triggering command dispatch."
-
-**Warning signs:**
-- `rate()` window in any tenant counter panel is shorter than `2 × SnapshotJobOptions.IntervalSeconds`.
-- Dashboard shows constant zero for tenant counters and engineer concludes the metric is not recording.
-- Dashboard shows extreme spikes alternating with zero — characteristic of a rate window that catches exactly 1 increment sometimes and 0 increments other times.
-
-**Phase to address:**
-Dashboard implementation phase — PromQL window sizing and panel descriptions must account for the 15s cycle before panels are finalised.
+**Phase to address:** Configuration validation (startup validators for preferred lease options).
 
 ---
 
@@ -538,11 +140,10 @@ Dashboard implementation phase — PromQL window sizing and panel descriptions m
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Add tenant counters to existing `PipelineMetricService` | No new class, faster to implement | Mixes pipeline metrics (no tenant label) with tenant metrics (tenant label); `PipelineMetricService` already owns 15 instruments and grows unwieldy; state gauge cannot be added here (wrong meter) | Never — create `TenantMetricService` |
-| Register state gauge on `MeterName` | Avoids meter decision | 3 conflicting series per tenant in Prometheus; PromQL requires instance filtering permanently | Never |
-| Use default histogram bucket boundaries | Zero configuration | P99 resolves to bucket boundary (5.0 or 10.0); histogram useless for percentile analysis in sub-50ms range | Never for per-tenant evaluation histogram |
-| Hardcode integer state values in `SnapshotJob` | 2 minutes saved | State encoding scattered through codebase; silent mismatch if Grafana Value Mappings are configured from a different reference | Never |
-| Skip updating `CardinalityAuditService` | ~10 lines saved | Tenant series invisible in startup audit; first indication of cardinality problem is Prometheus performance degradation | Acceptable if tenant count is documented as ≤10 and a follow-up task is filed |
+| Skip heartbeat lease cleanup on shutdown | Simpler service lifecycle | Delays non-preferred pod's election by up to TTL (15–30s) after preferred-pod restart | Acceptable if TTL is tuned to be short (< preferred pod's typical restart time) |
+| Hardcode stability gate duration as a constant | Avoids new config option | Cannot tune per-environment without redeployment | Never — make it configurable from the start |
+| Use `PHYSICAL_HOSTNAME` directly in options binding without fallback | Reuses existing env var | Silent empty-string match failures if var is absent | Acceptable only if a startup validator throws on empty |
+| Share suppression cache state between old and new leader via external store | Prevents brief duplicate commands after handover | Adds Redis/external dependency, far exceeds problem scope | Never — at-least-once evaluation is the correct contract |
 
 ---
 
@@ -550,10 +151,12 @@ Dashboard implementation phase — PromQL window sizing and panel descriptions m
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| OTel `AddView` for histogram buckets | Calling `AddView` after `AddMeter` in the `WithMetrics` lambda — OTel .NET may not apply the view to an already-registered instrument | Register `AddView` calls before the `AddMeter` calls in the same `WithMetrics` lambda |
-| Prometheus `histogram_quantile` with multi-instance histogram | `histogram_quantile(0.99, rate(bucket[2m]))` without `sum by (le, tenant_id)` — mixes buckets from 3 instances, produces incorrect percentile | Always: `histogram_quantile(0.99, sum by (le, tenant_id, priority) (rate(...bucket[2m])))` |
-| Grafana table for leader-gated state gauge | `max by (tenant_id, priority)` fails to find any series if the leader pod is not yet elected | Add `or vector(0)` fallback, or document expected blank behaviour during leader election startup |
-| `MetricRoleGatedExporter` `ParentProvider` reflection | The `_parentProviderPropagated` flag is set once per exporter instance; if any new meter is added after the flag is set, the inner exporter already has the parent provider | No action needed — the flag pattern is correct; do not attempt to reset it |
+| `LeaderElector` + preferred heartbeat service | Starting preferred heartbeat stamping immediately on pod startup, before stability gate expires | Gate heartbeat writes behind a `Task.Delay(stabilityWindowSeconds)` or a liveness check that ensures the pod has been up for N seconds |
+| `GracefulShutdownService` + new heartbeat service | Assuming BackgroundService framework stop handles heartbeat lease cleanup in the correct order | Explicitly add heartbeat lease deletion to `GracefulShutdownService` or document that TTL-based expiry is acceptable |
+| `PreferredNode` config + Downward API | Reading `NODE_NAME` when deployment injects `PHYSICAL_HOSTNAME` | Reuse the existing `PHYSICAL_HOSTNAME` env var; validate non-empty at startup |
+| RBAC + heartbeat lease | Adding heartbeat lease in a different namespace than the leadership lease | Keep both leases in `simetra` namespace; existing `Role` covers all lease names within namespace |
+| Freshness check + clock skew | Setting freshness threshold exactly equal to heartbeat interval | Add `+ clockSkewToleranceSeconds` (5s) to freshness threshold |
+| `K8sLeaseElection.StopAsync` + preferred heartbeat stop | Stopping leadership lease and heartbeat lease in undefined order via framework | Define explicit order: leadership lease deletion first, then heartbeat lease deletion, matching `GracefulShutdownService` sequence |
 
 ---
 
@@ -561,21 +164,21 @@ Dashboard implementation phase — PromQL window sizing and panel descriptions m
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| `TagList` allocation per counter increment | `TagList` with ≤8 tags is stack-allocated in OTel .NET; >8 tags falls back to heap allocation | Keep tag count on all tenant instruments to `(tenant_id, priority)` = 2 tags; do not add more | Breaks allocation budget if tag count exceeds 8 |
-| Per-tenant histogram `Record` inside `Task.WhenAll` parallel evaluation | `SnapshotJob` runs tenant evaluation in parallel; histogram `Record` must be thread-safe | OTel .NET histogram instruments are designed for concurrent use (confirmed in SDK source); safe as-is | Not a risk with current SDK |
-| `priority` label as a proxy for per-tenant unique values | If each tenant has a unique priority integer, `priority` becomes an alias for `tenant_id` and provides no grouping benefit while doubling series count | Document that `priority` reflects shared priority levels, not per-tenant unique identifiers; validate that operators do not assign unique priorities to every tenant | Breaks grouping utility as tenant count grows |
+| Polling heartbeat lease on every SnapshotJob cycle (15s) via Kubernetes API | Increased API server load; watch quota exhaustion at scale | Use a dedicated background loop for heartbeat reads; cache last-read timestamp in memory; only re-read if cache is older than T seconds | At 3+ pods × 4 reads/min each — negligible at this scale, but sets a bad pattern |
+| Preferred back-off check blocks SnapshotJob evaluation | SnapshotJob cycle duration increases; liveness vector staleness | Heartbeat freshness result should be a cached bool refreshed by background loop, not a synchronous API call in the job | Immediately if the K8s API is slow (>1s response) |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **State gauge meter assignment:** Confirm `snmp_tenant_state` is created on `LeaderMeterName`. Check: query Prometheus and verify `snmp_tenant_state` shows only 1 series per `(tenant_id, priority)` pair (not 3).
-- [ ] **Counter PromQL aggregation:** Every Grafana panel querying tenant counters uses `sum by (tenant_id, priority)`. Check: raw counter query returns `3 × tenant_count` series; post-aggregation returns `tenant_count` series.
-- [ ] **Histogram bucket boundaries applied:** Confirm custom boundaries are active. Check: `snmp_tenant_eval_duration_ms_bucket` in Prometheus has `le` label values matching the `AddView` boundaries (e.g., `0.5`, `1.0`), not default values (`5.0`, `10.0`, `25.0`).
-- [ ] **State encoding constants defined:** No numeric literals in `gauge.Record()` call sites. Check: grep for `gauge.Record` invocations in `TenantMetricService` — all use named constants.
-- [ ] **`CardinalityAuditService` updated:** Startup log shows tenant instrument series estimate alongside existing device/OID estimate. Check: `kubectl logs` on fresh start and grep for "tenant" in cardinality log line.
-- [ ] **MetricRoleGatedExporter unchanged:** `MetricRoleGatedExporter.cs` not modified in this milestone's PR. Check: `git diff HEAD~1 -- src/SnmpCollector/Telemetry/MetricRoleGatedExporter.cs` shows no changes.
-- [ ] **Rate window documented on dashboard panels:** Each counter panel PromQL uses `[2m]` or longer window; panel description states "zero rate = healthy system" for dispatch/failure counters.
+- [ ] **Heartbeat lease name:** Startup validator confirms it differs from leadership lease name — verify `LeaseOptions.Name != PreferredHeartbeatLeaseOptions.Name` throws at startup if equal.
+- [ ] **NODE_NAME / PHYSICAL_HOSTNAME binding:** Startup log prints the resolved node name at INFO level — verify the correct env var name is used and non-empty.
+- [ ] **RBAC:** Both lease names are in the `simetra` namespace — verify no cross-namespace lease is introduced.
+- [ ] **Stability gate:** Preferred pod does not stamp heartbeat lease until stability window has elapsed — verify with a test that restarts preferred pod rapidly and confirms no preemption loop.
+- [ ] **Shutdown sequence:** `GracefulShutdownService` either explicitly cleans up the heartbeat lease or the TTL-based expiry is documented as acceptable with its delay cost stated.
+- [ ] **`OnStoppedLeading` handlers:** No destructive teardown in `OnStoppedLeading` — verify handlers are limited to `_isLeader = false` assignment.
+- [ ] **Clock skew tolerance:** Freshness threshold is `heartbeatInterval + toleranceSeconds`, not `heartbeatInterval` exactly — verify in configuration or code.
+- [ ] **Command channel drain:** Post-yield drain correctly short-circuits via `IsLeader` gate — verify `_isLeader = false` is set before channel drain step in shutdown sequence.
 
 ---
 
@@ -583,12 +186,13 @@ Dashboard implementation phase — PromQL window sizing and panel descriptions m
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Counter double-counting (TV-1) | LOW | Update Grafana dashboard PromQL to add `sum by (tenant_id, priority)`; no code or redeploy needed |
-| State gauge on wrong meter (TV-2) | MEDIUM | Move gauge creation to `LeaderMeterName` service; redeploy; old 3-series data persists in Prometheus until retention expires |
-| Wrong histogram buckets (TV-4) | MEDIUM | Add `AddView` with correct boundaries; redeploy; historical histogram data is incompatible with new bucket layout — old percentiles are incorrect until data rolls off |
-| State encoding undocumented (TV-5) | LOW | Define constants in `TelemetryConstants.cs`; replace literals; Prometheus history unaffected |
-| Cardinality estimate incomplete (TV-6) | LOW | Update `CardinalityAuditService` formula; redeploy; no data loss |
-| Cardinality explosion from unbounded label (TV-6 variant) | HIGH | Remove high-cardinality label; redeploy; Prometheus TSDB may require manual series deletion or compaction to recover memory |
+| Destructive `OnStoppedLeading` (Pitfall 1) | HIGH — requires code fix and redeployment | Identify what state is cleared; restore it in `OnStartedLeading`; or move teardown to `CancellationToken` path only |
+| Heartbeat lease 404 window causes wrong election (Pitfall 2) | LOW — self-heals in one heartbeat interval | Tune TTL to cover restart time; add freshness threshold tolerance; document expected transient window |
+| RBAC 403 on heartbeat lease (Pitfall 3) | MEDIUM — requires `rbac.yaml` update and re-apply | Apply corrected Role/RoleBinding; pod will self-heal without restart if RBAC is updated while running |
+| Empty NODE_NAME (Pitfall 4) | LOW — configuration fix | Set correct env var in deployment.yaml; rolling restart |
+| Clock skew causing wrong freshness (Pitfall 5) | LOW — configuration tuning | Increase `clockSkewToleranceSeconds`; rolling restart |
+| Duplicate command dispatch during handover (Pitfall 7) | LOW — at-most transient; suppression cache will catch subsequent repeats | Tune `SuppressionWindowSeconds` to exceed handover window |
+| Same lease name for both leases (Pitfall 8) | MEDIUM — requires configuration fix and restart | Rename heartbeat lease in config; rolling restart |
 
 ---
 
@@ -596,23 +200,25 @@ Dashboard implementation phase — PromQL window sizing and panel descriptions m
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Counter double-counting (TV-1) | Instrument definition — PromQL standards doc | Raw counter query returns 3× tenant count; aggregated query returns tenant count |
-| State gauge on wrong meter (TV-2) | Instrument definition — meter assignment decision | Prometheus shows exactly 1 series per tenant for state gauge |
-| MetricRoleGatedExporter unchanged (TV-3) | Instrument definition — no exporter code changes | `git diff` shows no changes to `MetricRoleGatedExporter.cs` |
-| Histogram bucket sizing (TV-4) | Instrument definition — `AddView` in `AddSnmpTelemetry` | Prometheus `le` values for eval histogram match custom boundaries |
-| Enum gauge integer mapping (TV-5) | Instrument definition (constants) + dashboard (Value Mappings) | Grafana state column shows text labels with correct colours |
-| Cardinality audit update (TV-6) | Instrument definition — same PR as instrument creation | Startup log includes tenant series count |
-| Rate window sizing (TV-7) | Dashboard implementation — window and description per panel | All tenant counter panels use `[2m]` or longer; no panel uses window < 30s |
+| `OnStoppedLeading` fires on transient loss (Pitfall 1) | Two-lease coordination implementation | Unit test: mock `LeaderElector`, fire `OnStoppedLeading` twice, verify no state corruption on second call |
+| Heartbeat lease 404 window (Pitfall 2) | Heartbeat lifecycle design | E2E test: kill preferred pod cleanly, confirm non-preferred leader does not preempt within TTL window |
+| RBAC missing for heartbeat lease (Pitfall 3) | Pre-implementation RBAC review | Smoke test: deploy both leases in same namespace, verify no 403 in pod logs |
+| Empty NODE_NAME / wrong env var (Pitfall 4) | Configuration wiring | Startup validator test: set `PHYSICAL_HOSTNAME=""`, verify startup throws/warns |
+| Clock skew freshness threshold (Pitfall 5) | Heartbeat freshness check implementation | Code review: confirm `freshness = interval + tolerance`; document tolerance value |
+| Shutdown sequence missing heartbeat lease (Pitfall 6) | GracefulShutdownService extension | Verify shutdown sequence steps list includes heartbeat lease deletion or TTL policy is documented |
+| Command channel drain after yield (Pitfall 7) | Yield handover design doc | Manual test: trigger yield mid-SnapshotJob cycle, verify no duplicate SETs reach device within suppression window |
+| Same lease name collision (Pitfall 8) | Configuration validation | Startup validator: assert names differ; unit test the validator |
 
 ---
 
-## Sources (Tenant Vector Metrics section)
+## Sources
 
-- `src/SnmpCollector/Telemetry/MetricRoleGatedExporter.cs` — meter-name gating logic (line 56), leader-only vs. all-instances design
-- `src/SnmpCollector/Telemetry/TelemetryConstants.cs` — `MeterName` and `LeaderMeterName` constants
-- `src/SnmpCollector/Telemetry/PipelineMetricService.cs` — existing 15 instruments all on `MeterName`; counter tag pattern (`device_name` tag, `Add(1, tagList)`)
-- `src/SnmpCollector/Jobs/SnapshotJob.cs` — `TierResult` enum (Healthy/Resolved/Unresolved), 15s cycle, parallel tenant evaluation via `Task.WhenAll`
-- `src/SnmpCollector/Extensions/ServiceCollectionExtensions.cs` — `PeriodicExportingMetricReader` at 15s; `MetricReaderTemporalityPreference.Cumulative` (required for Prometheus `rate()`); `AddView` hook point in `WithMetrics` lambda
-- `src/SnmpCollector/Pipeline/CardinalityAuditService.cs` — existing cardinality formula (devices × OIDs × 2 × 2); does not include tenant instruments
-- `src/SnmpCollector/Pipeline/TenantVectorRegistry.cs` — `Tenant.Id` source (configured name or `"tenant-{i}"` fallback); tenant count bounded by configuration
-- OTel .NET SDK default histogram boundaries: `[0,5,10,25,50,75,100,250,500,750,1000,2500,5000,7500,10000]` — HIGH confidence, cross-referenced with OTel specification and Prometheus default bucket behaviour
+- kubernetes-client/csharp `LeaderElector.cs` source: [GitHub](https://github.com/kubernetes-client/csharp/blob/master/src/KubernetesClient/LeaderElection/LeaderElector.cs) — confirmed `OnStoppedLeading` fires on every inner-loop exit; `RunAndTryToHoldLeadershipForeverAsync` retries after loss (HIGH confidence)
+- client-go `leaderelection.go` source: [GitHub](https://github.com/kubernetes/client-go/blob/master/tools/leaderelection/leaderelection.go) — confirmed timing parameter relationships (`LeaseDuration > RenewDeadline > RetryPeriod × 1.2`); clock skew caveat documented explicitly; `OnStoppedLeading` not guaranteed to fire only after `OnStartedLeading` (HIGH confidence)
+- Kubernetes Downward API docs: [kubernetes.io](https://kubernetes.io/docs/concepts/workloads/pods/downward-api/) — `spec.nodeName` available via env var at container start; only env var (not volume) is supported for `spec.nodeName` (HIGH confidence)
+- client-go split brain issue: [kubernetes/kubernetes #67651](https://github.com/kubernetes/client-go/issues/67651) — confirmed split-brain window exists between lease deletion and non-preferred pod acquisition (MEDIUM confidence)
+- Project source code: `K8sLeaseElection.cs`, `GracefulShutdownService.cs`, `CommandWorkerService.cs`, `deployment.yaml`, `rbac.yaml` — verified integration points directly (HIGH confidence)
+
+---
+*Pitfalls research for: preferred leader election with site-affinity added to existing K8s SNMP monitoring system*
+*Researched: 2026-03-25*
