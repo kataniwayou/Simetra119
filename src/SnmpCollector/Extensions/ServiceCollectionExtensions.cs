@@ -214,6 +214,11 @@ public static class ServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<PreferredHeartbeatJobOptions>()
+            .Bind(configuration.GetSection(PreferredHeartbeatJobOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         // Custom IValidateOptions for cross-field validation (Phase 1)
         services.AddSingleton<IValidateOptions<PodIdentityOptions>, PodIdentityOptionsValidator>();
         services.AddSingleton<IValidateOptions<OtlpOptions>, OtlpOptionsValidator>();
@@ -485,6 +490,9 @@ public static class ServiceCollectionExtensions
         var snapshotOptions = new SnapshotJobOptions();
         configuration.GetSection(SnapshotJobOptions.SectionName).Bind(snapshotOptions);
 
+        var preferredHbOptions = new PreferredHeartbeatJobOptions();
+        configuration.GetSection(PreferredHeartbeatJobOptions.SectionName).Bind(preferredHbOptions);
+
         // Phase 6: Bind DevicesOptions to calculate thread pool size and register poll jobs.
         // CRITICAL: bind directly into .Devices (not the wrapper) -- matches AddSnmpConfiguration pattern.
         // DI container is NOT built yet; IOptions<DevicesOptions> is not available here.
@@ -497,7 +505,10 @@ public static class ServiceCollectionExtensions
 
         // Thread pool: generous ceiling to accommodate dynamic device additions at runtime.
         // Static jobs (CorrelationJob + HeartbeatJob + SnapshotJob) = 3, plus headroom for poll jobs.
+        // PreferredHeartbeatJob only runs in K8s mode.
         var initialJobCount = 3; // CorrelationJob + HeartbeatJob + SnapshotJob
+        if (k8s.KubernetesClientConfiguration.IsInCluster())
+            initialJobCount++; // + PreferredHeartbeatJob
         foreach (var device in devicesOptions.Devices)
             initialJobCount += device.Polls.Count;
         var threadPoolSize = Math.Max(initialJobCount, 50);
@@ -553,6 +564,23 @@ public static class ServiceCollectionExtensions
                     .WithMisfireHandlingInstructionNextWithRemainingCount()));
 
             intervalRegistry.Register("snapshot", snapshotOptions.IntervalSeconds);
+
+            // Phase 85: PreferredHeartbeatJob — reads heartbeat lease to maintain IsPreferredStampFresh.
+            // Only registered in K8s mode (IKubernetes is only available in cluster).
+            if (k8s.KubernetesClientConfiguration.IsInCluster())
+            {
+                var preferredHbKey = new JobKey("preferred-heartbeat");
+                q.AddJob<PreferredHeartbeatJob>(j => j.WithIdentity(preferredHbKey));
+                q.AddTrigger(t => t
+                    .ForJob(preferredHbKey)
+                    .WithIdentity("preferred-heartbeat-trigger")
+                    .StartNow()
+                    .WithSimpleSchedule(s => s
+                        .WithIntervalInSeconds(preferredHbOptions.IntervalSeconds)
+                        .RepeatForever()
+                        .WithMisfireHandlingInstructionNextWithRemainingCount()));
+                intervalRegistry.Register("preferred-heartbeat", preferredHbOptions.IntervalSeconds);
+            }
 
             // Phase 6: MetricPollJob per device per poll group.
             // Job keys use raw config address (DNS or IP) so operators can correlate to ConfigMap.
