@@ -5,16 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** Planning next milestone
+**Current focus:** v3.0 Preferred Leader Election
 
 ## Current Position
 
-Phase: — (between milestones)
+Phase: Not started (defining requirements)
 Plan: —
-Status: v2.6 shipped, ready for next milestone
-Last activity: 2026-03-25 — Completed quick-092: startup probe device check and watcher naming
-
-Progress: v2.6 shipped. Start next milestone with /gsd:new-milestone
+Status: Defining requirements for v3.0
+Last activity: 2026-03-25 — Milestone v3.0 started
 
 ## Performance Metrics
 
@@ -76,5 +74,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-25
-Stopped at: Completed quick-092 — startup probe device check and watcher naming
+Stopped at: Defining v3.0 requirements
 Resume file: None

@@ -192,7 +192,17 @@ See `.planning/milestones/v2.6-REQUIREMENTS.md` for full requirement details.
 
 ### Active
 
-(No active requirements — start next milestone with `/gsd:new-milestone`)
+**v3.0 Preferred Leader Election (started 2026-03-25)**
+
+- Preferred leader election with site-affinity — pod co-located with SNMP devices gets leadership priority
+- Two-lease mechanism: leadership lease (standard election) + preferred heartbeat lease (preferred pod stamp)
+- Non-preferred pods back off when preferred stamp is fresh; compete only when preferred is down
+- Non-preferred leader yields when preferred pod recovers (stamp becomes fresh)
+- Stability gate: preferred pod only stamps after readiness (watchers loaded, first poll complete)
+- PreferredNode config field compared against NODE_NAME Downward API env var
+- Lease namespace from pod's own namespace (not hardcoded "default")
+- Pod anti-affinity for one-pod-per-node scheduling across sites
+- Downward API env var for node name injection
 
 ### Out of Scope
 
@@ -209,6 +219,8 @@ See `.planning/milestones/v2.6-REQUIREMENTS.md` for full requirement details.
 
 **Current state:** v2.6 shipped. 479 unit tests passing, 113 E2E scenario scripts (01-113) across 7 categories. Running in Docker Desktop K8s cluster (3 replicas) with OTel Collector + Prometheus + Grafana. Two Grafana dashboards (business + operations) with per-tenant status table and footer row counts. All 4 watchers follow watcher-validates-registry-stores pattern. Closed-loop tenant evaluation with SNMP SET command execution and full per-tenant observability. Interactive 4-tenant simulation via sim_command.sh with 20 documented test scenarios.
 
+**Multi-site topology:** One K8s cluster spanning 3 sites. Each site has one server (node) with SNMP hardware devices. All 3 pods point at the same set of devices on one site. Pod co-located with devices has lowest latency and should be preferred leader. Pod anti-affinity ensures one pod per node.
+
 **Reference project:** `src/Simetra/` is an existing SNMP monitoring system used as architectural reference. Key patterns adopted: structured logging, OTel setup, console formatter, correlation IDs, leader election, role-gated export. Key patterns replaced: custom middleware -> MediatR, device modules -> flat OID map, channels -> single shared trap channel.
 
 **Target devices:** NPB (Network Packet Broker, CGS enterprise 47477.100) and OBP (Optical Bypass, CGS enterprise 47477.10.21). Both share a single oidmaps.json (92 entries).
@@ -222,7 +234,8 @@ See `.planning/milestones/v2.6-REQUIREMENTS.md` for full requirement details.
 - **Scheduling**: Quartz.NET — in-memory store, dynamic job registration
 - **SNMP library**: SharpSnmpLib (Lextm) — SNMPv2c only
 - **Telemetry**: OpenTelemetry SDK with OTLP gRPC exporter — metrics and logs only
-- **HA**: Kubernetes Lease API for leader election — all instances active, export gated
+- **HA**: Kubernetes Lease API for leader election — all instances active, export gated; preferred leader via two-lease mechanism
+- **Deployment**: One K8s cluster, 3 nodes (one per site), pod anti-affinity for one-pod-per-node
 - **Metric design**: Two instruments (snmp_gauge, snmp_info) — type determined at runtime from SNMP TypeCode
 - **OID map**: Flat dictionary, no pattern matching — exact OID string lookup
 - **Community string**: Simetra.{DeviceName} convention for both auth and device identity
@@ -261,5 +274,11 @@ See `.planning/milestones/v2.6-REQUIREMENTS.md` for full requirement details.
 | Sourced-script pattern for scenarios | No shebang in scenarios; inherit lib functions from run-all.sh | Good |
 | Pass-with-caveat for WATCH-04 | Watcher reconnection rarely observable in short test windows; code review suffices | Good |
 
+| Two-lease preferred leader | Clean separation: leadership lease + preferred heartbeat lease avoids write conflicts | — Pending |
+| Non-preferred back-off | Preferred stamp fresh → don't compete; stale → normal election | — Pending |
+| Voluntary yield over force-acquire | Leader yields via standard delete; preferred pod acquires through normal LeaderElector flow | — Pending |
+| NODE_NAME via Downward API | K8s injects node name; pod compares against PreferredNode config | — Pending |
+| Lease namespace from pod namespace | Not hardcoded "default"; read from service account or Downward API | — Pending |
+
 ---
-*Last updated: 2026-03-24 after v2.6 milestone shipped*
+*Last updated: 2026-03-25 after v3.0 milestone started*
