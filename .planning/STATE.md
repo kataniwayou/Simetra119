@@ -71,9 +71,10 @@ None.
 | 089 | Append index to duplicate tenant names instead of skipping | 2026-03-23 | 8873c2e | [089-duplicate-tenant-name-index](./quick/089-duplicate-tenant-name-index/) |
 | 090 | Enable table footer row counts on all 4 table panels | 2026-03-24 | 32ed4dd | [090-table-footer-row-counts](./quick/090-table-footer-row-counts/) |
 | 091 | Add evaluation pipeline logging to SnapshotJob | 2026-03-24 | dce2a00 | [091-snapshot-evaluation-logging](./quick/091-snapshot-evaluation-logging/) |
+| 092 | Startup probe device check and watcher naming | 2026-03-25 | 96faff7 | [092-startup-probe-device-check-and-watcher-naming](./quick/092-startup-probe-device-check-and-watcher-naming/) |
 
 ## Session Continuity
 
-Last session: 2026-03-24
-Stopped at: Completed quick-091 — evaluation pipeline logging in SnapshotJob
+Last session: 2026-03-25
+Stopped at: Completed quick-092 — startup probe device check and watcher naming
 Resume file: None
