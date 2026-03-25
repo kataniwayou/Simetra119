@@ -189,8 +189,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 86-01-PLAN.md — Writer path implementation, readiness gate, write-before-read Execute restructuring
-- [ ] 86-02-PLAN.md — Unit tests for writer path (constructor fix, create/replace, conflict, readiness gate)
+- [x] 86-01-PLAN.md — Writer path implementation, readiness gate, write-before-read Execute restructuring
+- [x] 86-02-PLAN.md — Unit tests for writer path (constructor fix, create/replace, conflict, readiness gate)
 
 #### Phase 87: K8sLeaseElection — Gate 1 (Backoff Before Acquire)
 **Goal**: Non-preferred pods delay their leadership retry when the preferred pod is present, while preserving completely standard election behavior when the preferred pod is absent or unconfigured
@@ -300,11 +300,11 @@ Plans:
 | 83. Command Interpreter | v2.6 | 1/1 | Complete | 2026-03-24 |
 | 84. Config and Interface Foundation | v3.0 | 1/1 | Complete | 2026-03-25 |
 | 85. PreferredHeartbeatService Reader Path | v3.0 | 2/2 | Complete | 2026-03-26 |
-| 86. PreferredHeartbeatService Writer Path | v3.0 | 0/2 | Not started | - |
+| 86. PreferredHeartbeatService Writer Path | v3.0 | 2/2 | Complete | 2026-03-26 |
 | 87. Election Gate 1 — Backoff Before Acquire | v3.0 | 0/TBD | Not started | - |
 | 88. Election Gate 2 — Voluntary Yield | v3.0 | 0/TBD | Not started | - |
 | 89. Observability and Deployment Wiring | v3.0 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-26 — Phase 85 complete*
+*Last updated: 2026-03-26 — Phase 86 complete*
