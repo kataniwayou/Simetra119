@@ -57,7 +57,7 @@ correlationService.SetCorrelationId(Guid.NewGuid().ToString("N"));
 
 // Phase 57: Deterministic watcher startup order (K8s mode only).
 // Sequential initial load ensures tenant validation runs against fully populated registries.
-// Order: OidMap -> Devices -> CommandMap -> Tenants
+// Order: OidMapWatcher -> DeviceWatcher -> CommandMapWatcher -> TenantWatcher
 // Failure at any step crashes the pod immediately -- K8s restarts it.
 if (k8s.KubernetesClientConfiguration.IsInCluster())
 {
@@ -86,7 +86,7 @@ if (k8s.KubernetesClientConfiguration.IsInCluster())
 
     totalSw.Stop();
     startupLogger.LogInformation(
-        "Startup sequence: OidMap={OidCount} ({OidTime:F1}s) -> Devices={DeviceCount} ({DeviceTime:F1}s) -> CommandMap={CommandCount} ({CommandTime:F1}s) -> Tenants={TenantCount} ({TenantTime:F1}s) -- total {TotalTime:F1}s",
+        "Startup sequence: OidMapWatcher={OidCount} ({OidTime:F1}s) -> DeviceWatcher={DeviceCount} ({DeviceTime:F1}s) -> CommandMapWatcher={CommandCount} ({CommandTime:F1}s) -> TenantWatcher={TenantCount} ({TenantTime:F1}s) -- total {TotalTime:F1}s",
         oidCount, oidTime.TotalSeconds,
         deviceCount, deviceTime.TotalSeconds,
         commandCount, commandTime.TotalSeconds,
