@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 ## Current Position
 
 Phase: 85 of 89 (PreferredHeartbeatService Reader Path)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-25 — Phase 84 complete (1 plan, 487 tests, 8 new)
+Plan: 1 of 1 in current phase
+Status: Phase complete
+Last activity: 2026-03-26 — Completed 85-01-PLAN.md (reader path: PreferredHeartbeatJob + UpdateStampFreshness)
 
-Progress: [████████████████░░░░] ~84%
+Progress: [█████████████████░░░] ~85%
 
 ## Performance Metrics
 
@@ -29,7 +29,7 @@ Progress: [████████████████░░░░] ~84%
 
 - Two-lease mechanism: leadership lease (existing `snmp-collector`) + heartbeat lease (`snmp-collector-preferred`)
 - PHYSICAL_HOSTNAME env var (not NODE_NAME) — already injected from spec.nodeName in existing deployment
-- PreferredHeartbeatService is both writer (preferred pod, post-readiness) and reader (non-preferred pod, periodic poll)
+- PreferredHeartbeatJob is both reader (Phase 85: all pods poll heartbeat lease, update volatile bool) and writer (Phase 86: preferred pod stamps lease, gated by IsPreferredPod)
 - IPreferredStampReader: narrow interface with single `bool IsPreferredStampFresh` — K8sLeaseElection reads in-memory bool (zero network calls in gate path)
 - Freshness threshold = HeartbeatDurationSeconds + 5s (clock-skew tolerance) — never exactly equal to heartbeat interval
 - 404 response from lease read = stale (same as old timestamp) — absence is not instant "down" signal
@@ -38,7 +38,7 @@ Progress: [████████████████░░░░] ~84%
 - OnStoppedLeading must be idempotent: sets _isLeader = false only, never destructive teardown
 - Startup validator: CFG-04 — heartbeat lease name must differ from leadership lease name (prevents 409 Conflict)
 - Startup validator: CFG-02 — warn/throw when PreferredNode configured but PHYSICAL_HOSTNAME is empty
-- Phase 3 (readiness gate) has open question: which mechanism for readiness signal (ApplicationStarted vs IHealthCheckService poll vs TaskCompletionSource<bool>)
+- Phase 86 (writer path): readiness gate mechanism not yet selected — three options: ApplicationStarted vs IHealthCheckService poll vs TaskCompletionSource<bool>
 - Phase 5 (voluntary yield) has open question: LeaderElector state after mid-renewal cancellation — resourceVersion staleness risk
 
 ### Decisions
@@ -70,6 +70,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-25
-Stopped at: Phase 84 complete — ready to plan Phase 85
+Last session: 2026-03-26
+Stopped at: Phase 85 complete — ready to plan Phase 86
 Resume file: None
