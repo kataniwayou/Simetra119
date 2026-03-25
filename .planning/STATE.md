@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** Every SNMP OID — from a trap or a poll — gets resolved, typed correctly, and pushed to Prometheus where it's queryable in Grafana within seconds.
-**Current focus:** v3.0 Preferred Leader Election — Phase 84: Config and Interface Foundation
+**Current focus:** v3.0 Preferred Leader Election — Phase 85: PreferredHeartbeatService Reader Path
 
 ## Current Position
 
-Phase: 84 of 89 (Config and Interface Foundation)
-Plan: 1 of TBD in current phase
-Status: In progress
-Last activity: 2026-03-25 — Completed 84-01-PLAN.md (config + interface foundation)
+Phase: 85 of 89 (PreferredHeartbeatService Reader Path)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-03-25 — Phase 84 complete (1 plan, 487 tests, 8 new)
 
 Progress: [████████████████░░░░] ~84%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 156 (v1.0 through v2.6, including quick tasks)
+- Total plans completed: 157 (v1.0 through v3.0 Phase 84, including quick tasks)
 - Average duration: ~25 min
 - Total execution time: ~43 hours
 
@@ -71,5 +71,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-25
-Stopped at: Completed 84-01-PLAN.md — PreferredNode field, IPreferredStampReader, NullPreferredStampReader, PreferredLeaderService, DI wiring, 8 unit tests
+Stopped at: Phase 84 complete — ready to plan Phase 85
 Resume file: None

@@ -160,7 +160,7 @@ See `.planning/milestones/v2.6-ROADMAP.md` for details.
 **Plans**: 1 plan
 
 Plans:
-- [ ] 84-01: LeaseOptions.PreferredNode, IPreferredStampReader, PreferredLeaderService stub, DI registration, unit tests
+- [x] 84-01: LeaseOptions.PreferredNode, IPreferredStampReader, PreferredLeaderService stub, DI registration, unit tests
 
 #### Phase 85: PreferredHeartbeatService — Reader Path
 **Goal**: Non-preferred pods maintain a live in-memory freshness signal by polling the heartbeat lease, with correct clock-skew tolerance and 404-as-stale semantics
@@ -296,7 +296,7 @@ Plans:
 | 81. E2E Partial Percentage Scenario | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 82. Fixture & OID Mapping | v2.6 | 2/2 | Complete | 2026-03-24 |
 | 83. Command Interpreter | v2.6 | 1/1 | Complete | 2026-03-24 |
-| 84. Config and Interface Foundation | v3.0 | 0/1 | Planned | - |
+| 84. Config and Interface Foundation | v3.0 | 1/1 | Complete | 2026-03-25 |
 | 85. PreferredHeartbeatService Reader Path | v3.0 | 0/TBD | Not started | - |
 | 86. PreferredHeartbeatService Writer Path | v3.0 | 0/TBD | Not started | - |
 | 87. Election Gate 1 — Backoff Before Acquire | v3.0 | 0/TBD | Not started | - |
@@ -305,4 +305,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-25 — v3.0 Preferred Leader Election milestone added, phases 84-89*
+*Last updated: 2026-03-25 — Phase 84 complete*
