@@ -171,10 +171,11 @@ Plans:
   2. A 404 (lease not found) is treated identically to a stale timestamp — `IsPreferredStampFresh` returns false, no exception thrown
   3. Freshness threshold is `HeartbeatDurationSeconds + 5s` (clock-skew tolerance baked in) — a stamp older than this threshold yields false
   4. `IPreferredStampReader.IsPreferredStampFresh` returns a real derived value, not a stub — verified by unit test with a mocked lease response
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 85-01: PreferredHeartbeatService reader branch, freshness computation, unit tests
+- [ ] 85-01-PLAN.md — PreferredHeartbeatJob implementation, PreferredLeaderService volatile bool, DI wiring
+- [ ] 85-02-PLAN.md — Unit tests for UpdateStampFreshness and PreferredHeartbeatJob with mocked K8s
 
 #### Phase 86: PreferredHeartbeatService — Writer Path and Readiness Gate
 **Goal**: The preferred pod stamps the heartbeat lease only after it is genuinely ready, giving non-preferred pods an accurate presence signal that does not trigger premature yield
