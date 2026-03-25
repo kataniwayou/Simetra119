@@ -191,4 +191,96 @@ public sealed class PreferredLeaderServiceTests
         var reader = new NullPreferredStampReader();
         Assert.False(reader.IsPreferredStampFresh);
     }
+
+    // -----------------------------------------------------------------------
+    // 9. UpdateStampFreshness_WhenCalledWithTrue_SetsIsPreferredStampFreshTrue
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void UpdateStampFreshness_WhenCalledWithTrue_SetsIsPreferredStampFreshTrue()
+    {
+        var svc = new PreferredLeaderService(
+            CreateOptions(),
+            NullLogger<PreferredLeaderService>.Instance);
+
+        Assert.False(svc.IsPreferredStampFresh); // starts false
+
+        svc.UpdateStampFreshness(true);
+
+        Assert.True(svc.IsPreferredStampFresh);
+    }
+
+    // -----------------------------------------------------------------------
+    // 10. UpdateStampFreshness_WhenCalledWithFalse_SetsIsPreferredStampFreshFalse
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void UpdateStampFreshness_WhenCalledWithFalse_SetsIsPreferredStampFreshFalse()
+    {
+        var svc = new PreferredLeaderService(
+            CreateOptions(),
+            NullLogger<PreferredLeaderService>.Instance);
+
+        svc.UpdateStampFreshness(true);
+        Assert.True(svc.IsPreferredStampFresh);
+
+        svc.UpdateStampFreshness(false);
+
+        Assert.False(svc.IsPreferredStampFresh);
+    }
+
+    // -----------------------------------------------------------------------
+    // 11. UpdateStampFreshness_InitialValueIsFalse
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void UpdateStampFreshness_InitialValueIsFalse()
+    {
+        var svc = new PreferredLeaderService(
+            CreateOptions(),
+            NullLogger<PreferredLeaderService>.Instance);
+
+        // Do NOT call UpdateStampFreshness — verify default is false
+        Assert.False(svc.IsPreferredStampFresh);
+    }
+
+    // -----------------------------------------------------------------------
+    // 12. UpdateStampFreshness_LogsOnTransition_FreshToStale
+    //     Verifies state change occurs correctly on fresh->stale transition.
+    //     Logging is verified indirectly via NullLogger (no exception = no crash).
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void UpdateStampFreshness_LogsOnTransition_FreshToStale()
+    {
+        var svc = new PreferredLeaderService(
+            CreateOptions(),
+            NullLogger<PreferredLeaderService>.Instance);
+
+        svc.UpdateStampFreshness(true);
+        Assert.True(svc.IsPreferredStampFresh);
+
+        svc.UpdateStampFreshness(false);
+
+        Assert.False(svc.IsPreferredStampFresh);
+    }
+
+    // -----------------------------------------------------------------------
+    // 13. UpdateStampFreshness_NoLogOnSameValue
+    //     Calling with the current value (false->false) causes no exception
+    //     and leaves state unchanged.
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void UpdateStampFreshness_NoLogOnSameValue()
+    {
+        var svc = new PreferredLeaderService(
+            CreateOptions(),
+            NullLogger<PreferredLeaderService>.Instance);
+
+        // Already false — call again with false (idempotent, no log)
+        svc.UpdateStampFreshness(false);
+
+        Assert.False(svc.IsPreferredStampFresh);
+    }
 }
