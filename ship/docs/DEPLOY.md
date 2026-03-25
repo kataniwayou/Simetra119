@@ -1,182 +1,193 @@
-# SnmpCollector K8s Deployment and Validation Guide
+# SnmpCollector Offline Deployment Guide
 
-## Prerequisites
+## Overview
 
-- Docker Desktop with Kubernetes enabled and running
-- `kubectl` configured for the `docker-desktop` context
+This guide deploys the SnmpCollector system on an offline prod machine running minikube.
+The develop machine builds Docker images, exports them as tar files, and transfers them
+to the prod machine via RDP.
 
-Confirm context:
+**Components deployed in minikube:**
+- OTel Collector (receives metrics/logs from snmp-collector, exports to external infrastructure)
+- SnmpCollector (3 replicas with leader election)
 
-```bash
-kubectl config current-context
-```
+**Provided by your organization (not deployed here):**
+- Prometheus
+- Grafana
+- Elasticsearch / Kibana
 
-Expected output: `docker-desktop`
-
----
-
-## Step 1: Remove Simetra deployment (if exists)
-
-```bash
-kubectl delete deployment simetra -n simetra 2>/dev/null || true
-```
+> The OTel Collector export addresses are configured in `deploy/otel-collector-configmap.yaml`.
+> Update the `prometheusremotewrite` and `elasticsearch` endpoints to match your organization's infrastructure.
 
 ---
 
-## Step 2: Apply/update monitoring stack
+## Part 1: Build Images (Develop Machine)
+
+### 1.1 Build SnmpCollector image
+
+From the `ship/` folder root:
 
 ```bash
-kubectl apply -f deploy/k8s/namespace.yaml
-kubectl apply -f deploy/k8s/serviceaccount.yaml
-kubectl apply -f deploy/k8s/rbac.yaml
-kubectl apply -f deploy/k8s/monitoring/otel-collector-configmap.yaml
-kubectl apply -f deploy/k8s/monitoring/otel-collector-deployment.yaml
-kubectl apply -f deploy/k8s/monitoring/prometheus-configmap.yaml
-kubectl apply -f deploy/k8s/monitoring/prometheus-deployment.yaml
-kubectl apply -f deploy/k8s/monitoring/elasticsearch-deployment.yaml
+docker build -t snmp-collector:v2.6 .
 ```
 
-Restart monitoring pods to pick up config changes:
+### 1.2 Pull OTel Collector image
 
 ```bash
-kubectl rollout restart deployment/otel-collector -n simetra
-kubectl rollout restart deployment/prometheus -n simetra
+docker pull otel/opentelemetry-collector-contrib:0.120.0
 ```
 
-Wait for rollout:
+### 1.3 Save images to tar files
 
 ```bash
-kubectl rollout status deployment/otel-collector -n simetra
-kubectl rollout status deployment/prometheus -n simetra
+docker save snmp-collector:v2.6 -o snmp-collector-v2.6.tar
+docker save otel/opentelemetry-collector-contrib:0.120.0 -o otel-collector-0.120.0.tar
 ```
+
+### 1.4 Transfer to prod machine
+
+Copy via RDP to the prod machine:
+- `snmp-collector-v2.6.tar`
+- `otel-collector-0.120.0.tar`
+- `ship/deploy/` folder (all yaml files)
 
 ---
 
-## Step 3: Build SnmpCollector Docker image
+## Part 2: Deploy (Prod Machine - minikube)
 
-Run from repo root (build context requires `src/SnmpCollector/`):
-
-```bash
-docker build -f src/SnmpCollector/Dockerfile -t snmp-collector:local .
-```
-
----
-
-## Step 4: Deploy SnmpCollector
+### 2.1 Load images into minikube
 
 ```bash
-kubectl apply -f deploy/k8s/snmp-collector/snmp-collector-config.yaml
-kubectl apply -f deploy/k8s/snmp-collector/simetra-oid-metric-map.yaml
-kubectl apply -f deploy/k8s/snmp-collector/simetra-devices.yaml
-kubectl apply -f deploy/k8s/snmp-collector/deployment.yaml
-kubectl apply -f deploy/k8s/snmp-collector/service.yaml
+minikube image load snmp-collector-v2.6.tar
+minikube image load otel-collector-0.120.0.tar
 ```
 
----
-
-## Step 5: Watch pods start
+Verify:
 
 ```bash
-kubectl get pods -n simetra -w
+minikube image ls | grep -E "snmp-collector|otel"
 ```
 
-Expected: 3 `snmp-collector-*` pods reach `Running` with `READY 1/1`.
-
-Press Ctrl+C once all 3 are ready.
-
----
-
-## Step 6: Verify health probes
+### 2.2 Create namespace and service account
 
 ```bash
-kubectl get pods -n simetra -l app=snmp-collector
+kubectl create namespace simetra
+kubectl -n simetra create serviceaccount simetra-sa
 ```
 
-All 3 pods must show `READY 1/1` and `STATUS Running`.
-
----
-
-## Step 7: Check logs
+### 2.3 Apply RBAC
 
 ```bash
-kubectl logs -l app=snmp-collector -n simetra --tail=50
+kubectl apply -f deploy/rbac.yaml
 ```
 
-Look for:
-
-- Structured JSON log lines on startup
-- `"Acquired leadership"` on exactly one pod
-- Correlation ID rotation log entries
-
----
-
-## Step 8: Verify leader election
+### 2.4 Deploy OTel Collector
 
 ```bash
-kubectl get lease -n simetra
-kubectl get lease snmp-collector-leader -n simetra -o jsonpath='{.spec.holderIdentity}'
+kubectl apply -f deploy/otel-collector-configmap.yaml
+kubectl apply -f deploy/otel-collector-deployment.yaml
 ```
 
-Exactly one pod name must appear as `holderIdentity`.
-
----
-
-## Step 9: Port-forward Prometheus and validate metrics
+Wait for OTel Collector to be ready:
 
 ```bash
-kubectl port-forward svc/prometheus 9090:9090 -n simetra
+kubectl -n simetra rollout status deployment/otel-collector
 ```
 
-Open http://localhost:9090 in a browser and run these PromQL queries.
-
-**Runtime metrics — must show 3 instances (one per pod):**
-
-```promql
-process_runtime_dotnet_gc_collections_count_total
-```
-
-**Pipeline metrics — must show entries from all 3 pods:**
-
-```promql
-snmp_event_published_total
-```
-
-Both queries must return results with 3 distinct `service_instance_id` label values.
-
----
-
-## Step 10: Leader failover test
-
-Find the current leader:
+### 2.5 Apply SnmpCollector ConfigMaps
 
 ```bash
-kubectl get lease snmp-collector-leader -n simetra -o jsonpath='{.spec.holderIdentity}'
+kubectl apply -f deploy/snmp-collector-config.yaml
+kubectl apply -f deploy/simetra-oid-metric-map.yaml
+kubectl apply -f deploy/simetra-oid-command-map.yaml
+kubectl apply -f deploy/simetra-devices.yaml
+kubectl apply -f deploy/simetra-tenants.yaml
 ```
 
-Delete the leader pod (replace `<leader-pod-name>` with the name from the command above):
+### 2.6 Update image tag in deployment.yaml
 
-```bash
-kubectl delete pod <leader-pod-name> -n simetra
+Edit `deploy/deployment.yaml` and change:
+
+```yaml
+image: snmp-collector:local
 ```
 
-Watch for a new leader (should acquire within ~15 seconds):
+to:
 
-```bash
-kubectl get lease snmp-collector-leader -n simetra -w
+```yaml
+image: snmp-collector:v2.6
 ```
 
-Confirm new holder differs from the deleted pod:
+`imagePullPolicy: Never` must remain (no registry available).
+
+### 2.7 Deploy SnmpCollector
 
 ```bash
-kubectl get lease snmp-collector-leader -n simetra -o jsonpath='{.spec.holderIdentity}'
+kubectl apply -f deploy/service.yaml
+kubectl apply -f deploy/deployment.yaml
 ```
 
 ---
 
-## Teardown (optional)
+## Part 3: Verify
 
-Remove SnmpCollector resources only:
+### 3.1 Check pods
 
 ```bash
-kubectl delete -f deploy/k8s/snmp-collector/
+kubectl -n simetra get pods
+```
+
+Expected: 1 `otel-collector` pod and 3 `snmp-collector` pods, all `Running` with `READY 1/1`.
+
+### 3.2 Check startup logs
+
+```bash
+kubectl -n simetra logs -l app=snmp-collector --tail=5 | grep "Startup sequence"
+```
+
+Expected: all pods show devices > 0, e.g.:
+
+```
+Startup sequence: OidMapWatcher=145 -> DeviceWatcher=3 -> CommandMapWatcher=13 -> TenantWatcher=4
+```
+
+### 3.3 Verify leader election
+
+```bash
+kubectl -n simetra get lease snmp-collector-leader -o jsonpath='{.spec.holderIdentity}'
+```
+
+Exactly one pod name must appear.
+
+### 3.4 Verify poll jobs are firing
+
+```bash
+kubectl -n simetra logs -l app=snmp-collector --tail=50 | grep "metric-poll"
+```
+
+Must show poll job execution lines.
+
+---
+
+## Teardown
+
+Remove all SnmpCollector resources:
+
+```bash
+kubectl delete deployment snmp-collector -n simetra
+kubectl delete service snmp-collector -n simetra
+kubectl delete configmap snmp-collector-config simetra-oid-metric-map simetra-oid-command-map simetra-devices simetra-tenants -n simetra
+```
+
+Remove OTel Collector:
+
+```bash
+kubectl delete deployment otel-collector -n simetra
+kubectl delete service otel-collector -n simetra
+kubectl delete configmap otel-collector-config -n simetra
+```
+
+Remove namespace (removes everything):
+
+```bash
+kubectl delete namespace simetra
 ```
