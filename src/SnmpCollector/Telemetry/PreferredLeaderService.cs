@@ -7,17 +7,21 @@ namespace SnmpCollector.Telemetry;
 /// <summary>
 /// Resolves this pod's preferred-leader identity once at startup by comparing
 /// <c>PHYSICAL_HOSTNAME</c> against <see cref="LeaseOptions.PreferredNode"/>.
-/// Implements <see cref="IPreferredStampReader"/> as a stub (always false) pending
-/// Phase 85 where the real heartbeat lease logic is added.
+/// Maintains <see cref="IsPreferredStampFresh"/> as a volatile bool updated by
+/// <see cref="UpdateStampFreshness"/> (called by PreferredHeartbeatJob on each poll cycle).
 /// </summary>
 public sealed class PreferredLeaderService : IPreferredStampReader
 {
     private readonly bool _isPreferredPod;
+    private readonly ILogger<PreferredLeaderService> _logger;
+    private volatile bool _isPreferredStampFresh;
 
     public PreferredLeaderService(
         IOptions<LeaseOptions> leaseOptions,
         ILogger<PreferredLeaderService> logger)
     {
+        _logger = logger;
+
         var preferredNode = leaseOptions.Value.PreferredNode;
 
         if (string.IsNullOrEmpty(preferredNode))
@@ -47,13 +51,30 @@ public sealed class PreferredLeaderService : IPreferredStampReader
             physicalHostname, preferredNode, _isPreferredPod);
     }
 
-    // Phase 84: always false -- no heartbeat lease written yet (Phase 85)
     /// <inheritdoc />
-    public bool IsPreferredStampFresh => false;
+    public bool IsPreferredStampFresh => _isPreferredStampFresh;
 
     /// <summary>
     /// Whether this pod's node name matches the configured PreferredNode.
-    /// Resolved once at startup. Consumed by downstream heartbeat service (Phase 85).
+    /// Resolved once at startup. Consumed by PreferredHeartbeatJob to gate the writer path.
     /// </summary>
     public bool IsPreferredPod => _isPreferredPod;
+
+    /// <summary>
+    /// Updates the in-memory freshness flag and logs any state transition at Info level.
+    /// Called by PreferredHeartbeatJob on each poll cycle.
+    /// Thread-safe: <see cref="_isPreferredStampFresh"/> is volatile.
+    /// </summary>
+    public void UpdateStampFreshness(bool isFresh)
+    {
+        var previous = _isPreferredStampFresh;
+        _isPreferredStampFresh = isFresh;
+
+        if (previous != isFresh)
+        {
+            _logger.LogInformation(
+                "PreferredStamp freshness changed: {Previous} -> {Current}",
+                previous, isFresh);
+        }
+    }
 }
