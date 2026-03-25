@@ -153,16 +153,14 @@ See `.planning/milestones/v2.6-ROADMAP.md` for details.
 #### Phase 84: Config and Interface Foundation
 **Goal**: The system knows which pod is preferred and the two-lease design is locked in code before any behavioral changes exist
 **Depends on**: Phase 83
-**Requirements**: CFG-01, CFG-02, CFG-03, CFG-04
+**Requirements**: CFG-01, CFG-02 (CFG-03 and CFG-04 dropped)
 **Success Criteria** (what must be TRUE):
-  1. `SiteAffinityOptions` loads from config with `PreferredNode` optional — app starts and behaves identically when the field is absent or empty
+  1. `LeaseOptions.PreferredNode` loads from config — app starts and behaves identically when the field is absent or empty
   2. Pod reads `PHYSICAL_HOSTNAME` env var at startup and determines `_isPreferredPod` — log line confirms preferred vs. non-preferred identity on startup
-  3. Lease namespace is resolved from the pod's own namespace at runtime, not hardcoded to "default"
-  4. Startup validation rejects configuration where the heartbeat lease name equals the leadership lease name, logging a clear error before any election runs
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 84-01: SiteAffinityOptions, IPreferredStampReader, DI registration, startup validators
+- [ ] 84-01: LeaseOptions.PreferredNode, IPreferredStampReader, PreferredLeaderService stub, DI registration, unit tests
 
 #### Phase 85: PreferredHeartbeatService — Reader Path
 **Goal**: Non-preferred pods maintain a live in-memory freshness signal by polling the heartbeat lease, with correct clock-skew tolerance and 404-as-stale semantics
@@ -298,7 +296,7 @@ Plans:
 | 81. E2E Partial Percentage Scenario | v2.5 | 1/1 | Complete | 2026-03-23 |
 | 82. Fixture & OID Mapping | v2.6 | 2/2 | Complete | 2026-03-24 |
 | 83. Command Interpreter | v2.6 | 1/1 | Complete | 2026-03-24 |
-| 84. Config and Interface Foundation | v3.0 | 0/TBD | Not started | - |
+| 84. Config and Interface Foundation | v3.0 | 0/1 | Planned | - |
 | 85. PreferredHeartbeatService Reader Path | v3.0 | 0/TBD | Not started | - |
 | 86. PreferredHeartbeatService Writer Path | v3.0 | 0/TBD | Not started | - |
 | 87. Election Gate 1 — Backoff Before Acquire | v3.0 | 0/TBD | Not started | - |
