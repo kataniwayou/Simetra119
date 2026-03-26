@@ -33,7 +33,7 @@ public sealed class LivenessHealthCheck : IHealthCheck
         IJobIntervalRegistry intervals,
         IOptions<LivenessOptions> options,
         IHeartbeatLivenessService heartbeatLiveness,
-        IOptions<HeartbeatJobOptions> heartbeatOptions,
+        IOptions<SnmpHeartbeatJobOptions> heartbeatOptions,
         ILogger<LivenessHealthCheck> logger)
     {
         _liveness = liveness;
@@ -96,7 +96,7 @@ public sealed class LivenessHealthCheck : IHealthCheck
         {
             // Never stamped since startup — treat as stale.
             // K8s failureThreshold=3 at periodSeconds=15 provides 45s margin.
-            // HeartbeatJob fires at StartNow(), so first arrival within 15-30s.
+            // SnmpHeartbeatJob fires at StartNow(), so first arrival within 15-30s.
             var pipelineEntry = new
             {
                 ageSeconds = (double?)null,

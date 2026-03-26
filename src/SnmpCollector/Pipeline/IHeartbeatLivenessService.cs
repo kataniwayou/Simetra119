@@ -2,7 +2,7 @@ namespace SnmpCollector.Pipeline;
 
 /// <summary>
 /// Tracks when the heartbeat trap last completed the full MediatR pipeline.
-/// Stamped by OtelMetricHandler when DeviceName == HeartbeatJobOptions.HeartbeatDeviceName.
+/// Stamped by OtelMetricHandler when DeviceName == SnmpHeartbeatJobOptions.HeartbeatDeviceName.
 /// Read by LivenessHealthCheck to detect a silent pipeline (channel blocked, consumer crashed, etc.).
 /// </summary>
 public interface IHeartbeatLivenessService

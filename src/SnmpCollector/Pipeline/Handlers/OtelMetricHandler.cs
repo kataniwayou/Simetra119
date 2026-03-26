@@ -63,7 +63,7 @@ public sealed class OtelMetricHandler : IRequestHandler<SnmpOidReceived, Unit>
                     _metricFactory.RecordGaugeDuration(metricName, notification.Oid, deviceName, ip, source,
                         notification.TypeCode.ToString().ToLowerInvariant(), notification.PollDurationMs.Value);
                 _pipelineMetrics.IncrementHandled(deviceName);
-                if (deviceName == HeartbeatJobOptions.HeartbeatDeviceName)
+                if (deviceName == SnmpHeartbeatJobOptions.HeartbeatDeviceName)
                     _heartbeatLiveness.Stamp();
                 break;
 

@@ -3,11 +3,11 @@ using System.ComponentModel.DataAnnotations;
 namespace SnmpCollector.Configuration;
 
 /// <summary>
-/// Heartbeat job timing configuration. Bound from "HeartbeatJob" section.
+/// SNMP heartbeat job timing configuration. Bound from "SnmpHeartbeatJob" section.
 /// </summary>
-public sealed class HeartbeatJobOptions
+public sealed class SnmpHeartbeatJobOptions
 {
-    public const string SectionName = "HeartbeatJob";
+    public const string SectionName = "SnmpHeartbeatJob";
 
     /// <summary>
     /// The heartbeat OID sent in the loopback trap. Single source of truth -- avoids magic strings.
@@ -15,7 +15,7 @@ public sealed class HeartbeatJobOptions
     public const string HeartbeatOid = "1.3.6.1.4.1.9999.1.1.1.0";
 
     /// <summary>
-    /// Device name used by HeartbeatJob's loopback trap. Single source of truth for the
+    /// Device name used by SnmpHeartbeatJob's loopback trap. Single source of truth for the
     /// "Simetra" device name — all comparisons reference this const.
     /// </summary>
     public const string HeartbeatDeviceName = "Simetra";

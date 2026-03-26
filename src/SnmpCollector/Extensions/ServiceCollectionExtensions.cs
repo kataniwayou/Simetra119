@@ -204,8 +204,8 @@ public static class ServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        services.AddOptions<HeartbeatJobOptions>()
-            .Bind(configuration.GetSection(HeartbeatJobOptions.SectionName))
+        services.AddOptions<SnmpHeartbeatJobOptions>()
+            .Bind(configuration.GetSection(SnmpHeartbeatJobOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
@@ -458,7 +458,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Registers <see cref="ICorrelationService"/> and <see cref="IDeviceUnreachabilityTracker"/>
     /// as singletons, the Quartz.NET in-memory scheduler with auto-scaled thread pool,
-    /// <see cref="CorrelationJob"/> with a simple interval trigger, <see cref="HeartbeatJob"/>
+    /// <see cref="CorrelationJob"/> with a simple interval trigger, <see cref="SnmpHeartbeatJob"/>
     /// with a configurable interval, and one <see cref="MetricPollJob"/> per device/poll-group
     /// pair with correct JobDataMap.
     /// <para>
@@ -484,8 +484,8 @@ public static class ServiceCollectionExtensions
         var correlationOptions = new CorrelationJobOptions();
         configuration.GetSection(CorrelationJobOptions.SectionName).Bind(correlationOptions);
 
-        var heartbeatOptions = new HeartbeatJobOptions();
-        configuration.GetSection(HeartbeatJobOptions.SectionName).Bind(heartbeatOptions);
+        var heartbeatOptions = new SnmpHeartbeatJobOptions();
+        configuration.GetSection(SnmpHeartbeatJobOptions.SectionName).Bind(heartbeatOptions);
 
         var snapshotOptions = new SnapshotJobOptions();
         configuration.GetSection(SnapshotJobOptions.SectionName).Bind(snapshotOptions);
@@ -504,9 +504,9 @@ public static class ServiceCollectionExtensions
         var intervalRegistry = new JobIntervalRegistry();
 
         // Thread pool: generous ceiling to accommodate dynamic device additions at runtime.
-        // Static jobs (CorrelationJob + HeartbeatJob + SnapshotJob) = 3, plus headroom for poll jobs.
+        // Static jobs (CorrelationJob + SnmpHeartbeatJob + SnapshotJob) = 3, plus headroom for poll jobs.
         // PreferredHeartbeatJob only runs in K8s mode.
-        var initialJobCount = 3; // CorrelationJob + HeartbeatJob + SnapshotJob
+        var initialJobCount = 3; // CorrelationJob + SnmpHeartbeatJob + SnapshotJob
         if (k8s.KubernetesClientConfiguration.IsInCluster())
             initialJobCount++; // + PreferredHeartbeatJob
         foreach (var device in devicesOptions.Devices)
@@ -537,19 +537,19 @@ public static class ServiceCollectionExtensions
 
             intervalRegistry.Register("correlation", correlationOptions.IntervalSeconds);
 
-            // HeartbeatJob: sends loopback SNMP trap to prove scheduler + pipeline alive.
-            var heartbeatKey = new JobKey("heartbeat");
-            q.AddJob<HeartbeatJob>(j => j.WithIdentity(heartbeatKey));
+            // SnmpHeartbeatJob: sends loopback SNMP trap to prove scheduler + pipeline alive.
+            var heartbeatKey = new JobKey("snmp-heartbeat");
+            q.AddJob<SnmpHeartbeatJob>(j => j.WithIdentity(heartbeatKey));
             q.AddTrigger(t => t
                 .ForJob(heartbeatKey)
-                .WithIdentity("heartbeat-trigger")
+                .WithIdentity("snmp-heartbeat-trigger")
                 .StartNow()
                 .WithSimpleSchedule(s => s
                     .WithIntervalInSeconds(heartbeatOptions.IntervalSeconds)
                     .RepeatForever()
                     .WithMisfireHandlingInstructionNextWithRemainingCount()));
 
-            intervalRegistry.Register("heartbeat", heartbeatOptions.IntervalSeconds);
+            intervalRegistry.Register("snmp-heartbeat", heartbeatOptions.IntervalSeconds);
 
             // SnapshotJob: evaluates tenant priority groups on a fixed interval.
             var snapshotKey = new JobKey("snapshot");

@@ -12,12 +12,12 @@ namespace SnmpCollector.Jobs;
 
 /// <summary>
 /// Sends a loopback SNMP v2c trap to the listener using the heartbeat OID from
-/// <see cref="HeartbeatJobOptions.HeartbeatOid"/>, proving the scheduler is alive.
+/// <see cref="SnmpHeartbeatJobOptions.HeartbeatOid"/>, proving the scheduler is alive.
 /// The trap flows through the full pipeline (listener -> middleware -> extraction -> processing)
 /// exactly like any external device trap. Stamps liveness vector on completion.
 /// </summary>
 [DisallowConcurrentExecution]
-public sealed class HeartbeatJob : IJob
+public sealed class SnmpHeartbeatJob : IJob
 {
     private static long _counter;
 
@@ -25,18 +25,18 @@ public sealed class HeartbeatJob : IJob
     private readonly ILivenessVectorService _liveness;
     private readonly int _listenerPort;
     private readonly string _communityString;
-    private readonly ILogger<HeartbeatJob> _logger;
+    private readonly ILogger<SnmpHeartbeatJob> _logger;
 
-    public HeartbeatJob(
+    public SnmpHeartbeatJob(
         ICorrelationService correlation,
         ILivenessVectorService liveness,
         IOptions<SnmpListenerOptions> listenerOptions,
-        ILogger<HeartbeatJob> logger)
+        ILogger<SnmpHeartbeatJob> logger)
     {
         _correlation = correlation;
         _liveness = liveness;
         _listenerPort = listenerOptions.Value.Port;
-        _communityString = CommunityStringHelper.DeriveFromDeviceName(HeartbeatJobOptions.HeartbeatDeviceName);
+        _communityString = CommunityStringHelper.DeriveFromDeviceName(SnmpHeartbeatJobOptions.HeartbeatDeviceName);
         _logger = logger;
     }
 
@@ -49,7 +49,7 @@ public sealed class HeartbeatJob : IJob
         {
             var variables = new List<Variable>
             {
-                new(new ObjectIdentifier(HeartbeatJobOptions.HeartbeatOid), new Counter32((uint)Interlocked.Increment(ref _counter)))
+                new(new ObjectIdentifier(SnmpHeartbeatJobOptions.HeartbeatOid), new Counter32((uint)Interlocked.Increment(ref _counter)))
             };
 
             var receiver = new IPEndPoint(IPAddress.Loopback, _listenerPort);
@@ -59,7 +59,7 @@ public sealed class HeartbeatJob : IJob
                 version: VersionCode.V2,
                 receiver: receiver,
                 community: new OctetString(_communityString),
-                enterprise: new ObjectIdentifier(HeartbeatJobOptions.HeartbeatOid),
+                enterprise: new ObjectIdentifier(SnmpHeartbeatJobOptions.HeartbeatOid),
                 timestamp: 0,
                 variables: variables));
 
