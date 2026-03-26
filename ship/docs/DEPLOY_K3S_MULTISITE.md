@@ -4,31 +4,50 @@
 
 This guide deploys the SnmpCollector system across **3 sites** using a single K3s cluster
 spanning 3 nodes. Each site runs a Linux VM on a Windows Server 2019 host via Hyper-V.
+Multiple site namespaces share a single OTel Collector DaemonSet (one per node).
 All required files are pre-included in the `ship/` folder — no internet access is needed.
 
 **Architecture:**
 
 ```
-Site A — Windows Server 2019 → Linux VM → K3s (server) → pod (leader)
-Site B — Windows Server 2019 → Linux VM → K3s (agent)  → pod (follower)
-Site C — Windows Server 2019 → Linux VM → K3s (agent)  → pod (follower)
+Node: simetra-k3s-a (Site A)
+├── OTel Collector pod (DaemonSet, simetra-infra) — hostPort 4317
+├── SnmpCollector pod (simetra-site-a) — leader, monitors Site A devices
+└── SnmpCollector pod (simetra-site-b) — follower
+
+Node: simetra-k3s-b (Site B)
+├── OTel Collector pod (DaemonSet, simetra-infra) — hostPort 4317
+├── SnmpCollector pod (simetra-site-a) — follower
+└── SnmpCollector pod (simetra-site-b) — leader, monitors Site B devices
+
+Node: simetra-k3s-c (Site C)
+├── OTel Collector pod (DaemonSet, simetra-infra) — hostPort 4317
+├── SnmpCollector pod (simetra-site-a) — follower
+└── SnmpCollector pod (simetra-site-b) — follower
 ```
+
+**3 namespaces, 9 pods total (3 per node).**
 
 **Key design:**
 - One K3s cluster, three nodes (one per site)
-- Pod anti-affinity ensures one pod per node
-- Preferred leader election: the pod on Site A (closest to SNMP devices) gets leadership priority
-- `PHYSICAL_HOSTNAME` env var identifies each pod's node for preferred leader logic
-- `POD_NAMESPACE` env var provides namespace for metric labeling
+- Each site namespace has 3 SnmpCollector pods with pod anti-affinity (one per node)
+- Preferred leader election: each site's preferred node is closest to its SNMP devices
+- OTel Collector DaemonSet with hostPort — every pod sends to its local node's collector
+- `k8s_namespace_name` label distinguishes site metrics in Prometheus/Grafana
+- `service_instance_id` label identifies which physical node each pod runs on
+
+**Namespaces:**
+
+| Namespace | Contents | Scope |
+|-----------|----------|-------|
+| `simetra-infra` | OTel Collector DaemonSet (1 pod per node, hostPort 4317) | Shared infrastructure |
+| `simetra-site-a` | SnmpCollector (3 pods) + ConfigMaps + RBAC for Site A | Site A devices |
+| `simetra-site-b` | SnmpCollector (3 pods) + ConfigMaps + RBAC for Site B | Site B devices |
 
 **Target environment (per site):**
 - Host: Windows Server 2019 Standard
 - Kubernetes: K3s v1.31.13+k3s1 (lightweight, production-grade, CNCF certified)
 - Runtime: Hyper-V VM running Ubuntu Server 22.04 LTS
-
-**Components deployed in K3s:**
-- OTel Collector (receives metrics/logs from snmp-collector, exports to external infrastructure)
-- SnmpCollector (3 replicas with leader election and preferred leader)
 
 **Provided by your organization (not deployed here):**
 - Prometheus
@@ -60,6 +79,28 @@ ship/
 | 6443 | TCP | K3s API server (agents → server) |
 | 8472 | UDP | Flannel VXLAN (pod-to-pod networking) |
 | 10250 | TCP | Kubelet metrics |
+
+---
+
+## Site Configuration
+
+Before starting, fill in the values for each site deployment.
+
+**SnmpCollector (repeat Part 7 per site):**
+
+| Parameter | Site A | Site B | Convention |
+|-----------|--------|--------|------------|
+| `{NAMESPACE}` | `simetra-site-a` | `simetra-site-b` | `simetra-site-{letter}` |
+| `{PREFERRED_NODE}` | `simetra-k3s-a` | `simetra-k3s-b` | Ubuntu server name from Part 3 |
+| `{TRAP_PORT}` | `10162` | `10163` | `10162` + site offset (a=0, b=1, c=2) |
+
+**Derived values (automatic):**
+
+| Value | Source | Example |
+|-------|--------|---------|
+| OTel endpoint | `http://<node-ip>:4317` via `HOST_IP` env var | Auto-resolved per pod |
+| `k8s_namespace_name` metric label | `POD_NAMESPACE` env var | `simetra-site-a` |
+| `service_instance_id` metric label | `PHYSICAL_HOSTNAME` env var | `simetra-k3s-a` |
 
 ---
 
@@ -116,7 +157,7 @@ Expected: `Install State` shows `Installed`.
 
 ## Part 3: Create Ubuntu Server VM (All 3 Sites — one-time)
 
-Repeat on each site. **Use a different VM name and IP for each site.**
+Repeat on each site. **Use a different VM name for each site.**
 
 ### Site naming plan
 
@@ -199,7 +240,7 @@ During Ubuntu installation:
 ### 3.4 Remove DVD drive after install
 
 ```powershell
-Remove-VMDvdDrive -VMName "simetra-k3s-a" -ControllerNumber 0 -ControllerLocation 1
+Remove-VMDvdDrive -VMName $VMName -ControllerNumber 0 -ControllerLocation 1
 ```
 
 ### 3.5 Verify SSH access from Windows host
@@ -360,11 +401,11 @@ rm ~/k3s ~/k3s-airgap-images-amd64.tar.zst ~/install.sh
 
 ---
 
-## Part 5: Deploy Application (from Site A)
+## Part 5: Load Container Images (all 3 nodes)
 
-All kubectl commands run from the Site A VM (the K3s server).
+Container images must be imported on **every node** (K3s has no shared registry).
 
-### 5.1 Copy application files into the Site A VM
+### 5.1 Copy files into the Site A VM
 
 From the Site A Windows host:
 
@@ -374,21 +415,19 @@ scp C:\Simetra\ship\otel-collector-0.120.0.tar <username>@172.20.0.10:~/
 scp -r C:\Simetra\ship\deploy\ <username>@172.20.0.10:~/deploy/
 ```
 
-### 5.2 Load container images into K3s (all 3 nodes)
-
-The container images must be imported on **every node** (K3s has no shared registry).
-
-**Site A** (SSH into Site A VM):
+### 5.2 Import images on Site A
 
 ```bash
 sudo k3s ctr images import ~/snmp-collector-v2.6.tar
 sudo k3s ctr images import ~/otel-collector-0.120.0.tar
 ```
 
-**Site B and Site C** — copy the tar files to each agent VM and import:
+### 5.3 Import images on Site B and Site C
+
+Copy tar files to each agent VM and import:
 
 ```bash
-# From Site A Windows host (or wherever the tars are):
+# From Windows host:
 scp C:\Simetra\ship\snmp-collector-v2.6.tar <username>@<Site-B-IP>:~/
 scp C:\Simetra\ship\otel-collector-0.120.0.tar <username>@<Site-B-IP>:~/
 
@@ -400,185 +439,355 @@ rm ~/snmp-collector-v2.6.tar ~/otel-collector-0.120.0.tar
 
 Repeat for Site C.
 
-Verify on Site A:
+### 5.4 Verify images
+
+From Site A:
 
 ```bash
 sudo k3s ctr images ls | grep -E "snmp-collector|otel"
 ```
 
-### 5.3 Create namespace and service account
+### 5.5 Prepare site deploy copies
+
+Create a copy of the deploy manifests for each site **before** modifying anything.
+This preserves the original `~/deploy/` as a clean template.
 
 ```bash
-kubectl create namespace simetra-site-a
-kubectl -n simetra-site-a create serviceaccount simetra-sa
+# Example for Site A:
+cp -r ~/deploy ~/deploy-simetra-site-a
+
+# Example for Site B:
+cp -r ~/deploy ~/deploy-simetra-site-b
 ```
 
-### 5.4 Apply RBAC
+> Create all site copies now. Parts 6 and 7 will modify files in-place.
 
-Update the namespace in `~/deploy/rbac.yaml` before applying:
+---
+
+## Part 6: Deploy OTel Collector (once — simetra-infra)
+
+All kubectl commands run from the Site A VM (the K3s server).
+
+### 6.1 Create infrastructure namespace
 
 ```bash
-sed -i 's|namespace: simetra|namespace: simetra-site-a|g' ~/deploy/rbac.yaml
-kubectl apply -f ~/deploy/rbac.yaml
+kubectl create namespace simetra-infra
 ```
 
-### 5.5 Deploy OTel Collector
+### 6.2 Deploy OTel Collector ConfigMap
 
-Update the namespace in OTel manifests:
+Update the namespace and apply:
 
 ```bash
-sed -i 's|namespace: simetra|namespace: simetra-site-a|g' ~/deploy/otel-collector-configmap.yaml
-sed -i 's|namespace: simetra|namespace: simetra-site-a|g' ~/deploy/otel-collector-deployment.yaml
+sed -i 's|namespace: simetra|namespace: simetra-infra|g' ~/deploy/otel-collector-configmap.yaml
 kubectl apply -f ~/deploy/otel-collector-configmap.yaml
-kubectl apply -f ~/deploy/otel-collector-deployment.yaml
 ```
 
-Wait for OTel Collector to be ready:
+> The file `otel-collector-deployment.yaml` in `~/deploy/` is not used — the DaemonSet
+> below replaces it for multi-site deployment.
+
+### 6.3 Deploy OTel Collector as DaemonSet
 
 ```bash
-kubectl -n simetra-site-a rollout status deployment/otel-collector
+cat <<'EOF' | kubectl apply -f -
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-collector
+  namespace: simetra-infra
+  labels:
+    app: otel-collector
+spec:
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+      - name: otel-collector
+        image: otel/opentelemetry-collector-contrib:0.120.0
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 4317
+          hostPort: 4317
+          protocol: TCP
+          name: otlp-grpc
+        volumeMounts:
+        - name: config
+          mountPath: /etc/otelcol-contrib/config.yaml
+          subPath: config.yaml
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: otel-collector-config
+EOF
 ```
 
-### 5.6 Update namespace in all SnmpCollector manifests
+### 6.4 Verify OTel Collector (one pod per node)
 
 ```bash
-for f in snmp-collector-config.yaml simetra-oid-metric-map.yaml simetra-oid-command-map.yaml simetra-devices.yaml simetra-tenants.yaml service.yaml deployment.yaml; do
-  sed -i 's|namespace: simetra|namespace: simetra-site-a|g' ~/deploy/$f
-done
+kubectl -n simetra-infra get pods -o wide
 ```
 
-### 5.7 Apply SnmpCollector ConfigMaps
+Expected:
 
-```bash
-kubectl apply -f ~/deploy/snmp-collector-config.yaml
-kubectl apply -f ~/deploy/simetra-oid-metric-map.yaml
-kubectl apply -f ~/deploy/simetra-oid-command-map.yaml
-kubectl apply -f ~/deploy/simetra-devices.yaml
-kubectl apply -f ~/deploy/simetra-tenants.yaml
 ```
-
-### 5.8 Configure PreferredNode and Lease namespace
-
-Edit the ConfigMap to set the preferred leader node and correct lease namespace:
-
-```bash
-kubectl edit configmap snmp-collector-config -n simetra-site-a
-```
-
-Update the `"Lease"` section:
-
-```json
-"Lease": {
-    "Name": "snmp-collector-leader",
-    "Namespace": "simetra-site-a",
-    "DurationSeconds": 15,
-    "RenewIntervalSeconds": 10,
-    "PreferredNode": "simetra-k3s-a"
-}
-```
-
-> `Namespace` must match the K8s namespace you created (`simetra-site-a`).
-> `PreferredNode` must match the Ubuntu server name from Part 3.3 exactly (case-sensitive).
-> This is the value that `PHYSICAL_HOSTNAME` env var resolves to via `spec.nodeName`.
-> When set, the pod running on this node gets leadership priority.
-> When absent or empty, standard fair election applies (backward compatible).
-
-### 5.9 Update image tag in deployment.yaml
-
-```bash
-sed -i 's|image: snmp-collector:local|image: snmp-collector:v2.6|' ~/deploy/deployment.yaml
-```
-
-`imagePullPolicy: Never` must remain (no registry available).
-
-### 5.10 Deploy SnmpCollector
-
-```bash
-kubectl apply -f ~/deploy/service.yaml
-kubectl apply -f ~/deploy/deployment.yaml
+NAME                   READY   STATUS    NODE
+otel-collector-xxxxx   1/1     Running   simetra-k3s-a
+otel-collector-yyyyy   1/1     Running   simetra-k3s-b
+otel-collector-zzzzz   1/1     Running   simetra-k3s-c
 ```
 
 ---
 
-## Part 6: Verify
+## Part 7: Deploy SnmpCollector (repeat per site)
 
-### 6.1 Check pods are spread across nodes
+Repeat this entire section for each site, substituting the placeholders from the
+Site Configuration table.
 
-```bash
-kubectl -n simetra-site-a get pods -o wide
-```
+> **Site A:** `{NAMESPACE}` = `simetra-site-a`, `{PREFERRED_NODE}` = `simetra-k3s-a`, `{TRAP_PORT}` = `10162`
+> **Site B:** `{NAMESPACE}` = `simetra-site-b`, `{PREFERRED_NODE}` = `simetra-k3s-b`, `{TRAP_PORT}` = `10163`
 
-Expected: 3 `snmp-collector` pods, **one on each node** (enforced by pod anti-affinity):
-
-```
-NAME                              READY   STATUS    NODE
-snmp-collector-xxx-aaa            1/1     Running   simetra-k3s-a
-snmp-collector-xxx-bbb            1/1     Running   simetra-k3s-b
-snmp-collector-xxx-ccc            1/1     Running   simetra-k3s-c
-```
-
-### 6.2 Check startup logs
+### 7.1 Update namespace in all manifests
 
 ```bash
-kubectl -n simetra-site-a logs -l app=snmp-collector --tail=5 | grep "Startup sequence"
-```
-
-Expected output:
-
-```
-Startup sequence: OidMapWatcher=145 -> DeviceWatcher=3 -> CommandMapWatcher=13 -> TenantWatcher=4
-```
-
-### 6.3 Verify leader election
-
-```bash
-kubectl -n simetra-site-a get lease snmp-collector-leader -o jsonpath='{.spec.holderIdentity}'
-```
-
-Exactly one pod name must appear. With `PreferredNode` configured, the pod on
-`simetra-k3s-a` should hold leadership at steady state.
-
-### 6.4 Verify preferred heartbeat lease
-
-```bash
-kubectl -n simetra-site-a get lease snmp-collector-leader-preferred -o jsonpath='{.spec.holderIdentity}'
-```
-
-The pod on the preferred node (`simetra-k3s-a`) should be stamping this lease.
-
-### 6.5 Verify node names and namespace in env vars
-
-```bash
-for pod in $(kubectl -n simetra-site-a get pods -l app=snmp-collector -o name); do
-  echo "$pod:"
-  kubectl -n simetra-site-a exec $pod -- printenv PHYSICAL_HOSTNAME POD_NAMESPACE
-  echo ""
+# Example for Site A: ~/deploy-simetra-site-a/
+# Example for Site B: ~/deploy-simetra-site-b/
+for f in rbac.yaml snmp-collector-config.yaml simetra-oid-metric-map.yaml simetra-oid-command-map.yaml simetra-devices.yaml simetra-tenants.yaml service.yaml deployment.yaml; do
+  sed -i 's|namespace: simetra|namespace: {NAMESPACE}|g' ~/deploy-{NAMESPACE}/$f
 done
 ```
 
-Expected: each pod shows its node name and `simetra-site-a` namespace.
-
-### 6.6 Verify poll jobs are firing
+### 7.2 Create namespace, service account, and RBAC
 
 ```bash
-kubectl -n simetra-site-a logs -l app=snmp-collector --tail=50 | grep "metric-poll"
+# Example for Site A: kubectl create namespace simetra-site-a
+kubectl create namespace {NAMESPACE}
+kubectl -n {NAMESPACE} create serviceaccount simetra-sa
+kubectl apply -f ~/deploy-{NAMESPACE}/rbac.yaml
 ```
 
-Must show poll job execution lines.
+### 7.3 Configure snmp-collector-config.yaml
 
-### 6.7 Clean up transfer files
+Edit `~/deploy-{NAMESPACE}/snmp-collector-config.yaml` (e.g. `~/deploy-simetra-site-a/snmp-collector-config.yaml`).
+
+Update the following sections. **Remove the `Otlp.Endpoint` field** — it will be
+overridden by an env var in the deployment (see step 7.6):
+
+```json
+{
+  "Otlp": {
+    "ServiceName": "snmp-collector"
+  },
+  "SnmpListener": {
+    "BindAddress": "0.0.0.0",
+    "Port": {TRAP_PORT}
+  },
+  "Lease": {
+    "Name": "snmp-collector-leader",
+    "Namespace": "{NAMESPACE}",
+    "DurationSeconds": 15,
+    "RenewIntervalSeconds": 10,
+    "PreferredNode": "{PREFERRED_NODE}"
+  }
+}
+```
+
+Example for Site A:
+- `{TRAP_PORT}` = `10162`
+- `{NAMESPACE}` = `simetra-site-a`
+- `{PREFERRED_NODE}` = `simetra-k3s-a`
+
+Example for Site B:
+- `{TRAP_PORT}` = `10163`
+- `{NAMESPACE}` = `simetra-site-b`
+- `{PREFERRED_NODE}` = `simetra-k3s-b`
+
+> `Lease.Namespace` must match `{NAMESPACE}` exactly.
+> `PreferredNode` must match the Ubuntu server name from Part 3.3 (case-sensitive).
+> `SnmpListener.Port` must be unique per site (10162, 10163, etc.).
+
+### 7.4 Configure simetra-devices.yaml
+
+Edit `~/deploy-{NAMESPACE}/simetra-devices.yaml` (e.g. `~/deploy-simetra-site-a/simetra-devices.yaml`)
+with this site's devices only.
+
+> Site A devices go in `simetra-site-a`. Site B devices go in `simetra-site-b`.
+> Each site monitors only its own SNMP hardware.
+
+### 7.5 Apply ConfigMaps
 
 ```bash
-rm ~/snmp-collector-v2.6.tar ~/otel-collector-0.120.0.tar
+# Example for Site A: ~/deploy-simetra-site-a/
+kubectl apply -f ~/deploy-{NAMESPACE}/snmp-collector-config.yaml
+kubectl apply -f ~/deploy-{NAMESPACE}/simetra-oid-metric-map.yaml
+kubectl apply -f ~/deploy-{NAMESPACE}/simetra-oid-command-map.yaml
+kubectl apply -f ~/deploy-{NAMESPACE}/simetra-devices.yaml
+kubectl apply -f ~/deploy-{NAMESPACE}/simetra-tenants.yaml
 ```
+
+### 7.6 Update deployment.yaml
+
+Edit `~/deploy-{NAMESPACE}/deployment.yaml` (e.g. `~/deploy-simetra-site-a/deployment.yaml`):
+
+**1. Update the image tag:**
+
+```bash
+# Example for Site A: ~/deploy-simetra-site-a/deployment.yaml
+sed -i 's|image: snmp-collector:local|image: snmp-collector:v2.6|' ~/deploy-{NAMESPACE}/deployment.yaml
+```
+
+**2. Add `HOST_IP` and `Otlp__Endpoint` env vars.** Add these to the `env:` section:
+
+```yaml
+        - name: HOST_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: Otlp__Endpoint
+          value: "http://$(HOST_IP):4317"
+```
+
+> `HOST_IP` resolves to the node's IP via Downward API.
+> `Otlp__Endpoint` uses K8s env var expansion `$(HOST_IP)` to route to the node-local OTel Collector.
+> This overrides the `Otlp.Endpoint` config value at runtime.
+
+**3. Update the SNMP container port** to match `{TRAP_PORT}`:
+
+```yaml
+        - containerPort: {TRAP_PORT}    # Example Site A: 10162, Site B: 10163
+          name: snmp
+          protocol: UDP
+```
+
+### 7.7 Update service.yaml
+
+Edit `~/deploy-{NAMESPACE}/service.yaml` (e.g. `~/deploy-simetra-site-a/service.yaml`).
+
+Update the SNMP trap port to match `{TRAP_PORT}`:
+
+```yaml
+  - name: snmp-trap
+    port: {TRAP_PORT}           # Example Site A: 10162, Site B: 10163
+    protocol: UDP
+    targetPort: {TRAP_PORT}     # Must match containerPort in deployment.yaml
+```
+
+### 7.8 Pre-apply checklist
+
+**Before applying, verify all files are correct.** Mismatched values cause silent failures
+(e.g., wrong `Lease.Namespace` causes the leader election to fail with no error in logs).
+
+**`snmp-collector-config.yaml`:**
+
+```bash
+# Example for Site A: ~/deploy-simetra-site-a/snmp-collector-config.yaml
+grep -E '"Namespace"|"PreferredNode"|"Port"|"Endpoint"' ~/deploy-{NAMESPACE}/snmp-collector-config.yaml
+```
+
+- [ ] `"Namespace": "{NAMESPACE}"` — must match K8s namespace exactly (e.g. `simetra-site-a`)
+- [ ] `"PreferredNode": "{PREFERRED_NODE}"` — must match node name exactly (e.g. `simetra-k3s-a`)
+- [ ] `"Port": {TRAP_PORT}` — must be unique per site (e.g. `10162`)
+- [ ] `"Endpoint"` line is **absent** — OTel endpoint is set via env var, not config
+
+> **If `Lease.Namespace` is wrong:** the LeaderElector will silently fail to create the
+> lease. The pod runs as follower forever with no error in logs. This is the most common
+> misconfiguration in multi-site deployment.
+
+**`deployment.yaml`:**
+
+```bash
+grep -E 'containerPort|HOST_IP|Otlp__Endpoint' ~/deploy-{NAMESPACE}/deployment.yaml
+```
+
+- [ ] `containerPort` (snmp) = `{TRAP_PORT}` (e.g. `10162`)
+- [ ] `HOST_IP` env var present (fieldRef: `status.hostIP`)
+- [ ] `Otlp__Endpoint` env var present (`http://$(HOST_IP):4317`)
+
+**`service.yaml`:**
+
+```bash
+grep -E 'port:|targetPort:' ~/deploy-{NAMESPACE}/service.yaml
+```
+
+- [ ] `port` and `targetPort` (snmp-trap) = `{TRAP_PORT}` — must match `containerPort` in deployment.yaml
+
+### 7.9 Deploy
+
+```bash
+# Example for Site A: ~/deploy-simetra-site-a/
+kubectl apply -f ~/deploy-{NAMESPACE}/service.yaml
+kubectl apply -f ~/deploy-{NAMESPACE}/deployment.yaml
+```
+
+### 7.10 Post-deploy verification
+
+**Immediate check (within 30 seconds):**
+
+```bash
+# Wait for pod to start
+kubectl -n {NAMESPACE} rollout status deployment/snmp-collector --timeout=60s
+
+# Check lease was created — this is the critical test
+kubectl -n {NAMESPACE} get leases
+```
+
+- [ ] `snmp-collector-leader` lease exists
+- [ ] If `PreferredNode` is configured: `snmp-collector-leader-preferred` lease exists
+
+> **If no lease after 30 seconds:** the most likely cause is `Lease.Namespace` in the
+> ConfigMap doesn't match the K8s namespace. Check with:
+> ```bash
+> kubectl -n {NAMESPACE} get configmap snmp-collector-config -o jsonpath='{.data.appsettings\.k8s\.json}' | grep '"Namespace"'
+> ```
+> The value must be `{NAMESPACE}` (e.g. `simetra-site-a`), not `simetra`.
+
+**Full verification:**
+
+```bash
+# Example for Site A: replace {NAMESPACE} with simetra-site-a
+
+# Pods spread across nodes
+kubectl -n {NAMESPACE} get pods -o wide
+
+# Leader identity
+kubectl -n {NAMESPACE} get lease snmp-collector-leader -o jsonpath='{.spec.holderIdentity}'
+
+# Preferred heartbeat lease
+kubectl -n {NAMESPACE} get lease snmp-collector-leader-preferred -o jsonpath='{.spec.holderIdentity}'
+
+# Env vars
+for pod in $(kubectl -n {NAMESPACE} get pods -l app=snmp-collector -o name); do
+  echo "$pod:"
+  kubectl -n {NAMESPACE} exec $pod -- printenv PHYSICAL_HOSTNAME POD_NAMESPACE HOST_IP Otlp__Endpoint
+  echo ""
+done
+
+# Startup logs
+kubectl -n {NAMESPACE} logs -l app=snmp-collector --tail=5 | grep "Startup sequence"
+
+# Leader confirmed in logs (not stuck on "follower")
+kubectl -n {NAMESPACE} logs -l app=snmp-collector --tail=100 | grep "Acquired leadership"
+
+# Poll jobs firing
+kubectl -n {NAMESPACE} logs -l app=snmp-collector --tail=50 | grep "metric-poll"
+```
+
+Expected:
+- 3 pods, one per node
+- Leader on `{PREFERRED_NODE}` (e.g. `simetra-k3s-a` for Site A)
+- Logs show `Acquired leadership` (not stuck on `follower`)
+- Each pod shows its node name, `{NAMESPACE}`, node IP for `HOST_IP`, and `http://<node-ip>:4317` for `Otlp__Endpoint`
 
 ---
 
 ## Deployment Manifest Reference
 
-Key sections in `deploy/deployment.yaml` relevant to multi-site operation:
-
-**Pod anti-affinity** — ensures one pod per node:
+**Pod anti-affinity** — ensures one SnmpCollector pod per node per namespace:
 
 ```yaml
 affinity:
@@ -590,60 +799,60 @@ affinity:
       topologyKey: kubernetes.io/hostname
 ```
 
+> Anti-affinity is namespace-scoped by default. Site A and Site B pods do not interfere
+> with each other — both can run on the same node.
+
 **Environment variables** — injected via Kubernetes Downward API:
 
 ```yaml
 env:
-- name: PHYSICAL_HOSTNAME          # Node name → used for preferred leader matching
+- name: PHYSICAL_HOSTNAME          # Node name → preferred leader matching
   valueFrom:
     fieldRef:
       fieldPath: spec.nodeName
-- name: POD_NAMESPACE              # Namespace → appears on all metrics as k8s_namespace_name
+- name: POD_NAMESPACE              # Namespace → k8s_namespace_name metric label
   valueFrom:
     fieldRef:
       fieldPath: metadata.namespace
+- name: HOST_IP                    # Node IP → used by Otlp__Endpoint
+  valueFrom:
+    fieldRef:
+      fieldPath: status.hostIP
+- name: Otlp__Endpoint             # Routes to node-local OTel Collector
+  value: "http://$(HOST_IP):4317"
 ```
 
-**ConfigMap Lease section** — preferred leader configuration:
+**Metric labels in Prometheus:**
 
-```json
-"Lease": {
-    "Name": "snmp-collector-leader",
-    "Namespace": "simetra-site-a",
-    "DurationSeconds": 15,
-    "RenewIntervalSeconds": 10,
-    "PreferredNode": "simetra-k3s-a"
-}
-```
-
-> `Namespace` must match the K8s namespace where the deployment runs.
-> `PreferredNode` is compared against `PHYSICAL_HOSTNAME` at pod startup.
-> The matching pod gets leadership priority via the two-lease mechanism.
+| Label | Source | Identifies |
+|-------|--------|------------|
+| `k8s_namespace_name` | `POD_NAMESPACE` env var | Which logical site (simetra-site-a, simetra-site-b) |
+| `service_instance_id` | `PHYSICAL_HOSTNAME` env var | Which physical node (simetra-k3s-a, simetra-k3s-b, simetra-k3s-c) |
+| `k8s_pod_name` | `HOSTNAME` env var | Which pod instance |
 
 ---
 
 ## Teardown
 
-Remove all SnmpCollector resources:
+### Remove a single site
 
 ```bash
-kubectl delete deployment snmp-collector -n simetra-site-a
-kubectl delete service snmp-collector -n simetra-site-a
-kubectl delete configmap snmp-collector-config simetra-oid-metric-map simetra-oid-command-map simetra-devices simetra-tenants -n simetra-site-a
+# Example: kubectl delete namespace simetra-site-a
+kubectl delete namespace {NAMESPACE}
 ```
 
-Remove OTel Collector:
+This removes all SnmpCollector resources, ConfigMaps, leases, and RBAC for that site.
+
+### Remove OTel Collector
 
 ```bash
-kubectl delete deployment otel-collector -n simetra-site-a
-kubectl delete service otel-collector -n simetra-site-a
-kubectl delete configmap otel-collector-config -n simetra-site-a
+kubectl delete namespace simetra-infra
 ```
 
-Remove namespace (removes everything):
+### Remove everything
 
 ```bash
-kubectl delete namespace simetra-site-a
+kubectl delete namespace simetra-site-a simetra-site-b simetra-infra
 ```
 
 ---
@@ -676,7 +885,8 @@ From Site A:
 ```bash
 kubectl get nodes
 kubectl -n simetra-site-a get pods -o wide
-kubectl -n simetra-site-a get lease snmp-collector-leader -o jsonpath='{.spec.holderIdentity}'
+kubectl -n simetra-site-b get pods -o wide
+kubectl -n simetra-infra get pods -o wide
 ```
 
 ### Update SnmpCollector
@@ -684,25 +894,37 @@ kubectl -n simetra-site-a get lease snmp-collector-leader -o jsonpath='{.spec.ho
 1. Build new image on develop machine with new tag (e.g. `snmp-collector:v2.7`)
 2. Save to tar, transfer to **all 3 VMs** via SCP
 3. Import on each VM: `sudo k3s ctr images import snmp-collector-v2.7.tar`
-4. Update image tag: `sed -i 's|snmp-collector:v2.6|snmp-collector:v2.7|' ~/deploy/deployment.yaml`
-5. Apply: `kubectl apply -f ~/deploy/deployment.yaml`
+4. For each site namespace:
+   ```bash
+   # Example for Site A:
+   sed -i 's|snmp-collector:v2.6|snmp-collector:v2.7|' ~/deploy-simetra-site-a/deployment.yaml
+   kubectl apply -f ~/deploy-simetra-site-a/deployment.yaml
+   ```
 
-### Change preferred leader to a different site
+### Change preferred leader for a site
 
 Edit the ConfigMap:
 
 ```bash
-kubectl edit configmap snmp-collector-config -n simetra-site-a
+# Example: kubectl edit configmap snmp-collector-config -n simetra-site-a
+kubectl edit configmap snmp-collector-config -n {NAMESPACE}
 ```
 
 Change `PreferredNode` to the desired node name (e.g. `simetra-k3s-b`).
 Then restart the pods to pick up the config change:
 
 ```bash
-kubectl rollout restart deployment/snmp-collector -n simetra-site-a
+kubectl rollout restart deployment/snmp-collector -n {NAMESPACE}
 ```
 
 The pod on the new preferred node will acquire leadership within ~30 seconds.
+
+### Add a new site
+
+1. Choose next trap port (e.g. `10164` for Site C)
+2. Create a new deploy copy: `cp -r ~/deploy ~/deploy-simetra-site-c`
+3. Repeat Part 7 with `{NAMESPACE}` = `simetra-site-c`, `{PREFERRED_NODE}` = `simetra-k3s-c`, `{TRAP_PORT}` = `10164`
+4. No changes needed to OTel Collector — DaemonSet already runs on all nodes
 
 ### VM resource adjustment
 
