@@ -146,7 +146,7 @@ See `.planning/milestones/v2.6-ROADMAP.md` for details.
 
 ---
 
-### 🚧 v3.0 Preferred Leader Election (In Progress)
+### v3.0 Preferred Leader Election (In Progress)
 
 **Milestone Goal:** Pod co-located with SNMP devices gets leadership priority for lowest-latency monitoring, with full HA preserved when the preferred pod is absent.
 
@@ -229,11 +229,12 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. A structured INFO log line is emitted at each election decision point: backing off (stamp fresh, not competing), competing normally (stamp stale or feature off), yielding to preferred pod (stamp became fresh while leading), and heartbeat stamping started (preferred pod post-readiness)
   2. The deployment manifest includes a pod anti-affinity rule (`requiredDuringSchedulingIgnoredDuringExecution`, `kubernetes.io/hostname` topology key) preventing two collector pods from landing on the same node
-  3. The pod spec injects `PHYSICAL_HOSTNAME` from `spec.nodeName` and `POD_NAMESPACE` from `metadata.namespace` via Downward API env vars — the preferred-election feature activates correctly in a multi-node cluster without manual config
+  3. The pod spec injects `PHYSICAL_HOSTNAME` from `spec.nodeName` via Downward API env var — the preferred-election feature activates correctly in a multi-node cluster without manual config
 **Plans**: 2 plans
 
 Plans:
-- [ ] 89-01: Structured log lines at all decision points, deployment manifest anti-affinity + Downward API wiring
+- [ ] 89-01-PLAN.md — Structured INFO logs at all 4 election decision points (OBS-01)
+- [ ] 89-02-PLAN.md — Pod anti-affinity rule and PHYSICAL_HOSTNAME verification (DEP-01, DEP-02)
 
 ---
 
@@ -305,8 +306,8 @@ Plans:
 | 86. PreferredHeartbeatService Writer Path | v3.0 | 2/2 | Complete | 2026-03-26 |
 | 87. Election Gate 1 — Backoff Before Acquire | v3.0 | 2/2 | Complete | 2026-03-26 |
 | 88. Election Gate 2 — Voluntary Yield | v3.0 | 2/2 | Complete | 2026-03-26 |
-| 89. Observability and Deployment Wiring | v3.0 | 0/TBD | Not started | - |
+| 89. Observability and Deployment Wiring | v3.0 | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-26 — Phase 88 complete*
+*Last updated: 2026-03-26 — Phase 89 planned*
