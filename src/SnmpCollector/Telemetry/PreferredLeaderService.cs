@@ -35,20 +35,12 @@ public sealed class PreferredLeaderService : IPreferredStampReader
 
         if (string.IsNullOrEmpty(physicalHostname))
         {
-            logger.LogWarning(
-                "PreferredNode is configured ({PreferredNode}) but PHYSICAL_HOSTNAME env var is empty. " +
-                "Preferred-leader feature disabled for this pod.",
-                preferredNode);
             _isPreferredPod = false;
             return;
         }
 
         // Exact case-sensitive match
         _isPreferredPod = physicalHostname == preferredNode;
-
-        logger.LogInformation(
-            "Preferred-leader identity: PHYSICAL_HOSTNAME={HostName}, PreferredNode={PreferredNode}, IsPreferredPod={IsPreferredPod}",
-            physicalHostname, preferredNode, _isPreferredPod);
     }
 
     /// <inheritdoc />

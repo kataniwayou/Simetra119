@@ -76,7 +76,7 @@ public sealed class MetricRoleGatedExporterTests : IDisposable
         CreateTestPipeline(StubLeaderElection leaderElection)
     {
         var inner = new CapturingExporter();
-        var gated = new MetricRoleGatedExporter(inner, leaderElection, TelemetryConstants.LeaderMeterName);
+        var gated = new MetricRoleGatedExporter(inner, new Lazy<ILeaderElection>(() => leaderElection), TelemetryConstants.LeaderMeterName);
         var reader = new PeriodicExportingMetricReader(gated, exportIntervalMilliseconds: int.MaxValue);
 
         var provider = Sdk.CreateMeterProviderBuilder()
@@ -188,7 +188,7 @@ public sealed class MetricRoleGatedExporterTests : IDisposable
     {
         var leaderElection = new StubLeaderElection();
         Assert.Throws<ArgumentNullException>(() =>
-            new MetricRoleGatedExporter(null!, leaderElection, TelemetryConstants.LeaderMeterName));
+            new MetricRoleGatedExporter(null!, new Lazy<ILeaderElection>(() => leaderElection), TelemetryConstants.LeaderMeterName));
     }
 
     [Fact]
@@ -205,6 +205,6 @@ public sealed class MetricRoleGatedExporterTests : IDisposable
         var inner = new CapturingExporter();
         var leaderElection = new StubLeaderElection();
         Assert.Throws<ArgumentNullException>(() =>
-            new MetricRoleGatedExporter(inner, leaderElection, null!));
+            new MetricRoleGatedExporter(inner, new Lazy<ILeaderElection>(() => leaderElection), null!));
     }
 }
