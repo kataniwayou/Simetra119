@@ -359,7 +359,7 @@
                       "from": -1000000000,
                       "result": {
                         "color": "dark-red",
-                        "text": "\u00e2\u2013\u00bc"
+                        "text": "â–¼"
                       },
                       "to": -0.0001
                     },
@@ -370,7 +370,7 @@
                       "from": -0.0001,
                       "result": {
                         "color": "text",
-                        "text": "\u00e2\u20ac\u201d"
+                        "text": "â€”"
                       },
                       "to": 0.0001
                     },
@@ -381,7 +381,7 @@
                       "from": 0.0001,
                       "result": {
                         "color": "dark-green",
-                        "text": "\u00e2\u2013\u00b2"
+                        "text": "â–²"
                       },
                       "to": 1000000000
                     },
@@ -1279,7 +1279,7 @@
       ],
       "title": "OID Resolution",
       "type": "piechart",
-      "description": "OID resolution outcomes \u00e2\u20ac\u201d resolved metric names vs Unknown. High Unknown rate may indicate missing OID map entries."
+      "description": "OID resolution outcomes â€” resolved metric names vs Unknown. High Unknown rate may indicate missing OID map entries."
     }
   ],
   "refresh": "5s",

@@ -1602,7 +1602,7 @@
                       "from": -1000000000,
                       "result": {
                         "color": "dark-red",
-                        "text": "\u00e2\u2013\u00bc"
+                        "text": "â–¼"
                       },
                       "to": -0.0001
                     },
@@ -1613,7 +1613,7 @@
                       "from": -0.0001,
                       "result": {
                         "color": "text",
-                        "text": "\u00e2\u20ac\u201d"
+                        "text": "â€”"
                       },
                       "to": 0.0001
                     },
@@ -1624,7 +1624,7 @@
                       "from": 0.0001,
                       "result": {
                         "color": "dark-green",
-                        "text": "\u00e2\u2013\u00b2"
+                        "text": "â–²"
                       },
                       "to": 1000000000
                     },
