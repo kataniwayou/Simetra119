@@ -187,6 +187,18 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "k8s_namespace_name"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Namespace"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "ip"
             },
             "properties": [
@@ -491,18 +503,19 @@
           "id": "organize",
           "options": {
             "indexByName": {
-              "Value #A": 8,
-              "Value #B": 9,
-              "Value #C": 10,
-              "device_name": 3,
-              "ip": 2,
-              "k8s_pod_name": 1,
-              "oid": 6,
-              "promql": 11,
-              "resolved_name": 5,
               "service_instance_id": 0,
-              "snmp_type": 7,
-              "source": 4
+              "k8s_pod_name": 1,
+              "k8s_namespace_name": 2,
+              "ip": 3,
+              "device_name": 4,
+              "source": 5,
+              "resolved_name": 6,
+              "oid": 7,
+              "snmp_type": 8,
+              "Value #A": 9,
+              "Value #B": 10,
+              "Value #C": 11,
+              "promql": 12
             }
           }
         }
@@ -732,6 +745,18 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "k8s_namespace_name"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Namespace"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "ip"
             },
             "properties": [
@@ -887,17 +912,18 @@
           "id": "organize",
           "options": {
             "indexByName": {
-              "Value #B": 9,
-              "device_name": 3,
-              "ip": 2,
-              "k8s_pod_name": 1,
-              "oid": 6,
-              "promql": 10,
-              "resolved_name": 5,
               "service_instance_id": 0,
-              "snmp_type": 7,
-              "source": 4,
-              "value": 8
+              "k8s_pod_name": 1,
+              "k8s_namespace_name": 2,
+              "ip": 3,
+              "device_name": 4,
+              "source": 5,
+              "resolved_name": 6,
+              "oid": 7,
+              "snmp_type": 8,
+              "value": 9,
+              "Value #B": 10,
+              "promql": 11
             }
           }
         }

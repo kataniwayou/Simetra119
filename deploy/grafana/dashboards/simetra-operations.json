@@ -111,6 +111,18 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "k8s_namespace_name"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Namespace"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Value #B"
             },
             "properties": [
@@ -181,7 +193,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "count by (service_instance_id, k8s_pod_name) (snmp_event_published_total{k8s_pod_name=~\"$pod\"})",
+          "expr": "count by (service_instance_id, k8s_pod_name, k8s_namespace_name) (snmp_event_published_total{k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -191,7 +203,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "clamp_max(count by (service_instance_id, k8s_pod_name) (snmp_gauge{k8s_pod_name=~\"$pod\"}), 1)",
+          "expr": "clamp_max(count by (service_instance_id, k8s_pod_name, k8s_namespace_name) (snmp_gauge{k8s_pod_name=~\"$pod\"}), 1)",
           "format": "table",
           "instant": true,
           "refId": "B"
@@ -207,9 +219,10 @@
           "id": "organize",
           "options": {
             "indexByName": {
-              "Value #B": 2,
+              "service_instance_id": 0,
               "k8s_pod_name": 1,
-              "service_instance_id": 0
+              "k8s_namespace_name": 2,
+              "Value #B": 3
             }
           }
         }
@@ -1273,6 +1286,18 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "k8s_namespace_name"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Namespace"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "tenant_id"
             },
             "properties": [
@@ -1709,7 +1734,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_evaluation_state{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_evaluation_state{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -1719,7 +1744,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (delta(tenant_command_dispatched_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s]))",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (delta(tenant_command_dispatched_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s]))",
           "format": "table",
           "instant": true,
           "refId": "B"
@@ -1729,7 +1754,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "histogram_quantile(0.99, sum by (le, tenant_id, priority, service_instance_id, k8s_pod_name) (rate(tenant_evaluation_duration_milliseconds_bucket{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le, tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (rate(tenant_evaluation_duration_milliseconds_bucket{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval])))",
           "format": "table",
           "instant": true,
           "refId": "C"
@@ -1739,7 +1764,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_command_dispatched_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_command_dispatched_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "D"
@@ -1749,7 +1774,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_command_failed_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_command_failed_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "E"
@@ -1759,7 +1784,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_command_suppressed_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_command_suppressed_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "F"
@@ -1769,7 +1794,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_metric_stale_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_metric_stale_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "G"
@@ -1779,7 +1804,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_metric_resolved_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_metric_resolved_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "H"
@@ -1789,7 +1814,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name) (tenant_metric_evaluate_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_metric_evaluate_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "I"
@@ -1819,17 +1844,18 @@
             "indexByName": {
               "service_instance_id": 0,
               "k8s_pod_name": 1,
-              "tenant_id": 2,
-              "priority": 3,
-              "Value #G": 4,
-              "Value #H": 5,
-              "Value #I": 6,
-              "Value #D": 7,
-              "Value #F": 8,
-              "Value #E": 9,
-              "Value #A": 10,
-              "Value #C": 11,
-              "Value #B": 12
+              "k8s_namespace_name": 2,
+              "tenant_id": 3,
+              "priority": 4,
+              "Value #G": 5,
+              "Value #H": 6,
+              "Value #I": 7,
+              "Value #D": 8,
+              "Value #F": 9,
+              "Value #E": 10,
+              "Value #A": 11,
+              "Value #C": 12,
+              "Value #B": 13
             }
           }
         }
