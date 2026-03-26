@@ -214,10 +214,19 @@ public static class ServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        services.AddOptions<PreferredHeartbeatJobOptions>()
-            .Bind(configuration.GetSection(PreferredHeartbeatJobOptions.SectionName))
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
+        // Only validate PreferredHeartbeatJobOptions when the preferred-leader feature is active.
+        // Reading PreferredNode with GetValue<string> avoids binding a full LeaseOptions object here
+        // (LeaseOptions has required properties that would throw if the section is absent).
+        var leaseSection = configuration.GetSection(LeaseOptions.SectionName);
+        var preferredNodeCfg = leaseSection.GetValue<string>(nameof(LeaseOptions.PreferredNode));
+        if (k8s.KubernetesClientConfiguration.IsInCluster()
+            && !string.IsNullOrWhiteSpace(preferredNodeCfg))
+        {
+            services.AddOptions<PreferredHeartbeatJobOptions>()
+                .Bind(configuration.GetSection(PreferredHeartbeatJobOptions.SectionName))
+                .ValidateDataAnnotations()
+                .ValidateOnStart();
+        }
 
         // Custom IValidateOptions for cross-field validation (Phase 1)
         services.AddSingleton<IValidateOptions<PodIdentityOptions>, PodIdentityOptionsValidator>();
@@ -490,9 +499,6 @@ public static class ServiceCollectionExtensions
         var snapshotOptions = new SnapshotJobOptions();
         configuration.GetSection(SnapshotJobOptions.SectionName).Bind(snapshotOptions);
 
-        var preferredHbOptions = new PreferredHeartbeatJobOptions();
-        configuration.GetSection(PreferredHeartbeatJobOptions.SectionName).Bind(preferredHbOptions);
-
         // Phase 6: Bind DevicesOptions to calculate thread pool size and register poll jobs.
         // CRITICAL: bind directly into .Devices (not the wrapper) -- matches AddSnmpConfiguration pattern.
         // DI container is NOT built yet; IOptions<DevicesOptions> is not available here.
@@ -503,12 +509,19 @@ public static class ServiceCollectionExtensions
         // Populated here during Quartz configuration, then registered as singleton.
         var intervalRegistry = new JobIntervalRegistry();
 
+        // Preferred-leader feature is active only when running in K8s AND PreferredNode is configured.
+        // Gate both the initialJobCount increment and the Quartz registration on this flag.
+        var preferredNodeScheduling = configuration.GetSection(LeaseOptions.SectionName)
+            .GetValue<string>(nameof(LeaseOptions.PreferredNode));
+        var preferredFeatureActive = k8s.KubernetesClientConfiguration.IsInCluster()
+            && !string.IsNullOrWhiteSpace(preferredNodeScheduling);
+
         // Thread pool: generous ceiling to accommodate dynamic device additions at runtime.
         // Static jobs (CorrelationJob + SnmpHeartbeatJob + SnapshotJob) = 3, plus headroom for poll jobs.
-        // PreferredHeartbeatJob only runs in K8s mode.
+        // PreferredHeartbeatJob only registers when the preferred-leader feature is active.
         var initialJobCount = 3; // CorrelationJob + SnmpHeartbeatJob + SnapshotJob
-        if (k8s.KubernetesClientConfiguration.IsInCluster())
-            initialJobCount++; // + PreferredHeartbeatJob
+        if (preferredFeatureActive)
+            initialJobCount++; // + PreferredHeartbeatJob (only when feature is configured)
         foreach (var device in devicesOptions.Devices)
             initialJobCount += device.Polls.Count;
         var threadPoolSize = Math.Max(initialJobCount, 50);
@@ -566,9 +579,13 @@ public static class ServiceCollectionExtensions
             intervalRegistry.Register("snapshot", snapshotOptions.IntervalSeconds);
 
             // Phase 85: PreferredHeartbeatJob — reads heartbeat lease to maintain IsPreferredStampFresh.
-            // Only registered in K8s mode (IKubernetes is only available in cluster).
-            if (k8s.KubernetesClientConfiguration.IsInCluster())
+            // Only registered when preferred-leader feature is active (K8s + PreferredNode configured).
+            // When PreferredNode is empty the job would fire every tick and hit a 404 on the K8s API.
+            if (preferredFeatureActive)
             {
+                var preferredHbOptions = new PreferredHeartbeatJobOptions();
+                configuration.GetSection(PreferredHeartbeatJobOptions.SectionName).Bind(preferredHbOptions);
+
                 var preferredHbKey = new JobKey("preferred-heartbeat");
                 q.AddJob<PreferredHeartbeatJob>(j => j.WithIdentity(preferredHbKey));
                 q.AddTrigger(t => t
