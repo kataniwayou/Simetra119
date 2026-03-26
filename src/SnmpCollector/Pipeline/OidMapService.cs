@@ -36,10 +36,6 @@ public sealed class OidMapService : IOidMapService
         _map = BuildFrozenMap(seeded);
         _metricNames = _map.Values.ToFrozenSet();
         _reverseMap = BuildReverseMap(_map);
-
-        _logger.LogInformation(
-            "OidMapService initialized with {EntryCount} entries",
-            _map.Count);
     }
 
     /// <inheritdoc />

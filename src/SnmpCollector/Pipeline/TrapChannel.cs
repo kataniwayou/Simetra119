@@ -36,8 +36,6 @@ public sealed class TrapChannel : ITrapChannel
         {
             pipelineMetrics.IncrementTrapDropped(envelope.DeviceName);
         });
-
-        _logger.LogInformation("Trap channel created (capacity {Capacity})", capacity);
     }
 
     /// <inheritdoc/>
