@@ -163,11 +163,17 @@ public sealed class K8sLeaseElection : BackgroundService, ILeaderElection
             // so this block never triggers — zero overhead (ELEC-03).
             if (!_preferredLeaderService.IsPreferredPod && _stampReader.IsPreferredStampFresh)
             {
-                _logger.LogDebug(
+                _logger.LogInformation(
                     "Preferred pod is alive — delaying election attempt for {DurationSeconds}s",
                     _leaseOptions.DurationSeconds);
                 await Task.Delay(TimeSpan.FromSeconds(_leaseOptions.DurationSeconds), stoppingToken);
                 continue; // re-evaluate at top of loop
+            }
+            else if (!_preferredLeaderService.IsPreferredPod && !_stampReader.IsPreferredStampFresh)
+            {
+                _logger.LogInformation(
+                    "Competing normally for lease {LeaseName} — preferred stamp is not fresh",
+                    _leaseOptions.Name);
             }
 
             using var innerCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
