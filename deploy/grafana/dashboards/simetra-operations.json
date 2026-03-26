@@ -2458,29 +2458,6 @@
           "type": "prometheus",
           "uid": "dfg62p9s7xl34a"
         },
-        "definition": "label_values(snmp_event_published_total, k8s_namespace_name)",
-        "includeAll": true,
-        "label": "Namespace",
-        "multi": true,
-        "name": "namespace",
-        "query": {
-          "qryType": 1,
-          "query": "label_values(snmp_event_published_total, k8s_namespace_name)"
-        },
-        "refresh": 2,
-        "type": "query"
-      },
-      {
-        "allValue": ".*",
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
-        },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "dfg62p9s7xl34a"
-        },
         "definition": "label_values(snmp_event_published_total{k8s_namespace_name=~\"$namespace\"}, service_instance_id)",
         "includeAll": true,
         "label": "Host",
@@ -2512,6 +2489,29 @@
         "query": {
           "qryType": 1,
           "query": "label_values(snmp_event_published_total{k8s_namespace_name=~\"$namespace\", service_instance_id=~\"$host\"}, k8s_pod_name)"
+        },
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "dfg62p9s7xl34a"
+        },
+        "definition": "label_values(snmp_event_published_total, k8s_namespace_name)",
+        "includeAll": true,
+        "label": "Namespace",
+        "multi": true,
+        "name": "namespace",
+        "query": {
+          "qryType": 1,
+          "query": "label_values(snmp_event_published_total, k8s_namespace_name)"
         },
         "refresh": 2,
         "type": "query"
