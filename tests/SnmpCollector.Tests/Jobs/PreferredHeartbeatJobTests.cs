@@ -1,4 +1,5 @@
 using System.Net;
+using System.Reflection;
 using k8s;
 using k8s.Autorest;
 using k8s.Models;
@@ -22,6 +23,8 @@ namespace SnmpCollector.Tests.Jobs;
 ///   <item>Reader path — fresh/stale/404/transient-error/null-timestamps/liveness (8 tests, Phase 85)</item>
 ///   <item>Writer path — create, renew, readiness gate, non-preferred skip, 409/404 conflict,
 ///         transient error, AcquireTime only on create (9 tests, Phase 86)</item>
+///   <item>Yield path — Gate 2 voluntary yield (Phase 88): happy path, each negative condition,
+///         delete failure resilience (6 tests)</item>
 /// </list>
 /// <para>
 /// SC-4: IPreferredStampReader.IsPreferredStampFresh returns a real derived value, not a stub —
@@ -946,6 +949,408 @@ public sealed class PreferredHeartbeatJobTests
             // Assert: AcquireTime NOT set on Replace body (renewal only updates RenewTime)
             Assert.NotNull(capturedReplace);
             Assert.Null(capturedReplace!.Spec.AcquireTime);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", null);
+        }
+    }
+
+    // =========================================================================
+    //  Yield path helpers
+    // =========================================================================
+
+    /// <summary>
+    /// Builds a non-preferred <see cref="PreferredHeartbeatJob"/> that has a real
+    /// <see cref="K8sLeaseElection"/> injected, enabling yield path testing.
+    /// The job's PHYSICAL_HOSTNAME is set to "other-node", which does NOT match
+    /// <see cref="NodeName"/> — so <c>IsPreferredPod</c> is <c>false</c>.
+    /// Caller MUST restore PHYSICAL_HOSTNAME in a finally block.
+    /// </summary>
+    private PreferredHeartbeatJob MakeNonPreferredJobWithElection(
+        out PreferredLeaderService preferredLeaderService,
+        out K8sLeaseElection leaseElection)
+    {
+        var leaseOptions = Options.Create(new LeaseOptions
+        {
+            Name = LeaseName,
+            Namespace = Namespace,
+            DurationSeconds = DurationSeconds,
+            PreferredNode = NodeName   // feature enabled, but this pod is NOT preferred
+        });
+
+        // PHYSICAL_HOSTNAME != PreferredNode → IsPreferredPod = false
+        Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", "other-node");
+
+        preferredLeaderService = new PreferredLeaderService(
+            leaseOptions,
+            NullLogger<PreferredLeaderService>.Instance);
+
+        // Real K8sLeaseElection (sealed — cannot substitute).
+        // Uses shared _mockKubeClient so DeleteNamespacedLeaseAsync calls are captured.
+        // PreferredLeaderService implements IPreferredStampReader, so it serves as both.
+        leaseElection = new K8sLeaseElection(
+            leaseOptions,
+            Options.Create(new PodIdentityOptions { PodIdentity = PodId }),
+            _mockKubeClient,
+            Substitute.For<IHostApplicationLifetime>(),
+            NullLogger<K8sLeaseElection>.Instance,
+            preferredLeaderService,
+            preferredLeaderService);  // implements IPreferredStampReader
+
+        var lifetime = MakeLifetime(alreadyStarted: false);
+
+        return new PreferredHeartbeatJob(
+            _mockKubeClient,
+            preferredLeaderService,
+            leaseOptions,
+            _podIdentityOptions,
+            lifetime,
+            _mockLiveness,
+            NullLogger<PreferredHeartbeatJob>.Instance,
+            leaseElection);
+    }
+
+    /// <summary>
+    /// Uses reflection to set <c>_isLeader = true</c> on a real (sealed)
+    /// <see cref="K8sLeaseElection"/> instance. Acceptable for unit-testing
+    /// sealed classes whose internal state cannot be reached via public API
+    /// without running the full election loop.
+    /// </summary>
+    private static void SetIsLeader(K8sLeaseElection election, bool value)
+    {
+        var field = typeof(K8sLeaseElection)
+            .GetField("_isLeader", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?? throw new InvalidOperationException("_isLeader field not found on K8sLeaseElection");
+
+        field.SetValue(election, value);
+    }
+
+    /// <summary>
+    /// Sets up <c>DeleteNamespacedLeaseWithHttpMessagesAsync</c> to return HTTP 200.
+    /// </summary>
+    private void SetupDeleteSucceeds()
+    {
+        var response = new HttpOperationResponse<V1Status>
+        {
+            Body = new V1Status(),
+            Response = new HttpResponseMessage(HttpStatusCode.OK)
+        };
+        _mockCoordV1
+            .DeleteNamespacedLeaseWithHttpMessagesAsync(
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<V1DeleteOptions>(),
+                Arg.Any<string?>(),
+                Arg.Any<int?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<string?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(response);
+    }
+
+    /// <summary>
+    /// Sets up <c>DeleteNamespacedLeaseWithHttpMessagesAsync</c> to throw the given exception.
+    /// </summary>
+    private void SetupDeleteThrows(Exception ex)
+    {
+        _mockCoordV1
+            .DeleteNamespacedLeaseWithHttpMessagesAsync(
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<V1DeleteOptions>(),
+                Arg.Any<string?>(),
+                Arg.Any<int?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<string?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                Arg.Any<CancellationToken>())
+            .ThrowsAsync(ex);
+    }
+
+    // =========================================================================
+    //  Yield path tests — Gate 2 (Phase 88)
+    // =========================================================================
+
+    // -------------------------------------------------------------------------
+    // 18. Execute_NonPreferredLeader_StampFresh_YieldsLeadership
+    //     Happy path: non-preferred pod is leader + stamp is fresh → delete called.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_NonPreferredLeader_StampFresh_YieldsLeadership()
+    {
+        // Arrange
+        SetupLeaseResponse(FreshLease(renewTime: DateTime.UtcNow));
+        SetupDeleteSucceeds();
+
+        var job = MakeNonPreferredJobWithElection(
+            out var preferredLeaderService,
+            out var leaseElection);
+
+        try
+        {
+            // Simulate this pod being the leader (reflection — sealed class)
+            SetIsLeader(leaseElection, true);
+
+            // Act: reader path sets stamp fresh, then Gate 2 condition fires
+            await job.Execute(MakeContext());
+
+            // Assert: delete called with leadership lease name and namespace
+            await _mockCoordV1.Received(1)
+                .DeleteNamespacedLeaseWithHttpMessagesAsync(
+                    Arg.Is<string>(n => n == LeaseName),
+                    Arg.Is<string>(ns => ns == Namespace),
+                    Arg.Any<V1DeleteOptions>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<int?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                    Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", null);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 19. Execute_StampStale_DoesNotYield
+    //     Stamp is stale → Gate 2 condition is false → no delete.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_StampStale_DoesNotYield()
+    {
+        // Arrange: lease renewed beyond threshold → stale
+        var staleTime = DateTime.UtcNow.AddSeconds(-(DurationSeconds + 5 + 1));
+        SetupLeaseResponse(FreshLease(renewTime: staleTime));
+
+        var job = MakeNonPreferredJobWithElection(
+            out _,
+            out var leaseElection);
+
+        try
+        {
+            SetIsLeader(leaseElection, true);
+
+            // Act
+            await job.Execute(MakeContext());
+
+            // Assert: no delete
+            await _mockCoordV1.DidNotReceive()
+                .DeleteNamespacedLeaseWithHttpMessagesAsync(
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<V1DeleteOptions>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<int?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                    Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", null);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 20. Execute_NotLeader_DoesNotYield
+    //     _isLeader is false (default) → Gate 2 condition is false → no delete.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_NotLeader_DoesNotYield()
+    {
+        // Arrange: stamp is fresh, but IsLeader is NOT set (default false)
+        SetupLeaseResponse(FreshLease(renewTime: DateTime.UtcNow));
+
+        var job = MakeNonPreferredJobWithElection(out _, out _);
+
+        try
+        {
+            // Act — _isLeader stays false (not calling SetIsLeader)
+            await job.Execute(MakeContext());
+
+            // Assert: no delete
+            await _mockCoordV1.DidNotReceive()
+                .DeleteNamespacedLeaseWithHttpMessagesAsync(
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<V1DeleteOptions>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<int?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                    Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", null);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 21. Execute_PreferredPod_DoesNotYield
+    //     Preferred pod (IsPreferredPod = true) → Gate 2 condition false → no delete.
+    //     The preferred pod never yields — it IS the one we're yielding to.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_PreferredPod_DoesNotYield()
+    {
+        // Arrange: preferred pod, scheduler ready, stamp fresh
+        SetupLeaseResponse(FreshLease(renewTime: DateTime.UtcNow));
+        SetupCreateResponse();
+
+        // Use MakePreferredJob — IsPreferredPod = true, PHYSICAL_HOSTNAME == NodeName
+        var job = MakePreferredJob(schedulerReady: true, out var preferredLeaderService);
+
+        // Build a separate K8sLeaseElection for this preferred job — IsPreferredPod = true
+        var leaseOptions = Options.Create(new LeaseOptions
+        {
+            Name = LeaseName,
+            Namespace = Namespace,
+            DurationSeconds = DurationSeconds,
+            PreferredNode = NodeName
+        });
+
+        // Note: PHYSICAL_HOSTNAME == NodeName was already set by MakePreferredJob
+        var leaseElection = new K8sLeaseElection(
+            leaseOptions,
+            Options.Create(new PodIdentityOptions { PodIdentity = PodId }),
+            _mockKubeClient,
+            Substitute.For<IHostApplicationLifetime>(),
+            NullLogger<K8sLeaseElection>.Instance,
+            preferredLeaderService,
+            preferredLeaderService);
+
+        SetIsLeader(leaseElection, true);
+
+        // Rebuild job with the election — preferred pod + election injected
+        var jobWithElection = new PreferredHeartbeatJob(
+            _mockKubeClient,
+            preferredLeaderService,
+            leaseOptions,
+            _podIdentityOptions,
+            MakeLifetime(alreadyStarted: true),
+            _mockLiveness,
+            NullLogger<PreferredHeartbeatJob>.Instance,
+            leaseElection);
+
+        try
+        {
+            // Act
+            await jobWithElection.Execute(MakeContext());
+
+            // Assert: no delete — preferred pod never yields
+            await _mockCoordV1.DidNotReceive()
+                .DeleteNamespacedLeaseWithHttpMessagesAsync(
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<V1DeleteOptions>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<int?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                    Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PHYSICAL_HOSTNAME", null);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 22. Execute_NullLeaseElection_DoesNotYield
+    //     When K8sLeaseElection is null (default job, no election injected),
+    //     Gate 2 condition is false → no delete, no NullReferenceException.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_NullLeaseElection_DoesNotYield()
+    {
+        // Arrange: default _job has no K8sLeaseElection. Stamp fresh.
+        SetupLeaseResponse(FreshLease(renewTime: DateTime.UtcNow));
+
+        // Act — no exception expected
+        await _job.Execute(MakeContext());
+
+        // Assert: no delete attempted
+        await _mockCoordV1.DidNotReceive()
+            .DeleteNamespacedLeaseWithHttpMessagesAsync(
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<V1DeleteOptions>(),
+                Arg.Any<string?>(),
+                Arg.Any<int?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<string?>(),
+                Arg.Any<bool?>(),
+                Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                Arg.Any<CancellationToken>());
+    }
+
+    // -------------------------------------------------------------------------
+    // 23. Execute_Yield_DeleteFails_StillCancelsInnerElection
+    //     Delete throws → job does NOT throw → liveness stamped (election cancel
+    //     fires even on delete failure — the warning path in YieldLeadershipAsync).
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_Yield_DeleteFails_StillCancelsInnerElection()
+    {
+        // Arrange: delete throws a 500 Internal Server Error
+        SetupLeaseResponse(FreshLease(renewTime: DateTime.UtcNow));
+        SetupDeleteThrows(MakeHttpException(HttpStatusCode.InternalServerError));
+
+        var job = MakeNonPreferredJobWithElection(
+            out _,
+            out var leaseElection);
+
+        try
+        {
+            SetIsLeader(leaseElection, true);
+
+            // Act: should NOT propagate the exception
+            await job.Execute(MakeContext());
+
+            // Assert: delete was attempted
+            await _mockCoordV1.Received(1)
+                .DeleteNamespacedLeaseWithHttpMessagesAsync(
+                    Arg.Is<string>(n => n == LeaseName),
+                    Arg.Is<string>(ns => ns == Namespace),
+                    Arg.Any<V1DeleteOptions>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<int?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<bool?>(),
+                    Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<string>>>(),
+                    Arg.Any<CancellationToken>());
+
+            // Assert: job completed normally (liveness stamp fired — delete failure is swallowed)
+            _mockLiveness.Received(1).Stamp(JobKeyName);
         }
         finally
         {
