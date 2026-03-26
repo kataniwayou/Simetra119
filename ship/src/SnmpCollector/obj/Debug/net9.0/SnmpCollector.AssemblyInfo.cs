@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SnmpCollector")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+85ce803759f426dd77774f90b343706201c5e135")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+77ee5f7b0b1d776582b806c68494834d074c3947")]
 [assembly: System.Reflection.AssemblyProductAttribute("SnmpCollector")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SnmpCollector")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

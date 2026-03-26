@@ -40,10 +40,17 @@ public sealed class SnmpConsoleFormatter : ConsoleFormatter
 
     private readonly IOptionsMonitor<SnmpConsoleFormatterOptions> _optionsMonitor;
 
-    // Lazily resolved DI services (resolved on first Write call)
-    private ICorrelationService? _correlationService;
-    private ILeaderElection? _leaderElection;
-    private bool _servicesResolved;
+    // Lazily resolved DI services (resolved on first Write call).
+    // Volatile for cross-thread visibility.
+    private volatile ICorrelationService? _correlationService;
+    private volatile ILeaderElection? _leaderElection;
+    private volatile bool _servicesResolved;
+
+    // Guard against reentrant resolution: if resolving ILeaderElection triggers a log
+    // (e.g. PreferredLeaderService constructor logs during K8sLeaseElection construction),
+    // the Write callback fires recursively. This flag prevents deadlock.
+    [ThreadStatic]
+    private static bool _resolving;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SnmpConsoleFormatter"/> class.
@@ -110,16 +117,28 @@ public sealed class SnmpConsoleFormatter : ConsoleFormatter
     /// </summary>
     private void EnsureServicesResolved()
     {
-        if (_servicesResolved)
+        if (_servicesResolved || _resolving)
             return;
 
         var sp = _optionsMonitor.CurrentValue.ServiceProvider;
         if (sp is null)
             return;
 
-        _correlationService = sp.GetService<ICorrelationService>();
-        _leaderElection = sp.GetService<ILeaderElection>();  // Phase 7: dynamic role
-        _servicesResolved = true;
+        _resolving = true;
+        try
+        {
+            _correlationService = sp.GetService<ICorrelationService>();
+            _leaderElection = sp.GetService<ILeaderElection>();
+            _servicesResolved = true;
+        }
+        catch
+        {
+            // Services not yet available — will retry on next Write.
+        }
+        finally
+        {
+            _resolving = false;
+        }
     }
 
     /// <summary>

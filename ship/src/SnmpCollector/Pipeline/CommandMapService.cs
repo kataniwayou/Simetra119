@@ -27,10 +27,6 @@ public sealed class CommandMapService : ICommandMapService
         _logger = logger;
         _forwardMap = initialEntries.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         _reverseMap = BuildReverseMap(_forwardMap);
-
-        _logger.LogInformation(
-            "CommandMapService initialized with {EntryCount} entries",
-            _forwardMap.Count);
     }
 
     /// <inheritdoc />

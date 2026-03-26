@@ -50,10 +50,10 @@ builder.Services.AddSnmpHealthChecks();     // Phase 8: health probe checks
 builder.Services.AddSnmpLifecycle();        // Phase 8: MUST BE LAST (SHUT-01)
 
 var app = builder.Build();
-
 // Seed first correlation ID before any Quartz job fires (before Run starts hosted services)
 var correlationService = app.Services.GetRequiredService<ICorrelationService>();
 correlationService.SetCorrelationId(Guid.NewGuid().ToString("N"));
+
 
 // Phase 57: Deterministic watcher startup order (K8s mode only).
 // Sequential initial load ensures tenant validation runs against fully populated registries.

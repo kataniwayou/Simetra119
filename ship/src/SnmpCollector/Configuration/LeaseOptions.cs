@@ -35,4 +35,12 @@ public sealed class LeaseOptions
     /// </summary>
     [Range(1, 600)]
     public int DurationSeconds { get; set; } = 15;
+
+    /// <summary>
+    /// Optional. When set, the pod whose PHYSICAL_HOSTNAME matches this value
+    /// is treated as the preferred leader candidate.
+    /// Feature is disabled when absent or empty — backward compatible.
+    /// Derived heartbeat lease name: "{Name}-preferred".
+    /// </summary>
+    public string? PreferredNode { get; set; }
 }

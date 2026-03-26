@@ -36,10 +36,6 @@ public sealed class OidMapService : IOidMapService
         _map = BuildFrozenMap(seeded);
         _metricNames = _map.Values.ToFrozenSet();
         _reverseMap = BuildReverseMap(_map);
-
-        _logger.LogInformation(
-            "OidMapService initialized with {EntryCount} entries",
-            _map.Count);
     }
 
     /// <inheritdoc />
@@ -100,7 +96,7 @@ public sealed class OidMapService : IOidMapService
     private static Dictionary<string, string> MergeWithHeartbeatSeed(Dictionary<string, string> entries)
     {
         var merged = new Dictionary<string, string>(entries, StringComparer.OrdinalIgnoreCase);
-        merged[HeartbeatJobOptions.HeartbeatOid] = "Heartbeat";
+        merged[SnmpHeartbeatJobOptions.HeartbeatOid] = "Heartbeat";
         return merged;
     }
 

@@ -1,4 +1,10 @@
 *.tar
+*.tar.zst
+*.iso
+*.msi
 src/SnmpCollector/bin/
 src/SnmpCollector/obj/
 src/SnmpCollector/.vs/
+infra/
+tools/
+temp-test/

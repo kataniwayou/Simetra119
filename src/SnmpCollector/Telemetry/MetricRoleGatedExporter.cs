@@ -18,13 +18,13 @@ public sealed class MetricRoleGatedExporter : BaseExporter<Metric>
         typeof(BaseExporter<Metric>).GetProperty("ParentProvider")!;
 
     private readonly BaseExporter<Metric> _inner;
-    private readonly ILeaderElection _leaderElection;
+    private readonly Lazy<ILeaderElection> _leaderElection;
     private readonly string _gatedMeterName;
     private bool _parentProviderPropagated;
 
     public MetricRoleGatedExporter(
         BaseExporter<Metric> inner,
-        ILeaderElection leaderElection,
+        Lazy<ILeaderElection> leaderElection,
         string gatedMeterName)
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
@@ -43,7 +43,7 @@ public sealed class MetricRoleGatedExporter : BaseExporter<Metric>
             _parentProviderPropagated = true;
         }
 
-        if (_leaderElection.IsLeader)
+        if (_leaderElection.Value.IsLeader)
         {
             // Leader: export everything (business + pipeline + runtime)
             return _inner.Export(batch);

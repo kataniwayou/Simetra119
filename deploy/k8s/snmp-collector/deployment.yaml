@@ -17,13 +17,13 @@ spec:
     spec:
       serviceAccountName: simetra-sa
       terminationGracePeriodSeconds: 30
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector:
-              matchLabels:
-                app: snmp-collector
-            topologyKey: kubernetes.io/hostname
+      # affinity:
+      #   podAntiAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution:
+      #     - labelSelector:
+      #         matchLabels:
+      #           app: snmp-collector
+      #       topologyKey: kubernetes.io/hostname
       containers:
       - name: snmp-collector
         image: snmp-collector:local

@@ -29,7 +29,7 @@ public sealed class PollSchedulerStartupService : IHostedService
     {
         var devices = _registry.AllDevices;
         var pollJobCount = devices.Sum(d => d.PollGroups.Count);
-        var threadPoolSize = pollJobCount + 2; // +1 CorrelationJob, +1 HeartbeatJob
+        var threadPoolSize = pollJobCount + 2; // +1 CorrelationJob, +1 SnmpHeartbeatJob
 
         _logger.LogInformation(
             "Registered {N} poll jobs across {M} devices, thread pool size: {T}",
