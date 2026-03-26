@@ -24,13 +24,19 @@ namespace SnmpCollector.Jobs;
 /// <see cref="PreferredLeaderService.IsPreferredStampFresh"/> based on stamp age.
 /// </para>
 /// <para>
+/// Gate 2 / voluntary yield (Phase 88, ELEC-02): when a non-preferred pod is leader and
+/// the preferred pod's heartbeat stamp becomes fresh, the non-preferred pod deletes the
+/// leadership lease and calls <see cref="K8sLeaseElection.CancelInnerElection"/> to allow
+/// the preferred pod to acquire through the normal LeaderElector flow.
+/// </para>
+/// <para>
 /// Freshness threshold: <c>LeaseOptions.DurationSeconds + 5s</c> (hardcoded clock-skew tolerance).
 /// 404 response = stale (lease not yet created or already expired).
 /// Transient K8s API errors keep the last known value to avoid flapping.
 /// </para>
 /// <para>
 /// Execute ordering: write-before-read — preferred pod stamps, then reads its own stamp.
-/// TTL expiry handles shutdown; no explicit lease delete is performed.
+/// TTL expiry handles shutdown; no explicit lease delete is performed on the heartbeat lease.
 /// </para>
 /// </summary>
 [DisallowConcurrentExecution]
@@ -40,6 +46,7 @@ public sealed class PreferredHeartbeatJob : IJob
     private readonly PreferredLeaderService _preferredLeaderService;
     private readonly LeaseOptions _leaseOptions;
     private readonly ILivenessVectorService _liveness;
+    private readonly K8sLeaseElection? _leaseElection;
     private readonly ILogger<PreferredHeartbeatJob> _logger;
 
     // Writer path fields
@@ -54,7 +61,8 @@ public sealed class PreferredHeartbeatJob : IJob
         IOptions<PodIdentityOptions> podIdentityOptions,
         IHostApplicationLifetime lifetime,
         ILivenessVectorService liveness,
-        ILogger<PreferredHeartbeatJob> logger)
+        ILogger<PreferredHeartbeatJob> logger,
+        K8sLeaseElection? leaseElection = null)
     {
         _kubeClient = kubeClient;
         _preferredLeaderService = preferredLeaderService;
@@ -62,6 +70,7 @@ public sealed class PreferredHeartbeatJob : IJob
         _podIdentity = podIdentityOptions.Value.PodIdentity ?? Environment.MachineName;
         _liveness = liveness;
         _logger = logger;
+        _leaseElection = leaseElection;
 
         // Set _isSchedulerReady once the host has fully started (all hosted services running).
         // ApplicationStarted is a CancellationToken — use Register, not += event subscription.
