@@ -20,7 +20,7 @@
 - ✅ **v2.4 Tenant Vector Metrics** - Phases 72-75 (shipped 2026-03-23)
 - ✅ **v2.5 Tenant Metrics Approach Modification** - Phases 76-81 (shipped 2026-03-23)
 - ✅ **v2.6 E2E Manual Tenant Simulation Suite** - Phases 82-83 (shipped 2026-03-24)
-- 🚧 **v3.0 Preferred Leader Election** - Phases 84-89 (in progress)
+- ✅ **v3.0 Preferred Leader Election** - Phases 84-89 (shipped 2026-03-26)
 
 ## Phases
 
@@ -146,7 +146,7 @@ See `.planning/milestones/v2.6-ROADMAP.md` for details.
 
 ---
 
-### v3.0 Preferred Leader Election (In Progress)
+### ✅ v3.0 Preferred Leader Election (Complete)
 
 **Milestone Goal:** Pod co-located with SNMP devices gets leadership priority for lowest-latency monitoring, with full HA preserved when the preferred pod is absent.
 
@@ -233,8 +233,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 89-01-PLAN.md — Structured INFO logs at all 4 election decision points (OBS-01)
-- [ ] 89-02-PLAN.md — Pod anti-affinity rule and PHYSICAL_HOSTNAME verification (DEP-01, DEP-02)
+- [x] 89-01-PLAN.md — Structured INFO logs at all 4 election decision points (OBS-01)
+- [x] 89-02-PLAN.md — Pod anti-affinity rule and PHYSICAL_HOSTNAME verification (DEP-01, DEP-02)
 
 ---
 
@@ -306,8 +306,8 @@ Plans:
 | 86. PreferredHeartbeatService Writer Path | v3.0 | 2/2 | Complete | 2026-03-26 |
 | 87. Election Gate 1 — Backoff Before Acquire | v3.0 | 2/2 | Complete | 2026-03-26 |
 | 88. Election Gate 2 — Voluntary Yield | v3.0 | 2/2 | Complete | 2026-03-26 |
-| 89. Observability and Deployment Wiring | v3.0 | 0/2 | Not started | - |
+| 89. Observability and Deployment Wiring | v3.0 | 2/2 | Complete | 2026-03-26 |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-26 — Phase 89 planned*
+*Last updated: 2026-03-26 — Phase 89 complete — v3.0 MILESTONE COMPLETE*
