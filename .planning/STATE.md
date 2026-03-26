@@ -72,9 +72,10 @@ None.
 | 094 | Skip PreferredHeartbeatJob when PreferredNode empty | 2026-03-26 | 14b1f08 | [094-skip-heartbeat-job-when-preferred-node-empty](./quick/094-skip-heartbeat-job-when-preferred-node-empty/) |
 | 095 | Remove singleton constructor logging (DI deadlock prevention) | 2026-03-26 | 68e0e3c | [095-remove-singleton-constructor-logging](./quick/095-remove-singleton-constructor-logging/) |
 | 096 | Add k8s.namespace.name OTel resource attribute and Grafana Namespace columns | 2026-03-26 | 3ea1689 | [096-add-namespace-otel-resource-attribute](./quick/096-add-namespace-otel-resource-attribute/) |
+| 097 | Fix duplicate correlationId and add namespace to console logs | 2026-03-26 | 62b63c9 | [097-fix-duplicate-correlationid-add-namespace](./quick/097-fix-duplicate-correlationid-add-namespace/) |
 
 ## Session Continuity
 
 Last session: 2026-03-26
-Stopped at: Completed quick-096 — add namespace OTel resource attribute
+Stopped at: Completed quick-097 — fix duplicate correlationId and add namespace to console logs
 Resume file: None
