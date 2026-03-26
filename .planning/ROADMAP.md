@@ -219,8 +219,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 88-01-PLAN.md — Yield condition check and YieldLeadershipAsync helper in PreferredHeartbeatJob
-- [ ] 88-02-PLAN.md — Unit tests for yield path (positive, negative conditions, delete failure)
+- [x] 88-01-PLAN.md — Yield condition check and YieldLeadershipAsync helper in PreferredHeartbeatJob
+- [x] 88-02-PLAN.md — Unit tests for yield path (positive, negative conditions, delete failure)
 
 #### Phase 89: Observability and Deployment Wiring
 **Goal**: Every preferred-election decision is visible in logs, the deployment manifest enforces one-pod-per-node topology, and the node-name env var is correctly wired so the feature activates in production
@@ -304,9 +304,9 @@ Plans:
 | 85. PreferredHeartbeatService Reader Path | v3.0 | 2/2 | Complete | 2026-03-26 |
 | 86. PreferredHeartbeatService Writer Path | v3.0 | 2/2 | Complete | 2026-03-26 |
 | 87. Election Gate 1 — Backoff Before Acquire | v3.0 | 2/2 | Complete | 2026-03-26 |
-| 88. Election Gate 2 — Voluntary Yield | v3.0 | 0/2 | In progress | - |
+| 88. Election Gate 2 — Voluntary Yield | v3.0 | 2/2 | Complete | 2026-03-26 |
 | 89. Observability and Deployment Wiring | v3.0 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-03-10*
-*Last updated: 2026-03-26 — Phase 88 planned (2 plans, 2 waves)
+*Last updated: 2026-03-26 — Phase 88 complete*
