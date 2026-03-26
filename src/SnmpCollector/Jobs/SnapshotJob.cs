@@ -232,7 +232,7 @@ public sealed class SnapshotJob : IJob
         // Compute stalePercent here (used in summary log and COMPUTE PERCENTAGES below)
         var stalePercent = staleTotal == 0 ? 0.0 : staleCount * 100.0 / staleTotal;
 
-        _logger.LogInformation(
+        _logger.LogDebug(
             "Tenant {TenantId} priority={Priority} state={State} stale={StaleCount}/{StaleTotal} ({StalePercent:F1}%)",
             tenant.Id, tenant.Priority, state, staleCount, staleTotal, stalePercent);
 

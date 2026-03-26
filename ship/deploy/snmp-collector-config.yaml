@@ -38,7 +38,7 @@ data:
       },
       "Logging": {
         "LogLevel": {
-          "Default": "Debug"
+          "Default": "Information"
         },
         "EnableConsole": true
       }
