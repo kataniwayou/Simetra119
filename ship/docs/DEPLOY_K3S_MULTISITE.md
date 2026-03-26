@@ -611,13 +611,34 @@ Example for Site B:
 > `PreferredNode` must match the Ubuntu server name from Part 3.3 (case-sensitive).
 > `SnmpListener.Port` must be unique per site (10162, 10163, etc.).
 
-### 7.4 Configure simetra-devices.yaml
+### 7.4 Configure site-specific devices and tenants
 
-Edit `~/deploy-{NAMESPACE}/simetra-devices.yaml` (e.g. `~/deploy-simetra-site-a/simetra-devices.yaml`)
-with this site's devices only.
+Each site has its own SNMP hardware with different IP addresses. The device and tenant
+configurations must reflect the actual devices at each site.
 
-> Site A devices go in `simetra-site-a`. Site B devices go in `simetra-site-b`.
-> Each site monitors only its own SNMP hardware.
+**`simetra-devices.yaml`** — Edit `~/deploy-{NAMESPACE}/simetra-devices.yaml`
+(e.g. `~/deploy-simetra-site-a/simetra-devices.yaml`) with this site's devices only.
+
+- Each device entry has a unique IP address pointing to hardware at this site
+- Device names should include site context if the same device type exists at multiple sites
+  (e.g. `Simetra.OBP-SiteA` vs `Simetra.OBP-SiteB`)
+- Do NOT include devices from other sites — each namespace monitors only its own hardware
+
+**`simetra-tenants.yaml`** — Edit `~/deploy-{NAMESPACE}/simetra-tenants.yaml`
+(e.g. `~/deploy-simetra-site-a/simetra-tenants.yaml`) with this site's tenant definitions.
+
+- Tenants reference device IPs and OIDs specific to this site's hardware
+- Tenant IDs should include site context to distinguish them in Grafana
+  (e.g. `tenant-0-site-a` vs `tenant-0-site-b`)
+- Thresholds and command slots may differ per site based on the physical equipment
+
+**`simetra-oid-metric-map.yaml`** and **`simetra-oid-command-map.yaml`** — typically
+identical across sites (same device types use the same OIDs). Only customize if sites
+have different device models with different OID trees.
+
+> Each site is an independent monitoring domain. Devices, tenants, thresholds, and
+> commands are all scoped to the site namespace. Metrics appear in Grafana with
+> `k8s_namespace_name` distinguishing which site produced them.
 
 ### 7.5 Apply ConfigMaps
 
