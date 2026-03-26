@@ -71,6 +71,7 @@ public static class ServiceCollectionExtensions
         // --- Metrics ---
         // No WithTracing block (LOG-07: no distributed traces in SnmpCollector).
         var podName = Environment.GetEnvironmentVariable("HOSTNAME") ?? Environment.MachineName;
+        var podNamespace = Environment.GetEnvironmentVariable("POD_NAMESPACE") ?? "unknown";
 
         builder.Services.AddOpenTelemetry()
             .ConfigureResource(resource => resource
@@ -79,7 +80,8 @@ public static class ServiceCollectionExtensions
                     serviceInstanceId: Environment.GetEnvironmentVariable("PHYSICAL_HOSTNAME")
                         ?? Environment.MachineName)
                 .AddAttributes([
-                    new KeyValuePair<string, object>("k8s.pod.name", podName)
+                    new KeyValuePair<string, object>("k8s.pod.name", podName),
+                    new KeyValuePair<string, object>("k8s.namespace.name", podNamespace)
                 ]))
             .WithMetrics(metrics =>
             {
@@ -93,13 +95,17 @@ public static class ServiceCollectionExtensions
                 // business metrics (LeaderMeterName) behind ILeaderElection.IsLeader.
                 metrics.AddReader(sp =>
                 {
-                    var leaderElection = sp.GetRequiredService<ILeaderElection>();
+                    // CRITICAL: Resolve ILeaderElection lazily to avoid DI deadlock during Build().
+                    // MeterProvider is created during builder.Build(), which holds the service provider
+                    // construction lock. Eagerly resolving K8sLeaseElection here causes a deadlock when
+                    // PreferredNode is configured (K8sLeaseElection -> PreferredLeaderService -> IOptions<LeaseOptions>).
+                    var lazyLeader = new Lazy<ILeaderElection>(() => sp.GetRequiredService<ILeaderElection>());
                     var otlpExporter = new OtlpMetricExporter(new OtlpExporterOptions
                     {
                         Endpoint = new Uri(endpoint)
                     });
                     var roleGated = new MetricRoleGatedExporter(
-                        otlpExporter, leaderElection, TelemetryConstants.LeaderMeterName);
+                        otlpExporter, lazyLeader, TelemetryConstants.LeaderMeterName);
                     // Cumulative temporality required: Prometheus rate() needs monotonically
                     // increasing counter values. Delta temporality sends per-interval deltas
                     // which rate() cannot compute over.
@@ -140,7 +146,8 @@ public static class ServiceCollectionExtensions
                         serviceInstanceId: Environment.GetEnvironmentVariable("PHYSICAL_HOSTNAME")
                             ?? Environment.MachineName)
                     .AddAttributes([
-                        new KeyValuePair<string, object>("k8s.pod.name", podName)
+                        new KeyValuePair<string, object>("k8s.pod.name", podName),
+                        new KeyValuePair<string, object>("k8s.namespace.name", podNamespace)
                     ]));
             logging.AddOtlpExporter(o =>
             {
@@ -149,12 +156,11 @@ public static class ServiceCollectionExtensions
             logging.AddProcessor(sp =>
             {
                 var hostName = Environment.GetEnvironmentVariable("PHYSICAL_HOSTNAME") ?? Environment.MachineName;
-                var correlationService = sp.GetRequiredService<ICorrelationService>();
-                var leaderElection = sp.GetRequiredService<ILeaderElection>();
-                return new SnmpLogEnrichmentProcessor(
-                    correlationService,
-                    hostName,
-                    () => leaderElection.CurrentRole);
+                // Pass IServiceProvider for fully lazy resolution. Dependencies (ILeaderElection,
+                // ICorrelationService) are resolved on first OnEnd call, with reentrancy guard to
+                // prevent deadlock when PreferredLeaderService logs during its own construction
+                // (which is in the ILeaderElection -> K8sLeaseElection dependency chain).
+                return new SnmpLogEnrichmentProcessor(sp, hostName);
             });
         });
 
@@ -204,8 +210,8 @@ public static class ServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        services.AddOptions<HeartbeatJobOptions>()
-            .Bind(configuration.GetSection(HeartbeatJobOptions.SectionName))
+        services.AddOptions<SnmpHeartbeatJobOptions>()
+            .Bind(configuration.GetSection(SnmpHeartbeatJobOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
@@ -213,6 +219,20 @@ public static class ServiceCollectionExtensions
             .Bind(configuration.GetSection(SnapshotJobOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
+
+        // Only validate PreferredHeartbeatJobOptions when the preferred-leader feature is active.
+        // Reading PreferredNode with GetValue<string> avoids binding a full LeaseOptions object here
+        // (LeaseOptions has required properties that would throw if the section is absent).
+        var leaseSection = configuration.GetSection(LeaseOptions.SectionName);
+        var preferredNodeCfg = leaseSection.GetValue<string>(nameof(LeaseOptions.PreferredNode));
+        if (k8s.KubernetesClientConfiguration.IsInCluster()
+            && !string.IsNullOrWhiteSpace(preferredNodeCfg))
+        {
+            services.AddOptions<PreferredHeartbeatJobOptions>()
+                .Bind(configuration.GetSection(PreferredHeartbeatJobOptions.SectionName))
+                .ValidateDataAnnotations()
+                .ValidateOnStart();
+        }
 
         // Custom IValidateOptions for cross-field validation (Phase 1)
         services.AddSingleton<IValidateOptions<PodIdentityOptions>, PodIdentityOptionsValidator>();
@@ -241,6 +261,12 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<K8sLeaseElection>());
             services.AddHostedService(sp => sp.GetRequiredService<K8sLeaseElection>());
 
+            // Phase 84: Preferred leader identity resolution (stub — no background loop until Phase 85).
+            // Concrete-first pattern: same singleton serves both PreferredLeaderService and IPreferredStampReader.
+            services.AddSingleton<PreferredLeaderService>();
+            services.AddSingleton<IPreferredStampReader>(
+                sp => sp.GetRequiredService<PreferredLeaderService>());
+
             // Phase 15: Independent ConfigMap watchers for OID maps and device config
             services.AddSingleton<OidMapWatcherService>();
             services.AddHostedService(sp => sp.GetRequiredService<OidMapWatcherService>());
@@ -260,6 +286,9 @@ public static class ServiceCollectionExtensions
         {
             // Local dev: AlwaysLeaderElection (IsLeader=true, no K8s dependency).
             services.AddSingleton<ILeaderElection, AlwaysLeaderElection>();
+
+            // Phase 84: Preferred leader feature disabled in local dev.
+            services.AddSingleton<IPreferredStampReader, NullPreferredStampReader>();
         }
 
         // Phase 7: PodIdentityOptions.PodIdentity defaults to HOSTNAME env var (K8s pod name),
@@ -444,7 +473,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Registers <see cref="ICorrelationService"/> and <see cref="IDeviceUnreachabilityTracker"/>
     /// as singletons, the Quartz.NET in-memory scheduler with auto-scaled thread pool,
-    /// <see cref="CorrelationJob"/> with a simple interval trigger, <see cref="HeartbeatJob"/>
+    /// <see cref="CorrelationJob"/> with a simple interval trigger, <see cref="SnmpHeartbeatJob"/>
     /// with a configurable interval, and one <see cref="MetricPollJob"/> per device/poll-group
     /// pair with correct JobDataMap.
     /// <para>
@@ -470,8 +499,8 @@ public static class ServiceCollectionExtensions
         var correlationOptions = new CorrelationJobOptions();
         configuration.GetSection(CorrelationJobOptions.SectionName).Bind(correlationOptions);
 
-        var heartbeatOptions = new HeartbeatJobOptions();
-        configuration.GetSection(HeartbeatJobOptions.SectionName).Bind(heartbeatOptions);
+        var heartbeatOptions = new SnmpHeartbeatJobOptions();
+        configuration.GetSection(SnmpHeartbeatJobOptions.SectionName).Bind(heartbeatOptions);
 
         var snapshotOptions = new SnapshotJobOptions();
         configuration.GetSection(SnapshotJobOptions.SectionName).Bind(snapshotOptions);
@@ -486,9 +515,19 @@ public static class ServiceCollectionExtensions
         // Populated here during Quartz configuration, then registered as singleton.
         var intervalRegistry = new JobIntervalRegistry();
 
+        // Preferred-leader feature is active only when running in K8s AND PreferredNode is configured.
+        // Gate both the initialJobCount increment and the Quartz registration on this flag.
+        var preferredNodeScheduling = configuration.GetSection(LeaseOptions.SectionName)
+            .GetValue<string>(nameof(LeaseOptions.PreferredNode));
+        var preferredFeatureActive = k8s.KubernetesClientConfiguration.IsInCluster()
+            && !string.IsNullOrWhiteSpace(preferredNodeScheduling);
+
         // Thread pool: generous ceiling to accommodate dynamic device additions at runtime.
-        // Static jobs (CorrelationJob + HeartbeatJob + SnapshotJob) = 3, plus headroom for poll jobs.
-        var initialJobCount = 3; // CorrelationJob + HeartbeatJob + SnapshotJob
+        // Static jobs (CorrelationJob + SnmpHeartbeatJob + SnapshotJob) = 3, plus headroom for poll jobs.
+        // PreferredHeartbeatJob only registers when the preferred-leader feature is active.
+        var initialJobCount = 3; // CorrelationJob + SnmpHeartbeatJob + SnapshotJob
+        if (preferredFeatureActive)
+            initialJobCount++; // + PreferredHeartbeatJob (only when feature is configured)
         foreach (var device in devicesOptions.Devices)
             initialJobCount += device.Polls.Count;
         var threadPoolSize = Math.Max(initialJobCount, 50);
@@ -517,19 +556,19 @@ public static class ServiceCollectionExtensions
 
             intervalRegistry.Register("correlation", correlationOptions.IntervalSeconds);
 
-            // HeartbeatJob: sends loopback SNMP trap to prove scheduler + pipeline alive.
-            var heartbeatKey = new JobKey("heartbeat");
-            q.AddJob<HeartbeatJob>(j => j.WithIdentity(heartbeatKey));
+            // SnmpHeartbeatJob: sends loopback SNMP trap to prove scheduler + pipeline alive.
+            var heartbeatKey = new JobKey("snmp-heartbeat");
+            q.AddJob<SnmpHeartbeatJob>(j => j.WithIdentity(heartbeatKey));
             q.AddTrigger(t => t
                 .ForJob(heartbeatKey)
-                .WithIdentity("heartbeat-trigger")
+                .WithIdentity("snmp-heartbeat-trigger")
                 .StartNow()
                 .WithSimpleSchedule(s => s
                     .WithIntervalInSeconds(heartbeatOptions.IntervalSeconds)
                     .RepeatForever()
                     .WithMisfireHandlingInstructionNextWithRemainingCount()));
 
-            intervalRegistry.Register("heartbeat", heartbeatOptions.IntervalSeconds);
+            intervalRegistry.Register("snmp-heartbeat", heartbeatOptions.IntervalSeconds);
 
             // SnapshotJob: evaluates tenant priority groups on a fixed interval.
             var snapshotKey = new JobKey("snapshot");
@@ -544,6 +583,27 @@ public static class ServiceCollectionExtensions
                     .WithMisfireHandlingInstructionNextWithRemainingCount()));
 
             intervalRegistry.Register("snapshot", snapshotOptions.IntervalSeconds);
+
+            // Phase 85: PreferredHeartbeatJob — reads heartbeat lease to maintain IsPreferredStampFresh.
+            // Only registered when preferred-leader feature is active (K8s + PreferredNode configured).
+            // When PreferredNode is empty the job would fire every tick and hit a 404 on the K8s API.
+            if (preferredFeatureActive)
+            {
+                var preferredHbOptions = new PreferredHeartbeatJobOptions();
+                configuration.GetSection(PreferredHeartbeatJobOptions.SectionName).Bind(preferredHbOptions);
+
+                var preferredHbKey = new JobKey("preferred-heartbeat");
+                q.AddJob<PreferredHeartbeatJob>(j => j.WithIdentity(preferredHbKey));
+                q.AddTrigger(t => t
+                    .ForJob(preferredHbKey)
+                    .WithIdentity("preferred-heartbeat-trigger")
+                    .StartNow()
+                    .WithSimpleSchedule(s => s
+                        .WithIntervalInSeconds(preferredHbOptions.IntervalSeconds)
+                        .RepeatForever()
+                        .WithMisfireHandlingInstructionNextWithRemainingCount()));
+                intervalRegistry.Register("preferred-heartbeat", preferredHbOptions.IntervalSeconds);
+            }
 
             // Phase 6: MetricPollJob per device per poll group.
             // Job keys use raw config address (DNS or IP) so operators can correlate to ConfigMap.

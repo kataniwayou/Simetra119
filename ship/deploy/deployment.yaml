@@ -17,6 +17,13 @@ spec:
     spec:
       serviceAccountName: simetra-sa
       terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: snmp-collector
+            topologyKey: kubernetes.io/hostname
       containers:
       - name: snmp-collector
         image: snmp-collector:local
@@ -39,6 +46,10 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         - name: CONFIG_DIRECTORY
           value: /app/config
         resources:

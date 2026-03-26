@@ -71,6 +71,7 @@ public static class ServiceCollectionExtensions
         // --- Metrics ---
         // No WithTracing block (LOG-07: no distributed traces in SnmpCollector).
         var podName = Environment.GetEnvironmentVariable("HOSTNAME") ?? Environment.MachineName;
+        var podNamespace = Environment.GetEnvironmentVariable("POD_NAMESPACE") ?? "unknown";
 
         builder.Services.AddOpenTelemetry()
             .ConfigureResource(resource => resource
@@ -79,7 +80,8 @@ public static class ServiceCollectionExtensions
                     serviceInstanceId: Environment.GetEnvironmentVariable("PHYSICAL_HOSTNAME")
                         ?? Environment.MachineName)
                 .AddAttributes([
-                    new KeyValuePair<string, object>("k8s.pod.name", podName)
+                    new KeyValuePair<string, object>("k8s.pod.name", podName),
+                    new KeyValuePair<string, object>("k8s.namespace.name", podNamespace)
                 ]))
             .WithMetrics(metrics =>
             {
@@ -93,13 +95,17 @@ public static class ServiceCollectionExtensions
                 // business metrics (LeaderMeterName) behind ILeaderElection.IsLeader.
                 metrics.AddReader(sp =>
                 {
-                    var leaderElection = sp.GetRequiredService<ILeaderElection>();
+                    // CRITICAL: Resolve ILeaderElection lazily to avoid DI deadlock during Build().
+                    // MeterProvider is created during builder.Build(), which holds the service provider
+                    // construction lock. Eagerly resolving K8sLeaseElection here causes a deadlock when
+                    // PreferredNode is configured (K8sLeaseElection -> PreferredLeaderService -> IOptions<LeaseOptions>).
+                    var lazyLeader = new Lazy<ILeaderElection>(() => sp.GetRequiredService<ILeaderElection>());
                     var otlpExporter = new OtlpMetricExporter(new OtlpExporterOptions
                     {
                         Endpoint = new Uri(endpoint)
                     });
                     var roleGated = new MetricRoleGatedExporter(
-                        otlpExporter, leaderElection, TelemetryConstants.LeaderMeterName);
+                        otlpExporter, lazyLeader, TelemetryConstants.LeaderMeterName);
                     // Cumulative temporality required: Prometheus rate() needs monotonically
                     // increasing counter values. Delta temporality sends per-interval deltas
                     // which rate() cannot compute over.
@@ -140,7 +146,8 @@ public static class ServiceCollectionExtensions
                         serviceInstanceId: Environment.GetEnvironmentVariable("PHYSICAL_HOSTNAME")
                             ?? Environment.MachineName)
                     .AddAttributes([
-                        new KeyValuePair<string, object>("k8s.pod.name", podName)
+                        new KeyValuePair<string, object>("k8s.pod.name", podName),
+                        new KeyValuePair<string, object>("k8s.namespace.name", podNamespace)
                     ]));
             logging.AddOtlpExporter(o =>
             {
@@ -149,12 +156,11 @@ public static class ServiceCollectionExtensions
             logging.AddProcessor(sp =>
             {
                 var hostName = Environment.GetEnvironmentVariable("PHYSICAL_HOSTNAME") ?? Environment.MachineName;
-                var correlationService = sp.GetRequiredService<ICorrelationService>();
-                var leaderElection = sp.GetRequiredService<ILeaderElection>();
-                return new SnmpLogEnrichmentProcessor(
-                    correlationService,
-                    hostName,
-                    () => leaderElection.CurrentRole);
+                // Pass IServiceProvider for fully lazy resolution. Dependencies (ILeaderElection,
+                // ICorrelationService) are resolved on first OnEnd call, with reentrancy guard to
+                // prevent deadlock when PreferredLeaderService logs during its own construction
+                // (which is in the ILeaderElection -> K8sLeaseElection dependency chain).
+                return new SnmpLogEnrichmentProcessor(sp, hostName);
             });
         });
 
