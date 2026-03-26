@@ -25,11 +25,11 @@ public sealed class SnmpConsoleFormatterOptions : ConsoleFormatterOptions
 /// Custom plain-text console formatter that prefixes every log line with hostname, role, and
 /// correlationId context. Produces output in the format:
 /// <code>
-/// {timestamp} [{level}] [{hostname}|{podName}|{role}|{globalId}|{operationId}] {category} {message}
+/// {timestamp} [{level}] [{hostname}|{podName}|{namespace}|{role}|{correlationId}] {category} {message}
 /// </code>
 /// Replaces JSON structured console output with human-readable plain text suitable for
-/// local development while retaining operational context. Shows BOTH global and operation
-/// correlation IDs (operationId shown only when set in async context).
+/// local development while retaining operational context. The operationId is appended only
+/// when it differs from globalId to avoid duplicate GUIDs in the prefix.
 /// </summary>
 public sealed class SnmpConsoleFormatter : ConsoleFormatter
 {
@@ -79,6 +79,7 @@ public sealed class SnmpConsoleFormatter : ConsoleFormatter
         var level = GetLevelAbbreviation(logEntry.LogLevel);
         var hostname = Environment.GetEnvironmentVariable("PHYSICAL_HOSTNAME") ?? Environment.MachineName;
         var podName = Environment.GetEnvironmentVariable("HOSTNAME") ?? Environment.MachineName;
+        var podNamespace = Environment.GetEnvironmentVariable("POD_NAMESPACE") ?? "unknown";
         var role = _leaderElection?.CurrentRole ?? "unknown";
         var globalId = _correlationService?.CurrentCorrelationId ?? "none";
         var operationId = _correlationService?.OperationCorrelationId;
@@ -92,10 +93,12 @@ public sealed class SnmpConsoleFormatter : ConsoleFormatter
         textWriter.Write('|');
         textWriter.Write(podName);
         textWriter.Write('|');
+        textWriter.Write(podNamespace);
+        textWriter.Write('|');
         textWriter.Write(role);
         textWriter.Write('|');
         textWriter.Write(globalId);
-        if (operationId is not null)
+        if (operationId is not null && !string.Equals(operationId, globalId, StringComparison.Ordinal))
         {
             textWriter.Write('|');
             textWriter.Write(operationId);
