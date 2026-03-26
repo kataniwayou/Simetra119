@@ -69,9 +69,10 @@ None.
 | 091 | Add evaluation pipeline logging to SnapshotJob | 2026-03-24 | dce2a00 | [091-snapshot-evaluation-logging](./quick/091-snapshot-evaluation-logging/) |
 | 092 | Startup probe device check and watcher naming | 2026-03-25 | 96faff7 | [092-startup-probe-device-check-and-watcher-naming](./quick/092-startup-probe-device-check-and-watcher-naming/) |
 | 093 | Rename HeartbeatJob to SnmpHeartbeatJob | 2026-03-26 | cf77510 | [093-rename-heartbeatjob-to-snmpheartbeatjob](./quick/093-rename-heartbeatjob-to-snmpheartbeatjob/) |
+| 094 | Skip PreferredHeartbeatJob when PreferredNode empty | 2026-03-26 | 14b1f08 | [094-skip-heartbeat-job-when-preferred-node-empty](./quick/094-skip-heartbeat-job-when-preferred-node-empty/) |
 
 ## Session Continuity
 
 Last session: 2026-03-26
-Stopped at: Completed quick-093 — renamed HeartbeatJob to SnmpHeartbeatJob
+Stopped at: Completed quick-094 — gate PreferredHeartbeatJob on PreferredNode being non-empty
 Resume file: None
