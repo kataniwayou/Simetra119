@@ -193,7 +193,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "count by (service_instance_id, k8s_pod_name, k8s_namespace_name) (snmp_event_published_total{k8s_pod_name=~\"$pod\"})",
+          "expr": "count by (service_instance_id, k8s_pod_name, k8s_namespace_name) (snmp_event_published_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -203,7 +203,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "clamp_max(count by (service_instance_id, k8s_pod_name, k8s_namespace_name) (snmp_gauge{k8s_pod_name=~\"$pod\"}), 1)",
+          "expr": "clamp_max(count by (service_instance_id, k8s_pod_name, k8s_namespace_name) (snmp_gauge{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}), 1)",
           "format": "table",
           "instant": true,
           "refId": "B"
@@ -327,7 +327,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (k8s_pod_name) (rate(snmp_event_published_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(snmp_event_published_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -423,7 +423,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (k8s_pod_name) (rate(snmp_event_handled_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(snmp_event_handled_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -519,7 +519,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (k8s_pod_name) (rate(snmp_event_errors_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(snmp_event_errors_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -615,7 +615,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (k8s_pod_name) (rate(snmp_event_rejected_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(snmp_event_rejected_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -711,7 +711,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (k8s_pod_name) (rate(snmp_poll_executed_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(snmp_poll_executed_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -807,7 +807,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (k8s_pod_name) (rate(snmp_trap_received_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(snmp_trap_received_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -903,7 +903,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (k8s_pod_name) (rate(snmp_trap_auth_failed_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(snmp_trap_auth_failed_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -999,7 +999,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (k8s_pod_name) (rate(snmp_trap_dropped_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(snmp_trap_dropped_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -1095,7 +1095,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (k8s_pod_name) (rate(snmp_poll_unreachable_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(snmp_poll_unreachable_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -1191,7 +1191,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (k8s_pod_name) (rate(snmp_poll_recovered_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(snmp_poll_recovered_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -1602,7 +1602,7 @@
                       "from": -1000000000,
                       "result": {
                         "color": "dark-red",
-                        "text": "▼"
+                        "text": "\u00e2\u2013\u00bc"
                       },
                       "to": -0.0001
                     },
@@ -1613,7 +1613,7 @@
                       "from": -0.0001,
                       "result": {
                         "color": "text",
-                        "text": "—"
+                        "text": "\u00e2\u20ac\u201d"
                       },
                       "to": 0.0001
                     },
@@ -1624,7 +1624,7 @@
                       "from": 0.0001,
                       "result": {
                         "color": "dark-green",
-                        "text": "▲"
+                        "text": "\u00e2\u2013\u00b2"
                       },
                       "to": 1000000000
                     },
@@ -1734,7 +1734,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_evaluation_state{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_evaluation_state{k8s_namespace_name=~\"$namespace\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -1744,7 +1744,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (delta(tenant_command_dispatched_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s]))",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (delta(tenant_command_dispatched_percent{k8s_namespace_name=~\"$namespace\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[30s]))",
           "format": "table",
           "instant": true,
           "refId": "B"
@@ -1754,7 +1754,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "histogram_quantile(0.99, sum by (le, tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (rate(tenant_evaluation_duration_milliseconds_bucket{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le, tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (rate(tenant_evaluation_duration_milliseconds_bucket{k8s_namespace_name=~\"$namespace\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"}[$__rate_interval])))",
           "format": "table",
           "instant": true,
           "refId": "C"
@@ -1764,7 +1764,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_command_dispatched_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_command_dispatched_percent{k8s_namespace_name=~\"$namespace\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "D"
@@ -1774,7 +1774,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_command_failed_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_command_failed_percent{k8s_namespace_name=~\"$namespace\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "E"
@@ -1784,7 +1784,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_command_suppressed_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_command_suppressed_percent{k8s_namespace_name=~\"$namespace\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "F"
@@ -1794,7 +1794,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_metric_stale_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_metric_stale_percent{k8s_namespace_name=~\"$namespace\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "G"
@@ -1804,7 +1804,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_metric_resolved_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_metric_resolved_percent{k8s_namespace_name=~\"$namespace\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "H"
@@ -1814,7 +1814,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_metric_evaluate_percent{service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
+          "expr": "max by (tenant_id, priority, service_instance_id, k8s_pod_name, k8s_namespace_name) (tenant_metric_evaluate_percent{k8s_namespace_name=~\"$namespace\", service_instance_id=~\"$host\", k8s_pod_name=~\"$pod\"})",
           "format": "table",
           "instant": true,
           "refId": "I"
@@ -1960,7 +1960,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (k8s_pod_name) (rate(dotnet_gc_collections_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(dotnet_gc_collections_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -2056,7 +2056,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (k8s_pod_name) (rate(dotnet_process_cpu_time_seconds_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(dotnet_process_cpu_time_seconds_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -2148,7 +2148,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "dotnet_process_memory_working_set_bytes{k8s_pod_name=~\"$pod\"}",
+          "expr": "dotnet_process_memory_working_set_bytes{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -2244,7 +2244,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "sum by (k8s_pod_name) (rate(dotnet_exceptions_total{k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (k8s_pod_name) (rate(dotnet_exceptions_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -2336,7 +2336,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "dotnet_thread_pool_thread_count_total{k8s_pod_name=~\"$pod\"}",
+          "expr": "dotnet_thread_pool_thread_count_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -2428,7 +2428,7 @@
             "type": "prometheus",
             "uid": "dfg62p9s7xl34a"
           },
-          "expr": "dotnet_thread_pool_queue_length_total{k8s_pod_name=~\"$pod\"}",
+          "expr": "dotnet_thread_pool_queue_length_total{k8s_namespace_name=~\"$namespace\", k8s_pod_name=~\"$pod\"}",
           "instant": false,
           "legendFormat": "{{k8s_pod_name}}",
           "range": true,
@@ -2458,14 +2458,14 @@
           "type": "prometheus",
           "uid": "dfg62p9s7xl34a"
         },
-        "definition": "label_values(snmp_event_published_total, service_instance_id)",
+        "definition": "label_values(snmp_event_published_total, k8s_namespace_name)",
         "includeAll": true,
-        "label": "Host",
+        "label": "Namespace",
         "multi": true,
-        "name": "host",
+        "name": "namespace",
         "query": {
           "qryType": 1,
-          "query": "label_values(snmp_event_published_total, service_instance_id)"
+          "query": "label_values(snmp_event_published_total, k8s_namespace_name)"
         },
         "refresh": 2,
         "type": "query"
@@ -2481,14 +2481,37 @@
           "type": "prometheus",
           "uid": "dfg62p9s7xl34a"
         },
-        "definition": "label_values(snmp_event_published_total{service_instance_id=~\"$host\"}, k8s_pod_name)",
+        "definition": "label_values(snmp_event_published_total{k8s_namespace_name=~\"$namespace\"}, service_instance_id)",
+        "includeAll": true,
+        "label": "Host",
+        "multi": true,
+        "name": "host",
+        "query": {
+          "qryType": 1,
+          "query": "label_values(snmp_event_published_total{k8s_namespace_name=~\"$namespace\"}, service_instance_id)"
+        },
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "dfg62p9s7xl34a"
+        },
+        "definition": "label_values(snmp_event_published_total{k8s_namespace_name=~\"$namespace\", service_instance_id=~\"$host\"}, k8s_pod_name)",
         "includeAll": true,
         "label": "Pod",
         "multi": true,
         "name": "pod",
         "query": {
           "qryType": 1,
-          "query": "label_values(snmp_event_published_total{service_instance_id=~\"$host\"}, k8s_pod_name)"
+          "query": "label_values(snmp_event_published_total{k8s_namespace_name=~\"$namespace\", service_instance_id=~\"$host\"}, k8s_pod_name)"
         },
         "refresh": 2,
         "type": "query"
