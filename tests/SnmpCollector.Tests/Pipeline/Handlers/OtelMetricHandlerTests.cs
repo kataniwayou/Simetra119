@@ -213,12 +213,12 @@ public sealed class OtelMetricHandlerTests : IDisposable
         // Heartbeat flows through the pipeline and exports as snmp_gauge with device_name=Simetra.
         var notification = new SnmpOidReceived
         {
-            Oid = HeartbeatJobOptions.HeartbeatOid,
+            Oid = SnmpHeartbeatJobOptions.HeartbeatOid,
             AgentIp = IPAddress.Parse("127.0.0.1"),
             Value = new Counter32(1),
             Source = SnmpSource.Trap,
             TypeCode = SnmpType.Counter32,
-            DeviceName = HeartbeatJobOptions.HeartbeatDeviceName,
+            DeviceName = SnmpHeartbeatJobOptions.HeartbeatDeviceName,
             MetricName = "Heartbeat",
             ExtractedValue = 1.0
         };
@@ -239,7 +239,7 @@ public sealed class OtelMetricHandlerTests : IDisposable
         var notification = MakeNotification(
             new Counter32(1),
             SnmpType.Counter32,
-            deviceName: HeartbeatJobOptions.HeartbeatDeviceName,
+            deviceName: SnmpHeartbeatJobOptions.HeartbeatDeviceName,
             extractedValue: 1.0);
 
         await _handler.Handle(notification, CancellationToken.None);
@@ -257,12 +257,12 @@ public sealed class OtelMetricHandlerTests : IDisposable
 
         var notification = new SnmpOidReceived
         {
-            Oid = HeartbeatJobOptions.HeartbeatOid,
+            Oid = SnmpHeartbeatJobOptions.HeartbeatOid,
             AgentIp = IPAddress.Parse("127.0.0.1"),
             Value = new Counter32(1),
             Source = SnmpSource.Trap,
             TypeCode = SnmpType.Counter32,
-            DeviceName = HeartbeatJobOptions.HeartbeatDeviceName,
+            DeviceName = SnmpHeartbeatJobOptions.HeartbeatDeviceName,
             MetricName = "Heartbeat",
             ExtractedValue = 1.0
         };

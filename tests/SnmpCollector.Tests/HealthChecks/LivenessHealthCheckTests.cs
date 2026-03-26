@@ -18,7 +18,7 @@ public sealed class LivenessHealthCheckTests
         int heartbeatIntervalSeconds = 15)
     {
         var options = Options.Create(new LivenessOptions { GraceMultiplier = graceMultiplier });
-        var heartbeatOptions = Options.Create(new HeartbeatJobOptions { IntervalSeconds = heartbeatIntervalSeconds });
+        var heartbeatOptions = Options.Create(new SnmpHeartbeatJobOptions { IntervalSeconds = heartbeatIntervalSeconds });
         return new LivenessHealthCheck(
             liveness, intervals, options,
             heartbeatLiveness ?? new HeartbeatLivenessService(),

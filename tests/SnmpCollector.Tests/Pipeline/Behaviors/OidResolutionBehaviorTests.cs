@@ -88,18 +88,18 @@ public sealed class OidResolutionBehaviorTests
     {
         // Heartbeat OID resolves to "Heartbeat" via OidMapService — no special-case bypassing
         var oidMapService = new StubOidMapService(
-            knownOid: HeartbeatJobOptions.HeartbeatOid,
+            knownOid: SnmpHeartbeatJobOptions.HeartbeatOid,
             metricName: "Heartbeat");
         var behavior = new OidResolutionBehavior<SnmpOidReceived, Unit>(
             oidMapService, NullLogger<OidResolutionBehavior<SnmpOidReceived, Unit>>.Instance);
         var notification = new SnmpOidReceived
         {
-            Oid = HeartbeatJobOptions.HeartbeatOid,
+            Oid = SnmpHeartbeatJobOptions.HeartbeatOid,
             AgentIp = IPAddress.Parse("127.0.0.1"),
             Value = new Counter32(1),
             Source = SnmpSource.Trap,
             TypeCode = SnmpType.Counter32,
-            DeviceName = HeartbeatJobOptions.HeartbeatDeviceName,
+            DeviceName = SnmpHeartbeatJobOptions.HeartbeatDeviceName,
         };
         var nextCalled = false;
 

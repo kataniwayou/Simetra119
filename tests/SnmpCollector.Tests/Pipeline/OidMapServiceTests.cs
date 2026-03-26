@@ -141,7 +141,7 @@ public sealed class OidMapServiceTests
 
         var result = sut.ResolveToOid("Heartbeat");
 
-        Assert.Equal(HeartbeatJobOptions.HeartbeatOid, result);
+        Assert.Equal(SnmpHeartbeatJobOptions.HeartbeatOid, result);
     }
 
     [Fact]

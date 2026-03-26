@@ -9,14 +9,14 @@ using Xunit;
 namespace SnmpCollector.Tests.Jobs;
 
 /// <summary>
-/// Unit tests for <see cref="HeartbeatJob"/> covering liveness stamping (success and failure paths),
+/// Unit tests for <see cref="SnmpHeartbeatJob"/> covering liveness stamping (success and failure paths),
 /// correlation ID scoping, and community string derivation.
 /// <para>
 /// The actual UDP send (Messenger.SendTrapV2) is a static call and cannot be mocked.
 /// Tests focus on observable side effects: liveness stamps and correlation ID lifecycle.
 /// </para>
 /// </summary>
-public sealed class HeartbeatJobTests
+public sealed class SnmpHeartbeatJobTests
 {
     private const int TestListenerPort = 9162;
 
@@ -26,9 +26,9 @@ public sealed class HeartbeatJobTests
 
     private readonly StubCorrelationService _correlation = new();
     private readonly StubLivenessVectorService _liveness = new();
-    private readonly HeartbeatJob _job;
+    private readonly SnmpHeartbeatJob _job;
 
-    public HeartbeatJobTests()
+    public SnmpHeartbeatJobTests()
     {
         var listenerOptions = Options.Create(new SnmpListenerOptions
         {
@@ -37,25 +37,25 @@ public sealed class HeartbeatJobTests
             Version = "v2c"
         });
 
-        _job = new HeartbeatJob(
+        _job = new SnmpHeartbeatJob(
             _correlation,
             _liveness,
             listenerOptions,
-            NullLogger<HeartbeatJob>.Instance);
+            NullLogger<SnmpHeartbeatJob>.Instance);
     }
 
     [Fact]
     public async Task Execute_StampsLiveness()
     {
         // Arrange
-        var context = MakeContext("heartbeat");
+        var context = MakeContext("snmp-heartbeat");
 
         // Act -- trap send may fail (no listener on test port), but finally block always runs.
         await _job.Execute(context);
 
         // Assert: liveness stamped with job key
         Assert.True(_liveness.StampCalled);
-        Assert.Equal("heartbeat", _liveness.LastStampedKey);
+        Assert.Equal("snmp-heartbeat", _liveness.LastStampedKey);
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public sealed class HeartbeatJobTests
     {
         // Arrange
         _correlation.SetCorrelationId("test-correlation-123");
-        var context = MakeContext("heartbeat");
+        var context = MakeContext("snmp-heartbeat");
 
         // Act
         await _job.Execute(context);
@@ -86,20 +86,20 @@ public sealed class HeartbeatJobTests
             Version = "v2c"
         });
 
-        var job = new HeartbeatJob(
+        var job = new SnmpHeartbeatJob(
             _correlation,
             _liveness,
             listenerOptions,
-            NullLogger<HeartbeatJob>.Instance);
+            NullLogger<SnmpHeartbeatJob>.Instance);
 
-        var context = MakeContext("heartbeat");
+        var context = MakeContext("snmp-heartbeat");
 
         // Act -- regardless of success or failure, liveness must be stamped
         await job.Execute(context);
 
         // Assert: liveness always stamped
         Assert.True(_liveness.StampCalled);
-        Assert.Equal("heartbeat", _liveness.LastStampedKey);
+        Assert.Equal("snmp-heartbeat", _liveness.LastStampedKey);
         // Assert: correlation ID always cleared
         Assert.Null(_correlation.OperationCorrelationId);
     }
@@ -107,12 +107,12 @@ public sealed class HeartbeatJobTests
     [Fact]
     public void Constructor_DerivesCommunityString()
     {
-        // The HeartbeatJob constructor derives the community string via
+        // The SnmpHeartbeatJob constructor derives the community string via
         // CommunityStringHelper.DeriveFromDeviceName("Simetra") -> "Simetra.Simetra".
         // If this fails, the constructor would throw. The fact that _job was created
         // successfully in the test constructor proves derivation works.
         // We verify by checking CommunityStringHelper directly.
-        var derived = CommunityStringHelper.DeriveFromDeviceName(HeartbeatJobOptions.HeartbeatDeviceName);
+        var derived = CommunityStringHelper.DeriveFromDeviceName(SnmpHeartbeatJobOptions.HeartbeatDeviceName);
         Assert.Equal("Simetra.Simetra", derived);
     }
 
@@ -120,13 +120,13 @@ public sealed class HeartbeatJobTests
     public async Task Execute_UsesJobKeyFromContext()
     {
         // Arrange: use a custom job key name
-        var context = MakeContext("heartbeat-custom");
+        var context = MakeContext("snmp-heartbeat-custom");
 
         // Act
         await _job.Execute(context);
 
         // Assert: liveness stamped with the context's job key, not a hardcoded value
-        Assert.Equal("heartbeat-custom", _liveness.LastStampedKey);
+        Assert.Equal("snmp-heartbeat-custom", _liveness.LastStampedKey);
     }
 
     // -------------------------------------------------------------------------
@@ -134,7 +134,7 @@ public sealed class HeartbeatJobTests
     // -------------------------------------------------------------------------
 
     private static IJobExecutionContext MakeContext(string jobKeyName)
-        => new StubHeartbeatJobContext(jobKeyName);
+        => new StubSnmpHeartbeatJobContext(jobKeyName);
 
     // -------------------------------------------------------------------------
     // Test doubles
@@ -186,16 +186,16 @@ public sealed class HeartbeatJobTests
     }
 
     /// <summary>
-    /// Minimal IJobExecutionContext stub for HeartbeatJob. Only provides JobDetail.Key.Name
-    /// and CancellationToken -- HeartbeatJob reads nothing else from the context.
+    /// Minimal IJobExecutionContext stub for SnmpHeartbeatJob. Only provides JobDetail.Key.Name
+    /// and CancellationToken -- SnmpHeartbeatJob reads nothing else from the context.
     /// </summary>
-    private sealed class StubHeartbeatJobContext : IJobExecutionContext
+    private sealed class StubSnmpHeartbeatJobContext : IJobExecutionContext
     {
         private readonly IJobDetail _jobDetail;
 
-        public StubHeartbeatJobContext(string jobKeyName)
+        public StubSnmpHeartbeatJobContext(string jobKeyName)
         {
-            _jobDetail = JobBuilder.Create<HeartbeatJob>()
+            _jobDetail = JobBuilder.Create<SnmpHeartbeatJob>()
                 .WithIdentity(jobKeyName)
                 .Build();
         }
