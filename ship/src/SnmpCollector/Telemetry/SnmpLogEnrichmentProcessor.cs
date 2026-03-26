@@ -24,6 +24,7 @@ public sealed class SnmpLogEnrichmentProcessor : BaseProcessor<LogRecord>
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly string _hostName;
+    private readonly string _podNamespace;
 
     // Resolved on first successful access. Volatile for cross-thread visibility.
     private volatile ICorrelationService? _correlationService;
@@ -49,6 +50,7 @@ public sealed class SnmpLogEnrichmentProcessor : BaseProcessor<LogRecord>
             ?? throw new ArgumentNullException(nameof(serviceProvider));
         _hostName = hostName
             ?? throw new ArgumentNullException(nameof(hostName));
+        _podNamespace = Environment.GetEnvironmentVariable("POD_NAMESPACE") ?? "unknown";
     }
 
     /// <inheritdoc />
@@ -59,9 +61,10 @@ public sealed class SnmpLogEnrichmentProcessor : BaseProcessor<LogRecord>
         // Null-check Attributes -- it can be null when no structured log parameters
         // are provided (e.g. logger.LogInformation("plain message")).
         var attributes = data.Attributes?.ToList()
-            ?? new List<KeyValuePair<string, object?>>(3);
+            ?? new List<KeyValuePair<string, object?>>(4);
 
         attributes.Add(new KeyValuePair<string, object?>("host_name", _hostName));
+        attributes.Add(new KeyValuePair<string, object?>("pod_namespace", _podNamespace));
         attributes.Add(new KeyValuePair<string, object?>("role", _leaderElection?.CurrentRole ?? "unknown"));
         attributes.Add(new KeyValuePair<string, object?>("correlationId",
             _correlationService?.OperationCorrelationId ?? _correlationService?.CurrentCorrelationId ?? "none"));
