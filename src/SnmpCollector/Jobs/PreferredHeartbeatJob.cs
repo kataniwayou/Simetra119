@@ -54,6 +54,10 @@ public sealed class PreferredHeartbeatJob : IJob
     private volatile bool _isSchedulerReady;
     private string? _cachedResourceVersion;
 
+    // Static flag: logs once per process lifetime regardless of job instantiation scope.
+    // Quartz resolves IJob as transient so an instance field would reset each tick.
+    private static bool _hasLoggedStampingStarted;
+
     public PreferredHeartbeatJob(
         IKubernetes kubeClient,
         PreferredLeaderService preferredLeaderService,
@@ -87,6 +91,14 @@ public sealed class PreferredHeartbeatJob : IJob
             // Non-preferred pods silently skip — no log.
             if (_preferredLeaderService.IsPreferredPod && _isSchedulerReady)
             {
+                if (!_hasLoggedStampingStarted)
+                {
+                    _logger.LogInformation(
+                        "Heartbeat stamping started for lease {LeaseName} — preferred pod is ready",
+                        $"{_leaseOptions.Name}-preferred");
+                    _hasLoggedStampingStarted = true;
+                }
+
                 await WriteHeartbeatLeaseAsync(context.CancellationToken);
             }
 
