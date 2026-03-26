@@ -92,6 +92,15 @@ public sealed class PreferredHeartbeatJob : IJob
 
             // Reader path: all pods, every tick (Phase 85, unchanged).
             await ReadAndUpdateStampFreshnessAsync(context.CancellationToken);
+
+            // Gate 2 (ELEC-02): non-preferred leader yields when preferred pod recovers.
+            if (_preferredLeaderService.IsPreferredStampFresh
+                && _leaseElection is not null
+                && _leaseElection.IsLeader
+                && !_preferredLeaderService.IsPreferredPod)
+            {
+                await YieldLeadershipAsync(context.CancellationToken);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -268,5 +277,37 @@ public sealed class PreferredHeartbeatJob : IJob
                 "Transient K8s API error reading lease {LeaseName} — keeping last value",
                 heartbeatLeaseName);
         }
+    }
+
+    /// <summary>
+    /// Voluntary yield: deletes the leadership lease then cancels the inner election,
+    /// allowing the preferred pod to acquire through the normal LeaderElector flow.
+    /// Mirrors the delete-then-cancel pattern from <see cref="K8sLeaseElection.StopAsync"/>.
+    /// </summary>
+    private async Task YieldLeadershipAsync(CancellationToken ct)
+    {
+        try
+        {
+            await _kubeClient.CoordinationV1.DeleteNamespacedLeaseAsync(
+                _leaseOptions.Name,
+                _leaseOptions.Namespace,
+                cancellationToken: ct);
+
+            _logger.LogInformation(
+                "Voluntary yield: deleted leadership lease {LeaseName} — preferred pod recovered",
+                _leaseOptions.Name);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Voluntary yield: failed to delete leadership lease {LeaseName} — cancelling inner election anyway",
+                _leaseOptions.Name);
+        }
+
+        _leaseElection!.CancelInnerElection();
     }
 }
