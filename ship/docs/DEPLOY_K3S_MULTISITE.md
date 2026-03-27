@@ -69,7 +69,7 @@ ship/
 │       └── install.sh                                 # K3s install script
 ├── deploy/                                            # K8s manifests
 ├── otel-collector-0.120.0.tar                         # OTel container image
-└── snmp-collector-v2.6.tar                            # SnmpCollector container image
+└── snmp-collector-v3.0.tar                            # SnmpCollector container image
 ```
 
 **Network requirements (between the 3 Linux VMs):**
@@ -108,16 +108,20 @@ Before starting, fill in the values for each site deployment.
 
 ### 1.1 Build SnmpCollector image
 
-From the `ship/` folder root:
+Navigate to the `ship/` folder (where the `Dockerfile` is located):
 
 ```bash
-docker build -t snmp-collector:v2.6 .
+cd C:\Simetra\ship
+```
+
+```bash
+docker build -t snmp-collector:v3.0 .
 ```
 
 ### 1.2 Save SnmpCollector image to tar
 
 ```bash
-docker save snmp-collector:v2.6 -o snmp-collector-v2.6.tar
+docker save snmp-collector:v3.0 -o snmp-collector-v3.0.tar
 ```
 
 ### 1.3 Transfer to all 3 sites
@@ -157,7 +161,13 @@ Expected: `Install State` shows `Installed`.
 
 ## Part 3: Create Ubuntu Server VM (All 3 Sites — one-time)
 
-Repeat on each site. **Use a different VM name for each site.**
+**Setup order:**
+
+1. **Site A:** 3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 4A.1 → 4A.2 → 4A.3 → 4A.4 → 4A.5 → 4A.6
+2. **Site B:** 3.2 → 3.3 → 3.4 → 3.5 → 4B.1 → 4B.2 → 4B.3 → 4B.4 (needs Site A running first)
+3. **Site C:** 3.2 → 3.3 → 3.4 → 3.5 → 4B.1 → 4B.2 → 4B.3 → 4B.4 (needs Site A running first)
+
+Step 3.1 (virtual switch) is done once. Each additional site repeats 3.2-3.5 (VM creation) then 4B (agent install).
 
 ### Site naming plan
 
@@ -170,6 +180,9 @@ Repeat on each site. **Use a different VM name for each site.**
 > Each VM gets IP `172.20.0.10` on its local Hyper-V switch (each host has its own isolated virtual switch).
 > Cross-site communication uses the host network — the VMs must be routable to each other.
 > The **Ubuntu server name** becomes the K3s **node name** and appears in metrics as `service_instance_id`.
+>
+> **Testing on one host:** VMs share one switch — use different IPs per VM
+> (e.g. `172.20.0.10` for Site A, `172.20.0.11` for Site B, `172.20.0.12` for Site C).
 
 ### 3.1 Create virtual switch
 
@@ -185,6 +198,15 @@ Configure NAT for the switch (allows VM to reach host network):
 New-NetIPAddress -IPAddress 172.20.0.1 -PrefixLength 24 -InterfaceAlias "vEthernet (SimetraSwitch)"
 New-NetNat -Name "SimetraNAT" -InternalIPInterfaceAddressPrefix 172.20.0.0/24
 ```
+
+Verify:
+
+```powershell
+Get-VMSwitch -Name "SimetraSwitch"
+Get-NetNat -Name "SimetraNAT"
+```
+
+Expected: switch and NAT rule listed.
 
 ### 3.2 Create the VM
 
@@ -214,6 +236,14 @@ $hdd = Get-VMHardDiskDrive -VMName $VMName
 Set-VMFirmware -VMName $VMName -BootOrder $dvd, $hdd
 ```
 
+Verify the VM was created:
+
+```powershell
+Get-VM -Name $VMName
+```
+
+Expected: VM listed with `State: Off`.
+
 ### 3.3 Install Ubuntu Server
 
 Start the VM and connect to console:
@@ -223,31 +253,60 @@ Start-VM -Name $VMName
 vmconnect localhost $VMName
 ```
 
-During Ubuntu installation:
-1. Select **Ubuntu Server (minimized)** — no GUI needed
-2. Configure network manually:
-   - IP: `172.20.0.10`
-   - Subnet: `255.255.255.0` (`/24`)
+Ubuntu installer steps (navigate with arrow keys, Enter to confirm, Tab to move between fields):
+
+1. **Language** — select `English` → Done
+2. **Keyboard** — select your layout (default: `English (US)`) → Done
+3. **Type of installation** — select **Ubuntu Server (minimized)** → Done
+4. **Network** — select the ethernet interface (e.g. `eth0`) → **Edit IPv4** → set method to **Manual**:
+   - Subnet: `172.20.0.0/24`
+   - Address: `172.20.0.10`
    - Gateway: `172.20.0.1`
-   - DNS: `172.20.0.1`
-3. On the **Profile setup** screen:
-   - Server name: use site-specific name (`simetra-k3s-a`, `simetra-k3s-b`, or `simetra-k3s-c`)
+   - Name servers: `172.20.0.1`
+   - Search domains: (leave empty)
+   - → Save → Done
+5. **Proxy** — leave empty → Done
+6. **Ubuntu archive mirror** — leave default → Done (mirror test will run; on offline machines it will fail and continue automatically)
+7. **Storage** — select **Use an entire disk** → Done → Done → Confirm destructive action
+8. **Profile setup**:
+   - Your name: `simetra-k3s-a` (or `simetra-k3s-b`, `simetra-k3s-c` per site)
+   - Your server's name: `simetra-k3s-a` (or `simetra-k3s-b`, `simetra-k3s-c` per site)
    - **This name becomes the K3s node name** and appears in metrics as `service_instance_id`
-   - Set username and password
-4. Enable **OpenSSH server** when prompted
-5. Complete installation and reboot
+   - Pick a username: `simetra-k3s-a` (or `simetra-k3s-b`, `simetra-k3s-c` per site)
+   - Choose a password: `simetra-k3s-a` (or `simetra-k3s-b`, `simetra-k3s-c` per site)
+   - Confirm password: (same)
+   - → Done
+9. **Upgrade to Ubuntu Pro** — select **Skip for now** → Continue
+10. **SSH Setup** — check **Install OpenSSH server** → Done
+11. **Featured server snaps** — do NOT select any → Done
+12. **Installation** — wait for install to complete → **Reboot Now**
 
 ### 3.4 Remove DVD drive after install
+
+> After reboot, the VM may show "Failed unmounting /cdrom — please remove installation medium, then press ENTER".
+> This is normal. Press **Enter** — the VM will boot from the hard drive.
+
+Once the VM shows a login prompt, remove the DVD from **PowerShell** to prevent this on future reboots:
 
 ```powershell
 Remove-VMDvdDrive -VMName $VMName -ControllerNumber 0 -ControllerLocation 1
 ```
+
+Verify VM is running without DVD:
+
+```powershell
+Get-VM -Name $VMName | Select-Object Name, State
+```
+
+Expected: `State: Running`.
 
 ### 3.5 Verify SSH access from Windows host
 
 ```powershell
 ssh <username>@172.20.0.10
 ```
+
+> Keep this SSH session open — you will use it in Part 4A.2.
 
 ---
 
@@ -257,7 +316,7 @@ ssh <username>@172.20.0.10
 
 #### 4A.1 Copy K3s files into the VM
 
-From the Windows host PowerShell:
+Open a **second PowerShell window** on the Windows host (keep SSH session open):
 
 ```powershell
 scp C:\Simetra\ship\infra\k3s\k3s <username>@172.20.0.10:~/
@@ -265,13 +324,17 @@ scp C:\Simetra\ship\infra\k3s\k3s-airgap-images-amd64.tar.zst <username>@172.20.
 scp C:\Simetra\ship\infra\k3s\install.sh <username>@172.20.0.10:~/
 ```
 
-#### 4A.2 Install K3s server (airgap mode)
-
-SSH into the Site A VM:
+Verify files arrived — switch to the **SSH session** (from step 3.5):
 
 ```bash
-ssh <username>@172.20.0.10
+ls -lh ~/k3s ~/k3s-airgap-images-amd64.tar.zst ~/install.sh
 ```
+
+Expected: 3 files listed with non-zero sizes.
+
+#### 4A.2 Install K3s server (airgap mode)
+
+Continue in the **same SSH session**:
 
 Place files in required locations:
 
@@ -306,10 +369,18 @@ Expected: one node (`simetra-k3s-a`) in `Ready` status.
 
 ```bash
 mkdir -p ~/.kube
+sudo chmod 644 /etc/rancher/k3s/k3s.yaml
 sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
 sudo chown $(id -u):$(id -g) ~/.kube/config
+```
+
+Verify kubectl works:
+
+```bash
 kubectl get nodes
 ```
+
+Expected: one node (`simetra-k3s-a`) in `Ready` status.
 
 #### 4A.5 Get the node token (needed for agents)
 
@@ -318,17 +389,21 @@ sudo cat /var/lib/rancher/k3s/server/node-token
 ```
 
 Save this token — you will need it for Site B and Site C.
+The token is stored permanently at `/var/lib/rancher/k3s/server/node-token` — you can retrieve it again anytime by re-running this command.
 
-#### 4A.6 Get the server IP
-
-The server API URL is `https://<Site-A-VM-routable-IP>:6443`. This is the IP that
-Site B and Site C VMs can reach over the network (not the local 172.20.0.10).
-
-#### 4A.7 Clean up install files
+#### 4A.6 Clean up install files
 
 ```bash
 rm ~/k3s ~/k3s-airgap-images-amd64.tar.zst ~/install.sh
 ```
+
+Verify:
+
+```bash
+ls ~/k3s ~/k3s-airgap-images-amd64.tar.zst ~/install.sh 2>&1
+```
+
+Expected: `No such file or directory` for all three.
 
 ### Part 4B: Install K3s Agent (Site B and Site C — one-time)
 
@@ -336,7 +411,13 @@ Repeat on each agent site.
 
 #### 4B.1 Copy K3s files into the VM
 
-From the Windows host PowerShell:
+SSH into the agent VM first, then open a **second PowerShell window** for SCP:
+
+```bash
+ssh <username>@<Site-B-IP>
+```
+
+From the **PowerShell window** on the Windows host:
 
 ```powershell
 scp C:\Simetra\ship\infra\k3s\k3s <username>@172.20.0.10:~/
@@ -344,13 +425,17 @@ scp C:\Simetra\ship\infra\k3s\k3s-airgap-images-amd64.tar.zst <username>@172.20.
 scp C:\Simetra\ship\infra\k3s\install.sh <username>@172.20.0.10:~/
 ```
 
-#### 4B.2 Install K3s agent (airgap mode)
-
-SSH into the agent VM:
+Verify files arrived — switch to the **agent SSH session**:
 
 ```bash
-ssh <username>@172.20.0.10
+ls -lh ~/k3s ~/k3s-airgap-images-amd64.tar.zst ~/install.sh
 ```
+
+Expected: 3 files listed with non-zero sizes.
+
+#### 4B.2 Install K3s agent (airgap mode)
+
+Continue in the **same agent SSH session**:
 
 Place files in required locations:
 
@@ -367,13 +452,18 @@ sudo chmod +x /usr/local/bin/k3s
 chmod +x ~/install.sh
 ```
 
-Run the installer as **agent** pointing to the Site A server:
+Run the installer as **agent** pointing to the Site A server.
+
+> **IMPORTANT:** Paste the entire command as **one line**. If it breaks across multiple lines,
+> the env vars won't apply and the installer will try to download from the internet (fails on offline machines).
 
 ```bash
 INSTALL_K3S_SKIP_DOWNLOAD=true K3S_URL=https://<Site-A-IP>:6443 K3S_TOKEN=<node-token> ~/install.sh
 ```
 
-> Replace `<Site-A-IP>` with the routable IP of Site A's VM.
+> Replace `<Site-A-IP>` with the IP of Site A's VM that this agent can reach over the network.
+> In production (separate hosts): this is the Windows host IP that NATs into the VM, not `172.20.0.10`.
+> When all VMs share the same Hyper-V switch (e.g. testing on one host): use `172.20.0.10` directly.
 > Replace `<node-token>` with the token from step 4A.5.
 
 #### 4B.3 Verify the agent joined the cluster
@@ -399,6 +489,14 @@ simetra-k3s-c    Ready    <none>                 1m
 rm ~/k3s ~/k3s-airgap-images-amd64.tar.zst ~/install.sh
 ```
 
+Verify:
+
+```bash
+ls ~/k3s ~/k3s-airgap-images-amd64.tar.zst ~/install.sh 2>&1
+```
+
+Expected: `No such file or directory` for all three.
+
 ---
 
 ## Part 5: Load Container Images (all 3 nodes)
@@ -407,20 +505,36 @@ Container images must be imported on **every node** (K3s has no shared registry)
 
 ### 5.1 Copy files into the Site A VM
 
-From the Site A Windows host:
+From the **PowerShell window** on the Windows host:
 
 ```powershell
-scp C:\Simetra\ship\snmp-collector-v2.6.tar <username>@172.20.0.10:~/
+scp C:\Simetra\ship\snmp-collector-v3.0.tar <username>@172.20.0.10:~/
 scp C:\Simetra\ship\otel-collector-0.120.0.tar <username>@172.20.0.10:~/
 scp -r C:\Simetra\ship\deploy\ <username>@172.20.0.10:~/deploy/
 ```
 
+Verify files arrived — switch to the **Site A SSH session**:
+
+```bash
+ls -lh ~/snmp-collector-v3.0.tar ~/otel-collector-0.120.0.tar && ls ~/deploy/
+```
+
+Expected: 2 tar files with non-zero sizes and deploy/ contents listed.
+
 ### 5.2 Import images on Site A
 
 ```bash
-sudo k3s ctr images import ~/snmp-collector-v2.6.tar
+sudo k3s ctr images import ~/snmp-collector-v3.0.tar
 sudo k3s ctr images import ~/otel-collector-0.120.0.tar
 ```
+
+Verify:
+
+```bash
+sudo k3s ctr images ls | grep -E "snmp-collector|otel"
+```
+
+Expected: both images listed.
 
 ### 5.3 Import images on Site B and Site C
 
@@ -428,18 +542,24 @@ Copy tar files to each agent VM and import:
 
 ```bash
 # From Windows host:
-scp C:\Simetra\ship\snmp-collector-v2.6.tar <username>@<Site-B-IP>:~/
+scp C:\Simetra\ship\snmp-collector-v3.0.tar <username>@<Site-B-IP>:~/
 scp C:\Simetra\ship\otel-collector-0.120.0.tar <username>@<Site-B-IP>:~/
 
 # SSH into Site B VM:
-sudo k3s ctr images import ~/snmp-collector-v2.6.tar
+sudo k3s ctr images import ~/snmp-collector-v3.0.tar
 sudo k3s ctr images import ~/otel-collector-0.120.0.tar
-rm ~/snmp-collector-v2.6.tar ~/otel-collector-0.120.0.tar
+rm ~/snmp-collector-v3.0.tar ~/otel-collector-0.120.0.tar
 ```
 
 Repeat for Site C.
 
-### 5.4 Verify images
+### 5.4 Clean up transfer files on Site A
+
+```bash
+rm ~/snmp-collector-v3.0.tar ~/otel-collector-0.120.0.tar
+```
+
+### 5.5 Verify images on all nodes
 
 From Site A:
 
@@ -447,7 +567,9 @@ From Site A:
 sudo k3s ctr images ls | grep -E "snmp-collector|otel"
 ```
 
-### 5.5 Prepare site deploy copies
+Expected: both images listed. Repeat on each agent node via SSH to confirm images were imported there too.
+
+### 5.6 Prepare site deploy copies
 
 Create a copy of the deploy manifests for each site **before** modifying anything.
 This preserves the original `~/deploy/` as a clean template.
@@ -459,6 +581,14 @@ cp -r ~/deploy ~/deploy-simetra-site-a
 # Example for Site B:
 cp -r ~/deploy ~/deploy-simetra-site-b
 ```
+
+Verify:
+
+```bash
+ls ~/deploy-simetra-site-a/deployment.yaml ~/deploy-simetra-site-b/deployment.yaml
+```
+
+Expected: both files exist.
 
 > Create all site copies now. Parts 6 and 7 will modify files in-place.
 
@@ -476,7 +606,12 @@ kubectl create namespace simetra-infra
 
 ### 6.2 Deploy OTel Collector ConfigMap
 
-Update the namespace and apply:
+**Before applying**, edit `~/deploy/otel-collector-configmap.yaml` and update the export
+endpoints to match your organization's infrastructure:
+- `prometheusremotewrite` endpoint → your Prometheus remote write URL
+- `elasticsearch` endpoint → your Elasticsearch URL
+
+Then update the namespace and apply:
 
 ```bash
 sed -i 's|namespace: simetra|namespace: simetra-infra|g' ~/deploy/otel-collector-configmap.yaml
@@ -575,27 +710,39 @@ kubectl apply -f ~/deploy-{NAMESPACE}/rbac.yaml
 
 Edit `~/deploy-{NAMESPACE}/snmp-collector-config.yaml` (e.g. `~/deploy-simetra-site-a/snmp-collector-config.yaml`).
 
-Update the following sections. **Remove the `Otlp.Endpoint` field** — it will be
-overridden by an env var in the deployment (see step 7.6):
+Update the following sections (keep all other sections unchanged).
+**Remove the `Otlp.Endpoint` field** — it will be overridden by an env var in the
+deployment (see step 7.6):
 
 ```json
-{
   "Otlp": {
     "ServiceName": "snmp-collector"
   },
+```
+
+Update the trap listener port:
+
+```json
   "SnmpListener": {
     "BindAddress": "0.0.0.0",
     "Port": {TRAP_PORT}
   },
+```
+
+Update the lease namespace and add preferred node:
+
+```json
   "Lease": {
     "Name": "snmp-collector-leader",
     "Namespace": "{NAMESPACE}",
     "DurationSeconds": 15,
     "RenewIntervalSeconds": 10,
     "PreferredNode": "{PREFERRED_NODE}"
-  }
-}
+  },
 ```
+
+> Only modify these 3 sections. Leave all other sections (CorrelationJob,
+> SnmpHeartbeatJob, SnapshotJob, Liveness, Channels, Logging) unchanged.
 
 Example for Site A:
 - `{TRAP_PORT}` = `10162`
@@ -659,7 +806,7 @@ Edit `~/deploy-{NAMESPACE}/deployment.yaml` (e.g. `~/deploy-simetra-site-a/deplo
 
 ```bash
 # Example for Site A: ~/deploy-simetra-site-a/deployment.yaml
-sed -i 's|image: snmp-collector:local|image: snmp-collector:v2.6|' ~/deploy-{NAMESPACE}/deployment.yaml
+sed -i 's|image: snmp-collector:local|image: snmp-collector:v3.0|' ~/deploy-{NAMESPACE}/deployment.yaml
 ```
 
 **2. Add `HOST_IP` and `Otlp__Endpoint` env vars.** Add these to the `env:` section:
@@ -880,6 +1027,32 @@ kubectl delete namespace simetra-site-a simetra-site-b simetra-infra
 
 ## Maintenance
 
+### Pause and resume work
+
+**To pause** — shut down VMs gracefully from PowerShell:
+
+```powershell
+Stop-VM -Name "simetra-k3s-a"
+Stop-VM -Name "simetra-k3s-b"
+Stop-VM -Name "simetra-k3s-c"
+```
+
+**To resume** — start VMs and verify cluster:
+
+```powershell
+Start-VM -Name "simetra-k3s-a"
+Start-VM -Name "simetra-k3s-b"
+Start-VM -Name "simetra-k3s-c"
+```
+
+Wait ~30 seconds, then SSH into Site A and verify:
+
+```bash
+kubectl get nodes
+```
+
+Expected: all nodes in `Ready` status. Continue from where you left off.
+
 ### VM auto-start on server boot
 
 K3s starts automatically inside each VM (systemd service). The VMs are configured
@@ -912,13 +1085,13 @@ kubectl -n simetra-infra get pods -o wide
 
 ### Update SnmpCollector
 
-1. Build new image on develop machine with new tag (e.g. `snmp-collector:v2.7`)
+1. Build new image on develop machine with new tag (e.g. `snmp-collector:v3.1`)
 2. Save to tar, transfer to **all 3 VMs** via SCP
-3. Import on each VM: `sudo k3s ctr images import snmp-collector-v2.7.tar`
+3. Import on each VM: `sudo k3s ctr images import snmp-collector-v3.1.tar`
 4. For each site namespace:
    ```bash
    # Example for Site A:
-   sed -i 's|snmp-collector:v2.6|snmp-collector:v2.7|' ~/deploy-simetra-site-a/deployment.yaml
+   sed -i 's|snmp-collector:v3.0|snmp-collector:v3.1|' ~/deploy-simetra-site-a/deployment.yaml
    kubectl apply -f ~/deploy-simetra-site-a/deployment.yaml
    ```
 
